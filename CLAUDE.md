@@ -17,7 +17,10 @@
    `gh api -X PUT repos/minho-nim/MinLab-AI-Office/pulls/<번호>/merge -f merge_method=squash`
    실패하면 고쳐서 다시 푸시하고, 통과 전에는 병합하지 않는다.
 4. 화면이 바뀌면 Artifact(Claude 안 데모 페이지)도 다시 게시한다: https://claude.ai/artifact/KymYCpMcfjW7Cskyjyf7Ph
-5. 운영 배포(Cloudflare Pages 등)는 소유자가 요청할 때만 한다.
+5. 운영 배포는 소유자가 요청할 때만 한다. Cloudflare Pages는 `release` 브랜치만 배포하므로,
+   배포 명령은 `git fetch origin && git push origin origin/main:refs/heads/release`(release를 main에 맞춤)이다.
+   현재 권한 설정은 `main`이 들어간 push를 막으므로 이 명령은 소유자가 직접 실행한다.
+   `main` 병합만으로는 배포되지 않는다. `release`에 직접 커밋하지 않는다.
 
 ## 지켜야 할 것
 
