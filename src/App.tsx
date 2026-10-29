@@ -194,9 +194,13 @@ export function App() {
     else say('error', `실행하지 못했습니다: ${res.error ?? '알 수 없는 오류'}`);
   };
 
-  const saveProject = async (p: { name: string; repo: string | null; description: string }) => {
-    const project: Project = { id: newId(), ...p, createdAt: new Date().toISOString() };
-    await mutate(() => store.saveProject(project), `${p.name} 프로젝트를 등록했습니다.`);
+  const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string }) => {
+    const existing = id ? projectById.get(id) : undefined;
+    // 수정해도 id가 같으므로 연결된 업무는 그대로 따라온다.
+    const project: Project = existing
+      ? { ...existing, ...fields, sample: false }
+      : { id: newId(), ...fields, createdAt: new Date().toISOString() };
+    await mutate(() => store.saveProject(project), `${fields.name} 프로젝트를 ${existing ? '수정' : '등록'}했습니다.`);
   };
 
   const selectAgent = (id: AgentId) => {
