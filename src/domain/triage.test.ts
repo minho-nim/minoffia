@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sampleSnapshot } from '../data/sample';
-import { answerStatus, matchProjects, titleFrom, triage } from './triage';
+import { answerStatus, matchProjects, replyIntent, titleFrom, triage } from './triage';
 
 const snap = sampleSnapshot();
 const now = new Date('2026-10-29T03:00:00Z');
@@ -45,5 +45,13 @@ describe('titleFrom', () => {
   it('첫 줄 60자', () => {
     expect(titleFrom('  첫 줄\n둘째 줄')).toBe('첫 줄');
     expect(titleFrom('가'.repeat(80))).toHaveLength(60);
+  });
+});
+
+describe('replyIntent', () => {
+  it('확인 질문에 글로 한 답', () => {
+    for (const y of ['응', '네', 'ㅇㅇ', '만들어', '만들어줘', '비공개 저장소 만들기', '좋아!', 'ok', '맞아요']) expect(replyIntent(y), y).toBe('yes');
+    for (const n of ['아니', '아니요', '나중에', 'ㄴㄴ', '취소', '괜찮아']) expect(replyIntent(n), n).toBe('no');
+    for (const x of ['MuscleMap에 다크 모드 추가해줘', 'useEffect가 뭐야?', '음']) expect(replyIntent(x), x).toBeNull();
   });
 });

@@ -110,6 +110,14 @@ export function triage(text: string, snap: Snapshot, now: Date = new Date()): Tr
   return { kind: 'unclear' };
 }
 
+/** 확인 질문에 글로 답한 경우: 'yes' | 'no' | null(판단 못 함) */
+export function replyIntent(text: string): 'yes' | 'no' | null {
+  const t = text.trim().toLowerCase().replace(/[.!~?\s]+$/g, '');
+  if (/^(아니|아뇨|아니요|ㄴㄴ|ㄴ|no|nope|나중|나중에|괜찮아|됐어|취소|안\s?해|하지\s?마|싫어)/.test(t)) return 'no';
+  if (/^(응|어|네|넵|예|ㅇㅇ|ㅇ|yes|y|ok|okay|오케이|좋아|그래|맞아|맞아요|만들어|만들기|만들어\s?줘|해\s?줘|해줘|진행|고고|ㄱㄱ|접수)/.test(t) || /(저장소\s?만들기|만들어\s?주세요)$/.test(t)) return 'yes';
+  return null;
+}
+
 /** 업무 제목: 첫 줄을 60자로 */
 export function titleFrom(text: string): string {
   const first = text.trim().split('\n')[0].replace(/\s+/g, ' ');
