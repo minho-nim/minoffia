@@ -11,6 +11,7 @@ for f in supabase/migrations/*.sql; do run "$f"; done
 run supabase/tests/99_grants.sql
 run supabase/tests/10_workflow_gates.sql
 run supabase/tests/30_attachments.sql
+run supabase/tests/40_links_clarifications.sql
 
 # 기존 v0.1 데이터가 0003 적용 후에도 남는지
 psql -q -c "drop database if exists ${DB}_mig" -c "create database ${DB}_mig"
@@ -21,5 +22,6 @@ runm supabase/migrations/0002_revoke_tasks_guard.sql
 runm supabase/tests/20_migration_preserves_v01.sql
 runm supabase/migrations/0003_v021_approval_gates.sql
 runm supabase/migrations/0004_attachments.sql
+runm supabase/migrations/0005_links_clarifications.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"

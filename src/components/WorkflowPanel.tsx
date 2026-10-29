@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { attachmentBlocker, attachmentsOf, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind } from '../domain/attachments';
 import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments';
+import { RequestContext } from './RequestContext';
+import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../domain/requestContext';
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildGptPackage } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
@@ -44,6 +46,10 @@ export interface WorkflowActions {
   updateAttachment: (attachment: Attachment) => Promise<boolean>;
   deleteAttachment: (attachment: Attachment) => Promise<boolean>;
   moveAttachment: (task: Task, id: string, delta: -1 | 1) => Promise<boolean>;
+  /** 서버가 링크를 읽어 기록한다 */
+  readLink: (task: Task, url: string) => Promise<boolean>;
+  deleteLink: (link: LinkRef) => Promise<boolean>;
+  addClarification: (task: Task, question: string, answer: string) => Promise<boolean>;
 }
 
 interface Props {
@@ -52,6 +58,11 @@ interface Props {
   view: WorkflowView;
   /** 이 업무의 첨부(요청 자료·결과 스크린샷) */
   attachments: Attachment[];
+  /** 모든 업무의 링크·확인 질문(이 업무 것만 골라 쓴다) */
+  links: LinkRef[];
+  clarifications: Clarification[];
+  /** 링크 읽기는 Supabase 연결 때만 */
+  canReadLinks: boolean;
   /** null이면 PM 전송 가능 */
   dispatchBlocker: string | null;
   actions: WorkflowActions;
@@ -78,7 +89,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -97,6 +108,8 @@ export function WorkflowPanel({ task, project, view, attachments, dispatchBlocke
   const [copied, setCopied] = useState<string | null>(null);
   const [resultImages, setResultImages] = useState<PendingImage[]>([]);
   const requestImages = attachmentsOf(attachments, task.id, 'request');
+  const taskLinks = linksOf(links, task.id);
+  const taskQa = clarificationsOf(clarifications, task.id);
   const resultShots = view.result ? attachmentsOf(attachments, task.id, 'result', view.result.revision) : [];
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -163,7 +176,7 @@ export function WorkflowPanel({ task, project, view, attachments, dispatchBlocke
           </p>
         )}
         <p className="muted small">
-          ChatGPT 자동 연결은 없습니다(수동 인계). 자료를 복사해 ChatGPT에서 기획한 뒤, 결과를 아래에 저장하세요. 이미지는 아래에서 열어 ChatGPT 대화에 직접 첨부하세요(Gemini 이미지 분석·링크 읽기는 아직 연결되지 않았습니다).
+          ChatGPT 자동 연결은 없습니다(수동 인계). 자료를 복사해 ChatGPT에서 기획한 뒤, 결과를 아래에 저장하세요. 이미지는 아래에서 열어 ChatGPT 대화에 직접 첨부하세요(Gemini 이미지 분석은 아직 연결되지 않았습니다). 링크는 서버가 읽어 본문을 자료에 넣고, ChatGPT가 물어본 확인 질문은 답과 함께 기록해 두면 다음 자료에 들어갑니다.
         </p>
         <div className="wf-sub">
           <p className="small">
@@ -182,8 +195,9 @@ export function WorkflowPanel({ task, project, view, attachments, dispatchBlocke
             emptyText="첨부한 이미지가 없습니다."
           />
         </div>
+        <RequestContext task={task} view={view} links={taskLinks} clarifications={taskQa} canReadLinks={canReadLinks} actions={actions} />
         <div className="task-actions">
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project, view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null, requestImages))}>
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project, view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null, requestImages, taskLinks, taskQa))}>
             {copied === 'gpt' ? '복사됨' : 'ChatGPT용 자료 복사'}
           </button>
           {!editing && (
@@ -476,7 +490,7 @@ export function WorkflowPanel({ task, project, view, attachments, dispatchBlocke
                         <button
                           type="button"
                           className="btn btn-small btn-ghost"
-                          onClick={() => item && void copy(a.id, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages))}
+                          onClick={() => item && void copy(a.id, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks))}
                         >
                           {copied === a.id ? '복사됨' : '지시서 복사'}
                         </button>
