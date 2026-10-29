@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { attachmentBlocker, attachmentsOf, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind } from '../domain/attachments';
+import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments';
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildGptPackage } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { canApprove, canRequestRevision, type WorkflowView } from '../domain/workflow';
 import type { AgentAssignment, Gate, Intent } from '../domain/workflow-types';
-import { GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
+import { DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
 
 export interface SpecFields {
   intent: Intent;
@@ -31,16 +33,25 @@ export interface WorkflowActions {
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
   recordStart: (assignment: AgentAssignment, url: string) => Promise<boolean>;
-  addResult: (task: Task, fields: ResultFields) => Promise<boolean>;
+  /** 결과 패키지와 스크린샷(결과를 저장한 뒤 올린다) */
+  addResult: (task: Task, fields: ResultFields, images?: PendingImage[]) => Promise<boolean>;
   setPrUrl: (task: Task, url: string) => Promise<boolean>;
   /** 결과 검토 → Claude PM 수정 요청 */
   requestRevision: (task: Task, feedback: string) => Promise<boolean>;
+  attachmentUrl: (attachment: Attachment) => Promise<string>;
+  /** 실패한 파일의 이유 목록을 돌려준다(빈 배열 = 모두 성공) */
+  addAttachments: (task: Task, kind: AttachmentKind, resultRevision: number | null, files: File[]) => Promise<string[]>;
+  updateAttachment: (attachment: Attachment) => Promise<boolean>;
+  deleteAttachment: (attachment: Attachment) => Promise<boolean>;
+  moveAttachment: (task: Task, id: string, delta: -1 | 1) => Promise<boolean>;
 }
 
 interface Props {
   task: Task;
   project: Project | undefined;
   view: WorkflowView;
+  /** 이 업무의 첨부(요청 자료·결과 스크린샷) */
+  attachments: Attachment[];
   /** null이면 PM 전송 가능 */
   dispatchBlocker: string | null;
   actions: WorkflowActions;
@@ -67,7 +78,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -84,6 +95,9 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
   const [showAFeedback, setShowAFeedback] = useState(false);
   const [revisionText, setRevisionText] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  const [resultImages, setResultImages] = useState<PendingImage[]>([]);
+  const requestImages = attachmentsOf(attachments, task.id, 'request');
+  const resultShots = view.result ? attachmentsOf(attachments, task.id, 'result', view.result.revision) : [];
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -149,10 +163,27 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
           </p>
         )}
         <p className="muted small">
-          ChatGPT 자동 연결은 없습니다(수동 인계). 자료를 복사해 ChatGPT에서 기획한 뒤, 결과를 아래에 저장하세요. 이미지·링크 분석은 아직 연결되지 않았습니다.
+          ChatGPT 자동 연결은 없습니다(수동 인계). 자료를 복사해 ChatGPT에서 기획한 뒤, 결과를 아래에 저장하세요. 이미지는 아래에서 열어 ChatGPT 대화에 직접 첨부하세요(Gemini 이미지 분석·링크 읽기는 아직 연결되지 않았습니다).
         </p>
+        <div className="wf-sub">
+          <p className="small">
+            <b>요청 자료 이미지</b> <span className="muted">· 비공개 저장, {MAX_REQUEST_FILES}장까지</span>
+          </p>
+          <AttachmentGallery
+            items={requestImages}
+            roles={ROLES_FOR.request}
+            blocker={attachmentBlocker(view, 'request', 'add', requestImages.length)}
+            max={MAX_REQUEST_FILES}
+            urlFor={actions.attachmentUrl}
+            onAdd={(files) => actions.addAttachments(task, 'request', null, files)}
+            onUpdate={actions.updateAttachment}
+            onDelete={actions.deleteAttachment}
+            onMove={(id, d) => actions.moveAttachment(task, id, d)}
+            emptyText="첨부한 이미지가 없습니다."
+          />
+        </div>
         <div className="task-actions">
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project, view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null))}>
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project, view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null, requestImages))}>
             {copied === 'gpt' ? '복사됨' : 'ChatGPT용 자료 복사'}
           </button>
           {!editing && (
@@ -406,7 +437,7 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                     </b>
                     <span className="pill">{adapter.label}</span>
                     <span className={`pill pill-adapter-${adapter.state}`}>{ADAPTER_STATE_LABEL[adapter.state]}</span>
-                    <span className="pill">{a.dispatchStatus}</span>
+                    <span className="pill">{DISPATCH_STATUS_LABEL[a.dispatchStatus]}</span>
                   </div>
                   {item?.goal && <p className="small">{item.goal}</p>}
                   {item && item.dependencies.length > 0 && <p className="muted small">먼저 끝나야 할 작업: {item.dependencies.join(', ')}</p>}
@@ -445,7 +476,7 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                         <button
                           type="button"
                           className="btn btn-small btn-ghost"
-                          onClick={() => item && void copy(a.id, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision))}
+                          onClick={() => item && void copy(a.id, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages))}
                         >
                           {copied === a.id ? '복사됨' : '지시서 복사'}
                         </button>
@@ -503,7 +534,7 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                 <b>결과 v{view.result.revision}</b>
                 {view.result.workItemId && ` · ${view.result.workItemId}`} · {view.result.summary || '(요약 없음)'}
               </p>
-              <p className="muted small mono">sha256 {view.result.sha256.slice(0, 16)}… · diff {view.result.diff.length.toLocaleString()}자 · 미리보기 미제공</p>
+              <p className="muted small mono">sha256 {view.result.sha256.slice(0, 16)}… · diff {view.result.diff.length.toLocaleString()}자 · 스크린샷 {resultShots.length}장 · 라이브 미리보기 미제공</p>
               {view.result.diff && <pre className="diff-view">{view.result.diff}</pre>}
               {view.result.testLog && (
                 <details>
@@ -512,6 +543,15 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                 </details>
               )}
               {view.result.remainingIssues && <p className="small">남은 문제: {view.result.remainingIssues}</p>}
+              <AttachmentGallery
+                items={resultShots}
+                roles={ROLES_FOR.result}
+                blocker={attachmentBlocker(view, 'result', 'add', resultShots.length, view.result.revision)}
+                max={MAX_RESULT_FILES}
+                urlFor={actions.attachmentUrl}
+                onAdd={(files) => actions.addAttachments(task, 'result', view.result!.revision, files)}
+                emptyText="결과 스크린샷 없음"
+              />
             </div>
           )}
           {!view.bApproved && (
@@ -571,9 +611,10 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
               onSubmit={(e) => {
                 e.preventDefault();
                 void run(async () => {
-                  if (await actions.addResult(task, result)) {
+                  if (await actions.addResult(task, result, resultImages)) {
                     setShowResultForm(false);
                     setResult({ workItemId: '', summary: '', diff: '', testLog: '', remainingIssues: '' });
+                    setResultImages([]);
                   }
                 });
               }}
@@ -607,6 +648,10 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                 <span>남은 문제</span>
                 <input id={`rissue-${task.id}`} value={result.remainingIssues} onChange={(e) => setResult({ ...result, remainingIssues: e.target.value })} maxLength={4000} />
               </label>
+              <div className="field">
+                <span>스크린샷 (변경 후·변경 전, {MAX_RESULT_FILES}장까지)</span>
+                <ImagePicker items={resultImages} onChange={setResultImages} roles={ROLES_FOR.result} max={MAX_RESULT_FILES} label="스크린샷 추가" />
+              </div>
               <div className="form-foot">
                 <span className="muted small">개인정보·비밀키가 diff에 없는지 확인하세요.</span>
                 <button type="submit" className="btn btn-primary" disabled={busy || (!result.diff.trim() && !result.summary.trim())}>

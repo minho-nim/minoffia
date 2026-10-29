@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { MIME_EXT, type Attachment } from '../domain/attachments';
 import type { Project, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, PmPlan, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { OfficeStore } from './store';
@@ -128,17 +129,50 @@ const toRevisionRequest = (r: Row): RevisionRequest => ({
   createdAt: r.created_at as string,
 });
 
+const toAttachment = (r: Row): Attachment => ({
+  id: r.id as string,
+  taskId: r.task_id as string,
+  kind: r.kind as Attachment['kind'],
+  resultRevision: (r.result_revision as number | null) ?? null,
+  position: r.position as number,
+  role: r.role as Attachment['role'],
+  note: (r.note as string) ?? '',
+  fileName: r.file_name as string,
+  mime: r.mime as string,
+  sizeBytes: r.size_bytes as number,
+  sha256: r.sha256 as string,
+  storagePath: r.storage_path as string,
+  createdAt: r.created_at as string,
+});
+
+/** 비공개 버킷. 정책은 supabase/migrations/0004_attachments.sql */
+const BUCKET = 'attachments';
+/** 화면용 주소 유효 시간(초) */
+const SIGNED_URL_SECONDS = 3600;
+
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
   return res.data;
 }
 
 export function createSupabaseStore(client: SupabaseClient): OfficeStore {
+  const userId = async () => {
+    const { data } = await client.auth.getSession();
+    const id = data.session?.user.id;
+    if (!id) throw new Error('로그인이 필요합니다.');
+    return id;
+  };
+  // 다른 기록이 같은 파일을 쓰지 않을 때만 파일을 지운다(같은 이미지는 한 번만 저장하므로).
+  const removeIfUnused = async (path: string) => {
+    const { count } = await client.from('attachments').select('id', { count: 'exact', head: true }).eq('storage_path', path);
+    if (!count) await client.storage.from(BUCKET).remove([path]);
+  };
+  const urlCache = new Map<string, { url: string; until: number }>();
   return {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -149,6 +183,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         // 결과 목록에는 큰 diff·로그를 빼고, 필요할 때만 읽는 대신 v0.2.1은 크기 상한(500KB)으로 제한한다.
         client.from('result_packages').select('*').order('revision'),
         client.from('revision_requests').select('*').order('created_at'),
+        client.from('attachments').select('*').order('position'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -161,6 +196,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           assignments: (check(assignments) ?? []).map(toAssignment),
           results: (check(results) ?? []).map(toResult),
           revisionRequests: (check(revisionRequests) ?? []).map(toRevisionRequest),
+          attachments: (check(attachments) ?? []).map(toAttachment),
         },
       };
     },
@@ -192,6 +228,14 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async deleteTask(id) {
       check(await client.from('tasks').delete().eq('id', id));
+      // 기록은 함께 지워졌다(on delete cascade). 남은 파일도 정리한다. 실패해도 업무 삭제는 끝난 것이다.
+      try {
+        const folder = `${await userId()}/${id}`;
+        const { data } = await client.storage.from(BUCKET).list(folder, { limit: 100 });
+        if (data?.length) await client.storage.from(BUCKET).remove(data.map((f) => `${folder}/${f.name}`));
+      } catch {
+        // 무시
+      }
     },
     async addManualRun(r) {
       check(await client.from('usage_runs').insert({ id: r.id, agent: r.agent, task_id: r.taskId, kind: 'manual' }));
@@ -281,6 +325,49 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           feedback: x.feedback,
         }),
       );
+    },
+    async addAttachment(x, file) {
+      const path = `${await userId()}/${x.taskId}/${x.sha256}.${MIME_EXT[x.mime] ?? 'bin'}`;
+      // 같은 업무에 같은 파일이 이미 있으면 그대로 쓴다(덮어쓰기 없음).
+      const up = await client.storage.from(BUCKET).upload(path, file, { contentType: x.mime, upsert: false });
+      const duplicate = up.error && /exist|duplicate/i.test(up.error.message);
+      if (up.error && !duplicate) throw new Error(`파일 올리기 실패: ${up.error.message}`);
+      const res = await client.from('attachments').insert({
+        id: x.id,
+        task_id: x.taskId,
+        kind: x.kind,
+        result_revision: x.resultRevision,
+        position: x.position,
+        role: x.role,
+        note: x.note,
+        file_name: x.fileName,
+        mime: x.mime,
+        size_bytes: x.sizeBytes,
+        sha256: x.sha256,
+        storage_path: path,
+      });
+      if (res.error) {
+        if (!duplicate) await removeIfUnused(path).catch(() => undefined);
+        throw new Error(res.error.message);
+      }
+    },
+    async updateAttachment(x) {
+      check(await client.from('attachments').update({ position: x.position, role: x.role, note: x.note }).eq('id', x.id));
+    },
+    async deleteAttachment(x) {
+      const res = await client.from('attachments').delete().eq('id', x.id).select('id');
+      if (res.error) throw new Error(res.error.message);
+      if (!res.data?.length) throw new Error('지울 수 없는 첨부입니다(결과 스크린샷은 검토 기록이라 남습니다).');
+      await removeIfUnused(x.storagePath).catch(() => undefined);
+    },
+    async attachmentUrl(x) {
+      const hit = urlCache.get(x.storagePath);
+      if (hit && hit.until > Date.now()) return hit.url;
+      const { data, error } = await client.storage.from(BUCKET).createSignedUrl(x.storagePath, SIGNED_URL_SECONDS);
+      if (error || !data) throw new Error(`파일 주소를 만들지 못했습니다: ${error?.message ?? ''}`);
+      // 만료 5분 전까지만 다시 쓴다.
+      urlCache.set(x.storagePath, { url: data.signedUrl, until: Date.now() + (SIGNED_URL_SECONDS - 300) * 1000 });
+      return data.signedUrl;
     },
     async addResult(x) {
       check(

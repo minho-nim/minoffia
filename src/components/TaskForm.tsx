@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
+import { MAX_REQUEST_FILES, ROLES_FOR } from '../domain/attachments';
 import { routeTask } from '../domain/router';
 import type { Priority, Project, RequestedType, UsageRun } from '../domain/types';
 import { PRIORITY_LABEL, WORK_TYPE_LABEL } from '../domain/types';
+import { ImagePicker, type PendingImage } from './Attachments';
 
 export interface TaskDraft {
   projectId: string;
@@ -15,7 +17,8 @@ export interface TaskDraft {
 interface Props {
   projects: Project[];
   usage: UsageRun[];
-  onSubmit: (draft: TaskDraft) => Promise<void>;
+  /** 이미지는 업무를 저장한 뒤 비공개 저장소에 올린다. */
+  onSubmit: (draft: TaskDraft, images: PendingImage[]) => Promise<void>;
 }
 
 export function TaskForm({ projects, usage, onSubmit }: Props) {
@@ -25,6 +28,7 @@ export function TaskForm({ projects, usage, onSubmit }: Props) {
   const [requestedType, setRequestedType] = useState<RequestedType>('auto');
   const [priority, setPriority] = useState<Priority>('normal');
   const [busy, setBusy] = useState(false);
+  const [images, setImages] = useState<PendingImage[]>([]);
 
   const pid = projects.some((p) => p.id === projectId) ? projectId : projects[0]?.id ?? '';
   const preview = title.trim() ? routeTask({ title, description, requestedType }, usage) : null;
@@ -41,7 +45,8 @@ export function TaskForm({ projects, usage, onSubmit }: Props) {
         if (!title.trim() || !pid) return;
         setBusy(true);
         try {
-          await onSubmit({ projectId: pid, title: title.trim(), description, requestedType, priority });
+          await onSubmit({ projectId: pid, title: title.trim(), description, requestedType, priority }, images);
+          setImages([]);
           setTitle('');
           setDescription('');
           setRequestedType('auto');
@@ -73,6 +78,10 @@ export function TaskForm({ projects, usage, onSubmit }: Props) {
           maxLength={2000}
         />
       </label>
+      <div className="field">
+        <span>이미지 (현재 화면·목표 디자인·오류 화면, {MAX_REQUEST_FILES}장까지)</span>
+        <ImagePicker items={images} onChange={setImages} roles={ROLES_FOR.request} max={MAX_REQUEST_FILES} />
+      </div>
       <div className="field-row">
         <label className="field">
           <span>프로젝트</span>
@@ -117,7 +126,7 @@ export function TaskForm({ projects, usage, onSubmit }: Props) {
           )}
         </p>
         <button type="submit" className="btn btn-primary" disabled={busy || !title.trim()}>
-          {busy ? '접수 중' : '업무 접수'}
+          {busy ? (images.length ? '접수·이미지 올리는 중' : '접수 중') : '업무 접수'}
         </button>
       </div>
     </form>
