@@ -22,6 +22,7 @@ import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
 import { getSupabase } from './lib/supabase';
 import { OfficeView } from './office/OfficeView';
+import { version } from '../package.json';
 
 type Tab = 'tasks' | 'projects' | 'agent';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -439,7 +440,7 @@ export function App() {
       <header className="topbar">
         <div className="brand-block">
           <h1 className="brand">
-            MINLAB AI OFFICE <span className="ver">v0.1</span>
+            MINLAB AI OFFICE <span className="ver">v{version}</span>
           </h1>
           {store.mode === 'local' ? (
             <span className="mode mode-local" title="데이터는 이 브라우저의 localStorage에만 저장됩니다">
