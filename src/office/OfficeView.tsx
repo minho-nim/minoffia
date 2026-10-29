@@ -94,12 +94,25 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect }: Prop
     }
   }, [scene]);
 
+  // 오피스가 화면 밖이면 걷기를 멈춘다. 휴대폰에서 목록을 보다 올라와도 걷는 모습이 보인다.
+  const visibleRef = useRef(true);
   useEffect(() => {
+    const el = canvasRef.current?.parentElement;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => {
+      visibleRef.current = e.isIntersecting;
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    // 동작 줄이기 설정이어도 이동 경로는 보여 준다(순간 이동하면 누가 어디로 갔는지 알 수 없다). 흔들림만 끈다.
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = visibleRef.current ? Math.min(0.1, (now - last) / 1000) : 0;
       last = now;
       for (const s of sceneRef.current) {
         const m = movers.current.get(s.agent);
@@ -107,31 +120,24 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect }: Prop
         if (!m || !el) continue;
         let walking = false;
         if (m.path.length) {
-          if (reduce) {
-            const end = m.path[m.path.length - 1];
-            m.x = end.x;
-            m.y = end.y;
-            m.path = [];
-          } else {
-            let budget = SPEED * dt;
-            while (budget > 0 && m.path.length) {
-              const p = m.path[0];
-              const dx = p.x - m.x;
-              const dy = p.y - m.y;
-              const d = Math.hypot(dx, dy);
-              if (d <= budget) {
-                m.x = p.x;
-                m.y = p.y;
-                m.path.shift();
-                budget -= d;
-              } else {
-                m.x += (dx / d) * budget;
-                m.y += (dy / d) * budget;
-                budget = 0;
-              }
+          let budget = SPEED * dt;
+          while (budget > 0 && m.path.length) {
+            const p = m.path[0];
+            const dx = p.x - m.x;
+            const dy = p.y - m.y;
+            const d = Math.hypot(dx, dy);
+            if (d <= budget) {
+              m.x = p.x;
+              m.y = p.y;
+              m.path.shift();
+              budget -= d;
+            } else {
+              m.x += (dx / d) * budget;
+              m.y += (dy / d) * budget;
+              budget = 0;
             }
-            walking = m.path.length > 0;
           }
+          walking = m.path.length > 0;
           if (!m.path.length && m.target) m.zone = m.target.zone;
         }
         // 실제로 작업 중일 때만 살짝 흔들린다.
