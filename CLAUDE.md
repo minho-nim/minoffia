@@ -9,18 +9,25 @@
 - `npm run build:artifact` — Claude Artifact용 단일 HTML(`dist-artifact/artifact.html`, 항상 로컬 데모 모드).
 - 화면 확인: Playwright로 `dist-artifact/index.html`을 열어 데스크톱(1400px)·모바일(400px) 스크린샷, 콘솔 오류와 가로 넘침 확인.
 
-## 작업 흐름 (소유자가 승인한 규칙)
+## 작업 흐름 (소유자가 승인한 규칙, 2026-10-29 v0.2.1로 변경)
 
-1. `main`에서 `feat/…`, `fix/…`, `chore/…` 브랜치를 만든다. `main`에 직접 푸시하지 않는다.
-2. 커밋 → 브랜치 푸시 → PR 생성(`gh api repos/minho-nim/MinLab-AI-Office/pulls`, GraphQL 기반 `gh pr`은 막혀 있음).
-3. `verify` 검사(GitHub Actions)가 **통과하면 Claude가 squash 병합**해도 된다:
-   `gh api -X PUT repos/minho-nim/MinLab-AI-Office/pulls/<번호>/merge -f merge_method=squash`
-   실패하면 고쳐서 다시 푸시하고, 통과 전에는 병합하지 않는다.
+1. `main`에서 `feat/…`, `fix/…`, `chore/…` 브랜치를 만들어 로컬에서 작업하고 `typecheck`·`test`·`build`(DB를 바꾸면 `scripts/test-db.sh`)를 돌린다.
+2. **푸시·PR 생성·병합은 소유자가 명시적으로 승인한 뒤에만** 한다("올려줘", "PR 만들어", "병합해" 등). 승인 없이 GitHub에 코드를 올리지 않는다.
+3. PR은 `gh api repos/minho-nim/MinLab-AI-Office/pulls`로 만든다(GraphQL 기반 `gh pr`은 막혀 있음). 병합 승인을 받으면
+   `verify` 통과를 확인한 뒤 `gh api -X PUT repos/minho-nim/MinLab-AI-Office/pulls/<번호>/merge -f merge_method=squash`.
 4. 화면이 바뀌면 Artifact(Claude 안 데모 페이지)도 다시 게시한다: https://claude.ai/artifact/KymYCpMcfjW7Cskyjyf7Ph
 5. 운영 배포는 소유자가 요청할 때만 한다. Cloudflare Pages는 `release` 브랜치만 배포하므로,
    배포 명령은 `git fetch origin && git push origin origin/main:refs/heads/release`(release를 main에 맞춤)이다.
    현재 권한 설정은 `main`이 들어간 push를 막으므로 이 명령은 소유자가 직접 실행한다.
    `main` 병합만으로는 배포되지 않는다. `release`에 직접 커밋하지 않는다.
+6. 운영 Supabase에 마이그레이션 적용·Edge Function 배포도 운영 변경이다. 소유자 승인 후에만 한다.
+
+## 앱이 다루는 업무 플로우 (v0.2.1, 수정 금지)
+
+사용자 요청 → ChatGPT 기획(수동 인계) → **A 승인** → Claude PM 계획(저장소 쓰기 금지) → **E 실행 승인** → Codex Cloud 주 개발(자동 시작 미검증 → 수동 인계) → 결과 패키지 검토 → **B 승인** 후 GitHub 업로드·PR → **C 승인** 후 운영 배포.
+- 배정 완료 ≠ 실행 중, 세션 시작(HTTP 200) ≠ 완료. 검증하지 않은 자동 실행을 성공으로 표시하지 않는다.
+- Claude 세션 안에 Codex CLI·Grok CLI를 설치·실행하지 않는다. 하위 에이전트를 Codex라고 부르지 않는다.
+- 승인·기획서·결과는 추가만 가능한 감사 기록이다. 게이트 규칙은 `supabase/migrations/0003_v021_approval_gates.sql`과 `src/domain/workflow.ts`가 같아야 한다.
 
 ## 지켜야 할 것
 
@@ -33,6 +40,8 @@
 ## 구조
 
 - `src/domain` 규칙(배정 router, 사용량 usage, 상태 전이 status, 지시서 handoff) — 단위 테스트 있음
+- `src/domain/workflow*.ts`·`pmPlan.ts`·`adapters.ts`·`handoffV2.ts` v0.2.1 승인 단계, PM 계획 검증, 실행 경로 상태
+- `src/components/WorkflowPanel.tsx` 업무 카드의 진행 단계 패널
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase

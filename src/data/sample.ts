@@ -1,4 +1,5 @@
 import type { Snapshot, Task } from '../domain/types';
+import type { TaskSpec } from '../domain/workflow-types';
 import { kstDay } from '../domain/usage';
 
 /** 로컬 데모 첫 화면용 예시. 실제 저장소와 연결되어 있지 않다. */
@@ -45,5 +46,22 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
   const usage = [
     { id: 's-u1', agent: 'codex' as const, taskId: 's-1', kind: 'manual' as const, day: kstDay(now), createdAt: at(60) },
   ];
-  return { projects, tasks, usage };
+  // 예시: GPT 기획서가 붙어 A 승인을 기다리는 업무 하나
+  const specs: TaskSpec[] = [
+    {
+      id: 's-spec-1',
+      taskId: 's-2',
+      revision: 1,
+      intent: 'change_request',
+      planner: 'chatgpt_manual',
+      userOriginalText: '선택지 분기 구조 설계',
+      finalPrompt: '친구들과 하는 선택지 게임의 장면·선택지·결말 데이터 구조를 설계한다. 기존 화면은 바꾸지 않는다.',
+      changeScope: 'src/story 데이터 구조, 문서',
+      preserveConstraints: '기존 화면·저장 데이터 유지',
+      testCriteria: 'npm test 통과, 예시 시나리오 3개 로딩',
+      answer: '',
+      createdAt: at(120),
+    },
+  ];
+  return { projects, tasks, usage, workflow: { specs, approvals: [], plans: [], assignments: [], results: [] } };
 }

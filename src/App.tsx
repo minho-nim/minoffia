@@ -5,6 +5,7 @@ import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
+import { WorkflowPanel, type WorkflowActions } from './components/WorkflowPanel';
 import { createLocalStore, resetLocalDemo } from './data/localStore';
 import { newId, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
@@ -14,6 +15,10 @@ import { canTransition } from './domain/status';
 import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/types';
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
+import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
+import { deriveWorkflow, officeStatus, sha256Hex } from './domain/workflow';
+import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
+import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
 import { getSupabase } from './lib/supabase';
 import { OfficeView } from './office/OfficeView';
@@ -21,8 +26,27 @@ import { OfficeView } from './office/OfficeView';
 type Tab = 'tasks' | 'projects' | 'agent';
 type Filter = 'open' | 'all' | TaskStatus;
 
-const EMPTY: Snapshot = { projects: [], tasks: [], usage: [] };
+const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
 const POLL_MS = 15_000;
+
+/** DB·저장소 규칙 위반 메시지를 사용자 말로 바꾼다. */
+function explainDbError(message: string): string {
+  const rules: [string, string][] = [
+    ['approvals_once', '이미 승인한 항목입니다. 중복으로 기록하지 않았습니다.'],
+    ['A must approve the latest spec', '최신 기획서만 A 승인할 수 있습니다.'],
+    ['question/ambiguous', '단순 질문이나 의도 불분명 기획서는 개발 승인 대상이 아닙니다.'],
+    ['A approval required', '최신 기획서의 A 승인이 먼저 필요합니다.'],
+    ['plan is stale', '기획서가 바뀌어 이 계획으로는 실행 승인할 수 없습니다. PM 계획을 다시 받으세요.'],
+    ['E must', '최신 계획에 있는 작업만 실행 승인할 수 있습니다.'],
+    ['E approval required', 'E 실행 승인 전에는 시작을 기록할 수 없습니다.'],
+    ['B must approve the latest', '최신 결과 패키지만 B 승인할 수 있습니다.'],
+    ['C requires B', '같은 결과의 B 승인이 먼저 필요합니다.'],
+    ['revision must be', '다른 기기에서 먼저 새 버전이 저장됐습니다. 새로고침 후 다시 시도하세요.'],
+    ['only the server', '서버가 확인한 상태는 화면에서 기록할 수 없습니다.'],
+  ];
+  const hit = rules.find(([needle]) => message.includes(needle));
+  return hit ? hit[1] : `저장하지 못했습니다: ${message}`;
+}
 
 export function App() {
   const [booting, setBooting] = useState(true);
@@ -141,6 +165,8 @@ export function App() {
       assignee: route.assignee,
       routeReason: route.reason,
       status: 'queued',
+      stage: 'received',
+      userOriginalText: [d.title, d.description.trim()].filter(Boolean).join('\n\n'),
       dispatch: { state: 'none' },
       createdAt: now,
       updatedAt: now,
@@ -184,7 +210,182 @@ export function App() {
     const project = projectById.get(task.projectId);
     if (!project?.repo) return '프로젝트에 GitHub 저장소(owner/repo)를 먼저 입력하세요.';
     if (runsToday(snap.usage, 'claude') >= (AGENT_BY_ID.claude.dailyCap ?? 0)) return '오늘 Claude Cloud 실행 2회를 모두 썼습니다.';
+    if (!deriveWorkflow(task, snap.workflow).aApproved) return '최신 기획서의 A 승인이 먼저 필요합니다.';
     return null;
+  };
+
+  // DB 기록으로 단계를 다시 계산해 업무에 반영한다(캐릭터 위치도 이 값을 따른다).
+  const syncStage = async (taskId: string) => {
+    const now = await store.load();
+    const t = now.tasks.find((x) => x.id === taskId);
+    if (t) {
+      const stage = deriveWorkflow(t, now.workflow).stage;
+      const status = officeStatus(stage, t.status);
+      if (t.stage !== stage || t.status !== status) {
+        try {
+          await store.saveTask({ ...t, stage, status, updatedAt: new Date().toISOString() });
+        } catch {
+          // 전송 중에는 상태를 바꿀 수 없다(DB 규칙). 다음 새로고침 때 다시 맞춘다.
+        }
+      }
+    }
+    setSnap(await store.load());
+  };
+
+  const step = async (taskId: string, fn: () => Promise<void>, ok?: string): Promise<boolean> => {
+    try {
+      await fn();
+      await syncStage(taskId);
+      if (ok) say('ok', ok);
+      return true;
+    } catch (e) {
+      say('error', explainDbError((e as Error).message));
+      return false;
+    }
+  };
+
+  const nextRevision = (list: { taskId: string }[], taskId: string, key: (x: never) => number) =>
+    Math.max(0, ...list.filter((x) => x.taskId === taskId).map((x) => key(x as never))) + 1;
+
+  const workflowActions: WorkflowActions = {
+    // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.
+    copy: async (text) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setHandoff(null);
+        return true;
+      } catch {
+        setHandoff(text);
+        return false;
+      }
+    },
+    saveSpec: (task, f) =>
+      step(
+        task.id,
+        () =>
+          store.addSpec({
+            id: newId(),
+            taskId: task.id,
+            revision: nextRevision(snap.workflow.specs, task.id, (x: { revision: number }) => x.revision),
+            intent: f.intent,
+            planner: 'chatgpt_manual',
+            userOriginalText: task.userOriginalText ?? [task.title, task.description].filter(Boolean).join('\n\n'),
+            finalPrompt: f.finalPrompt,
+            changeScope: f.changeScope,
+            preserveConstraints: f.preserveConstraints,
+            testCriteria: f.testCriteria,
+            answer: f.answer,
+            createdAt: new Date().toISOString(),
+          }),
+        '기획서 새 버전을 저장했습니다.',
+      ),
+    decide: (task, gate, revision, decision, workItemId = '', scope = {}) =>
+      step(
+        task.id,
+        async () => {
+          const previous = snap.workflow.approvals
+            .filter((a) => a.taskId === task.id && a.gate === gate && a.decision === 'approved')
+            .reduce<number | null>((m, a) => (m === null || a.approvedRevision > m ? a.approvedRevision : m), null);
+          const approval: Approval = {
+            id: newId(),
+            taskId: task.id,
+            gate,
+            decision,
+            approvedRevision: revision,
+            previousRevision: previous,
+            workItemId,
+            scope,
+            actor: session?.user.email ?? '로컬 데모',
+            createdAt: new Date().toISOString(),
+          };
+          await store.addApproval(approval);
+          if (gate === 'E' && decision === 'approved') {
+            const a = snap.workflow.assignments.find((x) => x.taskId === task.id && x.planRevision === revision && x.workItemId === workItemId);
+            if (a) await store.updateAssignment({ ...a, dispatchStatus: 'ready' });
+          }
+        },
+        decision === 'approved' ? `${gate} 승인을 기록했습니다.` : '보류로 기록했습니다.',
+      ),
+    dispatchPm: (task, ack) => dispatch(task, ack),
+    importPlan: async (task, text) => {
+      const view = deriveWorkflow(task, snap.workflow);
+      const parsed = parsePmPlan(text, task.id);
+      if (!parsed.ok) return parsed.errors;
+      if (!view.spec || !view.aApproved) return ['최신 기획서의 A 승인이 먼저 필요합니다.'];
+      const planRevision = nextRevision(snap.workflow.plans, task.id, (x: { planRevision: number }) => x.planRevision);
+      const plan: PmPlan = {
+        id: newId(),
+        taskId: task.id,
+        planRevision,
+        approvedSpecRevision: view.spec.revision,
+        targetBaseRevision: parsed.plan.target_base_revision,
+        source: task.dispatch.sessionUrl ? 'routine_session_manual_import' : 'manual',
+        plan: { ...parsed.plan, plan_revision: planRevision },
+        createdAt: new Date().toISOString(),
+      };
+      const assignments: AgentAssignment[] = parsed.plan.work_items.map((w) => ({
+        id: newId(),
+        taskId: task.id,
+        planRevision,
+        workItemId: w.id,
+        title: w.title,
+        assignee: PREF_AGENT[w.assignee_preference],
+        // 자동 실행 경로가 검증되기 전까지는 계획이 codex_cloud라고 해도 수동 인계로 둔다.
+        executionMode: 'manual_handoff',
+        dispatchStatus: 'awaiting_user_execution_approval',
+        statusSource: 'none',
+        providerExecutionId: null,
+        providerTaskUrl: null,
+        actualProviderStatus: 'unknown',
+        startedAt: null,
+        lastVerifiedAt: null,
+        updatedAt: new Date().toISOString(),
+      }));
+      const saved = await step(task.id, () => store.addPlan(plan, assignments), `PM 계획 v${planRevision}을 저장했습니다.`);
+      return saved ? null : ['저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.'];
+    },
+    recordStart: (a, url) =>
+      step(
+        a.taskId,
+        async () => {
+          await store.updateAssignment({
+            ...a,
+            dispatchStatus: 'started',
+            statusSource: 'user_reported',
+            providerTaskUrl: url.trim() || null,
+            actualProviderStatus: 'user_reported_started',
+            startedAt: new Date().toISOString(),
+          });
+          if (AGENT_BY_ID[a.assignee === 'gemini' ? 'studioA' : a.assignee].mode === 'manual') {
+            await store.addManualRun({ id: newId(), agent: a.assignee === 'gemini' ? 'studioA' : a.assignee, taskId: a.taskId, kind: 'manual', day: kstDay(), createdAt: new Date().toISOString() });
+          }
+        },
+        '직접 시작했다고 기록했습니다.',
+      ),
+    addResult: (task, f) =>
+      step(
+        task.id,
+        async () => {
+          const assignment = snap.workflow.assignments.find((a) => a.taskId === task.id && a.workItemId === f.workItemId);
+          const view = deriveWorkflow(task, snap.workflow);
+          await store.addResult({
+            id: newId(),
+            taskId: task.id,
+            revision: nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision),
+            planRevision: view.plan?.planRevision ?? null,
+            workItemId: f.workItemId,
+            source: assignment?.assignee === 'codex' ? 'codex_cloud_manual' : assignment?.assignee === 'claude' ? 'claude_manual' : 'manual',
+            summary: f.summary,
+            diff: f.diff,
+            testLog: f.testLog,
+            remainingIssues: f.remainingIssues,
+            sha256: await sha256Hex(`${f.diff}\n---\n${f.testLog}`),
+            createdAt: new Date().toISOString(),
+          });
+        },
+        '결과 패키지를 저장했습니다. GitHub에는 아직 올라가지 않았습니다.',
+      ),
+    setPrUrl: (task, url) => step(task.id, () => store.saveTask({ ...task, prUrl: url.trim() }), 'PR 주소를 기록했습니다.'),
   };
 
   const dispatch = async (task: Task, ack: boolean) => {
@@ -253,7 +454,7 @@ export function App() {
 
       <main className="layout">
         <section className="stage" aria-label="오피스">
-          <OfficeView tasks={snap.tasks} selected={selected} onSelect={selectAgent} />
+          <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} selected={selected} onSelect={selectAgent} />
           <p className="stage-note">
             캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.
           </p>
@@ -329,11 +530,19 @@ export function App() {
                     key={t.id}
                     task={t}
                     project={projectById.get(t.projectId)}
-                    dispatchBlocker={dispatchBlocker(t)}
+                    stageLabel={STAGE_LABEL[deriveWorkflow(t, snap.workflow).stage]}
+                    workflow={
+                      <WorkflowPanel
+                        task={t}
+                        project={projectById.get(t.projectId)}
+                        view={deriveWorkflow(t, snap.workflow)}
+                        dispatchBlocker={dispatchBlocker(t)}
+                        actions={workflowActions}
+                      />
+                    }
                     onStatus={setStatus}
                     onDelete={(task) => void mutate(() => store.deleteTask(task.id), '업무를 삭제했습니다.')}
                     onCopy={copyHandoff}
-                    onDispatch={dispatch}
                   />
                 ))
               )}
@@ -354,6 +563,7 @@ export function App() {
               agentId={selected}
               tasks={snap.tasks}
               usage={snap.usage}
+              assignments={snap.workflow.assignments}
               onOpenTask={() => {
                 setFilter('all');
                 setTab('tasks');

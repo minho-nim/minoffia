@@ -1,0 +1,71 @@
+import { describe, expect, it } from 'vitest';
+import { extractJson, parsePmPlan } from './pmPlan';
+
+const TASK = 'dacc111e-3f6b-4e65-a9d5-6bc8d6295fff';
+const plan = (over: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    task_id: TASK,
+    repository: 'minho-nim/MinLab-AI-Office',
+    target_base_revision: 'abc123',
+    plan_revision: 1,
+    status: 'planned',
+    questions: [],
+    work_items: [
+      { id: 'W1', title: '버튼', goal: 'g', dependencies: [], assignee_preference: 'codex_primary', execution_mode: 'manual_handoff', acceptance_tests: ['npm test'], preserve_constraints: [], attachment_refs: [], requires_execution_approval: false },
+      { id: 'W2', title: '리뷰', goal: 'g', dependencies: ['W1'], assignee_preference: 'grok_optional', execution_mode: 'manual_handoff' },
+    ],
+    ...over,
+  });
+
+describe('parsePmPlan', () => {
+  it('세션 메시지 속 ```json 블록을 꺼내 검증한다', () => {
+    const r = parsePmPlan(`계획입니다.\n\`\`\`json\n${plan()}\n\`\`\`\n끝`, TASK);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.plan.work_items).toHaveLength(2);
+      expect(r.plan.work_items[1].dependencies).toEqual(['W1']);
+    }
+  });
+
+  it('계획이 실행 승인 불필요라고 해도 항상 승인을 요구한다', () => {
+    const r = parsePmPlan(plan(), TASK);
+    expect(r.ok && r.plan.work_items.every((w) => w.requires_execution_approval)).toBe(true);
+  });
+
+  it('다른 업무의 계획은 거절한다', () => {
+    const r = parsePmPlan(plan({ task_id: 'other' }), TASK);
+    expect(r.ok).toBe(false);
+  });
+
+  it('잘못된 담당·없는 의존 작업·중복 id를 모두 알려준다', () => {
+    const r = parsePmPlan(
+      plan({
+        work_items: [
+          { id: 'W1', title: 'a', assignee_preference: 'codex', execution_mode: 'manual_handoff' },
+          { id: 'W1', title: 'b', assignee_preference: 'codex_primary', execution_mode: 'manual_handoff', dependencies: ['W9'] },
+        ],
+      }),
+      TASK,
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.join(' ')).toContain('assignee_preference');
+      expect(r.errors.join(' ')).toContain('중복');
+      expect(r.errors.join(' ')).toContain('W9');
+    }
+  });
+
+  it('JSON이 없거나 깨지면 이유를 알려준다', () => {
+    expect(parsePmPlan('그냥 글', TASK).ok).toBe(false);
+    expect(parsePmPlan('{ "task_id": ', TASK).ok).toBe(false);
+  });
+
+  it('질문만 있는 계획(needs_clarification)은 작업 없이도 통과', () => {
+    const r = parsePmPlan(plan({ status: 'needs_clarification', questions: ['무엇을 설계할까요?'], work_items: [] }), TASK);
+    expect(r.ok).toBe(true);
+  });
+
+  it('extractJson은 마지막 json 블록을 쓴다', () => {
+    expect(extractJson('```json\n{"a":1}\n```\n```json\n{"b":2}\n```')).toBe('{"b":2}');
+  });
+});
