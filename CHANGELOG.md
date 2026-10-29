@@ -1,5 +1,14 @@
 # 변경 기록
 
+## 0.2.6 — 2026-10-29
+
+### 추가
+- **새 프로젝트의 GitHub 저장소 만들기**(소유자 요청). 입력창에서 새 프로젝트를 만들면 "GitHub 저장소도 만들까요?"를 묻고, 프로젝트 탭의 저장소 없는 프로젝트에도 "저장소 만들기"가 있다.
+  - 서버 함수 `create-repo`: 소유자만, 버튼을 눌러야만, **비공개 + README만**, 하루 5개. 이름은 영문·숫자·-·_·.만, `MinLab`은 보호 이름이라 거절.
+  - 토큰은 secret `GITHUB_REPO_TOKEN`(소유자가 발급)에만 있고 저장소 만들기에만 쓴다. 코드는 지금처럼 B 승인 뒤에만 올라간다.
+  - 만든 저장소는 `managed_repos`에 남고, Claude PM은 `CLAUDE_ALLOWED_REPOSITORY`와 이 저장소들에서만 일한다(`minho-nim/MinLab`은 언제나 제외).
+- 마이그레이션 `0007_managed_repos.sql`, 시험 `60_managed_repos.sql`·`create-repo/naming.test.ts`.
+
 ## 0.2.5 — 2026-10-29
 
 ### 추가

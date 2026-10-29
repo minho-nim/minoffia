@@ -401,6 +401,24 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       urlCache.set(x.storagePath, { url: data.signedUrl, until: Date.now() + (SIGNED_URL_SECONDS - 300) * 1000 });
       return data.signedUrl;
     },
+    async createRepo(projectId, name) {
+      const { data, error } = await client.functions.invoke('create-repo', { body: { projectId, name } });
+      if (error) {
+        let message = error.message;
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const body = await ctx.json();
+            if (body?.error) message = body.error;
+          } catch {
+            // 본문이 JSON이 아니면 기본 메시지
+          }
+        }
+        throw new Error(message);
+      }
+      if (!data?.ok || !data.repo) throw new Error(data?.error ?? '저장소를 만들지 못했습니다.');
+      return { repo: data.repo as string, url: (data.url as string) ?? '', warning: data.warning as string | undefined };
+    },
     async askGemini(question, history) {
       const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history } });
       if (error) {

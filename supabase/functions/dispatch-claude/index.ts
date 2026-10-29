@@ -125,10 +125,17 @@ Deno.serve(async (req) => {
     .order('created_at');
   const qaLines = (qaRows ?? []).flatMap((c, i) => [`Q${i + 1}. ${c.question}`, `A${i + 1}. ${c.answer}`]);
 
-  // 4. 허용된 저장소 하나만
+  // 4. 허용된 저장소만: CLAUDE_ALLOWED_REPOSITORY 또는 AI Office가 만든 저장소(managed_repos). minho-nim/MinLab은 언제나 제외.
   const project = task.projects as unknown as { name: string; repo: string | null } | null;
-  if (!project?.repo || project.repo.toLowerCase() !== allowedRepo.toLowerCase()) {
-    return reply(403, { ok: false, error: `허용된 저장소(${allowedRepo})의 프로젝트만 실행할 수 있습니다.` });
+  const repo = (project?.repo ?? '').toLowerCase();
+  let allowed = !!repo && repo === allowedRepo.toLowerCase();
+  if (repo && !allowed) {
+    const { data: managed } = await userClient.from('managed_repos').select('full_name').eq('owner_id', user.id);
+    allowed = (managed ?? []).some((m) => String(m.full_name).toLowerCase() === repo);
+  }
+  if (repo === 'minho-nim/minlab') allowed = false;
+  if (!project?.repo || !allowed) {
+    return reply(403, { ok: false, error: `허용된 저장소(${allowedRepo} 또는 AI Office가 만든 저장소)의 프로젝트만 실행할 수 있습니다.` });
   }
 
   // 5. 원자적 예약(A 승인 버전 확인 + 일일 상한 + 같은 버전 중복 전송 방지)
