@@ -34,7 +34,9 @@
 ## 지켜야 할 것
 
 - 비밀값(Claude Routine 토큰, service_role 키, 비밀번호)을 코드·커밋·채팅에 남기지 않는다. `.env.local`은 커밋 금지.
-- 유료 API·크레딧이 드는 방법을 쓰지 않는다. 배정은 규칙 기반(LLM 호출 없음).
+- 유료 API·크레딧이 드는 방법을 쓰지 않는다. 배정·입력창 분류는 규칙 기반(LLM 호출 없음).
+- 입력창의 일반 질문만 사용자가 버튼을 누를 때 Gemini 무료 API로 보낸다(소유자 결정 2026-10-29, `supabase/functions/ask-gemini`). 질문 글은 저장하지 않는다. 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`.
+- 업무로 만들기 전에는 반드시 프로젝트를 사용자에게 확인받는다("이 프로젝트 맞아요?").
 - 캐릭터 위치·말풍선·모니터·경고등은 **업무 데이터로만** 움직인다. 꾸며낸 활동을 넣지 않는다.
 - 원격 실행이 성공해도 상태는 `in_progress`까지. 완료는 사람이 검토 대기 → 완료로 승인한다.
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
@@ -44,12 +46,13 @@
 - `src/domain` 규칙(배정 router, 사용량 usage, 상태 전이 status, 지시서 handoff) — 단위 테스트 있음
 - `src/domain/workflow*.ts`·`pmPlan.ts`·`adapters.ts`·`handoffV2.ts` v0.2.1 승인 단계, PM 계획 검증, 실행 경로 상태
 - `src/components/WorkflowPanel.tsx` 업무 카드의 진행 단계 패널
+- `src/domain/triage.ts`·`src/components/Inbox.tsx` 업무 탭 입력창(규칙 분류, 프로젝트 확인, Gemini·ChatGPT 선택)
 - `src/domain/requestContext.ts`·`src/components/RequestContext.tsx` 링크 읽기 결과·GPT 확인 질문(규칙은 `0005_links_clarifications.sql`), 서버 `supabase/functions/fetch-link`(내부망 차단은 `safety.ts`, 시험 있음)
 - `src/domain/attachments.ts`·`src/components/Attachments.tsx` 이미지 첨부(비공개 버킷 `attachments`, 규칙은 `0004_attachments.sql`과 같아야 함)
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase
-- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`
+- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`
 
 ## Supabase
 

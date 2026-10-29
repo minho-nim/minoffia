@@ -288,6 +288,22 @@ a {
   min-width: 0;
 }
 
+/* 휴대폰·좁은 화면: 오피스를 위에 고정하고 아래 패널만 스크롤한다(세로가 충분할 때만). */
+@media (max-width: 1039px) and (min-height: 620px) {
+  .stage {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+    padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 8px;
+    background: var(--bg);
+    box-shadow: 0 6px 10px -8px rgba(0, 0, 0, 0.35);
+  }
+  .stage-note {
+    display: none;
+  }
+}
+
 .stage-note {
   margin: 8px 2px 0;
   font-size: 12.5px;
@@ -1495,4 +1511,107 @@ a {
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--surface);
+}
+
+/* ---------- 입력창(묻기·요청) ---------- */
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.inbox-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 42vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.inbox-msg {
+  max-width: 92%;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.inbox-msg p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.inbox-msg.from-me {
+  align-self: flex-end;
+  background: var(--st-progress);
+  color: var(--st-progress-ink);
+}
+
+.inbox-msg.from-gemini {
+  border-left: 3px solid var(--info);
+}
+
+.inbox-who {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.inbox-msg.from-me .inbox-who {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.inbox-actions,
+.inbox-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.inbox-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.inbox-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.inbox-form textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  resize: vertical;
+  font-size: 15px;
+}
+
+.inbox-form .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.direct-entry > summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 0;
+}
+
+.direct-entry[open] > summary {
+  margin-bottom: 8px;
 }

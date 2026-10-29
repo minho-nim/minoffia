@@ -200,6 +200,9 @@ export function createLocalStore(): OfficeStore {
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
       dropUnusedFiles();
     },
+    async askGemini() {
+      throw new Error('로컬 데모에서는 Gemini에 물을 수 없습니다. ChatGPT로 복사해 물어보세요.');
+    },
     async readLink() {
       throw new Error('로컬 데모에서는 링크를 읽을 수 없습니다. Supabase에 연결된 사이트에서 쓰세요.');
     },

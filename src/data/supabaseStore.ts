@@ -197,7 +197,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -211,6 +211,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('attachments').select('*').order('position'),
         client.from('link_refs').select('*').order('created_at'),
         client.from('clarifications').select('*').order('created_at'),
+        client.from('ai_calls').select('id, ok, key_slot, created_at').gte('created_at', since).order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -227,6 +228,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           links: (check(links) ?? []).map(toLink),
           clarifications: (check(clarifications) ?? []).map(toClarification),
         },
+        // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
+        aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, createdAt: r.created_at as string })),
       };
     },
     async saveProject(p) {
@@ -397,6 +400,24 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       // 만료 5분 전까지만 다시 쓴다.
       urlCache.set(x.storagePath, { url: data.signedUrl, until: Date.now() + (SIGNED_URL_SECONDS - 300) * 1000 });
       return data.signedUrl;
+    },
+    async askGemini(question, history) {
+      const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history } });
+      if (error) {
+        let message = error.message;
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const body = await ctx.json();
+            if (body?.error) message = body.error;
+          } catch {
+            // 본문이 JSON이 아니면 기본 메시지
+          }
+        }
+        throw new Error(message);
+      }
+      if (!data?.ok || !data.answer) throw new Error(data?.error ?? 'Gemini가 답하지 못했습니다.');
+      return { answer: data.answer as string, keySlot: data.keySlot as number };
     },
     async readLink(taskId, url) {
       const { data, error } = await client.functions.invoke('fetch-link', { body: { taskId, url } });
