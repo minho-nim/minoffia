@@ -65,6 +65,13 @@ src/assets/office/characters/<id>-walk.png  (없으면 stand만 쓰고 살짝 �
 
 ## 3. Supabase Free 연결 (PC 간 동기화에 추천)
 
+> 연결 완료: 프로젝트 `minlab-ai-office`(서울, ref `kmmicksimbredbyvdmvx`)에 마이그레이션 0001·0002와 `dispatch-claude` 함수를 적용했다.
+> `.env.local`에는 아래 두 값을 넣으면 된다(공개용 값).
+> `VITE_SUPABASE_URL=https://kmmicksimbredbyvdmvx.supabase.co`, `VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_wHxWdPU9k3QTQ55RXdFJhw_wpCHydqA`
+> 남은 일: 소유자 로그인 계정 만들기, 공개 회원가입 끄기, Edge Function secrets 입력(아래 4장).
+
+처음부터 새로 만들 때:
+
 1. [Supabase Dashboard](https://supabase.com/dashboard)에서 무료 프로젝트를 만든다.
 2. `supabase/migrations/0001_office.sql`을 SQL Editor에서 실행한다.
 3. Auth에서 소유자 이메일/비밀번호 계정을 만든다. **공개 회원가입은 끄고**, 앱의 `VITE_ALLOW_SIGNUP=false`를 유지한다.
