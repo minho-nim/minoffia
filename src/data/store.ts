@@ -37,6 +37,8 @@ export interface OfficeStore {
   deleteLink(link: LinkRef): Promise<void>;
   /** GPT 확인 질문·답변(추가만) */
   addClarification(item: Clarification): Promise<void>;
+  /** 입력창 일반 질문을 Gemini 무료 API에 묻는다(서버가 키·하루 상한을 관리). 로컬 데모는 지원하지 않음. */
+  askGemini(question: string, history: { role: 'user' | 'model'; text: string }[]): Promise<{ answer: string; keySlot: number }>;
 }
 
 export function newId(): string {

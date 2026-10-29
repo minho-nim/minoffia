@@ -12,13 +12,15 @@ export interface TaskDraft {
   description: string;
   requestedType: RequestedType;
   priority: Priority;
+  /** 입력창에서 온 요청이면 사용자가 쓴 글 전체(원문 보존) */
+  originalText?: string;
 }
 
 interface Props {
   projects: Project[];
   usage: UsageRun[];
   /** 이미지는 업무를 저장한 뒤 비공개 저장소에 올린다. */
-  onSubmit: (draft: TaskDraft, images: PendingImage[]) => Promise<void>;
+  onSubmit: (draft: TaskDraft, images: PendingImage[]) => Promise<unknown>;
 }
 
 export function TaskForm({ projects, usage, onSubmit }: Props) {

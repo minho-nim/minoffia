@@ -1,0 +1,300 @@
+import { useEffect, useRef, useState } from 'react';
+import { AGENT_BY_ID } from '../domain/agents';
+import { chatGptQuestion, titleFrom, triage } from '../domain/triage';
+import type { Project, Snapshot, Task } from '../domain/types';
+import type { TaskDraft } from './TaskForm';
+
+/**
+ * 업무 탭 맨 위 입력창. AI에게 묻듯 쓰면 규칙이 먼저 나눈다.
+ * 업무로 만들기 전에는 반드시 "이 프로젝트 맞아요?"로 확인을 받는다.
+ * 일반 질문은 사용자가 버튼을 눌렀을 때만 Gemini(Google)로 보낸다.
+ */
+
+type From = 'me' | 'office' | 'gemini';
+interface Msg {
+  id: string;
+  from: From;
+  text: string;
+}
+
+/** 마지막 안내 메시지에 붙는 선택지 */
+type Pending =
+  | { kind: 'confirm'; text: string; project: Project }
+  | { kind: 'pick'; text: string }
+  | { kind: 'question'; text: string }
+  | { kind: 'unclear'; text: string }
+  | { kind: 'naming'; text: string };
+
+interface Props {
+  snap: Snapshot;
+  canAskGemini: boolean;
+  onCreateTask: (draft: TaskDraft) => Promise<Task | null>;
+  onCreateProject: (name: string) => Promise<Project | null>;
+  onAskGemini: (question: string, history: { role: 'user' | 'model'; text: string }[]) => Promise<string>;
+  onCopy: (text: string) => Promise<boolean>;
+}
+
+const KEY = 'minlab-ai-office:inbox:v1';
+const KEEP = 40;
+const mid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+function readLog(): Msg[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(KEY) ?? '[]') as Msg[];
+    return Array.isArray(v) ? v.slice(-KEEP) : [];
+  } catch {
+    return [];
+  }
+}
+
+const FROM_LABEL: Record<From, string> = { me: '나', office: '미나', gemini: 'Gemini' };
+
+export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy }: Props) {
+  const [log, setLog] = useState<Msg[]>(readLog);
+  const [input, setInput] = useState('');
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [showOther, setShowOther] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(log.slice(-KEEP)));
+    } catch {
+      // 저장이 막힌 브라우저에서는 이번 화면에서만 남는다.
+    }
+    endRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [log, pending]);
+
+  const say = (from: From, text: string) => setLog((l) => [...l, { id: mid(), from, text }].slice(-KEEP));
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const askProject = (text: string) => {
+    setShowOther(false);
+    setPending({ kind: 'pick', text });
+    say('office', '어느 프로젝트 업무인가요? 아래에서 고르거나 새 프로젝트를 만드세요.');
+  };
+
+  const handleRequest = (text: string, candidates: Project[]) => {
+    if (candidates.length === 1) {
+      setPending({ kind: 'confirm', text, project: candidates[0] });
+      say('office', `'${candidates[0].name}' 프로젝트 업무로 접수할까요?`);
+    } else askProject(text);
+  };
+
+  const submit = (raw: string) => {
+    const text = raw.trim();
+    if (!text || busy) return;
+    setInput('');
+    say('me', text);
+    if (pending?.kind === 'naming') {
+      const original = pending.text;
+      setPending(null);
+      void run(async () => {
+        const project = await onCreateProject(text.slice(0, 60));
+        if (!project) return say('office', '프로젝트를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
+        say('office', `'${project.name}' 프로젝트를 만들었습니다. GitHub 저장소는 아직 연결되지 않았습니다(프로젝트 탭에서 owner/repo 입력).`);
+        await create(original, project);
+      });
+      return;
+    }
+    setPending(null);
+    const t = triage(text, snap);
+    if (t.kind === 'status') say('office', t.answer);
+    else if (t.kind === 'request') handleRequest(text, t.candidates);
+    else if (t.kind === 'question') {
+      setPending({ kind: 'question', text });
+      say('office', '업무 기록으로는 답할 수 없는 질문이에요. 어디에 물어볼까요?');
+    } else {
+      setPending({ kind: 'unclear', text });
+      say('office', '질문인가요, 업무 요청인가요?');
+    }
+  };
+
+  const create = async (text: string, project: Project) => {
+    const title = titleFrom(text);
+    const task = await onCreateTask({
+      projectId: project.id,
+      title,
+      description: text === title ? '' : text,
+      requestedType: 'auto',
+      priority: 'normal',
+      originalText: text,
+    });
+    if (!task) return say('office', '업무를 저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
+    say(
+      'office',
+      `'${project.name}'에 접수했어요: ${task.title}\n담당 ${AGENT_BY_ID[task.assignee].name} · ${task.routeReason}\n아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.`,
+    );
+  };
+
+  const choose = (project: Project) => {
+    if (!pending) return;
+    const text = pending.text;
+    setPending(null);
+    say('me', `${project.name} 맞아요`);
+    void run(() => create(text, project));
+  };
+
+  const askGemini = (text: string) => {
+    setPending(null);
+    void run(async () => {
+      // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
+      const history: { role: 'user' | 'model'; text: string }[] = [];
+      log.forEach((m, i) => {
+        if (m.from === 'gemini' && log[i - 1]?.from === 'me') history.push({ role: 'user', text: log[i - 1].text }, { role: 'model', text: m.text });
+      });
+      try {
+        say('gemini', await onAskGemini(text, history.slice(-6)));
+      } catch (e) {
+        setPending({ kind: 'question', text });
+        say('office', `${(e as Error).message}`);
+      }
+    });
+  };
+
+  const copyGpt = async (text: string) => {
+    const ok = await onCopy(chatGptQuestion(text));
+    say('office', ok ? '질문을 복사했어요. ChatGPT 대화에 붙여넣으세요(Plus 구독 안, 추가 비용 없음).' : '복사가 막혔어요. 아래 업무 카드의 지시서 칸에서 직접 복사하세요.');
+  };
+
+  const others = (exclude?: string) => snap.projects.filter((p) => p.id !== exclude);
+
+  return (
+    <section className="inbox" aria-label="묻기·요청 입력창">
+      {log.length === 0 && (
+        <p className="muted small inbox-note">
+          예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.
+        </p>
+      )}
+      {log.length > 0 && (
+        <ol className="inbox-log" aria-live="polite">
+          {log.map((m) => (
+            <li key={m.id} className={`inbox-msg from-${m.from}`}>
+              <span className="inbox-who">{FROM_LABEL[m.from]}</span>
+              <p>{m.text}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {pending && !busy && (
+        <div className="inbox-actions" role="group" aria-label="선택">
+          {pending.kind === 'confirm' && (
+            <>
+              <button type="button" className="btn btn-small btn-primary" onClick={() => choose(pending.project)}>
+                맞아요, 접수
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setShowOther((v) => !v)}>
+                다른 프로젝트
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'question', text: pending.text })}>
+                질문이었어요
+              </button>
+              {showOther && (
+                <span className="inbox-choices">
+                  {others(pending.project.id).map((p) => (
+                    <button key={p.id} type="button" className="btn btn-small btn-ghost" onClick={() => choose(p)}>
+                      {p.name}
+                    </button>
+                  ))}
+                  <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'naming', text: pending.text })}>
+                    + 새 프로젝트
+                  </button>
+                </span>
+              )}
+            </>
+          )}
+          {pending.kind === 'pick' && (
+            <>
+              {snap.projects.map((p) => (
+                <button key={p.id} type="button" className="btn btn-small btn-ghost" onClick={() => choose(p)}>
+                  {p.name}
+                </button>
+              ))}
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'naming', text: pending.text })}>
+                + 새 프로젝트
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'question', text: pending.text })}>
+                질문이었어요
+              </button>
+            </>
+          )}
+          {pending.kind === 'question' && (
+            <>
+              {canAskGemini && (
+                <button type="button" className="btn btn-small btn-primary" onClick={() => askGemini(pending.text)}>
+                  Gemini에게 묻기
+                </button>
+              )}
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => void copyGpt(pending.text)}>
+                ChatGPT로 복사
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text)}>
+                사실은 업무 요청이에요
+              </button>
+              <p className="muted small inbox-note">
+                {canAskGemini
+                  ? 'Gemini에게 묻기를 누르면 이 질문이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 질문 글은 AI Office에 저장하지 않습니다.'
+                  : '로컬 데모에서는 Gemini를 쓸 수 없습니다.'}
+              </p>
+            </>
+          )}
+          {pending.kind === 'unclear' && (
+            <>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'question', text: pending.text })}>
+                질문이에요
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text)}>
+                업무 요청이에요
+              </button>
+            </>
+          )}
+          {pending.kind === 'naming' && <p className="muted small inbox-note">아래 입력창에 새 프로젝트 이름을 적고 보내세요.</p>}
+        </div>
+      )}
+      {busy && <p className="muted small inbox-note">처리 중…</p>}
+      <div ref={endRef} />
+
+      <form
+        className="inbox-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit(input);
+        }}
+      >
+        <textarea
+          id="inbox-input"
+          rows={2}
+          value={input}
+          maxLength={4000}
+          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : '묻거나 시킬 일을 적으세요 (Enter로 보내기)'}
+          aria-label="묻기·요청"
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter로 보내고, Shift+Enter는 줄바꿈. 한글 조합 중 Enter는 무시한다.
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              submit(input);
+            }
+          }}
+        />
+        <button type="submit" className="btn btn-primary" disabled={busy || !input.trim()}>
+          보내기
+        </button>
+      </form>
+      {log.length > 0 && (
+        <button type="button" className="link-btn small" onClick={() => { setLog([]); setPending(null); }}>
+          대화 지우기(이 기기)
+        </button>
+      )}
+    </section>
+  );
+}

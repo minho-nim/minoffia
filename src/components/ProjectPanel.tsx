@@ -6,7 +6,7 @@ interface Props {
   projects: Project[];
   tasks: Task[];
   /** id가 있으면 기존 프로젝트 수정, 없으면 새로 등록 */
-  onSave: (p: { id?: string; name: string; repo: string | null; description: string }) => Promise<void>;
+  onSave: (p: { id?: string; name: string; repo: string | null; description: string }) => Promise<unknown>;
   onDelete: (p: Project) => void;
 }
 
