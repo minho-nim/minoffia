@@ -1,6 +1,6 @@
 // Claude Code Cloud Routine을 HTTP 트리거로 실행한다.
 // 비밀값(Fire URL, Bearer token)은 이 함수의 secrets에만 둔다. 브라우저로 내려보내지 않는다.
-import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 /** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
 const HARD_DAILY_CAP = 2;
