@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AGENT_BY_ID, AGENTS } from '../domain/agents';
 import type { AgentId, Task } from '../domain/types';
+import type { AgentAssignment } from '../domain/workflow-types';
 import { STATUS_LABEL } from '../domain/types';
 import { drawOffice } from './draw';
 import { H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
@@ -10,6 +11,8 @@ import { BACKGROUND_URL } from './assets';
 
 interface Props {
   tasks: Task[];
+  /** PM이 배정한 작업. 담당 AI 캐릭터 위치에 반영한다. */
+  assignments?: AgentAssignment[];
   selected: AgentId | null;
   onSelect: (id: AgentId) => void;
 }
@@ -32,11 +35,11 @@ const BADGE: Partial<Record<AgentScene['activity'], string>> = {
   review: '?',
 };
 
-export function OfficeView({ tasks, selected, onSelect }: Props) {
+export function OfficeView({ tasks, assignments = [], selected, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRefs = useRef(new Map<AgentId, HTMLButtonElement>());
   const movers = useRef(new Map<AgentId, Mover>());
-  const scene = useMemo(() => buildScene(tasks), [tasks]);
+  const scene = useMemo(() => buildScene(tasks, assignments), [tasks, assignments]);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 

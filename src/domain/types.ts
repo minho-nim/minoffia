@@ -1,3 +1,5 @@
+import type { Stage, WorkflowData } from './workflow-types';
+
 export type AgentId = 'mina' | 'claude' | 'codex' | 'grok' | 'studioA' | 'studioB' | 'ci';
 export type RoomId = 'research' | 'dev' | 'terminal' | 'planning' | 'lounge';
 export type WorkType = 'planning' | 'dev' | 'design' | 'prototype' | 'research' | 'qa';
@@ -36,6 +38,14 @@ export interface Task {
   status: TaskStatus;
   dispatch: Dispatch;
   sample?: boolean;
+  /** v0.2.1 업무 단계(DB 저장값). 화면은 기록으로 다시 계산한 값을 쓴다. */
+  stage?: Stage;
+  /** 사용자가 처음 적은 요청 원문 */
+  userOriginalText?: string;
+  /** B 승인 뒤 기록한 PR 주소 */
+  prUrl?: string | null;
+  /** PM에 보낸 기획서 버전 */
+  dispatchSpecRevision?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +65,7 @@ export interface Snapshot {
   projects: Project[];
   tasks: Task[];
   usage: UsageRun[];
+  workflow: WorkflowData;
 }
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
