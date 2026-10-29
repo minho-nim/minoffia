@@ -178,3 +178,15 @@ export const INTENT_LABEL: Record<Intent, string> = {
   asset_request: '이미지·에셋 요청',
   ambiguous: '의도 불분명',
 };
+
+export const DISPATCH_STATUS_LABEL: Record<DispatchStatus, string> = {
+  proposed: '배정 제안',
+  awaiting_user_execution_approval: '실행 승인 대기',
+  ready: '시작 준비(수동 인계)',
+  starting: '시작 중',
+  started: '시작됨',
+  blocked_integration: '연동 차단',
+  blocked_quota: '한도 대기',
+  failed: '실패',
+  completed: '완료',
+};

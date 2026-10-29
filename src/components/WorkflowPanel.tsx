@@ -4,7 +4,7 @@ import { buildCodexHandoff, buildGptPackage } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { canApprove, canRequestRevision, type WorkflowView } from '../domain/workflow';
 import type { AgentAssignment, Gate, Intent } from '../domain/workflow-types';
-import { GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
+import { DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
 
 export interface SpecFields {
   intent: Intent;
@@ -406,7 +406,7 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                     </b>
                     <span className="pill">{adapter.label}</span>
                     <span className={`pill pill-adapter-${adapter.state}`}>{ADAPTER_STATE_LABEL[adapter.state]}</span>
-                    <span className="pill">{a.dispatchStatus}</span>
+                    <span className="pill">{DISPATCH_STATUS_LABEL[a.dispatchStatus]}</span>
                   </div>
                   {item?.goal && <p className="small">{item.goal}</p>}
                   {item && item.dependencies.length > 0 && <p className="muted small">먼저 끝나야 할 작업: {item.dependencies.join(', ')}</p>}
