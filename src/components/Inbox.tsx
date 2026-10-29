@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
-import { chatGptQuestion, titleFrom, triage } from '../domain/triage';
+import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
+import { chatGptQuestion, replyIntent, titleFrom, triage } from '../domain/triage';
 import type { Project, Snapshot, Task } from '../domain/types';
 import { RepoCreate } from './RepoCreate';
 import type { TaskDraft } from './TaskForm';
@@ -39,6 +40,8 @@ interface Props {
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
+/** 미나가 기다리는 선택(탭을 옮겨도 남게) */
+const PENDING_KEY = 'minlab-ai-office:inbox-pending:v1';
 const KEEP = 40;
 const mid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -51,12 +54,21 @@ function readLog(): Msg[] {
   }
 }
 
+function readPending(): Pending | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null') as Pending | null;
+    return v && typeof v === 'object' && 'kind' in v ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 const FROM_LABEL: Record<From, string> = { me: '나', office: '미나', gemini: 'Gemini' };
 
 export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const [input, setInput] = useState('');
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [pending, setPending] = useState<Pending | null>(readPending);
   const [busy, setBusy] = useState(false);
   const [showOther, setShowOther] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -69,6 +81,22 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
     endRef.current?.scrollIntoView({ block: 'nearest' });
   }, [log, pending]);
+
+  useEffect(() => {
+    try {
+      if (pending) localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+      else localStorage.removeItem(PENDING_KEY);
+    } catch {
+      // 저장이 막힌 브라우저
+    }
+  }, [pending]);
+
+  // 저장된 선택이 가리키는 프로젝트가 지워졌거나 이미 저장소가 생겼으면 선택을 접는다.
+  useEffect(() => {
+    if (!pending || !('project' in pending)) return;
+    const now = snap.projects.find((p) => p.id === pending.project.id);
+    if (!now || (pending.kind === 'repo' && now.repo)) setPending(null);
+  }, [snap.projects, pending]);
 
   const say = (from: From, text: string) => setLog((l) => [...l, { id: mid(), from, text }].slice(-KEEP));
   const run = async (fn: () => Promise<void>) => {
@@ -98,6 +126,40 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     if (!text || busy) return;
     setInput('');
     say('me', text);
+    // 확인 질문에 버튼 대신 글로 답한 경우("응", "만들어", "아니" 등)
+    const yn = replyIntent(text);
+    if (pending?.kind === 'repo' && yn) {
+      const project = pending.project;
+      if (yn === 'no') {
+        setPending(null);
+        say('office', '저장소는 나중에 프로젝트 탭에서 만들 수 있어요.');
+        return;
+      }
+      const name = toRepoSlug(project.name);
+      if (repoNameError(name) || !onCreateRepo) {
+        say('office', '저장소 이름을 영문으로 정해야 해요. 아래 칸에 이름을 적고 버튼을 누르세요.');
+        return;
+      }
+      void run(async () => {
+        const repo = await onCreateRepo(project, name);
+        if (repo) {
+          setPending(null);
+          say('office', `${repo} 저장소를 만들고 '${project.name}'에 연결했어요.`);
+        } else say('office', '저장소를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
+      });
+      return;
+    }
+    if (pending?.kind === 'confirm' && yn) {
+      if (yn === 'yes') {
+        const { text: original, project } = pending;
+        setPending(null);
+        void run(() => create(original, project));
+      } else {
+        setShowOther(true);
+        say('office', '그럼 어느 프로젝트인가요? 아래에서 고르세요.');
+      }
+      return;
+    }
     if (pending?.kind === 'naming') {
       const original = pending.text;
       setPending(null);
