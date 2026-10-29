@@ -58,6 +58,9 @@ function explainDbError(message: string): string {
     ['invalid storage path', '파일 저장 위치가 올바르지 않습니다. 다시 로그인한 뒤 시도하세요.'],
     ['mime type', 'PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.'],
     ['exceeded the maximum allowed size', '파일이 5MB를 넘습니다.'],
+    ['links are locked after A approval', 'A 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
+    ['clarification must target', '다른 기기에서 기획서가 새로 저장됐습니다. 새로고침 후 다시 기록하세요.'],
+    ['too many clarifications', '확인 질문은 업무당 30건까지 기록합니다.'],
   ];
   const hit = rules.find(([needle]) => message.includes(needle));
   return hit ? hit[1] : `저장하지 못했습니다: ${message}`;
@@ -472,6 +475,33 @@ export function App() {
       }
       return ok;
     },
+    readLink: async (task, url) => {
+      try {
+        const link = await store.readLink(task.id, url.trim());
+        setSnap(await store.load());
+        const okText = link.status === 'ok' ? '링크를 읽었습니다.' : link.status === 'partial' ? `링크를 일부만 읽었습니다. ${link.error}` : link.status === 'blocked' ? `링크를 차단했습니다: ${link.error}` : `링크를 읽지 못했습니다: ${link.error}`;
+        say(link.status === 'ok' || link.status === 'partial' ? 'ok' : 'error', okText);
+        return true;
+      } catch (e) {
+        say('error', explainDbError((e as Error).message));
+        return false;
+      }
+    },
+    deleteLink: (l) => step(l.taskId, () => store.deleteLink(l), '링크를 지웠습니다.'),
+    addClarification: (task, question, answer) =>
+      step(
+        task.id,
+        () =>
+          store.addClarification({
+            id: newId(),
+            taskId: task.id,
+            specRevision: Math.max(0, ...snap.workflow.specs.filter((x) => x.taskId === task.id).map((x) => x.revision)),
+            question: question.trim(),
+            answer: answer.trim(),
+            createdAt: new Date().toISOString(),
+          }),
+        '확인 질문·답변을 기록했습니다. ChatGPT용 자료에 함께 들어갑니다.',
+      ),
     attachmentUrl: (a) => store.attachmentUrl(a),
     addAttachments: async (task, kind, resultRevision, files) => {
       const existing = attachmentsOf(snap.workflow.attachments, task.id, kind, resultRevision);
@@ -665,6 +695,9 @@ export function App() {
                         project={projectById.get(t.projectId)}
                         view={deriveWorkflow(t, snap.workflow)}
                         attachments={snap.workflow.attachments.filter((a) => a.taskId === t.id)}
+                        links={snap.workflow.links}
+                        clarifications={snap.workflow.clarifications}
+                        canReadLinks={store.mode === 'supabase'}
                         dispatchBlocker={dispatchBlocker(t)}
                         actions={workflowActions}
                       />

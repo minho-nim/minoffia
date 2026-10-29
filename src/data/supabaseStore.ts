@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { MIME_EXT, type Attachment } from '../domain/attachments';
+import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, PmPlan, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { OfficeStore } from './store';
@@ -145,6 +146,30 @@ const toAttachment = (r: Row): Attachment => ({
   createdAt: r.created_at as string,
 });
 
+const toLink = (r: Row): LinkRef => ({
+  id: r.id as string,
+  taskId: r.task_id as string,
+  url: r.url as string,
+  kind: r.kind as LinkRef['kind'],
+  status: r.status as LinkRef['status'],
+  httpStatus: (r.http_status as number | null) ?? null,
+  contentType: (r.content_type as string) ?? '',
+  title: (r.title as string) ?? '',
+  excerpt: (r.excerpt as string) ?? '',
+  error: (r.error as string) ?? '',
+  sha256: (r.sha256 as string) ?? '',
+  createdAt: r.created_at as string,
+});
+
+const toClarification = (r: Row): Clarification => ({
+  id: r.id as string,
+  taskId: r.task_id as string,
+  specRevision: r.spec_revision as number,
+  question: r.question as string,
+  answer: r.answer as string,
+  createdAt: r.created_at as string,
+});
+
 /** 비공개 버킷. 정책은 supabase/migrations/0004_attachments.sql */
 const BUCKET = 'attachments';
 /** 화면용 주소 유효 시간(초) */
@@ -172,7 +197,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -184,6 +209,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('result_packages').select('*').order('revision'),
         client.from('revision_requests').select('*').order('created_at'),
         client.from('attachments').select('*').order('position'),
+        client.from('link_refs').select('*').order('created_at'),
+        client.from('clarifications').select('*').order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -197,6 +224,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           results: (check(results) ?? []).map(toResult),
           revisionRequests: (check(revisionRequests) ?? []).map(toRevisionRequest),
           attachments: (check(attachments) ?? []).map(toAttachment),
+          links: (check(links) ?? []).map(toLink),
+          clarifications: (check(clarifications) ?? []).map(toClarification),
         },
       };
     },
@@ -368,6 +397,40 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       // 만료 5분 전까지만 다시 쓴다.
       urlCache.set(x.storagePath, { url: data.signedUrl, until: Date.now() + (SIGNED_URL_SECONDS - 300) * 1000 });
       return data.signedUrl;
+    },
+    async readLink(taskId, url) {
+      const { data, error } = await client.functions.invoke('fetch-link', { body: { taskId, url } });
+      if (error) {
+        let message = error.message;
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const body = await ctx.json();
+            if (body?.error) message = body.error;
+          } catch {
+            // 본문이 JSON이 아니면 기본 메시지
+          }
+        }
+        throw new Error(message);
+      }
+      if (!data?.ok || !data.link) throw new Error(data?.error ?? '링크를 읽지 못했습니다.');
+      return toLink(data.link as Row);
+    },
+    async deleteLink(x) {
+      const res = await client.from('link_refs').delete().eq('id', x.id).select('id');
+      if (res.error) throw new Error(res.error.message);
+      if (!res.data?.length) throw new Error('지울 수 없는 링크입니다.');
+    },
+    async addClarification(x) {
+      check(
+        await client.from('clarifications').insert({
+          id: x.id,
+          task_id: x.taskId,
+          spec_revision: x.specRevision,
+          question: x.question,
+          answer: x.answer,
+        }),
+      );
     },
     async addResult(x) {
       check(
