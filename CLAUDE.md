@@ -9,18 +9,19 @@
 - `npm run build:artifact` — Claude Artifact용 단일 HTML(`dist-artifact/artifact.html`, 항상 로컬 데모 모드).
 - 화면 확인: Playwright로 `dist-artifact/index.html`을 열어 데스크톱(1400px)·모바일(400px) 스크린샷, 콘솔 오류와 가로 넘침 확인.
 
-## 작업 흐름 (소유자가 승인한 규칙, 2026-10-29 v0.2.1로 변경)
+## 작업 흐름 (소유자가 승인한 규칙, 2026-10-29 변경)
 
 1. `main`에서 `feat/…`, `fix/…`, `chore/…` 브랜치를 만들어 로컬에서 작업하고 `typecheck`·`test`·`build`(DB를 바꾸면 `scripts/test-db.sh`)를 돌린다.
-2. **푸시·PR 생성·병합은 소유자가 명시적으로 승인한 뒤에만** 한다("올려줘", "PR 만들어", "병합해" 등). 승인 없이 GitHub에 코드를 올리지 않는다.
-3. PR은 `gh api repos/minho-nim/MinLab-AI-Office/pulls`로 만든다(GraphQL 기반 `gh pr`은 막혀 있음). 병합 승인을 받으면
+2. **이 저장소(`minho-nim/MinLab-AI-Office`)에 한해**, 1번 시험이 모두 통과하면 푸시·PR 생성·병합(`verify` 통과 확인 후)까지 Claude가 알아서 한다(소유자 승인, 2026-10-29).
+   시험이 하나라도 실패하거나 확인하지 못했으면 올리지 않고 보고한다. 다른 저장소는 여전히 소유자 승인 뒤에만 올린다.
+3. PR은 `gh api repos/minho-nim/MinLab-AI-Office/pulls`로 만든다(GraphQL 기반 `gh pr`은 막혀 있음). 병합은
    `verify` 통과를 확인한 뒤 `gh api -X PUT repos/minho-nim/MinLab-AI-Office/pulls/<번호>/merge -f merge_method=squash`.
 4. 화면이 바뀌면 Artifact(Claude 안 데모 페이지)도 다시 게시한다: https://claude.ai/artifact/KymYCpMcfjW7Cskyjyf7Ph
 5. 운영 배포는 소유자가 요청할 때만 한다. Cloudflare Pages는 `release` 브랜치만 배포하므로,
    배포 명령은 `git fetch origin && git push origin origin/main:refs/heads/release`(release를 main에 맞춤)이다.
    현재 권한 설정은 `main`이 들어간 push를 막으므로 이 명령은 소유자가 직접 실행한다.
    `main` 병합만으로는 배포되지 않는다. `release`에 직접 커밋하지 않는다.
-6. 운영 Supabase에 마이그레이션 적용·Edge Function 배포도 운영 변경이다. 소유자 승인 후에만 한다.
+6. 운영 Supabase에 마이그레이션 적용·Edge Function 배포도 운영 변경이다. 병합과 별개로 소유자 승인 후에만 한다.
 
 ## 앱이 다루는 업무 플로우 (v0.2.1, 수정 금지)
 
