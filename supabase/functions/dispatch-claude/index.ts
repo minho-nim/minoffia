@@ -5,7 +5,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 /** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
-const HARD_DAILY_CAP = 2;
+const HARD_DAILY_CAP = 20;
 const FIRE_TIMEOUT_MS = 20_000;
 /** 공식 문서 예시 버전. 2023-06-01 이후 모든 버전을 같은 동작으로 받는다. */
 const ANTHROPIC_VERSION = '2026-10-21';

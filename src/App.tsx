@@ -233,7 +233,7 @@ export function App() {
     if (store.mode === 'local' || !client) return '로컬 데모에서는 실행할 수 없습니다. Supabase와 Edge Function을 연결해야 합니다.';
     const project = projectById.get(task.projectId);
     if (!project?.repo) return '프로젝트에 GitHub 저장소(owner/repo)를 먼저 입력하세요.';
-    if (runsToday(snap.usage, 'claude') >= (AGENT_BY_ID.claude.dailyCap ?? 0)) return '오늘 Claude Cloud 실행 2회를 모두 썼습니다.';
+    if (runsToday(snap.usage, 'claude') >= (AGENT_BY_ID.claude.dailyCap ?? 0)) return `오늘 Claude Cloud 실행 ${AGENT_BY_ID.claude.dailyCap}회를 모두 썼습니다.`;
     if (!deriveWorkflow(task, snap.workflow).aApproved) return '최신 기획서의 A 승인이 먼저 필요합니다.';
     return null;
   };
