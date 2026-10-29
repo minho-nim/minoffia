@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentPanel } from './components/AgentPanel';
+import { Inbox } from './components/Inbox';
 import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
 import { TaskCard } from './components/TaskCard';
@@ -159,13 +160,15 @@ export function App() {
   if (client && !session) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
 
-  const mutate = async (fn: () => Promise<void>, ok?: string) => {
+  const mutate = async (fn: () => Promise<void>, ok?: string): Promise<boolean> => {
     try {
       await fn();
       setSnap(await store.load());
       if (ok) say('ok', ok);
+      return true;
     } catch (e) {
       say('error', `저장하지 못했습니다: ${(e as Error).message}`);
+      return false;
     }
   };
 
@@ -209,7 +212,7 @@ export function App() {
     else if (count) say('ok', `이미지 ${count}장을 ${store.mode === 'local' ? '이 브라우저에' : '비공개 저장소에'} 저장했습니다.`);
   };
 
-  const addTask = async (d: TaskDraft, images: PendingImage[] = []) => {
+  const addTask = async (d: TaskDraft, images: PendingImage[] = []): Promise<Task | null> => {
     const route = routeTask(d, snap.usage);
     const now = new Date().toISOString();
     const task: Task = {
@@ -224,17 +227,18 @@ export function App() {
       routeReason: route.reason,
       status: 'queued',
       stage: 'received',
-      userOriginalText: [d.title, d.description.trim()].filter(Boolean).join('\n\n'),
+      userOriginalText: d.originalText?.trim() || [d.title, d.description.trim()].filter(Boolean).join('\n\n'),
       dispatch: { state: 'none' },
       createdAt: now,
       updatedAt: now,
     };
-    await mutate(() => store.saveTask(task), `${AGENT_BY_ID[route.assignee].name}에게 배정했습니다.`);
+    if (!(await mutate(() => store.saveTask(task), `${AGENT_BY_ID[route.assignee].name}에게 배정했습니다.`))) return null;
     if (images.length) {
       const errors = await uploadImages(task.id, 'request', null, images, 0);
       setSnap(await store.load());
       reportUploads(errors, images.length);
     }
+    return task;
   };
 
   const setStatus = (task: Task, to: TaskStatus) => {
@@ -554,13 +558,13 @@ export function App() {
     else say('error', `실행하지 못했습니다: ${res.error ?? '알 수 없는 오류'}`);
   };
 
-  const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string }) => {
+  const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string }): Promise<Project | null> => {
     const existing = id ? projectById.get(id) : undefined;
     // 수정해도 id가 같으므로 연결된 업무는 그대로 따라온다.
     const project: Project = existing
       ? { ...existing, ...fields, sample: false }
       : { id: newId(), ...fields, createdAt: new Date().toISOString() };
-    await mutate(() => store.saveProject(project), `${fields.name} 프로젝트를 ${existing ? '수정' : '등록'}했습니다.`);
+    return (await mutate(() => store.saveProject(project), `${fields.name} 프로젝트를 ${existing ? '수정' : '등록'}했습니다.`)) ? project : null;
   };
 
   const selectAgent = (id: AgentId) => {
@@ -607,6 +611,12 @@ export function App() {
               </li>
             );
           })}
+          {store.mode === 'supabase' && (
+            <li title="입력창 일반 질문을 Gemini 무료 API에 보낸 횟수(오늘, 성공만). 하루 상한은 서버가 관리합니다.">
+              <span>Gemini</span>
+              <span className="num">{(snap.aiCalls ?? []).filter((c) => c.ok && kstDay(new Date(c.createdAt)) === kstDay()).length}회</span>
+            </li>
+          )}
         </ul>
       </header>
 
@@ -664,7 +674,24 @@ export function App() {
 
           {tab === 'tasks' && (
             <div className="stack">
-              <TaskForm projects={snap.projects} usage={snap.usage} onSubmit={addTask} />
+              <Inbox
+                snap={snap}
+                canAskGemini={store.mode === 'supabase'}
+                onCreateTask={(d) => addTask(d)}
+                onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
+                onAskGemini={async (q, history) => {
+                  try {
+                    return (await store.askGemini(q, history)).answer;
+                  } finally {
+                    setSnap(await store.load());
+                  }
+                }}
+                onCopy={workflowActions.copy}
+              />
+              <details className="direct-entry">
+                <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
+                <TaskForm projects={snap.projects} usage={snap.usage} onSubmit={addTask} />
+              </details>
               <div className="filters" role="group" aria-label="업무 필터">
                 {(
                   [

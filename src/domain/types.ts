@@ -61,11 +61,21 @@ export interface UsageRun {
   createdAt: string;
 }
 
+/** 입력창 일반 질문을 Gemini에 보낸 기록(글은 저장하지 않음) */
+export interface AiCall {
+  id: string;
+  ok: boolean;
+  keySlot: 1 | 2 | null;
+  createdAt: string;
+}
+
 export interface Snapshot {
   projects: Project[];
   tasks: Task[];
   usage: UsageRun[];
   workflow: WorkflowData;
+  /** 최근 Gemini 질문 기록(Supabase 모드만) */
+  aiCalls?: AiCall[];
 }
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
