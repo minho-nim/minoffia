@@ -22,6 +22,7 @@ import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
 import { getSupabase } from './lib/supabase';
 import { OfficeView } from './office/OfficeView';
+import { version } from '../package.json';
 
 type Tab = 'tasks' | 'projects' | 'agent';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -182,7 +183,9 @@ export function App() {
     if (!canTransition(task, to)) return;
     const agent = AGENT_BY_ID[task.assignee];
     void mutate(async () => {
-      await store.saveTask({ ...task, status: to, updatedAt: new Date().toISOString() });
+      const next = { ...task, status: to, updatedAt: new Date().toISOString() };
+      // DB의 단계 값도 함께 맞춘다(예: 기획서 없는 업무를 완료 → completed).
+      await store.saveTask({ ...next, stage: deriveWorkflow(next, snap.workflow).stage });
       // 수동 인계 에이전트는 사람이 실제로 맡긴 시점(진행 시작)을 실행 1회로 기록한다.
       if (to === 'in_progress' && agent.mode === 'manual') {
         await store.addManualRun({
@@ -195,6 +198,23 @@ export function App() {
         });
       }
     }, `${task.title}: ${STATUS_LABEL[to]}`);
+  };
+
+  const assignTask = (task: Task, to: AgentId) => {
+    const from = AGENT_BY_ID[task.assignee].name;
+    const name = AGENT_BY_ID[to].name;
+    // 여러 번 바꿔도 처음 배정 근거는 하나만 남긴다.
+    const first = task.routeReason.replace(/^사용자가 담당을 바꿈: .*? \(처음 배정: (.*)\)$/, '$1');
+    void mutate(
+      () =>
+        store.saveTask({
+          ...task,
+          assignee: to,
+          routeReason: `사용자가 담당을 바꿈: ${from} → ${name} (처음 배정: ${first})`,
+          updatedAt: new Date().toISOString(),
+        }),
+      `${task.title}: 담당을 ${name}(으)로 바꿨습니다.`,
+    );
   };
 
   const copyHandoff = async (task: Task) => {
@@ -213,7 +233,7 @@ export function App() {
     if (store.mode === 'local' || !client) return '로컬 데모에서는 실행할 수 없습니다. Supabase와 Edge Function을 연결해야 합니다.';
     const project = projectById.get(task.projectId);
     if (!project?.repo) return '프로젝트에 GitHub 저장소(owner/repo)를 먼저 입력하세요.';
-    if (runsToday(snap.usage, 'claude') >= (AGENT_BY_ID.claude.dailyCap ?? 0)) return '오늘 Claude Cloud 실행 2회를 모두 썼습니다.';
+    if (runsToday(snap.usage, 'claude') >= (AGENT_BY_ID.claude.dailyCap ?? 0)) return `오늘 Claude Cloud 실행 ${AGENT_BY_ID.claude.dailyCap}회를 모두 썼습니다.`;
     if (!deriveWorkflow(task, snap.workflow).aApproved) return '최신 기획서의 A 승인이 먼저 필요합니다.';
     return null;
   };
@@ -439,7 +459,7 @@ export function App() {
       <header className="topbar">
         <div className="brand-block">
           <h1 className="brand">
-            MINLAB AI OFFICE <span className="ver">v0.1</span>
+            MINLAB AI OFFICE <span className="ver">v{version}</span>
           </h1>
           {store.mode === 'local' ? (
             <span className="mode mode-local" title="데이터는 이 브라우저의 localStorage에만 저장됩니다">
@@ -562,6 +582,7 @@ export function App() {
                       />
                     }
                     onStatus={setStatus}
+                    onAssign={assignTask}
                     onDelete={(task) => void mutate(() => store.deleteTask(task.id), '업무를 삭제했습니다.')}
                     onCopy={copyHandoff}
                   />

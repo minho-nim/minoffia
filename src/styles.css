@@ -953,6 +953,10 @@ a {
   color: var(--danger);
 }
 
+.confirm-neutral {
+  color: var(--muted);
+}
+
 .dispatch {
   display: flex;
   flex-direction: column;

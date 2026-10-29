@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AGENT_BY_ID } from './agents';
 import { kstDay, remainingToday, runsToday } from './usage';
 
 describe('usage', () => {
@@ -14,7 +15,7 @@ describe('usage', () => {
       { id: '2', agent: 'claude' as const, taskId: null, kind: 'cloud' as const, day: '2026-10-28', createdAt: '' },
     ];
     expect(runsToday(usage, 'claude', now)).toBe(1);
-    expect(remainingToday(usage, 'claude', now)).toBe(1);
+    expect(remainingToday(usage, 'claude', now)).toBe((AGENT_BY_ID.claude.dailyCap ?? 0) - 1);
     expect(remainingToday(usage, 'mina', now)).toBe(Infinity);
   });
 });

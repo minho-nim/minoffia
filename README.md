@@ -136,7 +136,7 @@ CLAUDE_ROUTINE_FIRE_URL     = 루틴 Fire URL
 CLAUDE_ROUTINE_TOKEN        = 루틴 Bearer token
 CLAUDE_ALLOWED_REPOSITORY   = owner/MinLab-AI-Office   # 루틴에 연결된 저장소와 같아야 함
 OFFICE_OWNER_EMAIL          = 소유자 로그인 이메일      # 이 계정만 실행 가능
-CLAUDE_DAILY_CAP            = 2                       # 선택. 코드 상한 2회를 넘지 않음
+CLAUDE_DAILY_CAP            = 20                      # 선택. 코드 상한 20회를 넘지 않음(루틴 한도 시간당 30회)
 CLAUDE_ROUTINE_BETA         =                         # 선택. 루틴 화면이 요구하는 anthropic-beta 헤더 값
 OFFICE_ALLOWED_ORIGIN       = https://your-office.pages.dev  # 선택. CORS 허용 주소
 ```
