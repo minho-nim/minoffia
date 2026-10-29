@@ -63,5 +63,5 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
       createdAt: at(120),
     },
   ];
-  return { projects, tasks, usage, workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [] } };
+  return { projects, tasks, usage, workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], links: [], clarifications: [] } };
 }

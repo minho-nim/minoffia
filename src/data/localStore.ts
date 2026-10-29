@@ -1,4 +1,5 @@
 import { attachmentBlocker, attachmentsOf, MAX_TOTAL_BYTES, totalBytes } from '../domain/attachments';
+import { linkBlocker, MAX_CLARIFICATIONS } from '../domain/requestContext';
 import type { Snapshot } from '../domain/types';
 import { canApprove, canRequestRevision, deriveWorkflow } from '../domain/workflow';
 import { EMPTY_WORKFLOW } from '../domain/workflow-types';
@@ -71,7 +72,7 @@ export function createLocalStore(): OfficeStore {
     const keep = <T extends { taskId: string }>(list: T[]) => list.filter((x) => alive.has(x.taskId));
     commit({
       ...state,
-      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments) },
+      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), links: keep(w.links), clarifications: keep(w.clarifications) },
     });
     dropUnusedFiles();
   };
@@ -198,6 +199,23 @@ export function createLocalStore(): OfficeStore {
       if (blocked) throw new Error(blocked);
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
       dropUnusedFiles();
+    },
+    async readLink() {
+      throw new Error('로컬 데모에서는 링크를 읽을 수 없습니다. Supabase에 연결된 사이트에서 쓰세요.');
+    },
+    async deleteLink(link) {
+      const task = state.tasks.find((t) => t.id === link.taskId);
+      if (!task) throw new Error('task not found');
+      const blocked = linkBlocker(deriveWorkflow(task, state.workflow), 0, 'delete');
+      if (blocked) throw new Error(blocked);
+      commit({ ...state, workflow: { ...state.workflow, links: state.workflow.links.filter((l) => l.id !== link.id) } });
+    },
+    async addClarification(item) {
+      const latest = Math.max(0, ...state.workflow.specs.filter((x) => x.taskId === item.taskId).map((x) => x.revision));
+      if (item.specRevision !== latest) throw new Error('clarification must target the latest spec revision');
+      if (state.workflow.clarifications.filter((c) => c.taskId === item.taskId).length >= MAX_CLARIFICATIONS) throw new Error('too many clarifications');
+      if (!item.question.trim() || !item.answer.trim()) throw new Error('질문과 답변을 모두 적으세요.');
+      commit({ ...state, workflow: { ...state.workflow, clarifications: [...state.workflow.clarifications, item] } });
     },
     async attachmentUrl(att) {
       const url = files[att.sha256];

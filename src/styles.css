@@ -1420,3 +1420,79 @@ a {
     flex-basis: calc(100% - 72px);
   }
 }
+
+/* ---------- 링크·확인 질문 ---------- */
+.link-list,
+.qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link-item {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.link-item p {
+  margin: 0;
+}
+
+.link-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.link-url {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pill-link-ok {
+  background: var(--st-done);
+  color: var(--st-done-ink);
+}
+
+.pill-link-partial {
+  background: var(--st-queued);
+  color: var(--st-queued-ink);
+}
+
+.pill-link-failed,
+.pill-link-blocked {
+  background: var(--st-blocked);
+  color: var(--st-blocked-ink);
+}
+
+.qa-list li {
+  padding: 6px 8px;
+  border-left: 3px solid var(--line);
+  background: var(--surface);
+}
+
+.qa-list p {
+  margin: 0;
+}
+
+.qa-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.qa-form input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
