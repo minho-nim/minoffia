@@ -1,4 +1,5 @@
-/** v0.2.1 확정 업무 플로우의 데이터. DB 테이블과 1:1로 맞춘다(supabase/migrations/0003). */
+/** v0.2.1 확정 업무 플로우의 데이터. DB 테이블과 1:1로 맞춘다(supabase/migrations/0003, 0004). */
+import type { Attachment } from './attachments';
 
 export type Stage =
   | 'received' | 'media_analysis' | 'planner_handoff' | 'planning' | 'needs_clarification' | 'spec_ready'
@@ -134,9 +135,11 @@ export interface WorkflowData {
   assignments: AgentAssignment[];
   results: ResultPackage[];
   revisionRequests: RevisionRequest[];
+  /** 요청 자료·결과 스크린샷(파일은 비공개 저장소에) */
+  attachments: Attachment[];
 }
 
-export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [] };
+export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [] };
 
 export const STAGE_LABEL: Record<Stage, string> = {
   received: '접수',
@@ -177,4 +180,16 @@ export const INTENT_LABEL: Record<Intent, string> = {
   change_request: '개발·수정 요청',
   asset_request: '이미지·에셋 요청',
   ambiguous: '의도 불분명',
+};
+
+export const DISPATCH_STATUS_LABEL: Record<DispatchStatus, string> = {
+  proposed: '배정 제안',
+  awaiting_user_execution_approval: '실행 승인 대기',
+  ready: '시작 준비(수동 인계)',
+  starting: '시작 중',
+  started: '시작됨',
+  blocked_integration: '연동 차단',
+  blocked_quota: '한도 대기',
+  failed: '실패',
+  completed: '완료',
 };

@@ -1,3 +1,4 @@
+import type { Attachment } from '../domain/attachments';
 import type { Project, Snapshot, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, PmPlan, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 
@@ -20,6 +21,16 @@ export interface OfficeStore {
   addResult(result: ResultPackage): Promise<void>;
   /** 결과 검토 → Claude PM 수정 요청 */
   addRevisionRequest(request: RevisionRequest): Promise<void>;
+  /**
+   * 이미지 첨부. 파일을 비공개 저장소에 올린 뒤 기록을 남긴다. 같은 업무의 같은 파일(sha256)은 한 번만 저장한다.
+   * `storagePath`는 저장소가 정한다.
+   */
+  addAttachment(attachment: Omit<Attachment, 'storagePath'>, file: Blob): Promise<void>;
+  /** 요청 자료의 순서·역할·설명만 바꾼다. */
+  updateAttachment(attachment: Attachment): Promise<void>;
+  deleteAttachment(attachment: Attachment): Promise<void>;
+  /** 화면에 보여 줄 주소. Supabase는 1시간 뒤 만료된다. */
+  attachmentUrl(attachment: Attachment): Promise<string>;
 }
 
 export function newId(): string {
