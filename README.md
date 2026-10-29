@@ -54,7 +54,7 @@ src/assets/office/characters/<id>-stand.png
 src/assets/office/characters/<id>-walk.png  (없으면 stand만 쓰고 살짝 들썩인다)
 ```
 
-`<id>`: `mina`, `claude`, `codex`, `grok`, `studioA`, `studioB`, `ci`. 현재 Grok·Codex·CI 봇·Claude는 받은 그림을 쓰고, 미나·Studio A·Studio B는 그림이 없어 코드 도트로 그린다. 자리 좌표는 `src/office/layout.ts`에 있다.
+`<id>`: `mina`, `claude`, `codex`, `grok`, `studioA`, `studioB`, `ci`. Grok·Codex·CI 봇·Claude는 받은 그림 그대로, 미나·Studio A·Studio B는 받은 그림의 머리·옷 색만 바꿔 만들었다(미나←Claude, Studio A←Grok, Studio B←Codex). 그림이 없는 캐릭터는 코드 도트로 그린다. 자리 좌표는 `src/office/layout.ts`에 있다.
 
 ## 2. GitHub 저장소
 
