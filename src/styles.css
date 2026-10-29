@@ -1615,3 +1615,12 @@ a {
 .direct-entry[open] > summary {
   margin-bottom: 8px;
 }
+
+.repo-create {
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+
+.repo-create > span {
+  flex-basis: 100%;
+}

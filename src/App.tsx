@@ -567,6 +567,18 @@ export function App() {
     return (await mutate(() => store.saveProject(project), `${fields.name} 프로젝트를 ${existing ? '수정' : '등록'}했습니다.`)) ? project : null;
   };
 
+  const createRepo = async (project: Project, name: string): Promise<string | null> => {
+    try {
+      const r = await store.createRepo(project.id, name);
+      setSnap(await store.load());
+      say(r.warning ? 'error' : 'ok', r.warning ?? `${r.repo} 비공개 저장소를 만들고 ${project.name}에 연결했습니다.`);
+      return r.repo;
+    } catch (e) {
+      say('error', `저장소를 만들지 못했습니다: ${(e as Error).message}`);
+      return null;
+    }
+  };
+
   const selectAgent = (id: AgentId) => {
     setSelected((cur) => (cur === id && tab === 'agent' ? null : id));
     setTab('agent');
@@ -687,6 +699,7 @@ export function App() {
                   }
                 }}
                 onCopy={workflowActions.copy}
+                onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
               />
               <details className="direct-entry">
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
@@ -745,6 +758,7 @@ export function App() {
               tasks={snap.tasks}
               onSave={saveProject}
               onDelete={(p) => void mutate(() => store.deleteProject(p.id), `${p.name} 프로젝트를 삭제했습니다.`)}
+              onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
             />
           )}
 
