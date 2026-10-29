@@ -1,4 +1,6 @@
+import { ADAPTER_STATE_LABEL, ADAPTERS } from '../domain/adapters';
 import { AGENT_BY_ID, MODE_LABEL } from '../domain/agents';
+import type { AgentAssignment } from '../domain/workflow-types';
 import { remainingToday, runsToday } from '../domain/usage';
 import type { AgentId, Task, UsageRun } from '../domain/types';
 import { STATUS_LABEL } from '../domain/types';
@@ -9,12 +11,17 @@ interface Props {
   agentId: AgentId;
   tasks: Task[];
   usage: UsageRun[];
+  assignments: AgentAssignment[];
   onOpenTask: (task: Task) => void;
 }
 
-export function AgentPanel({ agentId, tasks, usage, onOpenTask }: Props) {
+/** 오피스 캐릭터 → 실행 경로(어댑터) */
+const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision', mina: 'gpt' };
+
+export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask }: Props) {
   const a = AGENT_BY_ID[agentId];
-  const scene = buildScene(tasks).find((s) => s.agent === agentId);
+  const scene = buildScene(tasks, assignments).find((s) => s.agent === agentId);
+  const adapter = ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
   const mine = tasks.filter((t) => t.assignee === agentId);
   const used = runsToday(usage, agentId);
   const left = remainingToday(usage, agentId);
@@ -35,6 +42,17 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask }: Props) {
         </div>
       </div>
       <p>{a.note}</p>
+      {adapter && (
+        <div className="wf-manual">
+          <p className="small">
+            <b>{adapter.label}</b> · <span className={`pill pill-adapter-${adapter.state}`}>{ADAPTER_STATE_LABEL[adapter.state]}</span>
+            {' '}· PC 꺼도 {adapter.worksWithPcOff ? '동작' : '불가'}
+          </p>
+          <p className="muted small">
+            {adapter.reason} (확인 {adapter.checkedAt})
+          </p>
+        </div>
+      )}
       <p className="small">
         오늘 등록된 실행 <b className="num">{used}</b>
         {a.dailyCap !== null ? (

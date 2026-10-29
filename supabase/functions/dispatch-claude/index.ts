@@ -1,10 +1,14 @@
-// Claude Code Cloud Routine을 HTTP 트리거로 실행한다.
+// Claude Code Cloud Routine(PM)을 HTTP 트리거로 시작한다.
+// v0.2.1: A 승인된 최신 기획서 버전만 보낸다. Claude는 계획만 만들고 저장소에 쓰지 않는다.
 // 비밀값(Fire URL, Bearer token)은 이 함수의 secrets에만 둔다. 브라우저로 내려보내지 않는다.
+// 요청 형식 근거: https://platform.claude.com/docs/en/api/claude-code/routines-fire (2026-10-29 확인)
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 /** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
 const HARD_DAILY_CAP = 2;
 const FIRE_TIMEOUT_MS = 20_000;
+/** 공식 문서 예시 버전. 2023-06-01 이후 모든 버전을 같은 동작으로 받는다. */
+const ANTHROPIC_VERSION = '2026-10-21';
 
 // 대시보드에 붙여넣을 때 섞인 앞뒤 공백·줄바꿈은 지운다.
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
@@ -51,19 +55,57 @@ Deno.serve(async (req) => {
   // 2. RLS를 거쳐 내 업무만 읽는다.
   const { data: task } = await userClient
     .from('tasks')
-    .select('id, title, description, type, priority, assignee, status, dispatch_state, project_id, projects(name, repo)')
+    .select('id, title, description, type, priority, assignee, status, dispatch_state, dispatch_at, project_id, projects(name, repo)')
     .eq('id', body.taskId)
     .maybeSingle();
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
   if (task.assignee !== 'claude') return reply(400, { ok: false, error: 'Claude 담당 업무만 실행할 수 있습니다.' });
 
-  // 3. 허용된 저장소 하나만
+  // 3. A 승인된 최신 기획서만 (RLS를 거쳐 내 기록만 읽는다)
+  const { data: spec } = await userClient
+    .from('task_specs')
+    .select('revision, intent, user_original_text, final_prompt, change_scope, preserve_constraints, test_criteria')
+    .eq('task_id', task.id)
+    .order('revision', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!spec) return reply(409, { ok: false, error: '기획서가 없습니다. GPT 기획 결과를 먼저 저장하세요.' });
+  const { data: aApproval } = await userClient
+    .from('approvals')
+    .select('id')
+    .eq('task_id', task.id)
+    .eq('gate', 'A')
+    .eq('decision', 'approved')
+    .eq('approved_revision', spec.revision)
+    .maybeSingle();
+  if (!aApproval) return reply(409, { ok: false, error: `기획서 v${spec.revision}의 A 승인이 없습니다.` });
+
+  // 결과 검토에서 보낸 수정 요청(마지막 전송 뒤의 것)이 있으면 함께 보낸다.
+  let revisionQuery = userClient
+    .from('revision_requests')
+    .select('result_revision, feedback, created_at')
+    .eq('task_id', task.id)
+    .eq('spec_revision', spec.revision)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (task.dispatch_at) revisionQuery = revisionQuery.gt('created_at', task.dispatch_at);
+  const { data: revision } = await revisionQuery.maybeSingle();
+  const { data: previousResult } = revision
+    ? await userClient
+        .from('result_packages')
+        .select('summary, remaining_issues')
+        .eq('task_id', task.id)
+        .eq('revision', revision.result_revision)
+        .maybeSingle()
+    : { data: null };
+
+  // 4. 허용된 저장소 하나만
   const project = task.projects as unknown as { name: string; repo: string | null } | null;
   if (!project?.repo || project.repo.toLowerCase() !== allowedRepo.toLowerCase()) {
     return reply(403, { ok: false, error: `허용된 저장소(${allowedRepo})의 프로젝트만 실행할 수 있습니다.` });
   }
 
-  // 4. 원자적 예약(일일 상한 + 중복 실행 방지)
+  // 5. 원자적 예약(A 승인 버전 확인 + 일일 상한 + 같은 버전 중복 전송 방지)
   const cap = Math.min(HARD_DAILY_CAP, Number(env('CLAUDE_DAILY_CAP')) || HARD_DAILY_CAP);
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: claim, error: claimError } = await admin.rpc('claim_claude_dispatch', {
@@ -71,39 +113,53 @@ Deno.serve(async (req) => {
     p_owner: user.id,
     p_allow_retry: Boolean(body.acknowledgeRetry),
     p_cap: cap,
+    p_spec_revision: spec.revision,
   });
   if (claimError) return reply(500, { ok: false, error: `예약 실패: ${claimError.message}` });
   const row = Array.isArray(claim) ? claim[0] : claim;
   if (!row?.ok) {
     if (row?.reason === 'daily_cap') return reply(429, { ok: false, error: `오늘 Claude Cloud 실행 ${cap}회를 모두 썼습니다.` });
+    if (row?.reason === 'not_approved') return reply(409, { ok: false, error: '최신 기획서의 A 승인이 확인되지 않았습니다.' });
     return reply(409, {
       ok: false,
-      error: '이미 전송했거나 실패한 업무입니다. 실패한 경우 Routines History를 확인한 뒤 확인 체크 후 다시 실행하세요.',
+      error: '이 기획서 버전은 이미 PM에 보냈습니다. 결과를 고치려면 결과 검토에서 수정 요청을 먼저 기록하세요. 실패한 경우 Routines History를 확인한 뒤 확인 체크 후 다시 실행하세요.',
     });
   }
 
   const fail = async (message: string, status: number) => {
     await admin
       .from('tasks')
-      .update({ dispatch_state: 'failed', dispatch_error: message, status: 'blocked' })
+      .update({ dispatch_state: 'failed', dispatch_error: message, status: 'blocked', stage: 'integration_blocked' })
       .eq('id', task.id);
     return reply(status, { ok: false, error: message });
   };
 
-  // 5. 루틴 실행. 사용자가 보낸 내용은 <routine-fire-payload>로 전달된다.
+  // 6. 루틴(PM) 실행. 사용자가 보낸 내용은 <routine-fire-payload>로 전달된다. 최대 65,536자.
   const text = [
     `MinLab AI Office 업무 (작업 ID ${task.id})`,
     `저장소: ${project.repo}`,
     `프로젝트: ${project.name}`,
-    `유형: ${task.type} / 우선순위: ${task.priority}`,
+    `승인된 기획서: v${spec.revision} (A 승인됨, 수정 금지)`,
     ``,
-    `할 일: ${task.title}`,
-    task.description ? `설명: ${task.description}` : '',
+    `## 사용자 요청 원문`,
+    spec.user_original_text,
     ``,
-    `규칙: 새 브랜치 ai/claude/${String(task.id).slice(0, 8)}에서 작업하고 PR만 연다. main 푸시·병합·배포 금지.`,
+    `## 최종 개발 프롬프트`,
+    spec.final_prompt,
+    spec.change_scope ? `\n변경 범위: ${spec.change_scope}` : '',
+    spec.preserve_constraints ? `유지 조건: ${spec.preserve_constraints}` : '',
+    spec.test_criteria ? `테스트 기준: ${spec.test_criteria}` : '',
+    ``,
+    revision ? `## 결과 v${revision.result_revision} 검토 후 사용자 수정 요청 (새 계획 필요)` : '',
+    revision ? revision.feedback : '',
+    revision && previousResult?.summary ? `이전 결과 요약: ${previousResult.summary}` : '',
+    revision && previousResult?.remaining_issues ? `이전 결과의 남은 문제: ${previousResult.remaining_issues}` : '',
+    ``,
+    `규칙: 작업 분해·배정 계획(JSON)만 작성한다. 저장소 쓰기·커밋·브랜치·푸시·PR·병합·배포 금지(B 승인 전 GitHub 업로드 금지).`,
   ]
     .filter((l) => l !== '')
-    .join('\n');
+    .join('\n')
+    .slice(0, 65_000);
 
   let res: Response;
   try {
@@ -112,8 +168,7 @@ Deno.serve(async (req) => {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        ...(env('CLAUDE_ROUTINE_BETA') ? { 'anthropic-beta': env('CLAUDE_ROUTINE_BETA') } : {}),
+        'anthropic-version': ANTHROPIC_VERSION,
       },
       body: JSON.stringify({ text }),
       signal: AbortSignal.timeout(FIRE_TIMEOUT_MS),
@@ -131,19 +186,21 @@ Deno.serve(async (req) => {
       res.status === 401 || res.status === 403
         ? '토큰이 틀렸거나 만료됐습니다.'
         : res.status === 429
-          ? 'Claude 사용량 한도에 걸렸습니다.'
-          : '루틴 설정을 확인하세요.';
+          ? `루틴 시간당 실행 한도(루틴 30회·계정 100회)에 걸렸습니다.${res.headers.get('retry-after') ? ` ${res.headers.get('retry-after')}초 뒤 다시 시도하세요.` : ''}`
+          : res.status === 400
+            ? '요청 형식 오류이거나 루틴이 일시정지 상태입니다.'
+            : '루틴 설정을 확인하세요.';
     return fail(`Claude 실행 실패 HTTP ${res.status}: ${hint} ${detail}`.trim(), 502);
   }
 
   const data = await res.json().catch(() => ({}) as Record<string, unknown>);
-  const sessionUrl =
-    (data.claude_code_session_url as string | undefined) ?? (data.session_url as string | undefined) ?? (data.url as string | undefined) ?? null;
+  // 공식 응답: { type: 'routine_fire', claude_code_session_id, claude_code_session_url }
+  const sessionUrl = (data.claude_code_session_url as string | undefined) ?? null;
 
-  // 시작만 기록한다. 완료는 사람이 PR을 확인하고 표시한다.
+  // 세션 시작만 기록한다(HTTP 200 ≠ 계획 완료). 계획은 사용자가 세션에서 가져와 저장한다.
   await admin
     .from('tasks')
-    .update({ dispatch_state: 'dispatched', dispatch_session_url: sessionUrl, dispatch_error: null, status: 'in_progress' })
+    .update({ dispatch_state: 'dispatched', dispatch_session_url: sessionUrl, dispatch_error: null, status: 'in_progress', stage: 'dispatching' })
     .eq('id', task.id);
 
   return reply(200, { ok: true, sessionUrl });

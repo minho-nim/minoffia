@@ -82,3 +82,27 @@ describe('겹침', () => {
     expect(new Set(spots).size).toBe(spots.length);
   });
 });
+
+describe('배정 기록 반영', () => {
+  const parent = task({ id: 'p1', type: 'planning', assignee: 'claude', status: 'queued' });
+  const assignment = (dispatchStatus: 'awaiting_user_execution_approval' | 'started' | 'completed') => ({
+    id: 'a1', taskId: 'p1', planRevision: 1, workItemId: 'W1', title: '버튼 키우기', assignee: 'codex' as const,
+    executionMode: 'manual_handoff' as const, dispatchStatus, statusSource: 'user_reported' as const,
+    providerExecutionId: null, providerTaskUrl: null, actualProviderStatus: '', startedAt: null, lastVerifiedAt: null, updatedAt: '',
+  });
+
+  it('E 승인 전 Codex 배정은 대기로만 보인다', () => {
+    const s = buildScene([parent], [assignment('awaiting_user_execution_approval')]).find((x) => x.agent === 'codex')!;
+    expect(s.activity).toBe('waiting');
+  });
+
+  it('사용자가 시작을 기록하면 Codex가 작업 중', () => {
+    const s = buildScene([parent], [assignment('started')]).find((x) => x.agent === 'codex')!;
+    expect(s.activity).toBe('working');
+    expect(s.task?.title).toBe('버튼 키우기');
+  });
+
+  it('끝난 배정은 캐릭터를 움직이지 않는다', () => {
+    expect(buildScene([parent], [assignment('completed')]).find((x) => x.agent === 'codex')!.activity).toBe('resting');
+  });
+});

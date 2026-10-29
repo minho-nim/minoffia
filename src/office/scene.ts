@@ -1,5 +1,6 @@
 import { AGENTS, WORK_ROOM } from '../domain/agents';
 import type { AgentId, Task } from '../domain/types';
+import type { AgentAssignment } from '../domain/workflow-types';
 import { LOUNGE_SPOTS, RECEPTION, ROOM_BY_ID, type Spot } from './layout';
 
 export type Activity = 'working' | 'helping' | 'blocked' | 'review' | 'waiting' | 'resting';
@@ -40,7 +41,28 @@ function pick(tasks: Task[]): Task | null {
  * - 차단·검토 대기·접수만 있음: 자기 방
  * - 열린 업무 없음: 휴게실
  */
-export function buildScene(tasks: Task[]): AgentScene[] {
+/**
+ * PM이 배정한 작업을 담당 AI의 업무처럼 보이게 바꾼다.
+ * 실제 기록만 쓴다: E 승인 전 = 대기, 사용자가 시작을 기록 = 진행 중. 완료·실패한 배정은 보이지 않는다.
+ */
+export function assignmentTasks(tasks: Task[], assignments: AgentAssignment[]): Task[] {
+  const parent = new Map(tasks.map((t) => [t.id, t]));
+  return assignments.flatMap((a) => {
+    const p = parent.get(a.taskId);
+    const agent = a.assignee === 'gemini' ? 'studioA' : a.assignee;
+    if (!p || p.status === 'done' || agent === p.assignee) return [];
+    const waiting = ['proposed', 'awaiting_user_execution_approval', 'ready'].includes(a.dispatchStatus);
+    const running = a.dispatchStatus === 'started' || a.dispatchStatus === 'starting';
+    const blocked = a.dispatchStatus.startsWith('blocked') || a.dispatchStatus === 'failed';
+    if (!waiting && !running && !blocked) return [];
+    // 배정 작업은 개발 단계의 일이다. 방은 담당 AI의 역할로 정한다.
+    const type = a.assignee === 'gemini' ? 'design' : a.assignee === 'grok' ? 'qa' : 'dev';
+    return [{ ...p, id: `${p.id}:${a.workItemId}`, title: a.title || p.title, type, assignee: agent, status: running ? 'in_progress' : blocked ? 'blocked' : 'queued' }];
+  });
+}
+
+export function buildScene(tasks: Task[], assignments: AgentAssignment[] = []): AgentScene[] {
+  tasks = [...tasks, ...assignmentTasks(tasks, assignments)];
   const takenSeats = new Set<string>();
   const result: AgentScene[] = [];
   const openTasks = tasks.filter((t) => t.status !== 'done');
