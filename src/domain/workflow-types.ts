@@ -117,15 +117,26 @@ export interface ResultPackage {
   createdAt: string;
 }
 
+/** 결과 검토에서 Claude PM에 보내는 수정 요청 */
+export interface RevisionRequest {
+  id: string;
+  taskId: string;
+  specRevision: number;
+  resultRevision: number;
+  feedback: string;
+  createdAt: string;
+}
+
 export interface WorkflowData {
   specs: TaskSpec[];
   approvals: Approval[];
   plans: PmPlan[];
   assignments: AgentAssignment[];
   results: ResultPackage[];
+  revisionRequests: RevisionRequest[];
 }
 
-export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [] };
+export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [] };
 
 export const STAGE_LABEL: Record<Stage, string> = {
   received: '접수',

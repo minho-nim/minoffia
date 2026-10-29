@@ -157,6 +157,20 @@ create table public.result_packages (
   unique (task_id, revision)
 );
 
+-- 6-1. 결과 검토 → Claude PM 수정 요청 --------------------------------------
+-- 같은 기획서 버전으로 PM에 다시 보내 새 계획을 받는다. 수정 요청이 있을 때만 재전송할 수 있다.
+create table public.revision_requests (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  task_id uuid not null references public.tasks (id) on delete cascade,
+  spec_revision integer not null,
+  result_revision integer not null,
+  feedback text not null check (char_length(feedback) between 1 and 4000),
+  created_at timestamptz not null default now()
+);
+
+create index revision_requests_task_idx on public.revision_requests (task_id, created_at desc);
+
 -- 7. 소유자 일치 + 승인 게이트(서버 재검증) ----------------------------------
 create or replace function public.owner_matches_task()
 returns trigger
@@ -247,6 +261,41 @@ $$;
 
 create trigger result_packages_revision before insert on public.result_packages for each row execute function public.result_packages_next_revision();
 
+-- 수정 요청은 A 승인된 최신 기획서와, 아직 B 승인하지 않은 최신 결과에만 할 수 있다.
+create or replace function public.revision_requests_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_spec integer;
+  v_result integer;
+begin
+  if not exists (select 1 from tasks t where t.id = new.task_id and t.owner_id = new.owner_id) then
+    raise exception 'task does not belong to owner';
+  end if;
+  select max(revision) into v_spec from task_specs where task_id = new.task_id;
+  if v_spec is null or new.spec_revision <> v_spec or not exists (
+    select 1 from approvals a where a.task_id = new.task_id and a.gate = 'A' and a.decision = 'approved' and a.approved_revision = v_spec
+  ) then
+    raise exception 'revision request needs the latest A-approved spec';
+  end if;
+  select max(revision) into v_result from result_packages where task_id = new.task_id;
+  if v_result is null or new.result_revision <> v_result then
+    raise exception 'revision request must target the latest result package';
+  end if;
+  if exists (
+    select 1 from approvals a where a.task_id = new.task_id and a.gate = 'B' and a.decision = 'approved' and a.approved_revision = v_result
+  ) then
+    raise exception 'result already approved for GitHub upload';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger revision_requests_guard before insert on public.revision_requests for each row execute function public.revision_requests_guard();
+
 -- 승인 게이트. UI가 아니라 DB가 마지막으로 확인한다.
 create or replace function public.approvals_guard()
 returns trigger
@@ -299,6 +348,9 @@ begin
     select max(revision) into v_result from result_packages where task_id = new.task_id;
     if v_result is null or new.approved_revision <> v_result then
       raise exception 'B must approve the latest result package';
+    end if;
+    if exists (select 1 from revision_requests r where r.task_id = new.task_id and r.result_revision = v_result) then
+      raise exception 'B not allowed: revision was requested for this result';
     end if;
 
   elsif new.gate = 'C' then
@@ -361,6 +413,7 @@ revoke all on function public.pm_plans_guard() from public, anon, authenticated;
 revoke all on function public.result_packages_next_revision() from public, anon, authenticated;
 revoke all on function public.approvals_guard() from public, anon, authenticated;
 revoke all on function public.agent_assignments_guard() from public, anon, authenticated;
+revoke all on function public.revision_requests_guard() from public, anon, authenticated;
 
 -- 8. RLS --------------------------------------------------------------------
 alter table public.task_specs enable row level security;
@@ -368,6 +421,7 @@ alter table public.approvals enable row level security;
 alter table public.pm_plans enable row level security;
 alter table public.agent_assignments enable row level security;
 alter table public.result_packages enable row level security;
+alter table public.revision_requests enable row level security;
 
 -- 기획서·승인·계획·결과: 읽기와 추가만(수정·삭제 불가 = 감사 기록 보존). 업무를 지우면 함께 지워진다.
 create policy task_specs_select on public.task_specs for select to authenticated using (owner_id = auth.uid());
@@ -378,6 +432,8 @@ create policy pm_plans_select on public.pm_plans for select to authenticated usi
 create policy pm_plans_insert on public.pm_plans for insert to authenticated with check (owner_id = auth.uid());
 create policy result_packages_select on public.result_packages for select to authenticated using (owner_id = auth.uid());
 create policy result_packages_insert on public.result_packages for insert to authenticated with check (owner_id = auth.uid());
+create policy revision_requests_select on public.revision_requests for select to authenticated using (owner_id = auth.uid());
+create policy revision_requests_insert on public.revision_requests for insert to authenticated with check (owner_id = auth.uid());
 create policy agent_assignments_select on public.agent_assignments for select to authenticated using (owner_id = auth.uid());
 create policy agent_assignments_insert on public.agent_assignments for insert to authenticated with check (owner_id = auth.uid());
 create policy agent_assignments_update on public.agent_assignments for update to authenticated
@@ -436,6 +492,11 @@ begin
       or (dispatch_state = 'failed' and p_allow_retry)
       -- 새로 승인된 기획서 버전은 다시 PM에 보낼 수 있다.
       or (dispatch_state in ('dispatched', 'failed') and coalesce(dispatch_spec_revision, 0) < p_spec_revision)
+      -- 같은 버전이라도, 마지막 전송 뒤에 결과 수정 요청이 있으면 한 번 더 보낼 수 있다.
+      or (dispatch_state = 'dispatched' and dispatch_spec_revision = p_spec_revision and exists (
+        select 1 from revision_requests r
+        where r.task_id = p_task and r.spec_revision = p_spec_revision and r.created_at > coalesce(tasks.dispatch_at, '-infinity'::timestamptz)
+      ))
     );
   if not found then
     return query select false, 'not_claimable';

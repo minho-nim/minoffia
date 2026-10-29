@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Project, Task, UsageRun } from '../domain/types';
-import type { AgentAssignment, Approval, PmPlan, ResultPackage, TaskSpec } from '../domain/workflow-types';
+import type { AgentAssignment, Approval, PmPlan, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { OfficeStore } from './store';
 
 type Row = Record<string, unknown>;
@@ -119,6 +119,15 @@ const toRun = (r: Row): UsageRun => ({
   createdAt: r.created_at as string,
 });
 
+const toRevisionRequest = (r: Row): RevisionRequest => ({
+  id: r.id as string,
+  taskId: r.task_id as string,
+  specRevision: r.spec_revision as number,
+  resultRevision: r.result_revision as number,
+  feedback: r.feedback as string,
+  createdAt: r.created_at as string,
+});
+
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
   return res.data;
@@ -129,7 +138,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -139,6 +148,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('agent_assignments').select('*').order('work_item_id'),
         // 결과 목록에는 큰 diff·로그를 빼고, 필요할 때만 읽는 대신 v0.2.1은 크기 상한(500KB)으로 제한한다.
         client.from('result_packages').select('*').order('revision'),
+        client.from('revision_requests').select('*').order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -150,6 +160,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           plans: (check(plans) ?? []).map(toPlan),
           assignments: (check(assignments) ?? []).map(toAssignment),
           results: (check(results) ?? []).map(toResult),
+          revisionRequests: (check(revisionRequests) ?? []).map(toRevisionRequest),
         },
       };
     },
@@ -258,6 +269,17 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
             started_at: a.startedAt,
           })
           .eq('id', a.id),
+      );
+    },
+    async addRevisionRequest(x) {
+      check(
+        await client.from('revision_requests').insert({
+          id: x.id,
+          task_id: x.taskId,
+          spec_revision: x.specRevision,
+          result_revision: x.resultRevision,
+          feedback: x.feedback,
+        }),
       );
     },
     async addResult(x) {

@@ -1,5 +1,5 @@
 import type { Snapshot } from '../domain/types';
-import { canApprove, deriveWorkflow } from '../domain/workflow';
+import { canApprove, canRequestRevision, deriveWorkflow } from '../domain/workflow';
 import { EMPTY_WORKFLOW } from '../domain/workflow-types';
 import { sampleSnapshot } from './sample';
 import type { OfficeStore } from './store';
@@ -36,7 +36,10 @@ export function createLocalStore(): OfficeStore {
   const dropOrphans = (alive: Set<string>) => {
     const w = state.workflow;
     const keep = <T extends { taskId: string }>(list: T[]) => list.filter((x) => alive.has(x.taskId));
-    commit({ ...state, workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results) } });
+    commit({
+      ...state,
+      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests) },
+    });
   };
   return {
     mode: 'local',
@@ -122,6 +125,13 @@ export function createLocalStore(): OfficeStore {
       const max = Math.max(0, ...state.workflow.results.filter((x) => x.taskId === result.taskId).map((x) => x.revision));
       if (result.revision !== max + 1) throw new Error(`result revision must be ${max + 1}`);
       commit({ ...state, workflow: { ...state.workflow, results: [...state.workflow.results, result] } });
+    },
+    async addRevisionRequest(request) {
+      const task = state.tasks.find((t) => t.id === request.taskId);
+      if (!task) throw new Error('task not found');
+      const check = canRequestRevision(deriveWorkflow(task, state.workflow));
+      if (!check.ok) throw new Error(check.reason);
+      commit({ ...state, workflow: { ...state.workflow, revisionRequests: [...state.workflow.revisionRequests, request] } });
     },
   };
 }

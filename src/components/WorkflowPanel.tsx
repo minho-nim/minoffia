@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildGptPackage } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
-import { canApprove, type WorkflowView } from '../domain/workflow';
+import { canApprove, canRequestRevision, type WorkflowView } from '../domain/workflow';
 import type { AgentAssignment, Gate, Intent } from '../domain/workflow-types';
 import { GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
 
@@ -33,6 +33,8 @@ export interface WorkflowActions {
   recordStart: (assignment: AgentAssignment, url: string) => Promise<boolean>;
   addResult: (task: Task, fields: ResultFields) => Promise<boolean>;
   setPrUrl: (task: Task, url: string) => Promise<boolean>;
+  /** 결과 검토 → Claude PM 수정 요청 */
+  requestRevision: (task: Task, feedback: string) => Promise<boolean>;
 }
 
 interface Props {
@@ -78,6 +80,9 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
   const [ciChecked, setCiChecked] = useState(false);
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [aFeedback, setAFeedback] = useState('');
+  const [showAFeedback, setShowAFeedback] = useState(false);
+  const [revisionText, setRevisionText] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -114,7 +119,13 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
   const bCheck = canApprove(view, 'B');
   const cCheck = canApprove(view, 'C');
   const failed = task.dispatch.state === 'failed';
-  const sentThisRevision = !!view.spec && task.dispatchSpecRevision === view.spec.revision && task.dispatch.state !== 'failed';
+  // 수정 요청이 있으면, 요청 뒤에 보냈을 때만 '보냄'으로 본다.
+  const sentThisRevision =
+    !!view.spec &&
+    task.dispatchSpecRevision === view.spec.revision &&
+    task.dispatch.state !== 'failed' &&
+    (!view.pendingRevision || (!!task.dispatch.at && task.dispatch.at > view.pendingRevision.createdAt));
+  const revisionCheck = canRequestRevision(view);
 
   return (
     <div className="wf">
@@ -132,11 +143,16 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
       {/* 1. 기획(ChatGPT 수동 인계) */}
       <section className="wf-section">
         <h4>1. 기획 — ChatGPT</h4>
+        {view.plannerFeedback && (
+          <p className="task-error">
+            v{view.spec?.revision}에 수정 요청: {view.plannerFeedback} — 자료를 다시 복사하면 이 내용이 함께 들어갑니다. ChatGPT 결과로 새 버전을 저장하세요.
+          </p>
+        )}
         <p className="muted small">
           ChatGPT 자동 연결은 없습니다(수동 인계). 자료를 복사해 ChatGPT에서 기획한 뒤, 결과를 아래에 저장하세요. 이미지·링크 분석은 아직 연결되지 않았습니다.
         </p>
         <div className="task-actions">
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project))}>
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project, view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null))}>
             {copied === 'gpt' ? '복사됨' : 'ChatGPT용 자료 복사'}
           </button>
           {!editing && (
@@ -249,15 +265,36 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                 >
                   A 승인 (v{view.spec.revision})
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-small btn-ghost"
-                  disabled={busy}
-                  onClick={() => void run(() => actions.decide(task, 'A', view.spec!.revision, 'rejected'))}
-                >
-                  보류
+                <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => setShowAFeedback((v) => !v)}>
+                  수정 요청(ChatGPT로)
                 </button>
               </div>
+              {showAFeedback && (
+                <div className="wf-inline">
+                  <input
+                    id={`afb-${task.id}`}
+                    placeholder="무엇을 고칠지 적어 주세요"
+                    value={aFeedback}
+                    onChange={(e) => setAFeedback(e.target.value)}
+                    maxLength={2000}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    disabled={busy || !aFeedback.trim()}
+                    onClick={() =>
+                      void run(async () => {
+                        if (await actions.decide(task, 'A', view.spec!.revision, 'rejected', '', { feedback: aFeedback.trim() })) {
+                          setAFeedback('');
+                          setShowAFeedback(false);
+                        }
+                      })
+                    }
+                  >
+                    수정 요청 기록
+                  </button>
+                </div>
+              )}
             </>
           )}
         </section>
@@ -270,6 +307,11 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
           <p className="muted small">Claude는 계획만 만들고 저장소에 쓰지 않습니다. 세션이 시작돼도 계획이 오기 전까지는 완료가 아닙니다.</p>
           {!view.planCurrent && (
             <>
+              {view.pendingRevision && (
+                <p className="task-error">
+                  결과 v{view.pendingRevision.resultRevision} 수정 요청: {view.pendingRevision.feedback} — PM에 다시 보내 새 계획을 받으세요.
+                </p>
+              )}
               {task.dispatch.sessionUrl && (
                 <p className="task-session">
                   PM 세션:{' '}
@@ -293,7 +335,7 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                     disabled={busy || Boolean(dispatchBlocker) || (failed && !ack)}
                     onClick={() => void run(() => actions.dispatchPm(task, failed && ack))}
                   >
-                    Claude PM에 v{view.spec!.revision} 전달
+                    {view.pendingRevision ? `Claude PM에 수정 요청 전달 (v${view.spec!.revision})` : `Claude PM에 v${view.spec!.revision} 전달`}
                   </button>
                   {dispatchBlocker && <p className="muted small">{dispatchBlocker}</p>}
                 </div>
@@ -486,6 +528,40 @@ export function WorkflowPanel({ task, project, view, dispatchBlocker, actions }:
                 >
                   B: GitHub 업로드 승인 (결과 v{view.result.revision})
                 </button>
+              )}
+            </div>
+          )}
+          {view.result && !view.bApproved && (
+            <div className="wf-manual">
+              <p className="small">
+                <b>수정 요청(Claude PM으로)</b> — 결과를 보고 고칠 점을 적으면, 같은 기획서 v{view.spec?.revision}로 PM에 다시 보내 새 계획을 받습니다. 새 계획의 작업은 E 승인을 다시 받습니다.
+              </p>
+              {view.pendingRevision ? (
+                <p className="muted small">보낸 수정 요청: {view.pendingRevision.feedback}</p>
+              ) : view.resultRevised ? (
+                <p className="muted small">이 결과에는 수정 요청을 보냈습니다. 새 계획으로 작업한 결과를 새 버전으로 등록하세요.</p>
+              ) : (
+                <span className="wf-inline">
+                  <input
+                    id={`rev-${task.id}`}
+                    placeholder="예: 버튼 색은 원래대로, 크기만 키우기"
+                    value={revisionText}
+                    onChange={(e) => setRevisionText(e.target.value)}
+                    maxLength={4000}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    disabled={busy || !revisionText.trim() || !revisionCheck.ok}
+                    onClick={() =>
+                      void run(async () => {
+                        if (await actions.requestRevision(task, revisionText.trim())) setRevisionText('');
+                      })
+                    }
+                  >
+                    수정 요청 기록
+                  </button>
+                </span>
               )}
             </div>
           )}

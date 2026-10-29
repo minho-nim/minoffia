@@ -2,7 +2,17 @@ import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
 
 /** ChatGPT에 붙여넣을 기획 자료. GPT는 원문을 우선 해석하고 아래 형식으로 답한다. */
-export function buildGptPackage(task: Task, project: Project | undefined): string {
+export function buildGptPackage(task: Task, project: Project | undefined, previous?: { spec: TaskSpec; feedback: string } | null): string {
+  const revise = previous
+    ? [
+        '',
+        `## 이전 기획서 v${previous.spec.revision}에 대한 사용자 수정 요청`,
+        previous.feedback,
+        '',
+        '### 이전 최종 프롬프트',
+        previous.spec.finalPrompt || '(없음)',
+      ]
+    : [];
   return [
     '# MinLab AI Office 기획 요청',
     '',
@@ -13,6 +23,7 @@ export function buildGptPackage(task: Task, project: Project | undefined): strin
     '',
     '## 사용자 요청 원문 (수정하지 말고 그대로 해석)',
     task.userOriginalText ?? [task.title, task.description].filter(Boolean).join('\n\n'),
+    ...revise,
     '',
     '## 부탁',
     '1. 요청 의도를 question(단순 질문) / change_request(개발·수정) / asset_request(이미지·에셋) / ambiguous(불분명) 중 하나로 판단하세요.',

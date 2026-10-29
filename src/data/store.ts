@@ -1,5 +1,5 @@
 import type { Project, Snapshot, Task, UsageRun } from '../domain/types';
-import type { AgentAssignment, Approval, PmPlan, ResultPackage, TaskSpec } from '../domain/workflow-types';
+import type { AgentAssignment, Approval, PmPlan, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 
 export type StoreMode = 'local' | 'supabase';
 
@@ -18,6 +18,8 @@ export interface OfficeStore {
   addPlan(plan: PmPlan, assignments: AgentAssignment[]): Promise<void>;
   updateAssignment(assignment: AgentAssignment): Promise<void>;
   addResult(result: ResultPackage): Promise<void>;
+  /** 결과 검토 → Claude PM 수정 요청 */
+  addRevisionRequest(request: RevisionRequest): Promise<void>;
 }
 
 export function newId(): string {

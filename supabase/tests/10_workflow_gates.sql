@@ -123,5 +123,37 @@ select pg_temp.as_service();
 select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', false, 2, 3)) = 'claimed', 'A 승인된 최신 버전은 한 번 전송');
 select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', false, 2, 3)) = 'not_claimable', '같은 버전 중복 전송 불가');
 select pg_temp.check((select stage = 'dispatching' and dispatch_spec_revision = 3 from tasks), '전송 중 단계 기록');
+-- 결과 검토 → PM 수정 요청 → 같은 버전 재전송 -------------------------------
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111', 'owner@example.invalid');
+insert into tasks (id, project_id, title, type, assignee) values
+  ('bbbbbbbb-0000-4000-8000-000000000002', 'aaaaaaaa-0000-4000-8000-000000000001', '수정 요청 흐름', 'planning', 'claude');
+insert into task_specs (task_id, revision, intent, user_original_text, final_prompt) values
+  ('bbbbbbbb-0000-4000-8000-000000000002', 1, 'change_request', '원문', '프롬프트');
+select pg_temp.expect_fail($q$insert into revision_requests (task_id, spec_revision, result_revision, feedback) values ('bbbbbbbb-0000-4000-8000-000000000002', 1, 1, '버튼 색 다시')$q$, 'latest A-approved spec');
+insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000002', 'A', 'approved', 1);
+select pg_temp.expect_fail($q$insert into revision_requests (task_id, spec_revision, result_revision, feedback) values ('bbbbbbbb-0000-4000-8000-000000000002', 1, 1, '버튼 색 다시')$q$, 'latest result package');
+insert into result_packages (task_id, revision, source, summary) values ('bbbbbbbb-0000-4000-8000-000000000002', 1, 'manual', '1차 결과');
+
+select pg_temp.as_service();
+select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', false, 9, 1)) = 'claimed', '수정 흐름: 첫 PM 전송');
+update tasks set dispatch_state = 'dispatched', dispatch_at = now() - interval '1 minute' where id = 'bbbbbbbb-0000-4000-8000-000000000002';
+select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', false, 9, 1)) = 'not_claimable', '수정 요청 없이 같은 버전 재전송 불가');
+
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111', 'owner@example.invalid');
+insert into revision_requests (task_id, spec_revision, result_revision, feedback) values ('bbbbbbbb-0000-4000-8000-000000000002', 1, 1, '버튼 색을 원래대로');
+select pg_temp.as_service();
+select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', false, 9, 1)) = 'claimed', '수정 요청 뒤 같은 버전 한 번 재전송');
+update tasks set dispatch_state = 'dispatched' where id = 'bbbbbbbb-0000-4000-8000-000000000002';
+select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', false, 9, 1)) = 'not_claimable', '수정 요청 1건으로 재전송은 한 번만');
+
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111', 'owner@example.invalid');
+select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000002', 'B', 'approved', 1)$q$, 'revision was requested');
+insert into result_packages (task_id, revision, source, summary) values ('bbbbbbbb-0000-4000-8000-000000000002', 2, 'manual', '수정 반영 결과');
+insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000002', 'B', 'approved', 2);
+select pg_temp.check(true, '수정 요청한 결과(v1)는 B 불가, 새 결과(v2)는 B 가능');
+select pg_temp.expect_fail($q$insert into revision_requests (task_id, spec_revision, result_revision, feedback) values ('bbbbbbbb-0000-4000-8000-000000000002', 1, 2, '늦은 수정')$q$, 'already approved');
+select pg_temp.as_user('22222222-2222-4222-8222-222222222222', 'other@example.invalid');
+select pg_temp.check((select count(*) from revision_requests) = 0, '다른 사용자는 수정 요청을 볼 수 없음');
+
 reset role;
 \echo 승인 게이트 테스트 완료

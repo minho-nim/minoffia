@@ -9,6 +9,9 @@ v0.2.0 지시서와 v0.2.1 수정 지시서를 현재 저장소(v0.1 + 10월 29�
 - 기획서 버전(`task_specs`): ChatGPT 기획 결과를 수동으로 저장. 원문 보존, 버전이 바뀌면 이전 A 승인 무효.
 - Claude PM 계획(`pm_plans`) 검증·저장, 작업 배정(`agent_assignments`), 결과 패키지(`result_packages`, diff·테스트 로그·SHA-256).
 - 업무 카드의 **진행 단계** 패널: 기획 → A → PM 계획 → E·실행 → 결과·B → C.
+- 두 개의 수정 루프(흐름도 기준):
+  - A 단계 **수정 요청(ChatGPT로)**: 고칠 점을 기록하면 단계가 '기획 중'으로 돌아가고, ChatGPT용 자료에 수정 요청과 이전 프롬프트가 함께 들어간다.
+  - 결과 검토 **수정 요청(Claude PM으로)**(`revision_requests`): 같은 기획서 버전으로 PM에 한 번 더 보낼 수 있고, 새 계획의 작업은 E를 다시 받는다. 수정을 요청한 결과는 B 승인 대상이 아니다.
 - 실행 경로 연결 상태 표시(`src/domain/adapters.ts`): Claude PM 검증됨, Codex 자동 실행 미검증(수동 인계), GPT 수동, Gemini·Grok 미연결.
 - 오피스 캐릭터가 배정 기록을 따른다(E 전 대기, 사용자가 시작 기록 → 작업 중).
 - DB 시험(`scripts/test-db.sh`): 로컬 Postgres에서 승인 게이트·RLS·중복 방지·v0.1 데이터 보존 확인.

@@ -99,3 +99,44 @@ describe('officeStatus', () => {
     expect(officeStatus('completed', 'review')).toBe('done');
   });
 });
+
+describe('수정 루프', () => {
+  const result = (revision: number) => ({ id: `r${revision}`, taskId: 't1', revision, planRevision: 1, workItemId: '', source: 'manual' as const, summary: '', diff: '', testLog: '', remainingIssues: '', sha256: '', createdAt: '' });
+  const rejectA = (revision: number, feedback: string): Approval => ({ ...ok('A', revision), id: `xA${revision}`, decision: 'rejected', scope: { feedback }, createdAt: '2026-10-29T10:00:00Z' });
+
+  it('A에서 수정 요청하면 ChatGPT 재기획(planning)으로 돌아가고 내용을 기억한다', () => {
+    const v = deriveWorkflow(task, data({ specs: [spec(1)], approvals: [rejectA(1, '범위를 좁혀줘')] }));
+    expect(v.stage).toBe('planning');
+    expect(v.plannerFeedback).toBe('범위를 좁혀줘');
+    // 새 기획서 버전을 저장하면 이전 버전의 수정 요청은 더 이상 걸리지 않는다
+    expect(deriveWorkflow(task, data({ specs: [spec(1), spec(2)], approvals: [rejectA(1, 'x')] })).stage).toBe('development_approval_pending');
+  });
+
+  it('결과 검토 수정 요청 → 새 계획 전까지 PM 대기, 옛 계획 실행·B 승인 불가', () => {
+    const p1 = { ...plan(1, 1), createdAt: '2026-10-29T10:00:00Z' };
+    const request = { id: 'q1', taskId: 't1', specRevision: 1, resultRevision: 1, feedback: '색은 그대로', createdAt: '2026-10-29T11:00:00Z' };
+    const v = deriveWorkflow(task, data({ specs: [spec(1)], approvals: [ok('A', 1)], plans: [p1], assignments: [assignment(1)], results: [result(1)], revisionRequests: [request] }));
+    expect(v.stage).toBe('pm_queued');
+    expect(v.pendingRevision?.feedback).toBe('색은 그대로');
+    expect(v.planCurrent).toBe(false);
+    expect(canApprove(v, 'E', 'W1').ok).toBe(false);
+    expect(canApprove(v, 'B').ok).toBe(false);
+
+    // PM에 다시 보낸 뒤에는 세션 시작 단계
+    const sent = { ...task, dispatch: { state: 'dispatched' as const, at: '2026-10-29T11:05:00Z' } };
+    expect(deriveWorkflow(sent, data({ specs: [spec(1)], approvals: [ok('A', 1)], plans: [p1], results: [result(1)], revisionRequests: [request] })).stage).toBe('dispatching');
+
+    // 새 계획(v2)이 오면 수정 요청은 해결되고 새 작업의 E 승인을 받는다
+    const p2 = { ...plan(2, 1), createdAt: '2026-10-29T11:10:00Z' };
+    const after = deriveWorkflow(task, data({ specs: [spec(1)], approvals: [ok('A', 1)], plans: [p1, p2], assignments: [assignment(1), assignment(2)], results: [result(1)], revisionRequests: [request] }));
+    expect(after.pendingRevision).toBeNull();
+    expect(after.planCurrent).toBe(true);
+    expect(canApprove(after, 'E', 'W1').ok).toBe(true);
+    // 수정을 요청한 옛 결과 v1은 B 대상이 아니다
+    expect(after.stage).toBe('agent_handoff_pending');
+    expect(canApprove(after, 'B').ok).toBe(false);
+    const withNew = deriveWorkflow(task, data({ specs: [spec(1)], approvals: [ok('A', 1)], plans: [p1, p2], assignments: [assignment(2)], results: [result(1), result(2)], revisionRequests: [request] }));
+    expect(withNew.stage).toBe('github_approval_pending');
+    expect(canApprove(withNew, 'B').ok).toBe(true);
+  });
+});

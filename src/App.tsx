@@ -43,6 +43,10 @@ function explainDbError(message: string): string {
     ['C requires B', '같은 결과의 B 승인이 먼저 필요합니다.'],
     ['revision must be', '다른 기기에서 먼저 새 버전이 저장됐습니다. 새로고침 후 다시 시도하세요.'],
     ['only the server', '서버가 확인한 상태는 화면에서 기록할 수 없습니다.'],
+    ['revision request needs', 'A 승인된 최신 기획서가 있어야 수정 요청할 수 있습니다.'],
+    ['revision request must target', '최신 결과에만 수정 요청할 수 있습니다.'],
+    ['already approved for GitHub', '이미 GitHub 업로드를 승인한 결과는 수정 요청할 수 없습니다.'],
+    ['새 결과를 받은 뒤', 'PM에 수정을 요청한 상태입니다. 새 결과를 받은 뒤 승인하세요.'],
   ];
   const hit = rules.find(([needle]) => message.includes(needle));
   return hit ? hit[1] : `저장하지 못했습니다: ${message}`;
@@ -304,7 +308,7 @@ export function App() {
             if (a) await store.updateAssignment({ ...a, dispatchStatus: 'ready' });
           }
         },
-        decision === 'approved' ? `${gate} 승인을 기록했습니다.` : '보류로 기록했습니다.',
+        decision === 'approved' ? `${gate} 승인을 기록했습니다.` : '수정 요청을 기록했습니다. ChatGPT용 자료를 다시 복사해 재기획하세요.',
       ),
     dispatchPm: (task, ack) => dispatch(task, ack),
     importPlan: async (task, text) => {
@@ -386,6 +390,23 @@ export function App() {
         '결과 패키지를 저장했습니다. GitHub에는 아직 올라가지 않았습니다.',
       ),
     setPrUrl: (task, url) => step(task.id, () => store.saveTask({ ...task, prUrl: url.trim() }), 'PR 주소를 기록했습니다.'),
+    requestRevision: (task, feedback) =>
+      step(
+        task.id,
+        async () => {
+          const view = deriveWorkflow(task, snap.workflow);
+          if (!view.spec || !view.result) throw new Error('revision request must target the latest result package');
+          await store.addRevisionRequest({
+            id: newId(),
+            taskId: task.id,
+            specRevision: view.spec.revision,
+            resultRevision: view.result.revision,
+            feedback,
+            createdAt: new Date().toISOString(),
+          });
+        },
+        '수정 요청을 기록했습니다. 진행 단계 3번에서 Claude PM에 다시 보내세요.',
+      ),
   };
 
   const dispatch = async (task: Task, ack: boolean) => {

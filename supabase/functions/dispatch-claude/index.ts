@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   // 2. RLS를 거쳐 내 업무만 읽는다.
   const { data: task } = await userClient
     .from('tasks')
-    .select('id, title, description, type, priority, assignee, status, dispatch_state, project_id, projects(name, repo)')
+    .select('id, title, description, type, priority, assignee, status, dispatch_state, dispatch_at, project_id, projects(name, repo)')
     .eq('id', body.taskId)
     .maybeSingle();
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
@@ -80,6 +80,25 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (!aApproval) return reply(409, { ok: false, error: `기획서 v${spec.revision}의 A 승인이 없습니다.` });
 
+  // 결과 검토에서 보낸 수정 요청(마지막 전송 뒤의 것)이 있으면 함께 보낸다.
+  let revisionQuery = userClient
+    .from('revision_requests')
+    .select('result_revision, feedback, created_at')
+    .eq('task_id', task.id)
+    .eq('spec_revision', spec.revision)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (task.dispatch_at) revisionQuery = revisionQuery.gt('created_at', task.dispatch_at);
+  const { data: revision } = await revisionQuery.maybeSingle();
+  const { data: previousResult } = revision
+    ? await userClient
+        .from('result_packages')
+        .select('summary, remaining_issues')
+        .eq('task_id', task.id)
+        .eq('revision', revision.result_revision)
+        .maybeSingle()
+    : { data: null };
+
   // 4. 허용된 저장소 하나만
   const project = task.projects as unknown as { name: string; repo: string | null } | null;
   if (!project?.repo || project.repo.toLowerCase() !== allowedRepo.toLowerCase()) {
@@ -103,7 +122,7 @@ Deno.serve(async (req) => {
     if (row?.reason === 'not_approved') return reply(409, { ok: false, error: '최신 기획서의 A 승인이 확인되지 않았습니다.' });
     return reply(409, {
       ok: false,
-      error: '이 기획서 버전은 이미 PM에 보냈습니다. 실패한 경우 Routines History를 확인한 뒤 확인 체크 후 다시 실행하세요.',
+      error: '이 기획서 버전은 이미 PM에 보냈습니다. 결과를 고치려면 결과 검토에서 수정 요청을 먼저 기록하세요. 실패한 경우 Routines History를 확인한 뒤 확인 체크 후 다시 실행하세요.',
     });
   }
 
@@ -130,6 +149,11 @@ Deno.serve(async (req) => {
     spec.change_scope ? `\n변경 범위: ${spec.change_scope}` : '',
     spec.preserve_constraints ? `유지 조건: ${spec.preserve_constraints}` : '',
     spec.test_criteria ? `테스트 기준: ${spec.test_criteria}` : '',
+    ``,
+    revision ? `## 결과 v${revision.result_revision} 검토 후 사용자 수정 요청 (새 계획 필요)` : '',
+    revision ? revision.feedback : '',
+    revision && previousResult?.summary ? `이전 결과 요약: ${previousResult.summary}` : '',
+    revision && previousResult?.remaining_issues ? `이전 결과의 남은 문제: ${previousResult.remaining_issues}` : '',
     ``,
     `규칙: 작업 분해·배정 계획(JSON)만 작성한다. 저장소 쓰기·커밋·브랜치·푸시·PR·병합·배포 금지(B 승인 전 GitHub 업로드 금지).`,
   ]
