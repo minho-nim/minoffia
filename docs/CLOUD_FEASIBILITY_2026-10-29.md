@@ -14,6 +14,7 @@ v0.2 지시서 §9. `검증됨` = 공식 문서 확인 **그리고** 사용자 �
 | 6 | Supabase Free | https://supabase.com/docs/guides/functions/limits (커넥터로 확인) | 예(DB·Auth·RLS·Edge Function 운영 중, 비공개 Storage 업로드 2026-10-29 23:25 KST 실측) | 0원 | **검증됨**(현재 사용 범위) | Edge Function: 메모리 256MB, 실행 시간 150초, CPU 2초/요청, 함수 100개, secrets 100개. Storage(문서 확인 2026-10-29, https://supabase.com/docs/guides/storage/uploads/file-limits): 무료 1GB, 파일 하나 최대 50MB(전역), 대역폭 10GB(캐시 5GB + 비캐시 5GB). AI Office는 이미지 하나 5MB·합계 900MB로 더 낮게 막고, 서명 주소를 세션 동안 다시 써서 내려받기를 줄인다. 비활동 정지는 문서 재확인 필요. 결과 diff는 DB에 최대 500KB로 제한 |
 | 7 | Cloudflare Pages Free | https://developers.cloudflare.com/pages/get-started/direct-upload/ | 예(Git 연동, `release` 브랜치 운영) | 0원 | Git 연동 **검증됨** / B 전 비공개 Preview **미확인** | Git 연동 Preview는 브랜치 푸시가 필요해 B 전 검토에 못 쓴다. Direct Upload는 별도 프로젝트로 검토(운영 프로젝트 전환 금지) |
 | 8 | GitHub Free | — | 예(private 저장소, Actions `verify`, PR) | 0원 | **검증됨**(PR·CI) | 브랜치 보호 규칙은 미설정. C 승인 전 배포는 `release` 브랜치 분리로 막음 |
+| 10 | 링크 읽기(Edge Function `fetch-link`) | — | 예(2026-10-29 23:47 KST) | 0원(무료 범위) | **검증됨** | `https://example.com` → 읽음(HTTP 200, 제목 "Example Domain"), `http://169.254.169.254/latest/meta-data/` → 차단. 하루 30회·업무당 20개 |
 | 9 | PC 2대 꺼짐 + 모바일만 | — | 일부(모바일 접속·로그인 확인) | — | 아래 표 | — |
 
 ## PC가 모두 꺼져 있을 때
@@ -21,6 +22,7 @@ v0.2 지시서 §9. `검증됨` = 공식 문서 확인 **그리고** 사용자 �
 | 작업 | 가능? | 이유 |
 | --- | --- | --- |
 | 오피스 접속·업무 등록·승인 기록 | 예 | Cloudflare + Supabase |
+| 이미지 첨부·링크 읽기·확인 질문 기록 | 예 | Supabase Storage·Edge Function |
 | Claude PM 세션 시작 | 예 | Routines(클라우드) |
 | PM 계획 가져오기 | 예(수동) | 휴대폰에서 세션을 열어 JSON 복사 → 붙여넣기 |
 | Codex Cloud 작업 시작 | 예(수동) | Codex 웹/앱에서 사용자가 시작. 자동 시작은 불가 |
