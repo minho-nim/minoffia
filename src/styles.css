@@ -1277,3 +1277,10 @@ a {
   background: var(--surface-2);
   color: var(--muted);
 }
+
+.assign-select {
+  margin-left: 6px;
+  padding: 1px 4px;
+  font: inherit;
+  font-size: 12px;
+}
