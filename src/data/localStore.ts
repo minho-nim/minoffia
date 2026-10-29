@@ -1,3 +1,4 @@
+import { attachmentBlocker, attachmentsOf, MAX_TOTAL_BYTES, totalBytes } from '../domain/attachments';
 import type { Snapshot } from '../domain/types';
 import { canApprove, canRequestRevision, deriveWorkflow } from '../domain/workflow';
 import { EMPTY_WORKFLOW } from '../domain/workflow-types';
@@ -5,6 +6,8 @@ import { sampleSnapshot } from './sample';
 import type { OfficeStore } from './store';
 
 const KEY = 'minlab-ai-office:v1';
+/** 로컬 데모의 이미지 파일(sha256 → data URL). 업무 기록과 따로 둔다. */
+const FILES_KEY = 'minlab-ai-office:files:v1';
 
 function read(): Snapshot | null {
   try {
@@ -26,8 +29,38 @@ function write(s: Snapshot): void {
   }
 }
 
+function readFiles(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(FILES_KEY) ?? '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+const toDataUrl = (file: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error('파일을 읽지 못했습니다.'));
+    r.readAsDataURL(file);
+  });
+
 export function createLocalStore(): OfficeStore {
   let state: Snapshot = read() ?? sampleSnapshot();
+  let files = readFiles();
+  const saveFiles = () => {
+    try {
+      localStorage.setItem(FILES_KEY, JSON.stringify(files));
+    } catch {
+      // 브라우저 저장 공간이 모자라면 이번 화면에서만 보인다.
+    }
+  };
+  // 아무 기록도 가리키지 않는 파일은 지운다.
+  const dropUnusedFiles = () => {
+    const used = new Set(state.workflow.attachments.map((a) => a.storagePath));
+    files = Object.fromEntries(Object.entries(files).filter(([k]) => used.has(`local:${k}`)));
+    saveFiles();
+  };
   const commit = (next: Snapshot) => {
     state = next;
     write(state);
@@ -38,8 +71,9 @@ export function createLocalStore(): OfficeStore {
     const keep = <T extends { taskId: string }>(list: T[]) => list.filter((x) => alive.has(x.taskId));
     commit({
       ...state,
-      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests) },
+      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments) },
     });
+    dropUnusedFiles();
   };
   return {
     mode: 'local',
@@ -132,6 +166,43 @@ export function createLocalStore(): OfficeStore {
       const check = canRequestRevision(deriveWorkflow(task, state.workflow));
       if (!check.ok) throw new Error(check.reason);
       commit({ ...state, workflow: { ...state.workflow, revisionRequests: [...state.workflow.revisionRequests, request] } });
+    },
+    async addAttachment(att, file) {
+      const task = state.tasks.find((t) => t.id === att.taskId);
+      if (!task) throw new Error('task not found');
+      const view = deriveWorkflow(task, state.workflow);
+      const count = attachmentsOf(state.workflow.attachments, att.taskId, att.kind, att.resultRevision).length;
+      const blocked = attachmentBlocker(view, att.kind, 'add', count, att.resultRevision);
+      if (blocked) throw new Error(blocked);
+      if (totalBytes(state.workflow.attachments) + att.sizeBytes > MAX_TOTAL_BYTES) throw new Error('attachment storage quota exceeded');
+      if (!files[att.sha256]) {
+        files[att.sha256] = await toDataUrl(file);
+        saveFiles();
+      }
+      commit({ ...state, workflow: { ...state.workflow, attachments: [...state.workflow.attachments, { ...att, storagePath: `local:${att.sha256}` }] } });
+    },
+    async updateAttachment(next) {
+      const prev = state.workflow.attachments.find((a) => a.id === next.id);
+      const task = prev && state.tasks.find((t) => t.id === prev.taskId);
+      if (!prev || !task) throw new Error('attachment not found');
+      const blocked = attachmentBlocker(deriveWorkflow(task, state.workflow), prev.kind, 'change', 0, prev.resultRevision);
+      if (blocked) throw new Error(blocked);
+      const kept = { ...prev, position: next.position, role: next.role, note: next.note };
+      commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.map((a) => (a.id === prev.id ? kept : a)) } });
+    },
+    async deleteAttachment(att) {
+      const prev = state.workflow.attachments.find((a) => a.id === att.id);
+      const task = prev && state.tasks.find((t) => t.id === prev.taskId);
+      if (!prev || !task) throw new Error('attachment not found');
+      const blocked = attachmentBlocker(deriveWorkflow(task, state.workflow), prev.kind, 'change', 0, prev.resultRevision);
+      if (blocked) throw new Error(blocked);
+      commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
+      dropUnusedFiles();
+    },
+    async attachmentUrl(att) {
+      const url = files[att.sha256];
+      if (!url) throw new Error('이 기기에 파일이 없습니다(로컬 데모는 이 브라우저에만 저장됩니다).');
+      return url;
     },
   };
 }

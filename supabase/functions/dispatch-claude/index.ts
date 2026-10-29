@@ -99,6 +99,18 @@ Deno.serve(async (req) => {
         .maybeSingle()
     : { data: null };
 
+  // 요청 자료 이미지 목록(파일 이름·역할·설명만). PM은 이미지를 볼 수 없으므로 내용을 추측하지 않게 알린다.
+  const { data: images } = await userClient
+    .from('attachments')
+    .select('id, role, note, file_name')
+    .eq('task_id', task.id)
+    .eq('kind', 'request')
+    .order('position');
+  const ROLE: Record<string, string> = { current: '현재 화면', target: '목표·참고 디자인', error: '오류 화면', reference: '기타 참고' };
+  const imageLines = (images ?? []).map(
+    (a, i) => `${i + 1}. [${ROLE[a.role] ?? a.role}] ${a.file_name}${a.note ? ` — ${a.note}` : ''} (첨부 ${String(a.id).slice(0, 8)})`,
+  );
+
   // 4. 허용된 저장소 하나만
   const project = task.projects as unknown as { name: string; repo: string | null } | null;
   if (!project?.repo || project.repo.toLowerCase() !== allowedRepo.toLowerCase()) {
@@ -149,6 +161,9 @@ Deno.serve(async (req) => {
     spec.change_scope ? `\n변경 범위: ${spec.change_scope}` : '',
     spec.preserve_constraints ? `유지 조건: ${spec.preserve_constraints}` : '',
     spec.test_criteria ? `테스트 기준: ${spec.test_criteria}` : '',
+    ``,
+    imageLines.length ? `## 요청 자료 이미지 ${imageLines.length}장 (이 세션에서는 볼 수 없음. 내용을 추측하지 말고 작업의 attachment_refs에 첨부 ID를 적는다)` : '',
+    ...imageLines,
     ``,
     revision ? `## 결과 v${revision.result_revision} 검토 후 사용자 수정 요청 (새 계획 필요)` : '',
     revision ? revision.feedback : '',

@@ -5,10 +5,12 @@ import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
+import type { PendingImage } from './components/Attachments';
 import { WorkflowPanel, type WorkflowActions } from './components/WorkflowPanel';
 import { createLocalStore, resetLocalDemo } from './data/localStore';
 import { newId, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
+import { attachmentsOf, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
 import { routeTask } from './domain/router';
 import { canTransition } from './domain/status';
@@ -48,6 +50,14 @@ function explainDbError(message: string): string {
     ['revision request must target', '최신 결과에만 수정 요청할 수 있습니다.'],
     ['already approved for GitHub', '이미 GitHub 업로드를 승인한 결과는 수정 요청할 수 없습니다.'],
     ['새 결과를 받은 뒤', 'PM에 수정을 요청한 상태입니다. 새 결과를 받은 뒤 승인하세요.'],
+    ['locked after A approval', 'A 승인 뒤에는 요청 자료를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
+    ['append-only', '결과 스크린샷은 검토 기록이라 고치거나 지울 수 없습니다.'],
+    ['result attachment must target', '최신 결과 패키지에만 스크린샷을 붙일 수 있습니다.'],
+    ['too many attachments', '이미지 장수 상한(요청 10장, 결과 6장)을 넘었습니다.'],
+    ['quota exceeded', '첨부 저장 공간 상한(900MB)을 넘었습니다. 오래된 업무를 정리하세요.'],
+    ['invalid storage path', '파일 저장 위치가 올바르지 않습니다. 다시 로그인한 뒤 시도하세요.'],
+    ['mime type', 'PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.'],
+    ['exceeded the maximum allowed size', '파일이 5MB를 넘습니다.'],
   ];
   const hit = rules.find(([needle]) => message.includes(needle));
   return hit ? hit[1] : `저장하지 못했습니다: ${message}`;
@@ -156,7 +166,47 @@ export function App() {
     }
   };
 
-  const addTask = async (d: TaskDraft) => {
+  /** 이미지를 순서대로 올린다. 실패한 파일은 이유를 모아 돌려주고 나머지는 계속 올린다. */
+  const uploadImages = async (
+    taskId: string,
+    kind: AttachmentKind,
+    resultRevision: number | null,
+    images: Pick<PendingImage, 'file' | 'role' | 'note'>[],
+    startPosition: number,
+  ): Promise<string[]> => {
+    const errors: string[] = [];
+    for (const [i, img] of images.entries()) {
+      try {
+        await store.addAttachment(
+          {
+            id: newId(),
+            taskId,
+            kind,
+            resultRevision,
+            position: startPosition + i,
+            role: img.role,
+            note: img.note.trim(),
+            fileName: img.file.name,
+            mime: img.file.type,
+            sizeBytes: img.file.size,
+            sha256: await sha256OfBytes(await img.file.arrayBuffer()),
+            createdAt: new Date().toISOString(),
+          },
+          img.file,
+        );
+      } catch (e) {
+        errors.push(`${img.file.name}: ${explainDbError((e as Error).message)}`);
+      }
+    }
+    return errors;
+  };
+
+  const reportUploads = (errors: string[], count: number) => {
+    if (errors.length) say('error', `이미지 ${errors.length}장을 올리지 못했습니다. ${errors[0]}`);
+    else if (count) say('ok', `이미지 ${count}장을 ${store.mode === 'local' ? '이 브라우저에' : '비공개 저장소에'} 저장했습니다.`);
+  };
+
+  const addTask = async (d: TaskDraft, images: PendingImage[] = []) => {
     const route = routeTask(d, snap.usage);
     const now = new Date().toISOString();
     const task: Task = {
@@ -177,6 +227,11 @@ export function App() {
       updatedAt: now,
     };
     await mutate(() => store.saveTask(task), `${AGENT_BY_ID[route.assignee].name}에게 배정했습니다.`);
+    if (images.length) {
+      const errors = await uploadImages(task.id, 'request', null, images, 0);
+      setSnap(await store.load());
+      reportUploads(errors, images.length);
+    }
   };
 
   const setStatus = (task: Task, to: TaskStatus) => {
@@ -386,8 +441,9 @@ export function App() {
         },
         '직접 시작했다고 기록했습니다.',
       ),
-    addResult: (task, f) =>
-      step(
+    addResult: async (task, f, images = []) => {
+      const revision = nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision);
+      const ok = await step(
         task.id,
         async () => {
           const assignment = snap.workflow.assignments.find((a) => a.taskId === task.id && a.workItemId === f.workItemId);
@@ -395,7 +451,7 @@ export function App() {
           await store.addResult({
             id: newId(),
             taskId: task.id,
-            revision: nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision),
+            revision,
             planRevision: view.plan?.planRevision ?? null,
             workItemId: f.workItemId,
             source: assignment?.assignee === 'codex' ? 'codex_cloud_manual' : assignment?.assignee === 'claude' ? 'claude_manual' : 'manual',
@@ -408,7 +464,38 @@ export function App() {
           });
         },
         '결과 패키지를 저장했습니다. GitHub에는 아직 올라가지 않았습니다.',
-      ),
+      );
+      if (ok && images.length) {
+        const errors = await uploadImages(task.id, 'result', revision, images, 0);
+        setSnap(await store.load());
+        reportUploads(errors, images.length);
+      }
+      return ok;
+    },
+    attachmentUrl: (a) => store.attachmentUrl(a),
+    addAttachments: async (task, kind, resultRevision, files) => {
+      const existing = attachmentsOf(snap.workflow.attachments, task.id, kind, resultRevision);
+      const errors = await uploadImages(
+        task.id,
+        kind,
+        resultRevision,
+        files.map((file, i) => ({ file, note: '', role: kind === 'result' ? 'after' : existing.length + i === 0 ? 'current' : 'target' })),
+        existing.length ? Math.max(...existing.map((a) => a.position)) + 1 : 0,
+      );
+      setSnap(await store.load());
+      reportUploads(errors, files.length);
+      return errors;
+    },
+    updateAttachment: (a) => step(a.taskId, () => store.updateAttachment(a)),
+    deleteAttachment: (a) => step(a.taskId, () => store.deleteAttachment(a), `${a.fileName}을(를) 지웠습니다.`),
+    moveAttachment: (task, id, delta) =>
+      step(task.id, async () => {
+        const list = attachmentsOf(snap.workflow.attachments, task.id, 'request');
+        const next = moved(list, id, delta);
+        for (const a of next) {
+          if (list.find((x) => x.id === a.id)?.position !== a.position) await store.updateAttachment(a);
+        }
+      }),
     setPrUrl: (task, url) => step(task.id, () => store.saveTask({ ...task, prUrl: url.trim() }), 'PR 주소를 기록했습니다.'),
     requestRevision: (task, feedback) =>
       step(
@@ -577,6 +664,7 @@ export function App() {
                         task={t}
                         project={projectById.get(t.projectId)}
                         view={deriveWorkflow(t, snap.workflow)}
+                        attachments={snap.workflow.attachments.filter((a) => a.taskId === t.id)}
                         dispatchBlocker={dispatchBlocker(t)}
                         actions={workflowActions}
                       />

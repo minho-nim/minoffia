@@ -10,6 +10,7 @@ export function forTask(data: WorkflowData, taskId: string): WorkflowData {
     assignments: data.assignments.filter((x) => x.taskId === taskId),
     results: data.results.filter((x) => x.taskId === taskId),
     revisionRequests: data.revisionRequests.filter((x) => x.taskId === taskId),
+    attachments: data.attachments.filter((x) => x.taskId === taskId),
   };
 }
 

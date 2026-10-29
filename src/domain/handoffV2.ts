@@ -1,8 +1,15 @@
+import { describeAttachments, type Attachment } from './attachments';
 import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
 
 /** ChatGPT에 붙여넣을 기획 자료. GPT는 원문을 우선 해석하고 아래 형식으로 답한다. */
-export function buildGptPackage(task: Task, project: Project | undefined, previous?: { spec: TaskSpec; feedback: string } | null): string {
+export function buildGptPackage(
+  task: Task,
+  project: Project | undefined,
+  previous?: { spec: TaskSpec; feedback: string } | null,
+  attachments: Attachment[] = [],
+): string {
+  const images = describeAttachments(attachments);
   const revise = previous
     ? [
         '',
@@ -18,11 +25,14 @@ export function buildGptPackage(task: Task, project: Project | undefined, previo
     '',
     `- 업무 ID: ${task.id}`,
     `- 프로젝트: ${project?.name ?? '알 수 없음'} (${project?.repo ?? '저장소 미연결'})`,
-    '- 첨부 이미지: 없음 (Gemini 이미지 분석 미연결)',
+    images
+      ? `- 첨부 이미지 ${attachments.length}장 (아래 목록. 파일은 사용자가 이 대화에 직접 첨부합니다. 첨부되지 않은 이미지는 내용을 추측하지 마세요.)`
+      : '- 첨부 이미지: 없음',
     '- 링크: 없음 (링크 읽기 미연결)',
     '',
     '## 사용자 요청 원문 (수정하지 말고 그대로 해석)',
     task.userOriginalText ?? [task.title, task.description].filter(Boolean).join('\n\n'),
+    ...(images ? ['', '## 첨부 이미지 (사용자가 적은 역할·설명)', images] : []),
     ...revise,
     '',
     '## 부탁',
@@ -35,7 +45,15 @@ export function buildGptPackage(task: Task, project: Project | undefined, previo
 }
 
 /** 사용자가 Codex Cloud 웹에서 한 번 시작할 때 붙여넣을 지시서. 임시 폴백이며 자동 실행이 아니다. */
-export function buildCodexHandoff(task: Task, spec: TaskSpec, item: WorkItem, project: Project | undefined, baseRevision: string): string {
+export function buildCodexHandoff(
+  task: Task,
+  spec: TaskSpec,
+  item: WorkItem,
+  project: Project | undefined,
+  baseRevision: string,
+  attachments: Attachment[] = [],
+): string {
+  const images = describeAttachments(attachments);
   return [
     `# Codex Cloud 작업 — ${item.title}`,
     '',
@@ -48,6 +66,8 @@ export function buildCodexHandoff(task: Task, spec: TaskSpec, item: WorkItem, pr
     '## 승인된 기획서 (A 승인, 수정 금지)',
     spec.finalPrompt,
     spec.changeScope ? `\n변경 범위: ${spec.changeScope}` : '',
+    '',
+    ...(images ? ['', '## 참고 이미지 (사용자가 이 작업에 직접 첨부)', images] : []),
     '',
     '## 유지 조건',
     ...[spec.preserveConstraints, ...item.preserve_constraints].filter(Boolean).map((x) => `- ${x}`),
