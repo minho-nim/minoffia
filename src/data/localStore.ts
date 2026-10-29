@@ -33,8 +33,11 @@ export function createLocalStore(): OfficeStore {
       return state;
     },
     async saveProject(project) {
-      const rest = state.projects.filter((p) => p.id !== project.id);
-      commit({ ...state, projects: [...rest, project] });
+      const exists = state.projects.some((p) => p.id === project.id);
+      commit({
+        ...state,
+        projects: exists ? state.projects.map((p) => (p.id === project.id ? project : p)) : [...state.projects, project],
+      });
     },
     async deleteProject(id) {
       commit({

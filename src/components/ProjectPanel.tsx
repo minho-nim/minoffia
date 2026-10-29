@@ -5,7 +5,8 @@ import { REPO_PATTERN } from '../domain/types';
 interface Props {
   projects: Project[];
   tasks: Task[];
-  onSave: (p: { name: string; repo: string | null; description: string }) => Promise<void>;
+  /** id가 있으면 기존 프로젝트 수정, 없으면 새로 등록 */
+  onSave: (p: { id?: string; name: string; repo: string | null; description: string }) => Promise<void>;
   onDelete: (p: Project) => void;
 }
 
@@ -14,7 +15,24 @@ export function ProjectPanel({ projects, tasks, onSave, onDelete }: Props) {
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = projects.find((p) => p.id === editingId) ?? null;
   const repoValid = repo.trim() === '' || REPO_PATTERN.test(repo.trim());
+
+  const reset = () => {
+    setEditingId(null);
+    setName('');
+    setRepo('');
+    setDescription('');
+  };
+
+  const startEdit = (p: Project) => {
+    setConfirmId(null);
+    setEditingId(p.id);
+    setName(p.name);
+    setRepo(p.repo ?? '');
+    setDescription(p.description);
+  };
 
   return (
     <div className="stack">
@@ -23,12 +41,11 @@ export function ProjectPanel({ projects, tasks, onSave, onDelete }: Props) {
         onSubmit={async (e) => {
           e.preventDefault();
           if (!name.trim() || !repoValid) return;
-          await onSave({ name: name.trim(), repo: repo.trim() || null, description: description.trim() });
-          setName('');
-          setRepo('');
-          setDescription('');
+          await onSave({ id: editing?.id, name: name.trim(), repo: repo.trim() || null, description: description.trim() });
+          reset();
         }}
       >
+        {editing && <p className="form-title">{editing.name} 수정 중</p>}
         <div className="field-row">
           <label className="field">
             <span>프로젝트 이름</span>
@@ -54,9 +71,16 @@ export function ProjectPanel({ projects, tasks, onSave, onDelete }: Props) {
           <p className={repoValid ? 'route-preview' : 'task-error'}>
             {repoValid ? '저장소는 owner/repo 형식. 비워두면 연결 없는 프로젝트가 됩니다.' : 'owner/repo 형식으로 입력하세요. 예: minho-nim/MinLab-AI-Office'}
           </p>
-          <button type="submit" className="btn btn-primary" disabled={!name.trim() || !repoValid}>
-            프로젝트 등록
-          </button>
+          <span className="form-actions">
+            {editing && (
+              <button type="button" className="btn btn-ghost" onClick={reset}>
+                취소
+              </button>
+            )}
+            <button type="submit" className="btn btn-primary" disabled={!name.trim() || !repoValid}>
+              {editing ? '변경 저장' : '프로젝트 등록'}
+            </button>
+          </span>
         </div>
       </form>
 
@@ -72,6 +96,9 @@ export function ProjectPanel({ projects, tasks, onSave, onDelete }: Props) {
                 {p.description && <span className="muted small">{p.description}</span>}
               </div>
               <span className="muted small">업무 {count}</span>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => startEdit(p)}>
+                수정
+              </button>
               {confirmId === p.id ? (
                 <span className="confirm">
                   업무 {count}건도 함께 지워집니다.
