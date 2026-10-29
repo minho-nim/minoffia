@@ -953,6 +953,10 @@ a {
   color: var(--danger);
 }
 
+.confirm-neutral {
+  color: var(--muted);
+}
+
 .dispatch {
   display: flex;
   flex-direction: column;
@@ -1276,11 +1280,4 @@ a {
 .pill-adapter-not_connected {
   background: var(--surface-2);
   color: var(--muted);
-}
-
-.assign-select {
-  margin-left: 6px;
-  padding: 1px 4px;
-  font: inherit;
-  font-size: 12px;
 }

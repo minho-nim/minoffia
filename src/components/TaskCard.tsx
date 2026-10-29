@@ -29,6 +29,7 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
   const agent = AGENT_BY_ID[task.assignee];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
+  const [reassigning, setReassigning] = useState(false);
   // 진행 중인 일의 담당을 바꾸면 오피스에 없는 활동이 생긴다. 접수·차단 상태에서만 바꾼다.
   const canReassign = (task.status === 'queued' || task.status === 'blocked') && task.dispatch.state !== 'dispatching';
 
@@ -44,21 +45,6 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
           <dt>담당</dt>
           <dd>
             {agent.name} <span className="muted">· {MODE_LABEL[agent.mode]}</span>
-            {canReassign && (
-              <select
-                className="assign-select"
-                aria-label="담당 바꾸기"
-                value=""
-                onChange={(e) => e.target.value && onAssign(task, e.target.value as AgentId)}
-              >
-                <option value="">담당 바꾸기</option>
-                {AGENTS.filter((a) => a.id !== 'mina' && a.id !== task.assignee).map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            )}
           </dd>
         </div>
         <div>
@@ -107,6 +93,32 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
         >
           {copied === 'ok' ? '복사됨' : '지시서 복사'}
         </button>
+        {canReassign &&
+          (reassigning ? (
+            <span className="confirm confirm-neutral">
+              누구에게?
+              {AGENTS.filter((a) => a.id !== 'mina' && a.id !== task.assignee).map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className="btn btn-small btn-ghost"
+                  onClick={() => {
+                    setReassigning(false);
+                    onAssign(task, a.id as AgentId);
+                  }}
+                >
+                  {a.name}
+                </button>
+              ))}
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setReassigning(false)}>
+                취소
+              </button>
+            </span>
+          ) : (
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setReassigning(true)}>
+              담당 바꾸기
+            </button>
+          ))}
         {confirmDelete ? (
           <span className="confirm">
             삭제할까요?
