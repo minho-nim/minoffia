@@ -9,7 +9,7 @@
 
 ### 0-1. PC에서 처음 실행 (Windows 명령 프롬프트, cmd)
 
-Node.js 18 이상과 Git이 설치되어 있어야 한다.
+Node.js 20.19 이상(또는 22.12 이상)과 Git이 설치되어 있어야 한다. 버전은 `node -v`로 확인한다.
 
 ```cmd
 git clone https://github.com/minho-nim/MinLab-AI-Office.git
