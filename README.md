@@ -7,6 +7,28 @@
 
 ## 0. 실행
 
+### 0-1. PC에서 처음 실행 (Windows 명령 프롬프트, cmd)
+
+Node.js 20.19 이상(또는 22.12 이상)과 Git이 설치되어 있어야 한다. 버전은 `node -v`로 확인한다.
+
+```cmd
+git clone https://github.com/minho-nim/MinLab-AI-Office.git
+cd MinLab-AI-Office
+
+REM .env.local 만들기 (비워두면 로컬 데모 모드)
+echo VITE_SUPABASE_URL=> .env.local
+echo VITE_SUPABASE_PUBLISHABLE_KEY=>> .env.local
+echo VITE_ALLOW_SIGNUP=false>> .env.local
+
+npm install
+npm run dev
+```
+
+- Supabase를 연결하려면 `.env.local`의 `VITE_SUPABASE_URL=`, `VITE_SUPABASE_PUBLISHABLE_KEY=` 뒤에 값을 채운다(3장 참고). `.env.local`은 커밋하지 않는다.
+- 브라우저에서 `http://localhost:5173`을 연다. 종료는 `Ctrl+C`.
+
+### 0-2. PowerShell에서
+
 Windows PowerShell에서:
 
 ```powershell
