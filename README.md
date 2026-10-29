@@ -134,11 +134,25 @@ OFFICE_ALLOWED_ORIGIN       = https://your-office.pages.dev  # 선택. CORS 허�
 
 루틴 하나는 연결된 저장소만 작업한다. 함수는 실수로 다른 저장소를 건드리지 않게 **허용 저장소 하나**로 제한되어 있다(v0.1의 의도된 제한).
 
-## 5. Cloudflare Pages 배포
+## 5. Cloudflare Pages 배포 (모바일·다른 PC에서 접속)
 
-- GitHub 저장소를 Cloudflare Pages Free에 연결
-- Build command `npm run build`, Output directory `dist`
-- Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
+**배포 규칙:** Cloudflare는 `release` 브랜치만 운영 배포한다. `main`에 병합해도 사이트는 바뀌지 않는다. 소유자가 승인하면 `release`를 `main`과 같게 맞추고, 그때 배포된다.
+
+처음 한 번 연결:
+1. [Cloudflare 대시보드](https://dash.cloudflare.com) → Workers & Pages → Create → **Pages** → **Connect to Git** → GitHub 권한 승인 → `minho-nim/MinLab-AI-Office` 선택
+2. 빌드 설정
+   - Production branch: **`release`**
+   - Framework preset: Vite (또는 None)
+   - Build command `npm run build`, Build output directory `dist`
+3. Environment variables (Production)
+   - `VITE_SUPABASE_URL` = `https://kmmicksimbredbyvdmvx.supabase.co`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` = 3장의 publishable key
+   - `NODE_VERSION` = `22`  (Vite 7은 Node 20.19 이상 필요)
+4. Save and Deploy. 끝나면 `https://<이름>.pages.dev` 주소가 생긴다.
+5. 브랜치마다 미리보기 사이트가 생기지 않게: Settings → Builds → Branch control → Preview branches를 **None**으로.
+
+배포(승인 후): 로컬에서 `git fetch origin && git push origin origin/main:refs/heads/release`. 되돌릴 때는 이전 커밋으로 같은 명령을 쓴다.
+
 - 반드시 로그인과 Supabase RLS를 쓴다. **GitHub가 Private이어도 웹사이트는 공개다.**
 - 관리자용 AI Office와 친구에게 공개할 프로젝트 사이트는 분리한다.
 
