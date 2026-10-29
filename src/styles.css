@@ -565,6 +565,25 @@ a {
   font-size: 14px;
 }
 
+.notice-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notice-close {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .notice-ok {
   background: var(--st-done);
   color: var(--st-done-ink);

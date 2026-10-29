@@ -6,7 +6,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 const HARD_DAILY_CAP = 2;
 const FIRE_TIMEOUT_MS = 20_000;
 
-const env = (key: string) => Deno.env.get(key) ?? '';
+// 대시보드에 붙여넣을 때 섞인 앞뒤 공백·줄바꿈은 지운다.
+const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 
 const cors = {
   'Access-Control-Allow-Origin': env('OFFICE_ALLOWED_ORIGIN') || '*',

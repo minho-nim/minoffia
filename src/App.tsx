@@ -39,7 +39,8 @@ export function App() {
 
   const say = useCallback((kind: 'ok' | 'error', text: string) => {
     setNotice({ kind, text });
-    window.setTimeout(() => setNotice((n) => (n?.text === text ? null : n)), 4000);
+    // 오류는 이유를 읽을 수 있게 직접 닫을 때까지 남긴다.
+    if (kind === 'ok') window.setTimeout(() => setNotice((n) => (n?.text === text ? null : n)), 4000);
   }, []);
 
   // 시작: Supabase 설정이 없으면 로컬 데모 모드
@@ -280,8 +281,13 @@ export function App() {
           </nav>
 
           {notice && (
-            <p className={`notice notice-${notice.kind}`} role="status">
-              {notice.text}
+            <p className={`notice notice-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
+              <span>{notice.text}</span>
+              {notice.kind === 'error' && (
+                <button type="button" className="notice-close" onClick={() => setNotice(null)} aria-label="알림 닫기">
+                  닫기
+                </button>
+              )}
             </p>
           )}
 
