@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
 import { chatGptQuestion, titleFrom, triage } from '../domain/triage';
 import type { Project, Snapshot, Task } from '../domain/types';
+import { RepoCreate } from './RepoCreate';
 import type { TaskDraft } from './TaskForm';
 
 /**
@@ -23,7 +24,8 @@ type Pending =
   | { kind: 'pick'; text: string }
   | { kind: 'question'; text: string }
   | { kind: 'unclear'; text: string }
-  | { kind: 'naming'; text: string };
+  | { kind: 'naming'; text: string }
+  | { kind: 'repo'; project: Project };
 
 interface Props {
   snap: Snapshot;
@@ -32,6 +34,8 @@ interface Props {
   onCreateProject: (name: string) => Promise<Project | null>;
   onAskGemini: (question: string, history: { role: 'user' | 'model'; text: string }[]) => Promise<string>;
   onCopy: (text: string) => Promise<boolean>;
+  /** 저장소 만들기를 쓸 수 있으면 함수(Supabase 모드) */
+  onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
@@ -49,7 +53,7 @@ function readLog(): Msg[] {
 
 const FROM_LABEL: Record<From, string> = { me: '나', office: '미나', gemini: 'Gemini' };
 
-export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy }: Props) {
+export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const [input, setInput] = useState('');
   const [pending, setPending] = useState<Pending | null>(null);
@@ -100,8 +104,12 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       void run(async () => {
         const project = await onCreateProject(text.slice(0, 60));
         if (!project) return say('office', '프로젝트를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
-        say('office', `'${project.name}' 프로젝트를 만들었습니다. GitHub 저장소는 아직 연결되지 않았습니다(프로젝트 탭에서 owner/repo 입력).`);
+        say('office', `'${project.name}' 프로젝트를 만들었습니다.`);
         await create(original, project);
+        if (onCreateRepo) {
+          setPending({ kind: 'repo', project });
+          say('office', 'GitHub 저장소도 만들까요? 비공개 빈 저장소(README만)를 만들고 이 프로젝트에 연결합니다.');
+        } else say('office', 'GitHub 저장소는 아직 연결되지 않았습니다(프로젝트 탭에서 owner/repo 입력).');
       });
       return;
     }
@@ -136,7 +144,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
   };
 
   const choose = (project: Project) => {
-    if (!pending) return;
+    if (!pending || pending.kind === 'repo') return;
     const text = pending.text;
     setPending(null);
     say('me', `${project.name} 맞아요`);
@@ -258,6 +266,23 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
             </>
           )}
           {pending.kind === 'naming' && <p className="muted small inbox-note">아래 입력창에 새 프로젝트 이름을 적고 보내세요.</p>}
+          {pending.kind === 'repo' && onCreateRepo && (
+            <RepoCreate
+              project={pending.project}
+              onCancel={() => {
+                setPending(null);
+                say('office', '저장소는 나중에 프로젝트 탭에서 만들 수 있어요.');
+              }}
+              onCreate={async (project, name) => {
+                const repo = await onCreateRepo(project, name);
+                if (repo) {
+                  setPending(null);
+                  say('office', `${repo} 저장소를 만들고 '${project.name}'에 연결했어요.`);
+                }
+                return repo;
+              }}
+            />
+          )}
         </div>
       )}
       {busy && <p className="muted small inbox-note">처리 중…</p>}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Project, Task } from '../domain/types';
+import { RepoCreate } from './RepoCreate';
 import { REPO_PATTERN } from '../domain/types';
 
 interface Props {
@@ -8,14 +9,17 @@ interface Props {
   /** id가 있으면 기존 프로젝트 수정, 없으면 새로 등록 */
   onSave: (p: { id?: string; name: string; repo: string | null; description: string }) => Promise<unknown>;
   onDelete: (p: Project) => void;
+  /** 저장소 만들기(Supabase 모드에서만) */
+  onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
 }
 
-export function ProjectPanel({ projects, tasks, onSave, onDelete }: Props) {
+export function ProjectPanel({ projects, tasks, onSave, onDelete, onCreateRepo }: Props) {
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [repoFor, setRepoFor] = useState<string | null>(null);
   const editing = projects.find((p) => p.id === editingId) ?? null;
   const repoValid = repo.trim() === '' || REPO_PATTERN.test(repo.trim());
 
@@ -96,6 +100,11 @@ export function ProjectPanel({ projects, tasks, onSave, onDelete }: Props) {
                 {p.description && <span className="muted small">{p.description}</span>}
               </div>
               <span className="muted small">업무 {count}</span>
+              {onCreateRepo && !p.repo && !p.sample && repoFor !== p.id && (
+                <button type="button" className="btn btn-small btn-ghost" onClick={() => setRepoFor(p.id)}>
+                  저장소 만들기
+                </button>
+              )}
               <button type="button" className="btn btn-small btn-ghost" onClick={() => startEdit(p)}>
                 수정
               </button>
@@ -113,6 +122,17 @@ export function ProjectPanel({ projects, tasks, onSave, onDelete }: Props) {
                 <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirmId(p.id)}>
                   삭제
                 </button>
+              )}
+              {repoFor === p.id && onCreateRepo && (
+                <RepoCreate
+                  project={p}
+                  onCancel={() => setRepoFor(null)}
+                  onCreate={async (project, name) => {
+                    const repo = await onCreateRepo(project, name);
+                    if (repo) setRepoFor(null);
+                    return repo;
+                  }}
+                />
               )}
             </li>
           );
