@@ -1,5 +1,11 @@
 # MinLab AI Office — Claude 작업 안내
 
+**목표(소유자 정의, 2026-10-30)**: MinLab AI Office는 여러 AI(ChatGPT·Claude·Codex·Gemini·Grok)에게 내 요청에 맞는 일을 효율적으로 나눠 맡기고, 각 AI의 토큰·사용량은 최소로 쓰도록 관리하는 개인 AI 개발팀 사무실이다. 기능을 만들거나 고를 때 이 목표를 기준으로 판단한다.
+- AI를 안 써도 되는 일(분류·상태 질문·배정·프로젝트 확인)은 규칙으로 한다(토큰 0).
+- AI는 필요할 때만, 사용자가 누를 때만 쓴다. 같은 일을 두 번 시키지 않는다(같은 이미지·같은 기획서 버전은 다시 보내지 않음).
+- 싼 길부터: 규칙 → 무료(Gemini) → 구독 안 수동 인계(ChatGPT·Codex) → 구독 자동(Claude PM). 유료 API는 쓰지 않는다.
+- 하루 상한과 실제 사용 기록을 화면에 보여 준다. 공급자의 남은 토큰은 알 수 없으므로 횟수로 관리한다.
+
 개인 AI 개발팀을 2D 도트 오피스로 보여주는 업무 관리 웹앱. React 18 + Vite + TypeScript, Supabase(인증·DB·Edge Function).
 화면 문구와 커밋·PR은 한국어로 쓴다. 사양: `README.md`, `docs/REQUIREMENTS.md`, `docs/ARCHITECTURE.md`.
 
