@@ -1,7 +1,7 @@
 import type { Attachment, ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Snapshot, Task, UsageRun } from '../domain/types';
-import type { AgentAssignment, Approval, PmPlan, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
+import type { AgentAssignment, Approval, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 
 export type StoreMode = 'local' | 'supabase';
 
@@ -40,6 +40,8 @@ export interface OfficeStore {
   /** GPT 확인 질문·답변(추가만) */
   addClarification(item: Clarification): Promise<void>;
   /** 입력창 일반 질문을 Gemini 무료 API에 묻는다(서버가 키·하루 상한을 관리). 로컬 데모는 지원하지 않음. */
+  /** 업무의 PR 상태와 CI 결과를 서버가 GitHub에서 읽어 기록한다(로컬 데모는 지원하지 않음). */
+  checkPr(taskId: string): Promise<PrCheck>;
   /** AI별 동시 작업 상한(1~5) */
   setAgentLimit(assignee: 'codex' | 'claude' | 'gemini' | 'grok', maxRunning: number): Promise<void>;
   /** 새 프로젝트의 GitHub 저장소를 서버가 만들고 연결한다(로컬 데모는 지원하지 않음). */

@@ -95,6 +95,13 @@ insert into result_packages (task_id, revision, source, summary, diff) values
   ('bbbbbbbb-0000-4000-8000-000000000001', 1, 'codex_cloud_manual', '버튼 크기 변경', 'diff --git a/x b/x');
 select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'C', 'approved', 1)$q$, 'C requires B');
 insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'B', 'approved', 1);
+-- C는 서버가 확인한 'CI 성공 + 병합됨' 기록이 있어야 한다(0010)
+update tasks set pr_url = 'https://github.com/o/r/pull/1' where id = 'bbbbbbbb-0000-4000-8000-000000000001';
+select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'C', 'approved', 1)$q$, 'passing CI');
+select pg_temp.as_service();
+insert into pr_checks (owner_id, task_id, pr_url, pr_state, merged, ci_state) values
+  ('11111111-1111-4111-8111-111111111111', 'bbbbbbbb-0000-4000-8000-000000000001', 'https://github.com/o/r/pull/1', 'closed', true, 'success');
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111', 'owner@example.invalid');
 insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'C', 'approved', 1);
 insert into result_packages (task_id, revision, source, summary) values ('bbbbbbbb-0000-4000-8000-000000000001', 2, 'manual', '추가 수정');
 select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'C', 'approved', 2)$q$, 'C requires B');

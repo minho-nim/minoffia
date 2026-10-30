@@ -45,6 +45,7 @@
 - 입력창의 일반 질문만 사용자가 버튼을 누를 때 Gemini 무료 API로 보낸다(소유자 결정 2026-10-29, `supabase/functions/ask-gemini`). 질문 글은 저장하지 않는다. 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`.
 - 업무로 만들기 전에는 반드시 프로젝트를 사용자에게 확인받는다("이 프로젝트 맞아요?").
 - 새 프로젝트의 GitHub 저장소는 사용자가 버튼을 누를 때만 서버(`supabase/functions/create-repo`)가 비공개 빈 저장소로 만든다(소유자 결정 2026-10-29). Claude PM은 `CLAUDE_ALLOWED_REPOSITORY`와 `managed_repos`의 저장소에서만 일한다.
+- C(운영 배포) 승인은 서버(`supabase/functions/pr-status`)가 확인한 최신 'CI 성공 + 병합됨' 기록이 있어야 한다(`0010_pr_checks.sql`).
 - 캐릭터 위치·말풍선·모니터·경고등은 **업무 데이터로만** 움직인다. 꾸며낸 활동을 넣지 않는다.
 - 원격 실행이 성공해도 상태는 `in_progress`까지. 완료는 사람이 검토 대기 → 완료로 승인한다.
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
@@ -60,7 +61,7 @@
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase
-- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`, `supabase/functions/create-repo`, `supabase/functions/analyze-image`
+- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`, `supabase/functions/create-repo`, `supabase/functions/analyze-image`, `supabase/functions/pr-status`
 
 ## Supabase
 
