@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attachmentsOf, canGeminiRead, describeAttachments, docMime, fileNameFor, MAX_FILE_BYTES, moved, rolesFor, sha256OfBytes, validateFile, type Attachment } from './attachments';
+import { attachmentsOf, canGeminiRead, describeAttachments, docMime, fileNameFor, isRaster, MAX_FILE_BYTES, moved, previewKind, rolesFor, sha256OfBytes, storageContentType, validateFile, type Attachment } from './attachments';
 
 const att = (id: string, position: number, extra: Partial<Attachment> = {}): Attachment => ({
   id,
@@ -90,10 +90,10 @@ describe('문서 첨부(v0.3.2)', () => {
   });
 
   it('위험하거나 모르는 형식, 확장자와 다른 형식은 거절', () => {
-    expect(validateFile(f('a.html', 'text/html'), true)).toContain('문서');
     expect(validateFile(f('a.exe', 'application/octet-stream'), true)).not.toBeNull();
     expect(validateFile(f('a.pdf', 'text/html'), true)).not.toBeNull();
-    expect(validateFile(f('a.svg', 'image/svg+xml'), true)).not.toBeNull();
+    expect(validateFile(f('a.js', 'text/javascript'), true)).not.toBeNull();
+    expect(validateFile(f('a.png', 'image/svg+xml'), true)).toContain('확장자');
   });
 
   it('문서는 20MB, 이미지는 5MB', () => {
@@ -112,5 +112,35 @@ describe('문서 첨부(v0.3.2)', () => {
     expect(canGeminiRead({ mime: 'application/pdf', sizeBytes: 1000 })).toBe(true);
     expect(canGeminiRead({ mime: 'application/pdf', sizeBytes: 11 * 1024 * 1024 })).toBe(false);
     expect(canGeminiRead({ mime: 'application/zip', sizeBytes: 1000 })).toBe(false);
+  });
+});
+
+describe('HTML·SVG와 미리보기(v0.3.3)', () => {
+  const f = (name: string, type: string, size = 1000) => ({ name, type, size });
+
+  it('요청 자료는 HTML(20MB)·SVG(5MB)를 받고, 결과 스크린샷은 받지 않는다', () => {
+    expect(validateFile(f('page.html', 'text/html'), true)).toBeNull();
+    expect(validateFile(f('logo.svg', 'image/svg+xml'), true)).toBeNull();
+    expect(validateFile(f('logo.svg', 'image/svg+xml', 5 * 1024 * 1024 + 1), true)).toContain('5MB');
+    expect(validateFile(f('logo.svg', 'image/svg+xml'))).toContain('이미지만');
+    expect(validateFile(f('page.html', 'text/html'))).toContain('이미지만');
+  });
+
+  it('HTML·SVG는 저장소에 글로 올려 새 탭에서 실행되지 않게 한다', () => {
+    expect(storageContentType('text/html')).toBe('text/plain');
+    expect(storageContentType('image/svg+xml')).toBe('text/plain');
+    expect(storageContentType('application/pdf')).toBe('application/pdf');
+  });
+
+  it('미리보기 방식과 Gemini 요약 가능 여부', () => {
+    expect(previewKind('image/svg+xml')).toBe('svg');
+    expect(previewKind('image/png')).toBe('image');
+    expect(previewKind('text/markdown')).toBe('text');
+    expect(previewKind('application/vnd.openxmlformats-officedocument.presentationml.presentation')).toBe('pptx');
+    expect(previewKind('application/zip')).toBe('zip');
+    expect(isRaster('image/svg+xml')).toBe(false);
+    expect(canGeminiRead({ mime: 'image/svg+xml', sizeBytes: 10 })).toBe(false);
+    expect(canGeminiRead({ mime: 'text/html', sizeBytes: 10 })).toBe(true);
+    expect(canGeminiRead({ mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', sizeBytes: 10 })).toBe(true);
   });
 });

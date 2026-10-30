@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, questionProject, replyIntent, titleFrom, triage } from '../domain/triage';
-import { ACCEPT_REQUEST, isImage, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
+import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
@@ -467,7 +467,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         if (m.from === 'gemini' && log[i - 1]?.from === 'me') history.push({ role: 'user', text: log[i - 1].text }, { role: 'model', text: m.text });
       });
       // 질문에는 이미지만 보낸다(문서는 업무 요청 자료로 올린 뒤 'Gemini로 요약').
-      const held = photoStore.held.filter((f) => isImage(f.type));
+      const held = photoStore.held.filter((f) => isRaster(f.type));
       const images = held.slice(0, MAX_GEMINI_IMAGES);
       if (held.length > MAX_GEMINI_IMAGES) say('office', `사진은 앞의 ${MAX_GEMINI_IMAGES}장만 Gemini에 보냅니다.`);
       if (held.length < photoStore.held.length) say('office', '문서는 질문에 보내지 않아요. 업무로 접수하면 요청 자료에서 Gemini로 요약할 수 있어요.');
@@ -577,7 +577,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
               </button>
               <p className="muted small inbox-note">
                 {canAskGemini
-                  ? `Gemini에게 묻기를 누르면 이 질문${photoStore.held.some((f) => isImage(f.type)) ? `과 사진 ${Math.min(photoStore.held.filter((f) => isImage(f.type)).length, MAX_GEMINI_IMAGES)}장` : ''}이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 일반 질문은 개발일지 기록에 남지 않습니다.`
+                  ? `Gemini에게 묻기를 누르면 이 질문${photoStore.held.some((f) => isRaster(f.type)) ? `과 사진 ${Math.min(photoStore.held.filter((f) => isRaster(f.type)).length, MAX_GEMINI_IMAGES)}장` : ''}이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 일반 질문은 개발일지 기록에 남지 않습니다.`
                   : '로컬 데모에서는 Gemini를 쓸 수 없습니다.'}
               </p>
             </>

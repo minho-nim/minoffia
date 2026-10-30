@@ -1886,3 +1886,120 @@ a {
   align-items: center;
   gap: 8px;
 }
+
+/* 첨부 미리보기(브라우저 안에서만) */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.preview-img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px;
+}
+
+.preview-frame {
+  width: 100%;
+  height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.preview-text {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.preview-doc {
+  max-height: 360px;
+  overflow: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.preview-doc p {
+  margin: 0 0 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.preview-doc .preview-h {
+  margin-top: 6px;
+  font-weight: 700;
+}
+
+.preview-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.preview-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.preview-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.preview-table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.preview-table th,
+.preview-table td {
+  max-width: 220px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.preview-table th {
+  color: var(--muted);
+  font-weight: 400;
+  background: var(--surface-2);
+}
+
+.preview-zip {
+  max-height: 360px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.preview-zip li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}

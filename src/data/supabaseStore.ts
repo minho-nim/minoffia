@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { MIME_EXT, type Attachment, type ImageAnalysis } from '../domain/attachments';
+import { MIME_EXT, storageContentType, type Attachment, type ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
@@ -423,7 +423,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async addAttachment(x, file) {
       const path = `${await userId()}/${x.taskId}/${x.sha256}.${MIME_EXT[x.mime] ?? 'bin'}`;
       // 같은 업무에 같은 파일이 이미 있으면 그대로 쓴다(덮어쓰기 없음).
-      const up = await client.storage.from(BUCKET).upload(path, file, { contentType: x.mime, upsert: false });
+      // HTML·SVG는 글(text/plain)로 올려 비공개 주소를 직접 열어도 실행되지 않게 한다.
+      const up = await client.storage.from(BUCKET).upload(path, file, { contentType: storageContentType(x.mime), upsert: false });
       const duplicate = up.error && /exist|duplicate/i.test(up.error.message);
       if (up.error && !duplicate) throw new Error(`파일 올리기 실패: ${up.error.message}`);
       const res = await client.from('attachments').insert({
