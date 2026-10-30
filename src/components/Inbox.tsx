@@ -635,7 +635,11 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         }}
       >
         <button type="button" className="btn btn-ghost inbox-attach" aria-label="사진 첨부" title="사진 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
-          📎
+          {/* 이모지는 기기 글꼴마다 다르게 깨져 보여서 도트 그림 아이콘을 쓴다 */}
+          <svg className="pixel-icon" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
+            <path fill="currentColor" d="M1 3h14v1H1zM1 12h14v1H1zM1 4h1v8H1zM14 4h1v8h-1z" />
+            <path fill="currentColor" d="M10 5h2v2h-2zM3 11h1v-1h1V9h1V8h1v1h1v1h1V9h1V8h1v1h1v1h1v1h1v1H3z" opacity=".75" />
+          </svg>
         </button>
         <input
           ref={fileInput}

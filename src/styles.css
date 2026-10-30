@@ -1691,8 +1691,16 @@ a {
 
 .inbox-attach {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding-inline: 10px;
-  font-size: 18px;
+  color: var(--ink);
+}
+
+.pixel-icon {
+  display: block;
+  image-rendering: pixelated;
 }
 
 /* ---------- 에이전트 목록·한도 ---------- */
