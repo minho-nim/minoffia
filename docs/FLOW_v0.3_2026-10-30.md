@@ -48,6 +48,7 @@
 | 04 기획은 ChatGPT(수동 복사·붙여넣기) | 기본은 Gemini 무료 초안(접수 시 자동), 어렵거나 중요한 업무만 ChatGPT. A 승인 → PM 전송 자동 | 소유자 2026-10-30: "GPT도 자동 하고싶어" → Gemini 초안 + GPT는 필요할 때 선택. 최종 목표 "내가 하는 건 질문·승인·검토 및 수정 요청뿐" |
 
 ## 남은 결정·확인
+- **08 Codex 자동 실행**(소유자 결정 2026-10-30): 개인 Plus로 서버 무인 실행은 공식 경로가 없어(구독용 서버 인증 없음) Codex for Linear 절충안으로 간다. E 승인 → Linear 위임 → 진행·작업 링크 자동 확인 → 요약을 결과로, diff는 B 뒤 PR에서. 진단·결정·설정은 `docs/CODEX_LINEAR_DECISION_2026-10-30.md`.
 - **08 모바일 Codex**: ChatGPT 모바일 앱에서 Codex Cloud 작업을 시작·확인할 수 있는지 소유자 실측.
 - **07 Prototype First**: AI Studio Build 결과물을 어떻게 받을지(ZIP 업로드 / GitHub 저장소 / 링크).
 - **개발일지**(소유자 결정 2026-10-30):
