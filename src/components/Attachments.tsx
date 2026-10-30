@@ -126,7 +126,7 @@ function Thumb({ src, alt, mime }: { src: string | null; alt: string; mime: stri
 }
 
 /** 이 파일에 보일 역할(문서는 '문서·자료' 하나) */
-const rolesOf = (roles: AttachmentRole[], mime: string): AttachmentRole[] => (isImage(mime) ? roles : ['document']);
+const rolesOf = (roles: AttachmentRole[], mime: string): AttachmentRole[] => (isImage(mime) || roles.includes('prototype') ? roles : ['document']);
 
 /** 폼 안에서 고르는 중인 이미지. 저장은 폼을 낼 때 한다. */
 export function ImagePicker({
