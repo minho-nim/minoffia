@@ -1,4 +1,4 @@
-// PR 주소 읽기와 CI(check runs) 요약(외부 의존 없음: Deno 함수와 vitest가 같이 쓴다).
+// PR 주소 읽기와 CI(GitHub Actions 실행) 요약(외부 의존 없음: Deno 함수와 vitest가 같이 쓴다).
 
 export type CiState = 'success' | 'failure' | 'pending' | 'none';
 
