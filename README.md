@@ -1,4 +1,4 @@
-# MinLab AI Office v0.2.13
+# MinLab AI Office v0.2.14
 
 > **목표** — MinLab AI Office는 여러 AI(ChatGPT·Claude·Codex·Gemini·Grok)에게 내 요청에 맞는 일을 효율적으로 나눠 맡기고, 각 AI의 토큰·사용량은 최소로 쓰도록 관리하는 개인 AI 개발팀 사무실이다.
 >
@@ -83,7 +83,7 @@ npm run build
 | 3. PM | "Claude PM에 전달" → 세션의 JSON 계획을 붙여넣기 → 검증 후 저장 | 세션 시작은 자동, 계획 회수는 수동 |
 | 4. **E** | 작업마다 실행 승인. Codex 자동 시작은 미검증이라 버튼이 꺼져 있고, 수동 인계(지시서 복사 → Codex 웹에서 시작 → "직접 시작했어요") | 수동 인계 |
 | 5. 결과·**B** | diff·테스트 로그·스크린샷으로 결과 패키지 저장 → 검토 → **수정 요청(Claude PM으로)** 또는 B 승인. B 승인 후에만 PR | — |
-| 6. **C** | PR CI 통과·병합 확인 → C 승인 → `release` 갱신 명령 | — |
+| 6. **C** | "PR·CI 확인"(서버가 GitHub에서 CI 성공·병합을 읽음) → C 승인 → `release` 갱신 명령 | CI 확인은 자동 |
 
 이미지는 Supabase 비공개 버킷 `attachments`에 저장된다(파일 하나 5MB, 요청 10장·결과 6장, 합계 900MB). 요청 자료는 A 승인 뒤 잠기고, 결과 스크린샷은 추가만 된다. 이미지는 "Gemini로 분석"을 누르면 서버 함수 `analyze-image`가 Gemini 무료 API로 분석해 ChatGPT 자료에 넣는다(원본을 대신하지 않음, 하루 20회).
 

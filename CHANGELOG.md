@@ -1,5 +1,13 @@
 # 변경 기록
 
+## 0.2.14 — 2026-10-30
+
+### 추가
+- **PR CI 결과 자동 확인**(v0.2 §8). C 단계의 "PR·CI 확인"을 누르면 서버(`pr-status`)가 GitHub에서 PR 상태와 CI(check runs)를 읽어 기록한다(`pr_checks`, 사용자는 기록 불가).
+  - C 승인은 이 업무 PR 주소에 대한 **최신 확인이 'CI 성공 + main 병합됨'**일 때만 된다(DB `0010_pr_checks.sql`, 화면도 같은 규칙). CI 실패·진행 중·병합 전이면 버튼이 꺼진다.
+  - 허용 저장소(`CLAUDE_ALLOWED_REPOSITORY`, AI Office가 만든 저장소)의 PR만 읽고 `minho-nim/MinLab`은 제외. 토큰 `GITHUB_REPO_TOKEN`에 Pull requests·Checks 읽기 권한이 필요하다.
+  - 로컬 데모는 서버가 없어 예전처럼 직접 확인 체크박스를 쓴다.
+
 ## 0.2.13 — 2026-10-30
 
 ### 바뀜

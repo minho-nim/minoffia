@@ -19,7 +19,7 @@ import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/type
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
 import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
-import { deriveWorkflow, officeStatus, sha256Hex } from './domain/workflow';
+import { deriveWorkflow, latestPrCheck, officeStatus, sha256Hex } from './domain/workflow';
 import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
@@ -59,6 +59,7 @@ function explainDbError(message: string): string {
     ['invalid storage path', '파일 저장 위치가 올바르지 않습니다. 다시 로그인한 뒤 시도하세요.'],
     ['mime type', 'PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.'],
     ['concurrent execution limit', '이 AI의 동시 작업 상한에 닿았습니다. 하나를 끝내거나 "중단 기록"을 누르거나, 에이전트 탭에서 상한을 올리세요.'],
+    ['C requires a passing CI', 'PR의 CI 성공과 main 병합을 서버가 확인해야 C 승인을 할 수 있습니다. "PR·CI 확인"을 누르세요.'],
     ['dependency not finished', '계획상 앞 작업이 끝나야 시작할 수 있습니다. 앞 작업의 결과를 먼저 등록하세요.'],
     ['exceeded the maximum allowed size', '파일이 5MB를 넘습니다.'],
     ['links are locked after A approval', 'A 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
@@ -565,7 +566,22 @@ export function App() {
           if (list.find((x) => x.id === a.id)?.position !== a.position) await store.updateAttachment(a);
         }
       }),
-    setPrUrl: (task, url) => step(task.id, () => store.saveTask({ ...task, prUrl: url.trim() }), 'PR 주소를 기록했습니다.'),
+    setPrUrl: (task, url) => step(task.id, () => store.saveTask({ ...task, prUrl: url.trim().replace(/\/$/, '') }), 'PR 주소를 기록했습니다.'),
+    checkPr:
+      store.mode === 'supabase'
+        ? async (task) => {
+            try {
+              const c = await store.checkPr(task.id);
+              setSnap(await store.load());
+              const ok = c.ciState === 'success' && c.merged;
+              say(ok ? 'ok' : 'error', ok ? 'CI 성공, main에 병합됨을 확인했습니다. C 승인을 할 수 있습니다.' : `아직 C 승인을 할 수 없습니다: CI ${c.ciState === 'pending' ? '진행 중' : c.ciState === 'failure' ? '실패' : c.ciState === 'none' ? '없음' : '성공'}, ${c.merged ? '병합됨' : '병합 전'}`);
+              return true;
+            } catch (e) {
+              say('error', `PR을 확인하지 못했습니다: ${(e as Error).message}`);
+              return false;
+            }
+          }
+        : undefined,
     requestRevision: (task, feedback) =>
       step(
         task.id,
@@ -772,6 +788,7 @@ export function App() {
                         attachments={snap.workflow.attachments.filter((a) => a.taskId === t.id)}
                         analyses={snap.workflow.imageAnalyses.filter((a) => a.taskId === t.id)}
                         allAssignments={snap.workflow.assignments}
+                        prCheck={latestPrCheck(t, snap.workflow)}
                         agentLimits={snap.agentLimits}
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}

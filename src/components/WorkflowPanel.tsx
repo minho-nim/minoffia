@@ -7,8 +7,8 @@ import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildGptPackage } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { startBlocker } from '../domain/concurrency';
-import { canApprove, canRequestRevision, type WorkflowView } from '../domain/workflow';
-import type { AgentAssignment, Gate, Intent } from '../domain/workflow-types';
+import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
+import type { AgentAssignment, Gate, Intent, PrCheck } from '../domain/workflow-types';
 import { DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
 
 export interface SpecFields {
@@ -41,6 +41,8 @@ export interface WorkflowActions {
   /** 결과 패키지와 스크린샷(결과를 저장한 뒤 올린다) */
   addResult: (task: Task, fields: ResultFields, images?: PendingImage[]) => Promise<boolean>;
   setPrUrl: (task: Task, url: string) => Promise<boolean>;
+  /** 서버가 GitHub에서 PR·CI를 확인(Supabase 모드만) */
+  checkPr?: (task: Task) => Promise<boolean>;
   /** 결과 검토 → Claude PM 수정 요청 */
   requestRevision: (task: Task, feedback: string) => Promise<boolean>;
   attachmentUrl: (attachment: Attachment) => Promise<string>;
@@ -67,6 +69,8 @@ interface Props {
   analyses: ImageAnalysis[];
   /** 모든 업무의 배정(AI별 동시 작업 상한 규칙에 쓴다) */
   allAssignments: AgentAssignment[];
+  /** 이 업무 PR 주소에 대한 최신 서버 확인 */
+  prCheck?: PrCheck | null;
   /** AI별 동시 작업 상한 */
   agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
   /** 모든 업무의 링크·확인 질문(이 업무 것만 골라 쓴다) */
@@ -78,6 +82,8 @@ interface Props {
   dispatchBlocker: string | null;
   actions: WorkflowActions;
 }
+
+const CI_LABEL: Record<PrCheck['ciState'], string> = { success: '성공', failure: '실패', pending: '진행 중', none: '없음' };
 
 const STEPS = [
   { key: 'plan', label: '기획' },
@@ -100,7 +106,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -733,15 +739,44 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             </>
           ) : (
             <>
-              <label className="check">
-                <input id={`ci-${task.id}`} type="checkbox" checked={ciChecked} onChange={(e) => setCiChecked(e.target.checked)} />
-                PR의 CI(verify) 통과와 main 병합을 확인했습니다 (CI 자동 연동은 v0.2 예정)
-              </label>
+              {actions.checkPr ? (
+                <div className="wf-manual">
+                  <p className="small">
+                    <b>PR·CI 확인</b> — 서버가 GitHub에서 이 PR의 CI 결과와 병합 여부를 읽습니다. CI 성공 + main 병합이어야 C 승인을 할 수 있습니다.
+                  </p>
+                  {prCheck && (
+                    <>
+                      <p className="small">
+                        <span className={`pill pill-ci-${prCheck.ciState}`}>CI {CI_LABEL[prCheck.ciState]}</span>{' '}
+                        <span className={`pill ${prCheck.merged ? 'pill-ci-success' : 'pill-ci-pending'}`}>{prCheck.merged ? '병합됨' : prCheck.prState === 'closed' ? '닫힘(병합 안 됨)' : '병합 전'}</span>{' '}
+                        <span className="muted">{new Date(prCheck.checkedAt).toLocaleString('ko-KR')} 확인</span>
+                      </p>
+                      {prCheck.checks.length > 0 && (
+                        <ul className="small ci-list">
+                          {prCheck.checks.map((c) => (
+                            <li key={c.name}>
+                              {c.name}: {c.status === 'completed' ? c.conclusion : c.status}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                  <button type="button" className="btn btn-small" disabled={busy || !task.prUrl} onClick={() => void run(() => actions.checkPr!(task))}>
+                    {prCheck ? 'PR·CI 다시 확인' : 'PR·CI 확인'}
+                  </button>
+                </div>
+              ) : (
+                <label className="check">
+                  <input id={`ci-${task.id}`} type="checkbox" checked={ciChecked} onChange={(e) => setCiChecked(e.target.checked)} />
+                  PR의 CI(verify) 통과와 main 병합을 확인했습니다 (로컬 데모: 서버 확인 없음)
+                </label>
+              )}
               <button
                 type="button"
                 className="btn btn-small btn-primary"
-                disabled={busy || !cCheck.ok || !ciChecked || !task.prUrl}
-                onClick={() => void run(() => actions.decide(task, 'C', view.result!.revision, 'approved', '', { pr_url: task.prUrl }))}
+                disabled={busy || !cCheck.ok || !task.prUrl || (actions.checkPr ? !prCheckPasses(prCheck ?? null) : !ciChecked)}
+                onClick={() => void run(() => actions.decide(task, 'C', view.result!.revision, 'approved', '', { pr_url: task.prUrl, ci: prCheck ? { state: prCheck.ciState, merged: prCheck.merged, sha: prCheck.headSha } : 'manual' }))}
               >
                 C: 운영 배포 승인
               </button>
