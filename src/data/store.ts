@@ -1,4 +1,4 @@
-import type { Attachment } from '../domain/attachments';
+import type { Attachment, ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Snapshot, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, PmPlan, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
@@ -32,6 +32,8 @@ export interface OfficeStore {
   deleteAttachment(attachment: Attachment): Promise<void>;
   /** 화면에 보여 줄 주소. Supabase는 1시간 뒤 만료된다. */
   attachmentUrl(attachment: Attachment): Promise<string>;
+  /** 요청 자료 이미지를 Gemini로 분석한다(서버, 같은 이미지는 다시 씀). 로컬 데모는 지원하지 않음. */
+  analyzeImage(attachmentId: string): Promise<ImageAnalysis>;
   /** 서버가 링크를 한 번 읽고 결과를 기록한다(로컬 데모는 지원하지 않음). */
   readLink(taskId: string, url: string): Promise<LinkRef>;
   deleteLink(link: LinkRef): Promise<void>;

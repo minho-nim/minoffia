@@ -1,5 +1,5 @@
 /** v0.2.1 확정 업무 플로우의 데이터. DB 테이블과 1:1로 맞춘다(supabase/migrations/0003, 0004). */
-import type { Attachment } from './attachments';
+import type { Attachment, ImageAnalysis } from './attachments';
 import type { Clarification, LinkRef } from './requestContext';
 
 export type Stage =
@@ -138,13 +138,15 @@ export interface WorkflowData {
   revisionRequests: RevisionRequest[];
   /** 요청 자료·결과 스크린샷(파일은 비공개 저장소에) */
   attachments: Attachment[];
+  /** 요청 자료 이미지의 Gemini 분석 */
+  imageAnalyses: ImageAnalysis[];
   /** 서버가 읽은 링크 결과 */
   links: LinkRef[];
   /** GPT 확인 질문·답변 */
   clarifications: Clarification[];
 }
 
-export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], links: [], clarifications: [] };
+export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], clarifications: [] };
 
 export const STAGE_LABEL: Record<Stage, string> = {
   received: '접수',
