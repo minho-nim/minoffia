@@ -8,7 +8,7 @@ import { sampleSnapshot } from './sample';
 import type { ChatEntry } from '../domain/devlog';
 import { newId, type OfficeStore } from './store';
 
-/** 첨부 묶음 버전: 결과 스크린샷은 결과 버전, 시안은 계획 버전 */
+/** 첨부 묶음 버전: 결과 스크린샷은 결과 버전, 견본은 계획 버전 */
 const revOf = (a: { kind: string; resultRevision: number | null; planRevision?: number | null }) => (a.kind === 'prototype' ? a.planRevision ?? null : a.resultRevision);
 
 /** 로컬 데모의 대화 기록(이 브라우저에만, 최근 2000줄) */

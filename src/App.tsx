@@ -46,12 +46,12 @@ function explainDbError(message: string): string {
     ['E approval required', 'E 실행 승인 전에는 시작을 기록할 수 없습니다.'],
     ['B must approve the latest', '최신 결과 패키지만 B 승인할 수 있습니다.'],
     ['C requires B', '같은 결과의 B 승인이 먼저 필요합니다.'],
-    ['approve the prototype (P)', '시안 먼저 계획입니다. 시안을 올리고 P(시안 승인)를 한 뒤 Codex를 실행 승인하세요.'],
-    ['P requires an uploaded prototype', '승인할 시안(AI Studio 결과)을 먼저 올리세요.'],
-    ['P is only for prototype_first', '시안 먼저 계획에서만 시안을 승인합니다.'],
-    ['prototype is locked after P approval', 'P(시안 승인) 뒤에는 시안을 바꿀 수 없습니다.'],
-    ['plan is not prototype_first', '이 계획은 바로 개발이라 시안을 올리지 않습니다.'],
-    ['prototype must target the latest plan', '최신 계획에만 시안을 올릴 수 있습니다.'],
+    ['approve the prototype (P)', '견본 먼저 계획입니다. 견본을 올리고 P(견본 승인)를 한 뒤 Codex를 실행 승인하세요.'],
+    ['P requires an uploaded prototype', '승인할 견본(AI Studio 결과)을 먼저 올리세요.'],
+    ['P is only for prototype_first', '견본 먼저 계획에서만 견본을 승인합니다.'],
+    ['prototype is locked after P approval', 'P(견본 승인) 뒤에는 견본을 바꿀 수 없습니다.'],
+    ['plan is not prototype_first', '이 계획은 바로 개발이라 견본을 올리지 않습니다.'],
+    ['prototype must target the latest plan', '최신 계획에만 견본을 올릴 수 있습니다.'],
     ['revision must be', '다른 기기에서 먼저 새 버전이 저장됐습니다. 새로고침 후 다시 시도하세요.'],
     ['only the server', '서버가 확인한 상태는 화면에서 기록할 수 없습니다.'],
     ['revision request needs', 'A 승인된 최신 기획서가 있어야 수정 요청할 수 있습니다.'],
@@ -188,7 +188,7 @@ export function App() {
     }
   };
 
-  /** 파일을 순서대로 올린다. 실패한 파일은 이유를 모아 돌려주고 나머지는 계속 올린다. revision: 결과 버전(결과 스크린샷) 또는 계획 버전(시안) */
+  /** 파일을 순서대로 올린다. 실패한 파일은 이유를 모아 돌려주고 나머지는 계속 올린다. revision: 결과 버전(결과 스크린샷) 또는 계획 버전(견본) */
   const uploadImages = async (
     taskId: string,
     kind: AttachmentKind,
@@ -433,13 +433,13 @@ export function App() {
             createdAt: new Date().toISOString(),
           });
           await store.addApproval(approval('P', '', { prototypes: view.prototypeCount, plan_revision: rev }));
-          // 시안 작업(AI Studio·Gemini)은 시안 승인으로 끝난 것으로 기록한다. 그래야 그 뒤에 잇는 Codex 작업을 시작할 수 있다.
+          // 견본 작업(AI Studio·Gemini)은 견본 승인으로 끝난 것으로 기록한다. 그래야 그 뒤에 잇는 Codex 작업을 시작할 수 있다.
           for (const a of view.assignments.filter((x) => x.assignee === 'gemini' && x.dispatchStatus !== 'completed')) {
-            if (!view.eApproved(a.workItemId)) await store.addApproval(approval('E', a.workItemId, { assignee: 'gemini', mode: 'manual_handoff', with: 'P 시안 승인' }));
+            if (!view.eApproved(a.workItemId)) await store.addApproval(approval('E', a.workItemId, { assignee: 'gemini', mode: 'manual_handoff', with: 'P 견본 승인' }));
             await store.updateAssignment({ ...a, dispatchStatus: 'completed' });
           }
         },
-        'P(시안 승인)를 기록했습니다. 이제 Codex 작업을 실행 승인하세요. Codex 지시서에 승인된 시안이 들어갑니다.',
+        'P(견본 승인)를 기록했습니다. 이제 Codex 작업을 실행 승인하세요. Codex 지시서에 승인된 견본이 들어갑니다.',
       ),
     dispatchPm: (task, ack) => dispatch(task, ack),
     importPlan: async (task, text) => {
@@ -610,7 +610,7 @@ export function App() {
     deleteAttachment: (a) => step(a.taskId, () => store.deleteAttachment(a), `${a.fileName}을(를) 지웠습니다.`),
     moveAttachment: (task, id, delta) =>
       step(task.id, async () => {
-        // 옮기는 첨부와 같은 묶음(요청 자료 또는 같은 계획의 시안) 안에서 순서를 바꾼다.
+        // 옮기는 첨부와 같은 묶음(요청 자료 또는 같은 계획의 견본) 안에서 순서를 바꾼다.
         const target = snap.workflow.attachments.find((x) => x.id === id);
         const list =
           target?.kind === 'prototype'

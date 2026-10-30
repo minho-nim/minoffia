@@ -7,7 +7,7 @@ const KEYWORDS: Record<WorkType, string[]> = {
   planning: ['기획', '설계', '아키텍처', '스펙', '요구사항', '로드맵', '구조', 'plan', 'spec', 'architecture', 'roadmap'],
   dev: ['구현', '개발', '버그', '수정', '리팩터', '코드', '기능', '연동', '마이그레이션', 'api', 'fix', 'bug', 'implement', 'refactor'],
   design: ['디자인', 'ui', 'ux', '화면', '레이아웃', '색상', '아이콘', '도트', '스프라이트', '캐릭터', 'style'],
-  prototype: ['프로토타입', '시안', '목업', '데모', 'mockup', 'prototype', 'poc'],
+  prototype: ['프로토타입', '시안', '견본', '목업', '데모', 'mockup', 'prototype', 'poc'],
   research: ['조사', '리서치', '비교', '트렌드', '검색', '분석', '시장', 'research', 'compare'],
   qa: ['테스트', '검수', 'qa', '리뷰', '점검', 'ci', '회귀', 'test', 'review'],
 };

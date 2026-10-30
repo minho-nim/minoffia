@@ -76,23 +76,23 @@ describe('개발 방식(v0.3.5 Prototype First)', () => {
     expect(r.ok && r.plan.development_mode).toBe('direct');
   });
 
-  it('시안 먼저는 AI Studio 시안 작업(gemini_optional)이 있어야 한다', () => {
+  it('견본 먼저는 AI Studio 견본 작업(gemini_optional)이 있어야 한다', () => {
     const bad = parsePmPlan(plan({ development_mode: 'prototype_first' }), TASK);
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.errors.join()).toContain('gemini_optional');
     const good = parsePmPlan(
       plan({
         development_mode: 'prototype_first',
-        mode_reason: '새 화면이라 시안부터',
+        mode_reason: '새 화면이라 견본부터',
         work_items: [
-          { id: 'W1', title: '시안', assignee_preference: 'gemini_optional', execution_mode: 'manual_handoff' },
+          { id: 'W1', title: '견본', assignee_preference: 'gemini_optional', execution_mode: 'manual_handoff' },
           { id: 'W2', title: '통합', dependencies: ['W1'], assignee_preference: 'codex_primary', execution_mode: 'manual_handoff' },
         ],
       }),
       TASK,
     );
     expect(good.ok && good.plan.development_mode).toBe('prototype_first');
-    expect(good.ok && good.plan.mode_reason).toBe('새 화면이라 시안부터');
+    expect(good.ok && good.plan.mode_reason).toBe('새 화면이라 견본부터');
   });
 
   it('모르는 방식은 거절', () => {

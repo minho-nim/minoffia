@@ -81,7 +81,7 @@ export function parsePmPlan(text: string, expectedTaskId: string): ParseResult {
   if (mode !== 'prototype_first' && mode !== 'direct') errors.push('development_mode는 prototype_first 또는 direct여야 합니다.');
   if (o.mode_reason !== undefined && typeof o.mode_reason !== 'string') errors.push('mode_reason은 문자열이어야 합니다.');
   if (mode === 'prototype_first' && o.status === 'planned' && !items.some((i) => i.assignee_preference === 'gemini_optional'))
-    errors.push('prototype_first면 AI Studio 시안 작업(assignee_preference: gemini_optional)이 하나 있어야 합니다.');
+    errors.push('prototype_first면 AI Studio 견본 작업(assignee_preference: gemini_optional)이 하나 있어야 합니다.');
   if (errors.length) return { ok: false, errors };
 
   return {
