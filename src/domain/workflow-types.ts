@@ -89,7 +89,8 @@ export interface PmPlan {
   planRevision: number;
   approvedSpecRevision: number;
   targetBaseRevision: string;
-  source: 'routine_session_manual_import' | 'manual';
+  /** routine_session_auto = PM 세션이 submit-plan으로 보낸 계획(v0.4.2) */
+  source: 'routine_session_manual_import' | 'routine_session_auto' | 'manual';
   plan: PlanBody;
   createdAt: string;
 }

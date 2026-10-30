@@ -174,7 +174,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox',
 ];
 
 const toDeployment = (r: Row): Deployment => ({
@@ -502,6 +502,15 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       return () => {
         void client.removeChannel(channel);
       };
+    },
+    async loadPlanInbox() {
+      const { data, error } = await client.from('pm_plan_inbox').select('id, task_id, spec_revision, plan_text').eq('status', 'new').order('created_at');
+      if (error) return [];
+      return (data ?? []).map((r) => ({ id: r.id as string, taskId: r.task_id as string, specRevision: r.spec_revision as number, planText: r.plan_text as string }));
+    },
+    async markPlanInbox(id, status, note) {
+      const { data, error } = await client.from('pm_plan_inbox').update({ status, note: note.slice(0, 2000) }).eq('id', id).eq('status', 'new').select('id');
+      return !error && Boolean(data?.length);
     },
     async draftSpec(taskId, text) {
       const data = await invoke('draft-spec', { taskId, text });

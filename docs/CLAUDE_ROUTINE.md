@@ -25,7 +25,9 @@ GitHub 업로드는 사용자의 B 승인 뒤에만 하므로, 이 루틴은 저
                     "requires_execution_approval": true } ] }
 ```
 
-- 계획은 자동으로 AI Office에 돌아오지 않는다(fire 토큰은 읽기 권한이 없고, 세션 환경에서 Supabase 접속이 막혀 있음). 세션 링크를 열어 JSON을 복사하고, 업무 카드 → 진행 단계 3번에 붙여넣는다. 앱이 형식을 검증한다.
+- **v0.4.2부터 계획은 자동으로 돌아온다**: `dispatch-claude`가 payload 끝에 "계획 보내기" 절과 이 업무 전용 1회용 제출표(6시간, 3번까지, DB에는 해시만)를 붙인다. PM은 계획을 다 쓰면 `curl`로 `https://kmmicksimbredbyvdmvx.supabase.co/functions/v1/submit-plan`에 보낸다. 앱이 `parsePmPlan`으로 검증한 뒤 계획·배정으로 저장한다(E 승인 전 실행 없음).
+  - **소유자 설정(한 번)**: PM 루틴("MinLab AI Office 업무 실행")이 쓰는 클라우드 환경의 Network access에서 `kmmicksimbredbyvdmvx.supabase.co`를 Allowed domains에 넣는다(또는 더 넓은 접속 수준). 안내: https://code.claude.com/docs/en/cloud-environments#network-access
+  - 접속이 막히거나 형식이 틀리면 세션 링크를 열어 JSON을 복사하고, 업무 카드 → 진행 단계 3번에 붙여넣는다(예전 방식).
 - 루틴 설정에는 여전히 저장소 쓰기 도구가 켜져 있을 수 있다. 루틴 화면에서 쓰기 도구를 끌 수 있는지 확인한다(미확인).
 
 - 결과 검토에서 "수정 요청(Claude PM으로)"을 기록하면, 같은 기획서 버전으로 한 번 더 보낼 수 있다. payload에 `결과 vN 검토 후 사용자 수정 요청` 절이 붙고, PM은 그 내용을 반영한 새 계획(새 `plan_revision`)을 만든다. 새 계획의 작업은 E 승인을 다시 받는다.
