@@ -36,7 +36,7 @@ describe('buildDevlog', () => {
 
   it('프로젝트별 → 날짜별로 묶고 시간순으로 쓴다', () => {
     expect(md).toContain('# 개발일지 2026-10-30');
-    const muscle = md.indexOf('## MuscleMap');
+    const muscle = md.indexOf('## MuscleMap (프로젝트 ID: p1)');
     const none = md.indexOf('## 일반 대화(프로젝트 없음)');
     expect(muscle).toBeGreaterThan(0);
     expect(none).toBeGreaterThan(muscle);

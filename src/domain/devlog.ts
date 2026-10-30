@@ -73,19 +73,21 @@ export function buildDevlog(snap: Snapshot, chat: ChatEntry[], range: { from: st
   });
   if (!events.length) return `# 개발일지 ${range.from === range.to ? range.from : `${range.from} ~ ${range.to}`}\n\n(기록 없음)\n`;
 
+  // 프로젝트 ID로 묶는다(이름이 같거나 바뀌어도 섞이지 않게). '' = 프로젝트 없음
   const byProject = new Map<string, DevlogEvent[]>();
   for (const e of events) {
-    const key = e.projectId && names.has(e.projectId) ? names.get(e.projectId)! : NO_PROJECT;
+    const key = e.projectId && names.has(e.projectId) ? e.projectId : '';
     byProject.set(key, [...(byProject.get(key) ?? []), e]);
   }
   // 프로젝트 이름순, 프로젝트 없는 대화는 맨 뒤
-  const order = [...byProject.keys()].sort((a, b) => (a === NO_PROJECT ? 1 : b === NO_PROJECT ? -1 : a.localeCompare(b, 'ko')));
+  const order = [...byProject.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : names.get(a)!.localeCompare(names.get(b)!, 'ko')));
 
   const out = [`# 개발일지 ${range.from === range.to ? range.from : `${range.from} ~ ${range.to}`}`, ''];
-  for (const name of order) {
-    out.push(`## ${name}`, '');
+  for (const id of order) {
+    // 나중에 개발일지 프로젝트에 올릴 때 ID로 정확히 묶을 수 있게 함께 적는다.
+    out.push(id ? `## ${names.get(id)} (프로젝트 ID: ${id})` : `## ${NO_PROJECT}`, '');
     let day = '';
-    for (const e of byProject.get(name)!) {
+    for (const e of byProject.get(id)!) {
       const d = kstDay(new Date(e.at));
       if (d !== day) {
         if (day) out.push('');
