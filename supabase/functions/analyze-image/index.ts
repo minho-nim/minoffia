@@ -6,7 +6,7 @@ import { buildPrompt, parseAnalysis, toBase64 } from './analysis.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 40_000;
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
