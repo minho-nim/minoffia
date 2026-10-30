@@ -1,6 +1,6 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AgentPanel } from './components/AgentPanel';
+import { AgentRoster } from './components/AgentPanel';
 import { Inbox } from './components/Inbox';
 import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
@@ -58,6 +58,7 @@ function explainDbError(message: string): string {
     ['quota exceeded', '첨부 저장 공간 상한(900MB)을 넘었습니다. 오래된 업무를 정리하세요.'],
     ['invalid storage path', '파일 저장 위치가 올바르지 않습니다. 다시 로그인한 뒤 시도하세요.'],
     ['mime type', 'PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.'],
+    ['concurrent execution limit', '이미 시작된 개발 작업이 있습니다. 동시에 하나만 진행합니다. 그 작업의 결과를 등록하거나 "중단 기록"을 누른 뒤 시작하세요.'],
     ['exceeded the maximum allowed size', '파일이 5MB를 넘습니다.'],
     ['links are locked after A approval', 'A 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
     ['clarification must target', '다른 기기에서 기획서가 새로 저장됐습니다. 새로고침 후 다시 기록하세요.'],
@@ -448,6 +449,12 @@ export function App() {
         },
         '직접 시작했다고 기록했습니다.',
       ),
+    stopAssignment: (a) =>
+      step(
+        a.taskId,
+        () => store.updateAssignment({ ...a, dispatchStatus: 'failed', actualProviderStatus: 'user_stopped' }),
+        `${a.workItemId} 작업을 중단으로 기록했습니다. 다른 작업을 시작할 수 있습니다.`,
+      ),
     addResult: async (task, f, images = []) => {
       const revision = nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision);
       const ok = await step(
@@ -472,6 +479,19 @@ export function App() {
         },
         '결과 패키지를 저장했습니다. GitHub에는 아직 올라가지 않았습니다.',
       );
+      // 결과를 받은 작업은 끝난 것으로 기록한다(동시 실행 1개 제한이 풀린다).
+      // 작업을 고르지 않고 '전체'로 등록하면 이 업무의 시작된 작업을 모두 끝낸다.
+      const done = snap.workflow.assignments.filter(
+        (a) => a.taskId === task.id && (f.workItemId === '' || a.workItemId === f.workItemId) && (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting'),
+      );
+      if (ok && done.length) {
+        try {
+          for (const a of done) await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'user_reported_result' });
+          setSnap(await store.load());
+        } catch {
+          // 완료 기록 실패는 결과 저장과 별개다. 작업 카드에서 다시 시도할 수 있다.
+        }
+      }
       if (ok && images.length) {
         const errors = await uploadImages(task.id, 'result', revision, images, 0);
         setSnap(await store.load());
@@ -777,13 +797,11 @@ export function App() {
             />
           )}
 
-          {tab === 'agent' && selected && (
-            <AgentPanel
-              agentId={selected}
-              tasks={snap.tasks}
-              usage={snap.usage}
-              assignments={snap.workflow.assignments}
-              aiCalls={snap.aiCalls ?? []}
+          {tab === 'agent' && (
+            <AgentRoster
+              snap={snap}
+              selected={selected}
+              onSelect={(id) => setSelected(id)}
               serverMode={store.mode === 'supabase'}
               onOpenTask={() => {
                 setFilter('all');

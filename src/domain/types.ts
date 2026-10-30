@@ -68,6 +68,8 @@ export interface AiCall {
   keySlot: 1 | 2 | null;
   /** 일반 질문 / 이미지 분석 */
   purpose: 'question' | 'image';
+  /** 공급자 응답 코드(429 = 한도) */
+  httpStatus: number | null;
   createdAt: string;
 }
 

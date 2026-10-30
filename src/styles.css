@@ -1689,3 +1689,73 @@ a {
   padding-inline: 10px;
   font-size: 18px;
 }
+
+/* ---------- 에이전트 목록·한도 ---------- */
+.agent-expanded {
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.agent-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-row:hover,
+.agent-row:focus-visible {
+  border-color: var(--accent);
+}
+
+.agent-row-portrait {
+  flex: none;
+  width: 30px;
+  height: 40px;
+  image-rendering: pixelated;
+}
+
+.agent-row-portrait.is-art {
+  width: auto;
+  height: 44px;
+  image-rendering: auto;
+}
+
+.agent-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.agent-row-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+}
+
+.pill-quota-available {
+  background: var(--st-done);
+  color: var(--st-done-ink);
+}
+
+.pill-quota-exhausted {
+  background: var(--st-blocked);
+  color: var(--st-blocked-ink);
+}
+
+.pill-quota-unknown {
+  background: var(--surface-2);
+  color: var(--muted);
+}

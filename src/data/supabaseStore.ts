@@ -242,7 +242,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           imageAnalyses: imageAnalyses.error ? [] : (imageAnalyses.data ?? []).map(toAnalysis),
         },
         // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
-        aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : 'question') as 'question' | 'image', createdAt: r.created_at as string })),
+        aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : 'question') as 'question' | 'image', httpStatus: (r.http_status as number | null) ?? null, createdAt: r.created_at as string })),
       };
     },
     async saveProject(p) {
