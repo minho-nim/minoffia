@@ -1,8 +1,9 @@
 import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
-import { AGENT_BY_ID, MODE_LABEL } from '../domain/agents';
+import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
+import { quotaFor, QUOTA_STATE_LABEL, type QuotaInfo } from '../domain/quota';
 import type { AgentAssignment } from '../domain/workflow-types';
 import { remainingToday, runsToday } from '../domain/usage';
-import type { AgentId, AiCall, Task, UsageRun } from '../domain/types';
+import type { AgentId, AiCall, Snapshot, Task, UsageRun } from '../domain/types';
 import { STATUS_LABEL } from '../domain/types';
 import { ACTIVITY_LABEL, buildScene } from '../office/scene';
 import { spriteFor } from '../office/sprites';
@@ -17,12 +18,14 @@ interface Props {
   aiCalls?: AiCall[];
   /** 서버(Supabase) 모드인가 */
   serverMode?: boolean;
+  /** 오늘 한도 상태 */
+  quota?: QuotaInfo;
 }
 
 /** 오피스 캐릭터 → 실행 경로(어댑터) */
 const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision', mina: 'gpt' };
 
-export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false }: Props) {
+export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false, quota }: Props) {
   const a = AGENT_BY_ID[agentId];
   const scene = buildScene(tasks, assignments).find((s) => s.agent === agentId);
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
@@ -57,6 +60,13 @@ export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiC
           </p>
         </div>
       )}
+      {quota && (
+        <p className="small">
+          오늘 한도 <span className={`pill pill-quota-${quota.state}`}>{QUOTA_STATE_LABEL[quota.state]}</span> {quota.label !== QUOTA_STATE_LABEL[quota.state] && quota.label}
+          <br />
+          <span className="muted">{quota.detail}</span>
+        </p>
+      )}
       <p className="small">
         오늘 등록된 실행 <b className="num">{used}</b>
         {a.dailyCap !== null ? (
@@ -84,6 +94,67 @@ export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiC
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * 에이전트 탭: 모든 에이전트를 보여 주고, 고른 에이전트는 맨 위에 자세히 펼친다.
+ * 나머지는 한 줄 요약(지금 하는 일·오늘 한도·맡은 업무 수)이고 누르면 펼쳐진다.
+ */
+export function AgentRoster({
+  snap,
+  selected,
+  onSelect,
+  onOpenTask,
+  serverMode,
+}: {
+  snap: Snapshot;
+  selected: AgentId | null;
+  onSelect: (id: AgentId) => void;
+  onOpenTask: (task: Task) => void;
+  serverMode: boolean;
+}) {
+  const scene = buildScene(snap.tasks, snap.workflow.assignments);
+  const ordered = selected ? [AGENT_BY_ID[selected], ...AGENTS.filter((a) => a.id !== selected)] : AGENTS;
+  return (
+    <div className="stack">
+      {ordered.map((a) => {
+        if (a.id === selected) {
+          return (
+            <section key={a.id} className="agent-expanded" aria-label={`${a.name} 자세히`}>
+              <AgentPanel
+                agentId={a.id}
+                tasks={snap.tasks}
+                usage={snap.usage}
+                assignments={snap.workflow.assignments}
+                aiCalls={snap.aiCalls ?? []}
+                serverMode={serverMode}
+                quota={quotaFor(a.id, snap)}
+                onOpenTask={onOpenTask}
+              />
+            </section>
+          );
+        }
+        const s = scene.find((x) => x.agent === a.id);
+        const q = quotaFor(a.id, snap);
+        const open = snap.tasks.filter((t) => t.assignee === a.id && t.status !== 'done').length;
+        return (
+          <button key={a.id} type="button" className="agent-row" onClick={() => onSelect(a.id)} aria-label={`${a.name} 펼치기`}>
+            <img className={`agent-row-portrait${spriteFor(a, 'stand').art ? ' is-art' : ''}`} src={spriteFor(a, 'stand').src} alt="" />
+            <span className="agent-row-main">
+              <b>{a.name}</b> <span className="muted small">{a.role}</span>
+              <span className="agent-row-pills">
+                {s && <span className={`pill pill-act-${s.activity}`}>{ACTIVITY_LABEL[s.activity]}</span>}
+                <span className={`pill pill-quota-${q.state}`} title={q.detail}>
+                  {q.label}
+                </span>
+                <span className="muted small">업무 {open}</span>
+              </span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
