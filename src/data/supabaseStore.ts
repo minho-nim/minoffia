@@ -433,7 +433,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         task_id: x.taskId,
         kind: x.kind,
         result_revision: x.resultRevision,
-        // 시안일 때만 보낸다(0014 적용 전 DB에서도 다른 첨부는 올라가게)
+        // 견본일 때만 보낸다(0014 적용 전 DB에서도 다른 첨부는 올라가게)
         ...(x.kind === 'prototype' ? { plan_revision: x.planRevision ?? null } : {}),
         position: x.position,
         role: x.role,

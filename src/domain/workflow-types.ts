@@ -12,7 +12,7 @@ export type Stage =
 export type Intent = 'question' | 'change_request' | 'asset_request' | 'ambiguous';
 
 /** A = 개발 방향 승인, E = AI 실행 승인, B = GitHub 업로드 승인, C = 운영 배포 승인 */
-/** P = 시안 승인(Prototype First 계획에서 Codex 실행 전) */
+/** P = 견본 승인(Prototype First 계획에서 Codex 실행 전) */
 export type Gate = 'A' | 'E' | 'P' | 'B' | 'C';
 
 export interface TaskSpec {
@@ -60,11 +60,11 @@ export interface WorkItem {
   requires_execution_approval: boolean;
 }
 
-/** 개발 방식(새 플로우 07단계): 시안 먼저(AI Studio Build → 시안 승인 → Codex) / 바로 개발 */
+/** 개발 방식(새 플로우 07단계): 견본 먼저(AI Studio Build → 견본 승인 → Codex) / 바로 개발 */
 export type DevelopmentMode = 'prototype_first' | 'direct';
 
 export const DEVELOPMENT_MODE_LABEL: Record<DevelopmentMode, string> = {
-  prototype_first: '시안 먼저(Prototype First)',
+  prototype_first: '견본 먼저(Prototype First)',
   direct: '바로 개발(Direct Development)',
 };
 
@@ -220,7 +220,7 @@ export const STAGE_LABEL: Record<Stage, string> = {
 export const GATE_LABEL: Record<Gate, string> = {
   A: 'A 개발 방향 승인',
   E: 'E AI 실행 승인',
-  P: 'P 시안 승인',
+  P: 'P 견본 승인',
   B: 'B GitHub 업로드 승인',
   C: 'C 운영 배포 승인',
 };

@@ -34,7 +34,7 @@ export interface WorkflowActions {
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   decide: (task: Task, gate: Gate, revision: number, decision: 'approved' | 'rejected', workItemId?: string, scope?: Record<string, unknown>) => Promise<boolean>;
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
-  /** 시안 먼저: P(시안 승인) + 시안 작업 끝냄 */
+  /** 견본 먼저: P(견본 승인) + 견본 작업 끝냄 */
   approvePrototype: (task: Task) => Promise<boolean>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
   recordStart: (assignment: AgentAssignment, url: string) => Promise<boolean>;
@@ -133,7 +133,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
   const requestImages = attachmentsOf(attachments, task.id, 'request');
   const analysisById = new Map(analyses.map((a) => [a.attachmentId, a]));
   const taskLinks = linksOf(links, task.id);
-  // 시안 먼저 계획의 시안(최신 계획 버전)
+  // 견본 먼저 계획의 견본(최신 계획 버전)
   const prototypeFiles = view.plan ? attachmentsOf(attachments, task.id, 'prototype', view.plan.planRevision) : [];
   const taskQa = clarificationsOf(clarifications, task.id);
   const resultShots = view.result ? attachmentsOf(attachments, task.id, 'result', view.result.revision) : [];
@@ -538,7 +538,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                             )
                           }
                         >
-                          {copied === a.id ? '복사됨' : view.prototypeFirst && a.assignee === 'gemini' ? 'AI Studio 시안 지시서 복사' : '지시서 복사'}
+                          {copied === a.id ? '복사됨' : view.prototypeFirst && a.assignee === 'gemini' ? 'AI Studio 견본 지시서 복사' : '지시서 복사'}
                         </button>
                         {a.dispatchStatus === 'completed' ? (
                           <p className="small ok-text">결과를 받아 끝난 작업입니다.</p>
@@ -588,13 +588,13 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         </section>
       )}
 
-      {/* 4-1. 시안 먼저: AI Studio 시안 → 미리보기 검토 → P 승인 */}
+      {/* 4-1. 견본 먼저: AI Studio 견본 → 미리보기 검토 → P 승인 */}
       {view.planCurrent && view.prototypeFirst && (
         <section className="wf-section">
-          <h4>4-1. 시안 검토 — {GATE_LABEL.P}</h4>
+          <h4>4-1. 견본 검토 — {GATE_LABEL.P}</h4>
           <p className="muted small">
-            Claude PM이 <b>시안 먼저</b>를 골랐습니다. 위 시안 작업의 "AI Studio 시안 지시서"를 Google AI Studio Build에 붙여넣어 시안을 만들고, 결과(ZIP·HTML·스크린샷)를 여기에 올려 미리보기로 확인하세요.
-            시안을 승인(P)하면 Codex 지시서에 이 시안이 들어가고, Codex는 시안의 화면 구성과 흐름을 보존하며 실제 코드에 통합합니다.
+            Claude PM이 <b>견본 먼저</b>를 골랐습니다. 위 견본 작업의 "AI Studio 견본 지시서"를 Google AI Studio Build에 붙여넣어 견본을 만들고, 결과(ZIP·HTML·스크린샷)를 여기에 올려 미리보기로 확인하세요.
+            견본을 승인(P)하면 Codex 지시서에 이 견본이 들어가고, Codex는 견본의 화면 구성과 흐름을 보존하며 실제 코드에 통합합니다.
           </p>
           <AttachmentGallery
             items={prototypeFiles}
@@ -606,15 +606,15 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             onUpdate={actions.updateAttachment}
             onDelete={actions.deleteAttachment}
             onMove={(id, d) => actions.moveAttachment(task, id, d)}
-            emptyText="아직 올린 시안이 없습니다."
+            emptyText="아직 올린 견본이 없습니다."
             allowDocs
           />
           {view.pApproved ? (
-            <p className="ok-text">시안 승인됨(P). 이제 Codex 작업을 실행 승인하세요.</p>
+            <p className="ok-text">견본 승인됨(P). 이제 Codex 작업을 실행 승인하세요.</p>
           ) : (
             <>
               <button type="button" className="btn btn-small btn-primary" disabled={busy || !canApprove(view, 'P').ok} onClick={() => void run(() => actions.approvePrototype(task))}>
-                P: 시안 승인
+                P: 견본 승인
               </button>
               {!canApprove(view, 'P').ok && <p className="muted small">{(canApprove(view, 'P') as { reason: string }).reason}</p>}
             </>

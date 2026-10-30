@@ -7,7 +7,7 @@ import type { WorkflowView } from './workflow';
  * 규칙은 supabase/migrations/0004_attachments.sql, 0012_document_attachments.sql, 0013_html_svg_attachments.sql 과 같아야 한다.
  */
 
-/** request = 업무 요청 자료(GPT·PM·개발 AI에 넘김), result = 결과 패키지의 스크린샷, prototype = AI Studio 시안(시안 먼저 계획) */
+/** request = 업무 요청 자료(GPT·PM·개발 AI에 넘김), result = 결과 패키지의 스크린샷, prototype = AI Studio 견본(견본 먼저 계획) */
 export type AttachmentKind = 'request' | 'result' | 'prototype';
 export type AttachmentRole = 'current' | 'target' | 'error' | 'reference' | 'document' | 'prototype' | 'before' | 'after';
 
@@ -17,7 +17,7 @@ export interface Attachment {
   kind: AttachmentKind;
   /** 결과 스크린샷이면 결과 패키지 버전 */
   resultRevision: number | null;
-  /** 시안이면 PM 계획 버전 */
+  /** 견본이면 PM 계획 버전 */
   planRevision?: number | null;
   /** 같은 묶음 안의 순서(0부터) */
   position: number;
@@ -38,7 +38,7 @@ export const ROLE_LABEL: Record<AttachmentRole, string> = {
   error: '오류 화면',
   reference: '기타 참고',
   document: '문서·자료',
-  prototype: '시안',
+  prototype: '견본',
   before: '변경 전',
   after: '변경 후',
 };
@@ -76,7 +76,7 @@ export function previewKind(mime: string): PreviewKind | null {
 /** 이 파일에 고를 수 있는 역할 */
 export const rolesFor = (kind: AttachmentKind, mime: string): AttachmentRole[] =>
   kind === 'prototype' ? ['prototype'] : kind === 'request' && !isImage(mime) ? ['document'] : ROLES_FOR[kind];
-/** 시안은 한 계획에 10개까지 */
+/** 견본은 한 계획에 10개까지 */
 export const MAX_PROTOTYPE_FILES = 10;
 
 export const MIME_EXT: Record<string, string> = {
@@ -205,7 +205,7 @@ export function fileNameFor(name: string, mime: string, index: number): string {
   return `${clean || `image-${index + 1}`}.${MIME_EXT[mime] ?? 'png'}`;
 }
 
-/** revision: 결과 스크린샷이면 결과 버전, 시안이면 계획 버전 */
+/** revision: 결과 스크린샷이면 결과 버전, 견본이면 계획 버전 */
 export function attachmentsOf(list: Attachment[], taskId: string, kind: AttachmentKind, revision: number | null = null): Attachment[] {
   return list
     .filter(
@@ -246,7 +246,7 @@ export async function sha256OfBytes(data: ArrayBuffer): Promise<string> {
 
 /**
  * 첨부를 추가·변경할 수 없는 이유(DB 트리거와 같은 규칙). 가능하면 null.
- * - 시안: 최신 계획이 시안 먼저일 때만, P(시안 승인) 전까지 올리고 바꾸고 지운다. resultRevision 자리에 계획 버전을 준다.
+ * - 견본: 최신 계획이 견본 먼저일 때만, P(견본 승인) 전까지 올리고 바꾸고 지운다. resultRevision 자리에 계획 버전을 준다.
  * - 요청 자료: 최신 기획서가 A 승인되면 잠긴다(기획서를 새 버전으로 저장하면 다시 열린다).
  * - 결과 스크린샷: 최신 결과 패키지에만, B 승인 전까지, 추가만.
  */
@@ -263,10 +263,10 @@ export function attachmentBlocker(
     return null;
   }
   if (kind === 'prototype') {
-    if (!view.plan || !view.prototypeFirst) return '시안 먼저 계획에서만 시안을 올립니다.';
-    if (resultRevision !== view.plan.planRevision) return '최신 계획에만 시안을 올릴 수 있습니다.';
-    if (view.pApproved) return 'P(시안 승인) 뒤에는 시안을 바꿀 수 없습니다. 바꾸려면 PM에 다시 계획을 받으세요.';
-    if (op === 'add' && count >= MAX_PROTOTYPE_FILES) return `시안은 ${MAX_PROTOTYPE_FILES}개까지 올릴 수 있습니다.`;
+    if (!view.plan || !view.prototypeFirst) return '견본 먼저 계획에서만 견본을 올립니다.';
+    if (resultRevision !== view.plan.planRevision) return '최신 계획에만 견본을 올릴 수 있습니다.';
+    if (view.pApproved) return 'P(견본 승인) 뒤에는 견본을 바꿀 수 없습니다. 바꾸려면 PM에 다시 계획을 받으세요.';
+    if (op === 'add' && count >= MAX_PROTOTYPE_FILES) return `견본은 ${MAX_PROTOTYPE_FILES}개까지 올릴 수 있습니다.`;
     return null;
   }
   if (op === 'change') return '결과 스크린샷은 추가만 할 수 있습니다(검토 기록).';
