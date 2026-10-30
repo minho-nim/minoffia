@@ -82,7 +82,7 @@ export function TaskForm({ projects, usage, onSubmit }: Props) {
       </label>
       <div className="field">
         <span>이미지 (현재 화면·목표 디자인·오류 화면, {MAX_REQUEST_FILES}장까지)</span>
-        <ImagePicker items={images} onChange={setImages} roles={ROLES_FOR.request} max={MAX_REQUEST_FILES} />
+        <ImagePicker items={images} onChange={setImages} roles={ROLES_FOR.request} max={MAX_REQUEST_FILES} label="이미지·문서 추가" allowDocs />
       </div>
       <div className="field-row">
         <label className="field">

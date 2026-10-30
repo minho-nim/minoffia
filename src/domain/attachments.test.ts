@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attachmentsOf, describeAttachments, fileNameFor, MAX_FILE_BYTES, moved, sha256OfBytes, validateFile, type Attachment } from './attachments';
+import { attachmentsOf, canGeminiRead, describeAttachments, docMime, fileNameFor, MAX_FILE_BYTES, moved, rolesFor, sha256OfBytes, validateFile, type Attachment } from './attachments';
 
 const att = (id: string, position: number, extra: Partial<Attachment> = {}): Attachment => ({
   id,
@@ -74,5 +74,43 @@ describe('geminiAdapter', () => {
     const ok = geminiAdapter([{ ok: true, createdAt: '2026-10-30T01:00:00Z' }], true);
     expect(ok.state).toBe('verified');
     expect(ok.checkedAt).toBe('2026-10-30');
+  });
+});
+
+describe('문서 첨부(v0.3.2)', () => {
+  const f = (name: string, type: string, size = 1000) => ({ name, type, size });
+
+  it('요청 자료는 문서를 받고, 형식은 확장자 기준으로 맞춘다', () => {
+    expect(validateFile(f('spec.pdf', 'application/pdf'), true)).toBeNull();
+    expect(validateFile(f('a.zip', 'application/x-zip-compressed'), true)).toBeNull();
+    expect(validateFile(f('a.csv', 'application/vnd.ms-excel'), true)).toBeNull();
+    expect(validateFile(f('notes.md', ''), true)).toBeNull();
+    expect(docMime(f('a.zip', 'application/x-zip-compressed'))).toBe('application/zip');
+    expect(docMime(f('notes.md', ''))).toBe('text/markdown');
+  });
+
+  it('위험하거나 모르는 형식, 확장자와 다른 형식은 거절', () => {
+    expect(validateFile(f('a.html', 'text/html'), true)).toContain('문서');
+    expect(validateFile(f('a.exe', 'application/octet-stream'), true)).not.toBeNull();
+    expect(validateFile(f('a.pdf', 'text/html'), true)).not.toBeNull();
+    expect(validateFile(f('a.svg', 'image/svg+xml'), true)).not.toBeNull();
+  });
+
+  it('문서는 20MB, 이미지는 5MB', () => {
+    expect(validateFile(f('a.pdf', 'application/pdf', 20 * 1024 * 1024), true)).toBeNull();
+    expect(validateFile(f('a.pdf', 'application/pdf', 20 * 1024 * 1024 + 1), true)).toContain('20MB');
+    expect(validateFile(f('a.png', 'image/png', 5 * 1024 * 1024 + 1), true)).toContain('5MB');
+  });
+
+  it('결과 스크린샷 자리(allowDocs=false)는 이미지만', () => {
+    expect(validateFile(f('spec.pdf', 'application/pdf'))).toContain('이미지만');
+  });
+
+  it('역할: 문서는 document 하나, Gemini는 이미지와 10MB 이하 PDF·글만', () => {
+    expect(rolesFor('request', 'application/pdf')).toEqual(['document']);
+    expect(rolesFor('request', 'image/png')).toContain('current');
+    expect(canGeminiRead({ mime: 'application/pdf', sizeBytes: 1000 })).toBe(true);
+    expect(canGeminiRead({ mime: 'application/pdf', sizeBytes: 11 * 1024 * 1024 })).toBe(false);
+    expect(canGeminiRead({ mime: 'application/zip', sizeBytes: 1000 })).toBe(false);
   });
 });
