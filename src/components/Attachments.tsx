@@ -5,6 +5,7 @@ import {
   validateFile,
   type Attachment,
   type AttachmentRole,
+  type ImageAnalysis,
 } from '../domain/attachments';
 
 /** 아직 저장하지 않은 이미지(업무 접수·결과 등록 폼에서 고르는 중) */
@@ -194,6 +195,9 @@ export function AttachmentGallery({
   onDelete,
   onMove,
   emptyText,
+  analyses,
+  onAnalyze,
+  analyzeBlocker,
 }: {
   items: Attachment[];
   roles: AttachmentRole[];
@@ -206,6 +210,12 @@ export function AttachmentGallery({
   onDelete?: (a: Attachment) => Promise<boolean>;
   onMove?: (id: string, delta: -1 | 1) => Promise<boolean>;
   emptyText?: string;
+  /** Gemini 이미지 분석 결과(첨부 id → 분석) */
+  analyses?: Map<string, ImageAnalysis>;
+  /** 분석 요청(쓸 수 없으면 없음) */
+  onAnalyze?: (a: Attachment) => Promise<boolean>;
+  /** 분석할 수 없는 이유(예: A 승인 뒤 잠김) */
+  analyzeBlocker?: string | null;
 }) {
   const [urls, setUrls] = useState<Record<string, string | null>>({});
   const [failed, setFailed] = useState<Record<string, string>>({});
@@ -278,6 +288,16 @@ export function AttachmentGallery({
                     <span className="pill">{ROLE_LABEL[a.role]}</span> {a.note}
                   </p>
                 )}
+                {analyses?.get(a.id) ? (
+                  <AnalysisView analysis={analyses.get(a.id)!} />
+                ) : (
+                  onAnalyze &&
+                  !analyzeBlocker && (
+                    <button type="button" className="btn btn-small btn-ghost att-analyze" disabled={busy} onClick={() => void act(() => onAnalyze(a))}>
+                      Gemini로 분석
+                    </button>
+                  )
+                )}
               </div>
               {editable && (
                 <span className="att-tools">
@@ -303,6 +323,9 @@ export function AttachmentGallery({
         </ol>
       )}
       {blocker && items.length > 0 && <p className="muted small">{blocker}</p>}
+      {onAnalyze && !analyzeBlocker && items.some((a) => !analyses?.get(a.id)) && (
+        <p className="muted small">"Gemini로 분석"을 누르면 그 이미지가 Google(Gemini 무료)로 갑니다. 개인정보·기밀이 보이는 이미지는 보내지 마세요. 분석은 원본을 대신하지 않습니다.</p>
+      )}
       {!blocker && onAdd && items.length < max && (
         <DropZone
           disabled={busy}
@@ -323,5 +346,61 @@ export function AttachmentGallery({
         </ul>
       )}
     </div>
+  );
+}
+
+/** Gemini 분석 결과 보기. 보이는 것과 추정을 나눠 보여 준다. */
+function AnalysisView({ analysis }: { analysis: ImageAnalysis }) {
+  const b = analysis.analysis;
+  return (
+    <details className="att-analysis">
+      <summary className="small">
+        Gemini 분석 보기 <span className="muted">· {analysis.keySlot === null ? '같은 이미지의 이전 분석' : analysis.model}</span>
+      </summary>
+      <dl className="small">
+        {b.observations?.length > 0 && (
+          <>
+            <dt>보이는 것</dt>
+            <dd>{b.observations.join(' / ')}</dd>
+          </>
+        )}
+        {b.ui_structure && (
+          <>
+            <dt>화면 구조</dt>
+            <dd>{b.ui_structure}</dd>
+          </>
+        )}
+        {b.visible_text?.length > 0 && (
+          <>
+            <dt>글자</dt>
+            <dd>{b.visible_text.join(' / ')}</dd>
+          </>
+        )}
+        {b.colors_layout && (
+          <>
+            <dt>색·배치</dt>
+            <dd>{b.colors_layout}</dd>
+          </>
+        )}
+        {b.role_fit && (
+          <>
+            <dt>역할과 맞는지</dt>
+            <dd>{b.role_fit}</dd>
+          </>
+        )}
+        {b.uncertainties?.length > 0 && (
+          <>
+            <dt>추정·불확실</dt>
+            <dd>{b.uncertainties.join(' / ')}</dd>
+          </>
+        )}
+        {b.raw && (
+          <>
+            <dt>형식 밖 답변</dt>
+            <dd className="wf-pre">{b.raw}</dd>
+          </>
+        )}
+      </dl>
+    </details>
   );
 }

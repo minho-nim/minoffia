@@ -1,4 +1,4 @@
-# MinLab AI Office v0.2.8
+# MinLab AI Office v0.2.9
 
 개인 AI 개발팀을 운영하는 **2D 도트 사무실형 작업 관리 웹앱**. 회사 Windows PC, 집 PC, 모바일에서 프로젝트와 업무를 보고, 지원되는 Claude Code Cloud Routines 실행을 지시할 수 있다. 다른 AI는 *연동 확인 전까지* 수동 인계만 제공한다.
 
@@ -78,7 +78,7 @@ npm run build
 | 5. 결과·**B** | diff·테스트 로그·스크린샷으로 결과 패키지 저장 → 검토 → **수정 요청(Claude PM으로)** 또는 B 승인. B 승인 후에만 PR | — |
 | 6. **C** | PR CI 통과·병합 확인 → C 승인 → `release` 갱신 명령 | — |
 
-이미지는 Supabase 비공개 버킷 `attachments`에 저장된다(파일 하나 5MB, 요청 10장·결과 6장, 합계 900MB). 요청 자료는 A 승인 뒤 잠기고, 결과 스크린샷은 추가만 된다. Gemini 이미지 분석은 아직 연결되지 않았다.
+이미지는 Supabase 비공개 버킷 `attachments`에 저장된다(파일 하나 5MB, 요청 10장·결과 6장, 합계 900MB). 요청 자료는 A 승인 뒤 잠기고, 결과 스크린샷은 추가만 된다. 이미지는 "Gemini로 분석"을 누르면 서버 함수 `analyze-image`가 Gemini 무료 API로 분석해 ChatGPT 자료에 넣는다(원본을 대신하지 않음, 하루 20회).
 
 링크는 서버 함수 `fetch-link`가 한 번 읽는다(내부망 차단, 8초·1MB, 하루 30회). 읽은 내용은 신뢰할 수 없는 참고자료로 표시해 ChatGPT 자료에 넣는다. ChatGPT의 확인 질문과 답은 업무 카드에 기록하면 다음 자료에 함께 들어간다.
 

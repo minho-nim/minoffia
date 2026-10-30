@@ -507,6 +507,20 @@ export function App() {
         '확인 질문·답변을 기록했습니다. ChatGPT용 자료에 함께 들어갑니다.',
       ),
     attachmentUrl: (a) => store.attachmentUrl(a),
+    analyzeImage:
+      store.mode === 'supabase'
+        ? async (a) => {
+            try {
+              await store.analyzeImage(a.id);
+              setSnap(await store.load());
+              say('ok', `${a.fileName}을(를) 분석했습니다. 진행 단계 1번에서 "Gemini 분석 보기"를 여세요.`);
+              return true;
+            } catch (e) {
+              say('error', `이미지를 분석하지 못했습니다: ${(e as Error).message}`);
+              return false;
+            }
+          }
+        : undefined,
     addAttachments: async (task, kind, resultRevision, files) => {
       const existing = attachmentsOf(snap.workflow.attachments, task.id, kind, resultRevision);
       const errors = await uploadImages(
@@ -735,6 +749,7 @@ export function App() {
                         project={projectById.get(t.projectId)}
                         view={deriveWorkflow(t, snap.workflow)}
                         attachments={snap.workflow.attachments.filter((a) => a.taskId === t.id)}
+                        analyses={snap.workflow.imageAnalyses.filter((a) => a.taskId === t.id)}
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}
                         canReadLinks={store.mode === 'supabase'}

@@ -1624,3 +1624,24 @@ a {
 .repo-create > span {
   flex-basis: 100%;
 }
+
+.att-analyze {
+  align-self: flex-start;
+}
+
+.att-analysis dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 8px;
+  margin: 4px 0 0;
+}
+
+.att-analysis dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.att-analysis dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
