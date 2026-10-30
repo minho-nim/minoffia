@@ -1,4 +1,5 @@
-// 업무에 기록된 PR의 상태와 CI 결과를 GitHub에서 읽어 기록한다(v0.2 §8, 소유자가 버튼을 눌렀을 때만).
+// 업무에 기록된 PR의 상태와 CI(GitHub Actions 실행 결과)를 GitHub에서 읽어 기록한다(v0.2 §8, 소유자가 버튼을 눌렀을 때만).
+// 토큰 권한: Pull requests(Read), Actions(Read). Fine-grained 토큰에는 Checks 권한이 없다.
 // C(운영 배포) 승인은 최신 확인이 'CI 성공 + 병합됨'일 때만 된다(DB 0010_pr_checks.sql).
 // 토큰(GITHUB_REPO_TOKEN)은 읽기에만 쓴다. 허용 저장소(CLAUDE_ALLOWED_REPOSITORY·AI Office가 만든 저장소)만, minho-nim/MinLab은 제외.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
@@ -69,14 +70,22 @@ Deno.serve(async (req) => {
   const prData = (await prRes.json()) as { state?: string; merged?: boolean; head?: { sha?: string } };
   const sha = prData.head?.sha ?? '';
 
-  let runs: CheckRun[] = [];
-  const runsRes = await gh(`/repos/${pr.owner}/${pr.repo}/commits/${sha}/check-runs?per_page=50`).catch(() => null);
+  // CI는 GitHub Actions(verify)다. Fine-grained 토큰에는 Checks 권한이 없어서 Actions 실행 기록(Actions: Read)으로 읽는다.
+  const runsRes = await gh(`/repos/${pr.owner}/${pr.repo}/actions/runs?head_sha=${encodeURIComponent(sha)}&per_page=50`).catch(() => null);
   if (!runsRes || !runsRes.ok) {
-    const hint = runsRes && (runsRes.status === 403 || runsRes.status === 404) ? ' 토큰에 Checks(Read) 권한이 있는지 확인하세요.' : '';
+    const hint = runsRes && (runsRes.status === 403 || runsRes.status === 404) ? ' 토큰에 Actions(Read-only) 권한이 있는지 확인하세요.' : '';
     return reply(502, { ok: false, error: `CI 결과를 읽지 못했습니다(HTTP ${runsRes?.status ?? '응답 없음'}).${hint}` });
   }
-  const runsData = (await runsRes.json()) as { check_runs?: { name: string; status: string; conclusion: string | null }[] };
-  runs = (runsData.check_runs ?? []).slice(0, 50).map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion }));
+  const runsData = (await runsRes.json()) as { workflow_runs?: { name: string; status: string; conclusion: string | null; run_attempt?: number }[] };
+  // 같은 워크플로를 다시 돌렸으면 최신 실행만 센다(목록은 최신순).
+  const seen = new Set<string>();
+  const runs: CheckRun[] = [];
+  for (const r of runsData.workflow_runs ?? []) {
+    if (seen.has(r.name)) continue;
+    seen.add(r.name);
+    runs.push({ name: r.name, status: r.status, conclusion: r.conclusion });
+    if (runs.length >= 50) break;
+  }
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: row, error } = await admin
