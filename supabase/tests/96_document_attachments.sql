@@ -28,7 +28,7 @@ begin
           '11111111-1111-4111-8111-111111111111/d0c0d0c0-0000-4000-8000-000000000001/f');
 end $$;
 
-select pg_temp.check((select 'application/pdf' = any(allowed_mime_types) and 'application/zip' = any(allowed_mime_types) and not ('text/html' = any(allowed_mime_types)) from storage.buckets where id = 'attachments'), '버킷 형식: 문서 추가, HTML 없음');
+select pg_temp.check((select 'application/pdf' = any(allowed_mime_types) and 'application/zip' = any(allowed_mime_types) and not ('text/html' = any(allowed_mime_types)) and not ('image/svg+xml' = any(allowed_mime_types)) from storage.buckets where id = 'attachments'), '버킷 형식: 문서 추가, HTML·SVG는 글(text/plain)로만');
 
 select set_config('request.jwt.claims', json_build_object('sub', '11111111-1111-4111-8111-111111111111', 'role', 'authenticated', 'email', 'owner@example.invalid')::text, false);
 set role authenticated;
@@ -40,8 +40,13 @@ select pg_temp.att('application/vnd.openxmlformats-officedocument.wordprocessing
 select pg_temp.att('text/markdown', 'document', 10);
 select pg_temp.att('application/zip', 'document', 1000);
 select pg_temp.expect_fail($q$select pg_temp.att('application/pdf', 'document', 20971521)$q$, 'attachments_size_bytes_check');
-select pg_temp.expect_fail($q$select pg_temp.att('text/html', 'document', 10)$q$, 'attachments_mime_check');
-select pg_temp.expect_fail($q$select pg_temp.att('image/svg+xml', 'current', 10)$q$, 'attachments_mime_check');
+-- 0013: HTML은 문서, SVG는 이미지(5MB). 그 밖의 형식은 거절
+select pg_temp.att('text/html', 'document', 20971520);
+select pg_temp.att('image/svg+xml', 'current', 5242880);
+select pg_temp.expect_fail($q$select pg_temp.att('image/svg+xml', 'current', 5242881)$q$, 'attachments_size_bytes_check');
+select pg_temp.expect_fail($q$select pg_temp.att('image/svg+xml', 'document', 10)$q$, 'attachments_check1');
+select pg_temp.expect_fail($q$select pg_temp.att('text/javascript', 'document', 10)$q$, 'attachments_mime_check');
+select pg_temp.expect_fail($q$select pg_temp.att('application/x-msdownload', 'document', 10)$q$, 'attachments_mime_check');
 -- 문서에 화면 역할, 이미지에 document 역할은 안 됨
 select pg_temp.expect_fail($q$select pg_temp.att('application/pdf', 'current', 10)$q$, 'attachments_check1');
 select pg_temp.expect_fail($q$select pg_temp.att('image/png', 'document', 10)$q$, 'attachments_check1');
@@ -60,6 +65,7 @@ insert into result_packages (owner_id, task_id, revision, source, summary) value
 alter table result_packages enable trigger user;
 set role authenticated;
 select pg_temp.expect_fail($q$select pg_temp.att('application/pdf', 'after', 10, 'result', 1)$q$, 'attachments_check1');
+select pg_temp.expect_fail($q$select pg_temp.att('image/svg+xml', 'after', 10, 'result', 1)$q$, 'attachments_check1');
 select pg_temp.att('image/png', 'after', 10, 'result', 1);
 
 reset role;

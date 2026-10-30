@@ -30,12 +30,23 @@ export function buildPrompt(role: string, note: string): string {
   ].join('\n');
 }
 
-/** Gemini로 요약할 수 있는 문서 형식(클라이언트 src/domain/attachments.ts canGeminiRead와 같음) */
-export const DOC_MIMES = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json'];
+/** Gemini로 요약할 수 있는 문서 형식(클라이언트 src/domain/attachments.ts canGeminiRead와 같음). DOCX·XLSX·PPTX는 글을 뽑아 보낸다. */
+export const DOC_MIMES = [
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/json',
+  'text/html',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
 export const MAX_DOC_BYTES = 10 * 1024 * 1024;
 
-/** Gemini에 보낼 형식: PDF는 그대로, 글 문서는 text/plain으로. 받지 않는 형식이면 null */
+/** Gemini에 보낼 형식: 그림·PDF는 그대로, 글 문서·HTML·(글을 뽑은) DOCX·XLSX·PPTX는 text/plain. SVG·ZIP 등은 null */
 export function geminiMime(mime: string, sizeBytes: number): string | null {
+  if (mime === 'image/svg+xml') return null;
   if (mime.startsWith('image/')) return mime;
   if (!DOC_MIMES.includes(mime) || sizeBytes > MAX_DOC_BYTES) return null;
   return mime === 'application/pdf' ? mime : 'text/plain';

@@ -3,8 +3,8 @@ import type { WorkflowView } from './workflow';
 
 /**
  * 첨부(v0.2 §4, §7, v0.3 01단계). 원본은 비공개 저장소에 두고, 화면에는 만료되는 주소로만 보여 준다.
- * 요청 자료는 이미지(5MB)와 문서(20MB), 결과 스크린샷은 이미지만.
- * 규칙은 supabase/migrations/0004_attachments.sql, 0012_document_attachments.sql 과 같아야 한다.
+ * 요청 자료는 이미지(5MB, SVG 포함)와 문서(20MB, HTML 포함), 결과 스크린샷은 PNG·JPG·WEBP·GIF만.
+ * 규칙은 supabase/migrations/0004_attachments.sql, 0012_document_attachments.sql, 0013_html_svg_attachments.sql 과 같아야 한다.
  */
 
 /** request = 업무 요청 자료(GPT·PM·개발 AI에 넘김), result = 결과 패키지의 스크린샷 */
@@ -47,6 +47,27 @@ export const ROLES_FOR: Record<AttachmentKind, AttachmentRole[]> = {
 };
 
 export const isImage = (mime: string) => mime.startsWith('image/');
+/** 바로 <img>로 보여도 되는 그림(SVG는 저장소에서 글로 내려오므로 미리보기로만 본다) */
+export const isRaster = (mime: string) => isImage(mime) && mime !== 'image/svg+xml';
+
+/**
+ * 저장소에 올릴 때 쓰는 형식. HTML·SVG는 비공개 주소를 새 탭에서 열어도 스크립트가 돌지 않도록 글(text/plain)로 저장한다.
+ * DB에는 원래 형식을 남기고, 화면은 내려받아 격리된 미리보기로만 보여 준다.
+ */
+export const storageContentType = (mime: string) => (mime === 'text/html' || mime === 'image/svg+xml' ? 'text/plain' : mime);
+
+/** 미리보기 방식 */
+export type PreviewKind = 'image' | 'svg' | 'html' | 'text' | 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'zip';
+export function previewKind(mime: string): PreviewKind | null {
+  if (mime === 'image/svg+xml') return 'svg';
+  if (isImage(mime)) return 'image';
+  if (mime === 'text/html') return 'html';
+  if (['text/plain', 'text/markdown', 'text/csv', 'application/json'].includes(mime)) return 'text';
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime === 'application/zip') return 'zip';
+  const ext = MIME_EXT[mime];
+  return ext === 'docx' || ext === 'xlsx' || ext === 'pptx' ? ext : null;
+}
 
 /** 이 파일에 고를 수 있는 역할 */
 export const rolesFor = (kind: AttachmentKind, mime: string): AttachmentRole[] => (kind === 'request' && !isImage(mime) ? ['document'] : ROLES_FOR[kind]);
@@ -56,6 +77,8 @@ export const MIME_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'image/svg+xml': 'svg',
+  'text/html': 'html',
   'application/pdf': 'pdf',
   'text/plain': 'txt',
   'text/markdown': 'md',
@@ -77,6 +100,8 @@ const DOC_TYPES: Record<string, { mime: string; aliases: string[] }> = {
   md: { mime: 'text/markdown', aliases: ['text/x-markdown', 'text/plain'] },
   csv: { mime: 'text/csv', aliases: ['application/vnd.ms-excel', 'text/x-csv', 'application/csv', 'text/plain'] },
   json: { mime: 'application/json', aliases: ['text/json', 'text/plain'] },
+  html: { mime: 'text/html', aliases: [] },
+  htm: { mime: 'text/html', aliases: [] },
   docx: { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', aliases: [] },
   xlsx: { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', aliases: [] },
   pptx: { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', aliases: [] },
@@ -84,15 +109,25 @@ const DOC_TYPES: Record<string, { mime: string; aliases: string[] }> = {
 };
 
 /** 파일 고르기 창에 줄 형식 목록 */
-export const ACCEPT_REQUEST = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', ...Object.keys(DOC_TYPES).map((e) => `.${e}`)].join(',');
+export const ACCEPT_REQUEST = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', '.svg', ...Object.keys(DOC_TYPES).map((e) => `.${e}`)].join(',');
 export const ACCEPT_IMAGES = 'image/png,image/jpeg,image/webp,image/gif';
 
-/** Gemini로 요약할 수 있는 문서(그 밖의 문서·ZIP은 보관·내려받기만) */
-const GEMINI_DOC_MIMES = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json'];
+/** Gemini로 요약할 수 있는 문서(DOCX·XLSX·PPTX는 서버가 글을 뽑아 보낸다. ZIP·SVG는 미리보기만) */
+const GEMINI_DOC_MIMES = [
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/json',
+  'text/html',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
 /** Gemini 요청 크기 한도 때문에 요약은 10MB 이하 문서만 */
 export const MAX_GEMINI_DOC_BYTES = 10 * 1024 * 1024;
 export const canGeminiRead = (a: { mime: string; sizeBytes: number }) =>
-  isImage(a.mime) || (GEMINI_DOC_MIMES.includes(a.mime) && a.sizeBytes <= MAX_GEMINI_DOC_BYTES);
+  isRaster(a.mime) || (GEMINI_DOC_MIMES.includes(a.mime) && a.sizeBytes <= MAX_GEMINI_DOC_BYTES);
 
 /** 이미지 하나 5MB. Supabase 무료 저장소(1GB)를 아끼려고 둔 상한이다. */
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -126,20 +161,28 @@ export function docMime(file: { name: string; type: string }): string | null {
  */
 export function prepareFile(raw: File, index: number, allowDocs: boolean): File {
   const named = raw.name && raw.name.includes('.') ? raw : new File([raw], fileNameFor(raw.name, raw.type, index), { type: raw.type });
-  if (!allowDocs || isImage(named.type)) return named;
+  if (!allowDocs || isRaster(named.type)) return named;
+  // SVG는 형식 이름이 비어 오는 경우가 있다.
+  if (/\.svg$/i.test(named.name) && (named.type === '' || named.type === 'image/svg+xml')) return named.type ? named : new File([named], named.name, { type: 'image/svg+xml' });
   const mime = docMime(named);
   return mime && mime !== named.type ? new File([named], named.name, { type: mime }) : named;
 }
 
 /** 문제가 있으면 한국어 이유, 없으면 null. allowDocs = 요청 자료(문서도 받음) */
 export function validateFile(file: { name: string; type: string; size: number }, allowDocs = false): string | null {
+  if (allowDocs && file.type === 'image/svg+xml') {
+    if (!/\.svg$/i.test(file.name)) return `${file.name}: 확장자와 파일 형식이 다릅니다.`;
+    if (file.size <= 0) return `${file.name}: 빈 파일입니다.`;
+    if (file.size > MAX_FILE_BYTES) return `${file.name}: 5MB를 넘습니다(${(file.size / 1024 / 1024).toFixed(1)}MB).`;
+    return null;
+  }
   if (allowDocs && !isImage(file.type)) {
-    if (!docMime(file)) return `${file.name}: 이미지(PNG·JPG·WEBP·GIF)나 문서(PDF·TXT·MD·CSV·JSON·DOCX·XLSX·PPTX·ZIP)만 올릴 수 있습니다.`;
+    if (!docMime(file)) return `${file.name}: 이미지(PNG·JPG·WEBP·GIF·SVG)나 문서(PDF·TXT·MD·CSV·JSON·HTML·DOCX·XLSX·PPTX·ZIP)만 올릴 수 있습니다.`;
     if (file.size <= 0) return `${file.name}: 빈 파일입니다.`;
     if (file.size > MAX_DOC_BYTES) return `${file.name}: 문서는 20MB까지입니다(${(file.size / 1024 / 1024).toFixed(1)}MB).`;
     return null;
   }
-  if (!MIME_EXT[file.type] || !isImage(file.type)) return `${file.name}: PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.`;
+  if (!MIME_EXT[file.type] || !isRaster(file.type)) return `${file.name}: PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.`;
   const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
   // 붙여넣은 이미지는 이름에 확장자가 없을 수 있다. 확장자가 있으면 형식과 맞아야 한다.
   if (ext && !(EXT_OK[ext] ?? []).includes(file.type)) return `${file.name}: 확장자와 파일 형식이 다릅니다.`;

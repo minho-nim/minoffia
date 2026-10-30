@@ -38,7 +38,9 @@ describe('문서 요약(v0.3.2)', () => {
     expect(geminiMime('application/json', 1000)).toBe('text/plain');
     expect(geminiMime('image/png', 1000)).toBe('image/png');
     expect(geminiMime('application/zip', 1000)).toBeNull();
-    expect(geminiMime('application/vnd.openxmlformats-officedocument.wordprocessingml.document', 1000)).toBeNull();
+    expect(geminiMime('application/vnd.openxmlformats-officedocument.wordprocessingml.document', 1000)).toBe('text/plain');
+    expect(geminiMime('text/html', 1000)).toBe('text/plain');
+    expect(geminiMime('image/svg+xml', 1000)).toBeNull();
     expect(geminiMime('application/pdf', 10 * 1024 * 1024 + 1)).toBeNull();
   });
 

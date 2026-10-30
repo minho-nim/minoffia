@@ -37,5 +37,6 @@ runm supabase/migrations/0009_concurrency_limit.sql
 runm supabase/migrations/0010_pr_checks.sql
 runm supabase/migrations/0011_inbox_deployments.sql
 runm supabase/migrations/0012_document_attachments.sql
+runm supabase/migrations/0013_html_svg_attachments.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"
