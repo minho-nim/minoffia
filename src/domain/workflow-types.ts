@@ -20,7 +20,8 @@ export interface TaskSpec {
   taskId: string;
   revision: number;
   intent: Intent;
-  planner: 'chatgpt_manual';
+  /** chatgpt_manual = ChatGPT 기획을 사람이 저장, gemini_draft = Gemini 무료 초안(서버 저장, v0.4.0) */
+  planner: 'chatgpt_manual' | 'gemini_draft';
   userOriginalText: string;
   finalPrompt: string;
   changeScope: string;

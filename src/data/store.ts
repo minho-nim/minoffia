@@ -74,6 +74,8 @@ export interface OfficeStore {
   setAgentLimit(assignee: 'codex' | 'claude' | 'gemini' | 'grok', maxRunning: number): Promise<void>;
   /** 새 프로젝트의 GitHub 저장소를 서버가 만들고 연결한다(로컬 데모는 지원하지 않음). */
   createRepo(projectId: string, name: string): Promise<{ repo: string; url: string; warning?: string }>;
+  /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
+  draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
   askGemini(
     question: string,
     history: { role: 'user' | 'model'; text: string }[],
