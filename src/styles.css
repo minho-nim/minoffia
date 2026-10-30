@@ -1326,6 +1326,7 @@ a {
 
 .att-item {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: flex-start;
   padding: 6px;
@@ -1367,7 +1368,8 @@ a {
 
 .att-body {
   display: flex;
-  flex: 1 1 auto;
+  /* 내용 길이로 줄바꿈되지 않게 남는 폭을 쓴다(미리보기·요약은 .att-wide 줄로) */
+  flex: 1 1 0;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
@@ -1673,6 +1675,35 @@ a {
 .att-analysis dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* 미리보기·요약: 첨부 한 줄 아래 전체 폭 */
+.att-wide {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.att-wide .att-analysis {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.att-wide .att-analysis dl {
+  font-size: 14px;
+}
+
+/* 좁은 화면: 항목 이름 위, 내용 아래 */
+@media (max-width: 560px) {
+  .att-analysis dl {
+    grid-template-columns: 1fr;
+  }
+  .att-analysis dd {
+    margin-bottom: 6px;
+  }
 }
 
 .inbox-photos {

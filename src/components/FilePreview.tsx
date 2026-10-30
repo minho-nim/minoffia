@@ -67,7 +67,8 @@ async function makeView(blob: Blob, mime: string): Promise<View> {
   throw new Error('이 형식은 미리보기를 지원하지 않습니다.');
 }
 
-export function FilePreview({ name, mime, load }: { name: string; mime: string; load: () => Promise<Blob> }) {
+/** openUrl: 저장된 파일의 실제 주소(만료됨). PDF를 새 탭에서 열 때 쓴다(휴대폰은 blob: 주소를 새 탭으로 못 여는 경우가 있다). */
+export function FilePreview({ name, mime, load, openUrl }: { name: string; mime: string; load: () => Promise<Blob>; openUrl?: string | null }) {
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState('');
 
@@ -97,9 +98,10 @@ export function FilePreview({ name, mime, load }: { name: string; mime: string; 
       {view.kind === 'pdf' && (
         <>
           <iframe className="preview-frame" src={view.url} title={name} />
-          <a className="small" href={view.url} target="_blank" rel="noreferrer">
-            새 탭에서 PDF 열기(휴대폰은 이쪽)
+          <a className="btn btn-small btn-ghost" href={openUrl || view.url} target="_blank" rel="noreferrer">
+            PDF 크게 보기(새 탭)
           </a>
+          <p className="muted small">휴대폰에서는 위 창이 비어 보일 수 있어요. 그때는 "PDF 크게 보기"를 누르세요.</p>
         </>
       )}
       {view.kind === 'html' && (
