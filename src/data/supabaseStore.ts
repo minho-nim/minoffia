@@ -207,7 +207,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -223,6 +223,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('clarifications').select('*').order('created_at'),
         client.from('ai_calls').select('*').gte('created_at', since).order('created_at'),
         client.from('image_analyses').select('*').order('created_at'),
+        client.from('agent_limits').select('assignee, max_running'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -241,6 +242,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
           imageAnalyses: imageAnalyses.error ? [] : (imageAnalyses.data ?? []).map(toAnalysis),
         },
+        agentLimits: agentLimits.error ? {} : Object.fromEntries((agentLimits.data ?? []).map((r: Row) => [r.assignee as string, r.max_running as number])),
         // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
         aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : 'question') as 'question' | 'image', httpStatus: (r.http_status as number | null) ?? null, createdAt: r.created_at as string })),
       };
@@ -413,6 +415,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       // 만료 5분 전까지만 다시 쓴다.
       urlCache.set(x.storagePath, { url: data.signedUrl, until: Date.now() + (SIGNED_URL_SECONDS - 300) * 1000 });
       return data.signedUrl;
+    },
+    async setAgentLimit(assignee, maxRunning) {
+      check(await client.from('agent_limits').upsert({ assignee, max_running: maxRunning, updated_at: new Date().toISOString() }));
     },
     async analyzeImage(attachmentId) {
       const { data, error } = await client.functions.invoke('analyze-image', { body: { attachmentId } });

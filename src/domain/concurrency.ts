@@ -1,19 +1,32 @@
 /**
  * 개발 작업 시작 규칙(DB 0009_concurrency_limit.sql과 같다).
- * - AI마다 동시에 1개: 같은 AI에게 시작된 작업이 있으면 그 AI의 다른 작업은 기다린다. 다른 AI끼리는 동시에.
- * - 순서: PM 계획의 dependencies에 적힌 앞 작업이 끝나야(completed) 시작한다.
+ * - AI별 동시 작업 상한: Codex Cloud·Claude Code는 여러 작업을 동시에 돌릴 수 있다. 기본 Codex 3·Claude 3·Gemini 2·Grok 1,
+ *   소유자가 1~5로 바꾼다. 다른 AI끼리는 서로 세지 않는다.
+ * - 순서: PM 계획의 dependencies에 적힌 앞 작업이 끝나야(completed) 시작한다(같은 파일 충돌 방지).
  */
 import { AGENT_BY_ID } from './agents';
-import type { AgentAssignment, PmPlan } from './workflow-types';
+import type { AgentAssignment, AgentKind, PmPlan } from './workflow-types';
+
+export type AgentLimits = Partial<Record<AgentKind, number>>;
+
+export const DEFAULT_AGENT_LIMITS: Record<AgentKind, number> = { codex: 3, claude: 3, gemini: 2, grok: 1 };
+export const MAX_AGENT_LIMIT = 5;
+
+export function limitFor(kind: AgentKind, limits: AgentLimits = {}): number {
+  return limits[kind] ?? DEFAULT_AGENT_LIMITS[kind];
+}
 
 const running = (a: AgentAssignment) => a.dispatchStatus === 'started' || a.dispatchStatus === 'starting';
 const agentName = (a: AgentAssignment) => AGENT_BY_ID[a.assignee === 'gemini' ? 'studioA' : a.assignee].name;
 
 /** 시작할 수 없는 이유(한국어), 시작할 수 있으면 null */
-export function startBlocker(target: AgentAssignment, all: AgentAssignment[], plan: PmPlan | null): string | null {
+export function startBlocker(target: AgentAssignment, all: AgentAssignment[], plan: PmPlan | null, limits: AgentLimits = {}): string | null {
   if (running(target)) return null;
-  const busy = all.find((a) => a.id !== target.id && a.assignee === target.assignee && running(a));
-  if (busy) return `${agentName(target)}가 이미 다른 작업(${busy.workItemId} ${busy.title})을 하고 있습니다. 그 작업의 결과를 등록하거나 중단한 뒤 시작하세요.`;
+  const busy = all.filter((a) => a.id !== target.id && a.assignee === target.assignee && running(a));
+  const cap = limitFor(target.assignee, limits);
+  if (busy.length >= cap) {
+    return `${agentName(target)}가 이미 ${busy.length}개 작업(${busy.map((b) => b.workItemId).join(', ')})을 하고 있습니다(동시 상한 ${cap}개). 하나를 끝내거나 중단하거나, 에이전트 탭에서 상한을 올리세요.`;
+  }
   const item = plan?.plan.work_items.find((w) => w.id === target.workItemId);
   const waiting = (item?.dependencies ?? []).filter(
     (dep) => !all.some((a) => a.taskId === target.taskId && a.planRevision === target.planRevision && a.workItemId === dep && a.dispatchStatus === 'completed'),

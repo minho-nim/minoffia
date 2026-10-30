@@ -1,8 +1,25 @@
 -- MinLab AI Office v0.2.11: 동시 개발 작업 규칙(v0.2 §6, 소유자 결정 2026-10-30)
--- AI마다 동시에 1개: 같은 AI(assignee)에게 이미 시작(starting·started)된 작업이 있으면 그 AI의 다른 작업을 시작하지 못한다.
---   다른 AI끼리는 동시에 진행할 수 있다(여러 AI에게 나눠 맡기는 목표).
+-- AI별 동시 작업 상한: 같은 AI(assignee)에게 시작(starting·started)된 작업이 상한만큼 있으면 그 AI의 다른 작업을 시작하지 못한다.
+--   Codex Cloud·Claude Code는 여러 작업을 동시에 돌릴 수 있으므로 기본 상한은 Codex 3, Claude 3, Gemini 2, Grok 1.
+--   소유자가 agent_limits에서 AI별로 1~5로 바꿀 수 있다. 다른 AI끼리는 서로 세지 않는다.
 -- 순서 지키기: PM 계획의 dependencies에 적힌 작업이 끝나기(completed) 전에는 시작하지 못한다(같은 파일 충돌 방지).
 -- 결과를 등록(completed)하거나 중단(failed)을 기록하면 풀린다. 서버(service_role)도 같은 규칙을 따른다.
+
+-- AI별 동시 작업 상한(소유자가 바꿈). 행이 없으면 기본값을 쓴다.
+create table public.agent_limits (
+  owner_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  assignee text not null check (assignee in ('codex', 'claude', 'gemini', 'grok')),
+  max_running integer not null check (max_running between 1 and 5),
+  updated_at timestamptz not null default now(),
+  primary key (owner_id, assignee)
+);
+
+alter table public.agent_limits enable row level security;
+
+create policy agent_limits_select on public.agent_limits for select to authenticated using (owner_id = (select auth.uid()));
+create policy agent_limits_insert on public.agent_limits for insert to authenticated with check (owner_id = (select auth.uid()));
+create policy agent_limits_update on public.agent_limits for update to authenticated
+  using (owner_id = (select auth.uid())) with check (owner_id = (select auth.uid()));
 
 create or replace function public.agent_assignments_guard()
 returns trigger
@@ -13,6 +30,7 @@ as $$
 declare
   v_is_service boolean := coalesce(current_setting('request.jwt.claims', true)::json ->> 'role', '') = 'service_role';
   v_running integer;
+  v_cap integer;
   v_waiting text;
 begin
   if tg_op = 'UPDATE' then
@@ -41,8 +59,12 @@ begin
      and (tg_op = 'INSERT' or old.dispatch_status not in ('starting', 'started')) then
     select count(*) into v_running from agent_assignments
     where owner_id = new.owner_id and assignee = new.assignee and dispatch_status in ('starting', 'started') and id <> new.id;
-    if v_running >= 1 then
-      raise exception 'concurrent execution limit: this AI already has a running work item';
+    v_cap := coalesce(
+      (select l.max_running from agent_limits l where l.owner_id = new.owner_id and l.assignee = new.assignee),
+      case new.assignee when 'codex' then 3 when 'claude' then 3 when 'gemini' then 2 else 1 end
+    );
+    if v_running >= v_cap then
+      raise exception 'concurrent execution limit: this AI already has % running work item(s)', v_running;
     end if;
     -- 계획에 적힌 앞 작업(dependencies)이 모두 끝나야 시작한다.
     select string_agg(dep, ', ') into v_waiting

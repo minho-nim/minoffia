@@ -65,8 +65,10 @@ interface Props {
   attachments: Attachment[];
   /** 이 업무 이미지의 Gemini 분석 */
   analyses: ImageAnalysis[];
-  /** 모든 업무의 배정(AI마다 동시에 1개 규칙에 쓴다) */
+  /** 모든 업무의 배정(AI별 동시 작업 상한 규칙에 쓴다) */
   allAssignments: AgentAssignment[];
+  /** AI별 동시 작업 상한 */
+  agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
   /** 모든 업무의 링크·확인 질문(이 업무 것만 골라 쓴다) */
   links: LinkRef[];
   clarifications: Clarification[];
@@ -98,7 +100,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -521,12 +523,12 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                             <button
                               type="button"
                               className="btn btn-small"
-                              disabled={busy || !!startBlocker(a, allAssignments, view.plan)}
+                              disabled={busy || !!startBlocker(a, allAssignments, view.plan, agentLimits)}
                               onClick={() => void run(() => actions.recordStart(a, startUrl[a.id] ?? ''))}
                             >
                               직접 시작했어요
                             </button>
-                            {startBlocker(a, allAssignments, view.plan) && <span className="muted small">{startBlocker(a, allAssignments, view.plan)}</span>}
+                            {startBlocker(a, allAssignments, view.plan, agentLimits) && <span className="muted small">{startBlocker(a, allAssignments, view.plan, agentLimits)}</span>}
                           </span>
                         ) : (
                           <p className="small">
