@@ -204,7 +204,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         </p>
         <div className="wf-sub">
           <p className="small">
-            <b>요청 자료 이미지</b> <span className="muted">· 비공개 저장, {MAX_REQUEST_FILES}장까지</span>
+            <b>요청 자료(이미지·문서)</b> <span className="muted">· 비공개 저장, {MAX_REQUEST_FILES}개까지</span>
           </p>
           <AttachmentGallery
             items={requestImages}
@@ -216,10 +216,11 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             onUpdate={actions.updateAttachment}
             onDelete={actions.deleteAttachment}
             onMove={(id, d) => actions.moveAttachment(task, id, d)}
-            emptyText="첨부한 이미지가 없습니다."
+            emptyText="첨부한 이미지·문서가 없습니다."
             analyses={analysisById}
             onAnalyze={actions.analyzeImage}
             analyzeBlocker={view.aApproved ? 'A 승인 뒤에는 분석을 붙이지 않습니다.' : null}
+            allowDocs
           />
         </div>
         <RequestContext task={task} view={view} links={taskLinks} clarifications={taskQa} canReadLinks={canReadLinks} actions={actions} />

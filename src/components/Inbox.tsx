@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, questionProject, replyIntent, titleFrom, triage } from '../domain/triage';
-import { MAX_REQUEST_FILES, validateFile, fileNameFor } from '../domain/attachments';
+import { ACCEPT_REQUEST, isImage, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
@@ -162,19 +162,20 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     const errors: string[] = [];
     const ok: File[] = [];
     [...list].forEach((raw, i) => {
-      const file = raw.name && raw.name.includes('.') ? raw : new File([raw], fileNameFor(raw.name, raw.type, photos.length + i), { type: raw.type });
-      const err = validateFile(file);
+      // 업무 요청 자료가 될 수 있으므로 문서도 받는다(Gemini 질문에는 이미지만 보낸다).
+      const file = prepareFile(raw, photos.length + i, true);
+      const err = validateFile(file, true);
       if (err) errors.push(err);
-      else if (photos.length + ok.length >= MAX_REQUEST_FILES) errors.push(`${file.name}: 사진은 ${MAX_REQUEST_FILES}장까지입니다.`);
+      else if (photos.length + ok.length >= MAX_REQUEST_FILES) errors.push(`${file.name}: 첨부는 ${MAX_REQUEST_FILES}개까지입니다.`);
       else ok.push(file);
     });
     setPhotoErrors(errors);
     if (ok.length) setPhotos([...photos, ...ok]);
   };
   useEffect(() => {
-    const urls = photos.map((f) => URL.createObjectURL(f));
+    const urls = photos.map((f) => (isImage(f.type) ? URL.createObjectURL(f) : ''));
     setPreviews(urls);
-    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+    return () => urls.forEach((u) => u && URL.revokeObjectURL(u));
   }, [photos]);
 
   useEffect(() => {
@@ -333,7 +334,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     } else if (!pending || !replyIntent(text)) {
       if (pending?.kind !== 'naming') photoStore.held = [];
     }
-    say('me', sent.length ? `${text}\n📷 사진 ${sent.length}장` : text);
+    say('me', sent.length ? `${text}\n(첨부 ${sent.length}개: ${sent.map((f) => f.name).join(', ')})` : text);
     // 확인 질문에 버튼 대신 글로 답한 경우("응", "만들어", "아니" 등)
     const yn = replyIntent(text);
     if (pending?.kind === 'repo' && yn) {
@@ -378,7 +379,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     const t = triage(text, snap);
     if (t.kind === 'status') {
       say('office', t.answer);
-      if (sent.length) say('office', '사진은 업무 요청이나 질문에만 써요. 다음 메시지에 다시 붙여 주세요.');
+      if (sent.length) say('office', '첨부는 업무 요청이나 질문에만 써요. 다음 메시지에 다시 붙여 주세요.');
       photoStore.held = [];
     }
     else if (t.kind === 'new_project') {
@@ -428,7 +429,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
 
   const create = async (text: string, project: Project) => {
     const title = titleFrom(text);
-    const images: PendingImage[] = photoStore.held.map((file, i) => ({ key: `${i}-${file.name}`, file, role: 'reference', note: '' }));
+    const images: PendingImage[] = photoStore.held.map((file, i) => ({ key: `${i}-${file.name}`, file, role: isImage(file.type) ? 'reference' : 'document', note: '' }));
     photoStore.held = [];
     const task = await onCreateTask({
       projectId: project.id,
@@ -446,7 +447,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       `'${project.name}'에 접수했어요: ${task.title}\n담당 ${AGENT_BY_ID[task.assignee].name} · ${task.routeReason}\n아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.`,
       { projectId: project.id, taskId: task.id },
     );
-    if (images.length) say('office', `사진 ${images.length}장을 이 업무의 요청 자료로 올렸어요(역할은 '기타 참고', 업무 카드에서 바꿀 수 있어요).`);
+    if (images.length) say('office', `첨부 ${images.length}개를 이 업무의 요청 자료로 올렸어요(이미지 역할은 '기타 참고', 업무 카드에서 바꿀 수 있어요).`);
   };
 
   const choose = (project: Project) => {
@@ -465,8 +466,11 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       log.forEach((m, i) => {
         if (m.from === 'gemini' && log[i - 1]?.from === 'me') history.push({ role: 'user', text: log[i - 1].text }, { role: 'model', text: m.text });
       });
-      const images = photoStore.held.slice(0, MAX_GEMINI_IMAGES);
-      if (photoStore.held.length > MAX_GEMINI_IMAGES) say('office', `사진은 앞의 ${MAX_GEMINI_IMAGES}장만 Gemini에 보냅니다.`);
+      // 질문에는 이미지만 보낸다(문서는 업무 요청 자료로 올린 뒤 'Gemini로 요약').
+      const held = photoStore.held.filter((f) => isImage(f.type));
+      const images = held.slice(0, MAX_GEMINI_IMAGES);
+      if (held.length > MAX_GEMINI_IMAGES) say('office', `사진은 앞의 ${MAX_GEMINI_IMAGES}장만 Gemini에 보냅니다.`);
+      if (held.length < photoStore.held.length) say('office', '문서는 질문에 보내지 않아요. 업무로 접수하면 요청 자료에서 Gemini로 요약할 수 있어요.');
       try {
         const encoded = await Promise.all(images.map(async (f) => ({ mime: f.type, data: await toBase64(f) })));
         const answer = await onAskGemini(text, history.slice(-6), encoded);
@@ -573,7 +577,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
               </button>
               <p className="muted small inbox-note">
                 {canAskGemini
-                  ? `Gemini에게 묻기를 누르면 이 질문${photoStore.held.length ? `과 사진 ${Math.min(photoStore.held.length, MAX_GEMINI_IMAGES)}장` : ''}이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 일반 질문은 개발일지 기록에 남지 않습니다.`
+                  ? `Gemini에게 묻기를 누르면 이 질문${photoStore.held.some((f) => isImage(f.type)) ? `과 사진 ${Math.min(photoStore.held.filter((f) => isImage(f.type)).length, MAX_GEMINI_IMAGES)}장` : ''}이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 일반 질문은 개발일지 기록에 남지 않습니다.`
                   : '로컬 데모에서는 Gemini를 쓸 수 없습니다.'}
               </p>
             </>
@@ -612,10 +616,16 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       <div ref={endRef} />
 
       {photos.length > 0 && (
-        <ul className="inbox-photos" aria-label="보낼 사진">
+        <ul className="inbox-photos" aria-label="보낼 첨부">
           {photos.map((f, i) => (
             <li key={`${i}-${f.name}`}>
-              {previews[i] && <img src={previews[i]} alt={f.name} />}
+              {previews[i] ? (
+                <img src={previews[i]} alt={f.name} />
+              ) : (
+                <span className="inbox-doc" title={f.name}>
+                  {(MIME_EXT[f.type] ?? 'file').toUpperCase()}
+                </span>
+              )}
               <button type="button" className="inbox-photo-x" aria-label={`${f.name} 빼기`} onClick={() => setPhotos(photos.filter((_, j) => j !== i))}>
                 ×
               </button>
@@ -642,7 +652,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           if (e.dataTransfer.files.length) addPhotos(e.dataTransfer.files);
         }}
       >
-        <button type="button" className="btn btn-ghost inbox-attach" aria-label="사진 첨부" title="사진 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
+        <button type="button" className="btn btn-ghost inbox-attach" aria-label="사진·문서 첨부" title="사진·문서 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
           {/* 이모지는 기기 글꼴마다 다르게 깨져 보여서 도트 그림 아이콘을 쓴다 */}
           <svg className="pixel-icon" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
             <path fill="currentColor" d="M1 3h14v1H1zM1 12h14v1H1zM1 4h1v8H1zM14 4h1v8h-1z" />
@@ -652,7 +662,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         <input
           ref={fileInput}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept={ACCEPT_REQUEST}
           multiple
           hidden
           onChange={(e) => {
@@ -662,7 +672,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         />
         <textarea
           onPaste={(e) => {
-            const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+            const files = [...e.clipboardData.files];
             if (files.length) {
               e.preventDefault();
               addPhotos(files);

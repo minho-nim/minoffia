@@ -12,7 +12,7 @@ import { WorkflowPanel, type WorkflowActions } from './components/WorkflowPanel'
 import { createLocalStore, resetLocalDemo } from './data/localStore';
 import { newId, type InboxState, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
-import { attachmentsOf, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
+import { attachmentsOf, isImage, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
 import { routeTask } from './domain/router';
 import { canTransition } from './domain/status';
@@ -560,7 +560,11 @@ export function App() {
         task.id,
         kind,
         resultRevision,
-        files.map((file, i) => ({ file, note: '', role: kind === 'result' ? 'after' : existing.length + i === 0 ? 'current' : 'target' })),
+        files.map((file, i) => ({
+          file,
+          note: '',
+          role: kind === 'result' ? 'after' : !isImage(file.type) ? 'document' : existing.length + i === 0 ? 'current' : 'target',
+        })),
         existing.length ? Math.max(...existing.map((a) => a.position)) + 1 : 0,
       );
       setSnap(await store.load());
