@@ -11,6 +11,7 @@ export function forTask(data: WorkflowData, taskId: string): WorkflowData {
     results: data.results.filter((x) => x.taskId === taskId),
     revisionRequests: data.revisionRequests.filter((x) => x.taskId === taskId),
     attachments: data.attachments.filter((x) => x.taskId === taskId),
+    imageAnalyses: data.imageAnalyses.filter((x) => x.taskId === taskId),
     links: data.links.filter((x) => x.taskId === taskId),
     clarifications: data.clarifications.filter((x) => x.taskId === taskId),
   };

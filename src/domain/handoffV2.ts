@@ -1,4 +1,4 @@
-import { describeAttachments, type Attachment } from './attachments';
+import { describeAnalyses, describeAttachments, type Attachment, type ImageAnalysis } from './attachments';
 import { describeClarifications, describeLinks, type Clarification, type LinkRef } from './requestContext';
 import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
@@ -11,8 +11,10 @@ export function buildGptPackage(
   attachments: Attachment[] = [],
   links: LinkRef[] = [],
   clarifications: Clarification[] = [],
+  analyses: ImageAnalysis[] = [],
 ): string {
   const images = describeAttachments(attachments);
+  const analysisText = describeAnalyses(attachments, analyses);
   const linkText = describeLinks(links, true);
   const qa = describeClarifications(clarifications);
   const revise = previous
@@ -39,6 +41,7 @@ export function buildGptPackage(
     '## 사용자 요청 원문 (수정하지 말고 그대로 해석)',
     task.userOriginalText ?? [task.title, task.description].filter(Boolean).join('\n\n'),
     ...(images ? ['', '## 첨부 이미지 (사용자가 적은 역할·설명)', images] : []),
+    ...(analysisText ? ['', '## Gemini 이미지 분석 (원본을 대신하지 않음 · 보이는 것과 추정을 나눔)', analysisText] : []),
     ...(linkText ? ['', '## 링크', linkText] : []),
     ...(qa ? ['', '## 이전 확인 질문·답변', qa] : []),
     ...revise,

@@ -66,6 +66,8 @@ export interface AiCall {
   id: string;
   ok: boolean;
   keySlot: 1 | 2 | null;
+  /** 일반 질문 / 이미지 분석 */
+  purpose: 'question' | 'image';
   createdAt: string;
 }
 

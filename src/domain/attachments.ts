@@ -1,3 +1,4 @@
+import type { ImageAnalysisBody } from '../../supabase/functions/analyze-image/analysis';
 import type { WorkflowView } from './workflow';
 
 /**
@@ -137,4 +138,38 @@ export function attachmentBlocker(
   if (view.bApproved) return 'B 승인 뒤에는 결과를 바꿀 수 없습니다.';
   if (count >= MAX_RESULT_FILES) return `결과 스크린샷은 ${MAX_RESULT_FILES}장까지입니다.`;
   return null;
+}
+
+/** Gemini 이미지 분석 결과(서버만 만든다, 원본을 대신하지 않음) */
+export interface ImageAnalysis {
+  id: string;
+  attachmentId: string;
+  taskId: string;
+  model: string;
+  /** null = 같은 이미지의 이전 분석을 다시 씀 */
+  keySlot: 1 | 2 | null;
+  analysis: ImageAnalysisBody;
+  createdAt: string;
+}
+
+/** ChatGPT 자료에 넣는 이미지 분석. 관찰과 추정을 나눠 그대로 옮긴다. */
+export function describeAnalyses(items: Attachment[], analyses: ImageAnalysis[]): string {
+  const byId = new Map(analyses.map((a) => [a.attachmentId, a]));
+  return items
+    .map((att, i) => {
+      const a = byId.get(att.id);
+      if (!a) return null;
+      const b = a.analysis;
+      const lines = [`${i + 1}. ${att.fileName} [${ROLE_LABEL[att.role]}]`];
+      if (b.observations?.length) lines.push(`   보이는 것: ${b.observations.join(' / ')}`);
+      if (b.ui_structure) lines.push(`   화면 구조: ${b.ui_structure}`);
+      if (b.visible_text?.length) lines.push(`   글자: ${b.visible_text.join(' / ')}`);
+      if (b.colors_layout) lines.push(`   색·배치: ${b.colors_layout}`);
+      if (b.role_fit) lines.push(`   역할과 맞는지: ${b.role_fit}`);
+      if (b.uncertainties?.length) lines.push(`   추정·불확실: ${b.uncertainties.join(' / ')}`);
+      if (b.raw) lines.push(`   (형식 밖 답변) ${b.raw.slice(0, 1500)}`);
+      return lines.join('\n');
+    })
+    .filter((x): x is string => x !== null)
+    .join('\n');
 }

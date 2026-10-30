@@ -72,7 +72,7 @@ export function createLocalStore(): OfficeStore {
     const keep = <T extends { taskId: string }>(list: T[]) => list.filter((x) => alive.has(x.taskId));
     commit({
       ...state,
-      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), links: keep(w.links), clarifications: keep(w.clarifications) },
+      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), imageAnalyses: keep(w.imageAnalyses), links: keep(w.links), clarifications: keep(w.clarifications) },
     });
     dropUnusedFiles();
   };
@@ -199,6 +199,9 @@ export function createLocalStore(): OfficeStore {
       if (blocked) throw new Error(blocked);
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
       dropUnusedFiles();
+    },
+    async analyzeImage() {
+      throw new Error('로컬 데모에서는 Gemini 이미지 분석을 쓸 수 없습니다.');
     },
     async createRepo() {
       throw new Error('로컬 데모에서는 GitHub 저장소를 만들 수 없습니다.');
