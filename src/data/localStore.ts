@@ -1,3 +1,4 @@
+import { startBlocker } from '../domain/concurrency';
 import { attachmentBlocker, attachmentsOf, MAX_TOTAL_BYTES, totalBytes } from '../domain/attachments';
 import { linkBlocker, MAX_CLARIFICATIONS } from '../domain/requestContext';
 import type { Snapshot } from '../domain/types';
@@ -153,10 +154,12 @@ export function createLocalStore(): OfficeStore {
         (a) => a.taskId === prev.taskId && a.gate === 'E' && a.decision === 'approved' && a.approvedRevision === prev.planRevision && a.workItemId === prev.workItemId,
       );
       if (executing && !eOk) throw new Error('E approval required before recording execution');
-      // DB와 같은 규칙: 새로 시작하는 작업은 동시에 하나만
+      // DB와 같은 규칙: AI마다 동시에 1개, 계획의 앞 작업이 끝나야 시작
       const starting = (next.dispatchStatus === 'started' || next.dispatchStatus === 'starting') && prev.dispatchStatus !== 'started' && prev.dispatchStatus !== 'starting';
-      if (starting && state.workflow.assignments.some((a) => a.id !== prev.id && (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting'))) {
-        throw new Error('concurrent execution limit: finish or stop the running work item first');
+      if (starting) {
+        const plan = state.workflow.plans.find((p) => p.taskId === prev.taskId && p.planRevision === prev.planRevision) ?? null;
+        const blocked = startBlocker(prev, state.workflow.assignments, plan);
+        if (blocked) throw new Error(blocked.includes('앞 작업') ? `dependency not finished: ${blocked}` : `concurrent execution limit: ${blocked}`);
       }
       const locked = { ...next, taskId: prev.taskId, planRevision: prev.planRevision, workItemId: prev.workItemId, assignee: prev.assignee, executionMode: prev.executionMode };
       commit({ ...state, workflow: { ...state.workflow, assignments: state.workflow.assignments.map((a) => (a.id === prev.id ? locked : a)) } });

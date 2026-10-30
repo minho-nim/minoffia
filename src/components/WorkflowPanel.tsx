@@ -6,6 +6,7 @@ import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildGptPackage } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
+import { startBlocker } from '../domain/concurrency';
 import { canApprove, canRequestRevision, type WorkflowView } from '../domain/workflow';
 import type { AgentAssignment, Gate, Intent } from '../domain/workflow-types';
 import { DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
@@ -64,6 +65,8 @@ interface Props {
   attachments: Attachment[];
   /** 이 업무 이미지의 Gemini 분석 */
   analyses: ImageAnalysis[];
+  /** 모든 업무의 배정(AI마다 동시에 1개 규칙에 쓴다) */
+  allAssignments: AgentAssignment[];
   /** 모든 업무의 링크·확인 질문(이 업무 것만 골라 쓴다) */
   links: LinkRef[];
   clarifications: Clarification[];
@@ -95,7 +98,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, analyses, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -518,11 +521,12 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, link
                             <button
                               type="button"
                               className="btn btn-small"
-                              disabled={busy}
+                              disabled={busy || !!startBlocker(a, allAssignments, view.plan)}
                               onClick={() => void run(() => actions.recordStart(a, startUrl[a.id] ?? ''))}
                             >
                               직접 시작했어요
                             </button>
+                            {startBlocker(a, allAssignments, view.plan) && <span className="muted small">{startBlocker(a, allAssignments, view.plan)}</span>}
                           </span>
                         ) : (
                           <p className="small">

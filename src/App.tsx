@@ -58,7 +58,8 @@ function explainDbError(message: string): string {
     ['quota exceeded', '첨부 저장 공간 상한(900MB)을 넘었습니다. 오래된 업무를 정리하세요.'],
     ['invalid storage path', '파일 저장 위치가 올바르지 않습니다. 다시 로그인한 뒤 시도하세요.'],
     ['mime type', 'PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.'],
-    ['concurrent execution limit', '이미 시작된 개발 작업이 있습니다. 동시에 하나만 진행합니다. 그 작업의 결과를 등록하거나 "중단 기록"을 누른 뒤 시작하세요.'],
+    ['concurrent execution limit', '이 AI는 이미 다른 작업을 하고 있습니다(AI마다 동시에 1개). 그 작업의 결과를 등록하거나 "중단 기록"을 누른 뒤 시작하세요.'],
+    ['dependency not finished', '계획상 앞 작업이 끝나야 시작할 수 있습니다. 앞 작업의 결과를 먼저 등록하세요.'],
     ['exceeded the maximum allowed size', '파일이 5MB를 넘습니다.'],
     ['links are locked after A approval', 'A 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
     ['clarification must target', '다른 기기에서 기획서가 새로 저장됐습니다. 새로고침 후 다시 기록하세요.'],
@@ -770,6 +771,7 @@ export function App() {
                         view={deriveWorkflow(t, snap.workflow)}
                         attachments={snap.workflow.attachments.filter((a) => a.taskId === t.id)}
                         analyses={snap.workflow.imageAnalyses.filter((a) => a.taskId === t.id)}
+                        allAssignments={snap.workflow.assignments}
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}
                         canReadLinks={store.mode === 'supabase'}
