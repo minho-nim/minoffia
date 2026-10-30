@@ -450,8 +450,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       if (!data?.ok || !data.repo) throw new Error(data?.error ?? '저장소를 만들지 못했습니다.');
       return { repo: data.repo as string, url: (data.url as string) ?? '', warning: data.warning as string | undefined };
     },
-    async askGemini(question, history) {
-      const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history } });
+    async askGemini(question, history, images = []) {
+      const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history, images } });
       if (error) {
         let message = error.message;
         const ctx = (error as { context?: Response }).context;
