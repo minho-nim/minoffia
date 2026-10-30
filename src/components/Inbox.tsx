@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
-import { chatGptQuestion, replyIntent, titleFrom, triage } from '../domain/triage';
+import { chatGptFollowup, chatGptQuestion, questionProject, replyIntent, titleFrom, triage } from '../domain/triage';
 import { MAX_REQUEST_FILES, validateFile, fileNameFor } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
 import type { InboxState, NewChatEntry } from '../data/store';
@@ -26,7 +26,9 @@ interface Msg {
 type Pending =
   | { kind: 'confirm'; text: string; project: Project }
   | { kind: 'pick'; text: string }
-  | { kind: 'question'; text: string }
+  | { kind: 'question'; text: string; projectName?: string }
+  /** Gemini가 답한 뒤: GPT에게 이어서 묻기 */
+  | { kind: 'followup'; text: string; answer: string }
   | { kind: 'unclear'; text: string }
   /** 새 프로젝트 이름을 기다림. text가 있으면 이름을 받은 뒤 그 요청을 업무로 만든다 */
   | { kind: 'naming'; text: string; createTask?: boolean }
@@ -44,12 +46,12 @@ interface Props {
   onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
   /** 대화를 계정에 저장해 다른 기기에서 이어 본다(Supabase 모드). 없으면 이 기기에만 남는다. */
   sync?: { load: () => Promise<InboxState | null>; save: (state: InboxState) => Promise<void> };
-  /** 대화 기록(개발일지 원본)에 추가. 화면의 '대화 지우기'와 상관없이 남는다. */
+  /** 대화 기록(개발일지 원본)에 추가. 프로젝트 업무와 연결된 메시지만 보낸다(일반 대화·질문은 남기지 않음). */
   onArchive?: (entries: NewChatEntry[]) => Promise<void>;
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
-/** 미나가 기다리는 선택(탭을 옮겨도 남게) */
+/** 미니엉이 기다리는 선택(탭을 옮겨도 남게) */
 const PENDING_KEY = 'minlab-ai-office:inbox-pending:v1';
 /** 아직 서버 대화 기록에 못 올린 메시지(연결이 끊겼을 때 다음에 다시 올린다) */
 const OUTBOX_KEY = 'minlab-ai-office:chat-outbox:v1';
@@ -113,14 +115,14 @@ function readPending(): Pending | null {
   }
 }
 
-const FROM_LABEL: Record<From, string> = { me: '나', office: '미나', gemini: 'Gemini' };
+const FROM_LABEL: Record<From, string> = { me: '나', office: '미니엉', gemini: 'Gemini' };
 
 /** Gemini 질문에 함께 보낼 수 있는 사진 수(무료 한도·요청 크기 때문) */
 const MAX_GEMINI_IMAGES = 3;
 
 /**
  * 탭을 옮겨 입력창이 다시 그려져도 고른 사진이 남도록 화면 밖에 둔다(이 기기, 새로고침하면 사라짐).
- * draft = 입력창에 붙어 있는 사진, held = 보낸 메시지에 딸려 미나의 확인을 기다리는 사진.
+ * draft = 입력창에 붙어 있는 사진, held = 보낸 메시지에 딸려 미니엉의 확인을 기다리는 사진.
  */
 const photoStore: { draft: File[]; held: File[] } = { draft: [], held: [] };
 
@@ -283,9 +285,10 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     archive();
     // 처음 열 때 남은 것만 올린다.
   }, []);
+  // 소유자 결정(2026-10-30): 일반 대화·질문은 기록하지 않고, 프로젝트·업무가 정해진 메시지만 개발일지용으로 남긴다.
   const say = (from: From, text: string, link: { projectId?: string; taskId?: string } = {}) => {
     setLog((l) => [...l, { id: mid(), from, text }].slice(-KEEP));
-    archive({ role: from, text, projectId: link.projectId ?? null, taskId: link.taskId ?? null });
+    if (link.projectId || link.taskId) archive({ role: from, text, projectId: link.projectId ?? null, taskId: link.taskId ?? null });
   };
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -313,7 +316,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     const text = raw.trim();
     if (!text || busy) return;
     setInput('');
-    // 이 메시지에 사진이 있으면 미나의 다음 확인까지 들고 간다. 사진 없는 새 메시지는 이전 사진을 놓는다(확인 답만 할 때는 유지).
+    // 이 메시지에 사진이 있으면 미니엉의 다음 확인까지 들고 간다. 사진 없는 새 메시지는 이전 사진을 놓는다(확인 답만 할 때는 유지).
     const sent = photos;
     if (sent.length) {
       photoStore.held = sent;
@@ -379,8 +382,17 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
     else if (t.kind === 'request') handleRequest(text, t.candidates);
     else if (t.kind === 'question') {
-      setPending({ kind: 'question', text });
-      say('office', '업무 기록으로는 답할 수 없는 질문이에요. 어디에 물어볼까요?');
+      // 소유자 결정(2026-10-30): 일반 질문은 보내기 한 번에 Gemini 무료가 답하고, GPT로 이어서 물을 수 있다.
+      // 프로젝트 판단이 필요한 질문(프로젝트 이름이 들어 있음)은 GPT를 먼저 권한다.
+      const project = questionProject(text, snap.projects);
+      if (project) {
+        setPending({ kind: 'question', text, projectName: project.name });
+        say('office', `'${project.name}' 프로젝트 판단이 필요한 질문 같아요. GPT에게 묻는 걸 권해요.`);
+      } else if (canAskGemini) askGemini(text);
+      else {
+        setPending({ kind: 'question', text });
+        say('office', '업무 기록으로는 답할 수 없는 질문이에요. 어디에 물어볼까요?');
+      }
     } else {
       setPending({ kind: 'unclear', text });
       say('office', '질문인가요, 업무 요청인가요?');
@@ -419,6 +431,8 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       originalText: text,
     }, images);
     if (!task) return say('office', '업무를 저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
+    // 접수된 요청 원문은 화면에 이미 있으므로 기록에만 남긴다.
+    archive({ role: 'me', text, projectId: project.id, taskId: task.id });
     say(
       'office',
       `'${project.name}'에 접수했어요: ${task.title}\n담당 ${AGENT_BY_ID[task.assignee].name} · ${task.routeReason}\n아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.`,
@@ -447,8 +461,10 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       if (photoStore.held.length > MAX_GEMINI_IMAGES) say('office', `사진은 앞의 ${MAX_GEMINI_IMAGES}장만 Gemini에 보냅니다.`);
       try {
         const encoded = await Promise.all(images.map(async (f) => ({ mime: f.type, data: await toBase64(f) })));
-        say('gemini', await onAskGemini(text, history.slice(-6), encoded));
+        const answer = await onAskGemini(text, history.slice(-6), encoded);
+        say('gemini', answer);
         photoStore.held = [];
+        setPending({ kind: 'followup', text, answer });
       } catch (e) {
         setPending({ kind: 'question', text });
         say('office', `${(e as Error).message}`);
@@ -456,8 +472,8 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     });
   };
 
-  const copyGpt = async (text: string) => {
-    const ok = await onCopy(chatGptQuestion(text));
+  const copyGpt = async (text: string, geminiAnswer?: string) => {
+    const ok = await onCopy(geminiAnswer ? chatGptFollowup(text, geminiAnswer) : chatGptQuestion(text));
     say('office', ok ? '질문을 복사했어요. ChatGPT 대화에 붙여넣으세요(Plus 구독 안, 추가 비용 없음).' : '복사가 막혔어요. 아래 업무 카드의 지시서 칸에서 직접 복사하세요.');
   };
 
@@ -523,22 +539,33 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
               </button>
             </>
           )}
+          {pending.kind === 'followup' && (
+            <>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => void copyGpt(pending.text, pending.answer)}>
+                GPT에게 이어서 묻기
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text)}>
+                업무로 만들기
+              </button>
+              <p className="muted small inbox-note">GPT에게 이어서 묻기: 질문과 Gemini 답을 함께 복사합니다. ChatGPT 앱에 붙여넣으세요(Plus 구독 안, 추가 비용 없음).</p>
+            </>
+          )}
           {pending.kind === 'question' && (
             <>
+              <button type="button" className={`btn btn-small ${pending.projectName ? 'btn-primary' : 'btn-ghost'}`} onClick={() => void copyGpt(pending.text)}>
+                ChatGPT로 복사
+              </button>
               {canAskGemini && (
-                <button type="button" className="btn btn-small btn-primary" onClick={() => askGemini(pending.text)}>
+                <button type="button" className={`btn btn-small ${pending.projectName ? 'btn-ghost' : 'btn-primary'}`} onClick={() => askGemini(pending.text)}>
                   Gemini에게 묻기
                 </button>
               )}
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => void copyGpt(pending.text)}>
-                ChatGPT로 복사
-              </button>
               <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text)}>
                 사실은 업무 요청이에요
               </button>
               <p className="muted small inbox-note">
                 {canAskGemini
-                  ? `Gemini에게 묻기를 누르면 이 질문${photoStore.held.length ? `과 사진 ${Math.min(photoStore.held.length, MAX_GEMINI_IMAGES)}장` : ''}이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 질문 글·사진은 AI Office에 저장하지 않습니다.`
+                  ? `Gemini에게 묻기를 누르면 이 질문${photoStore.held.length ? `과 사진 ${Math.min(photoStore.held.length, MAX_GEMINI_IMAGES)}장` : ''}이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 일반 질문은 개발일지 기록에 남지 않습니다.`
                   : '로컬 데모에서는 Gemini를 쓸 수 없습니다.'}
               </p>
             </>
@@ -648,12 +675,13 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           보내기
         </button>
       </form>
+      {canAskGemini && <p className="muted small inbox-note">일반 질문은 보내면 Gemini(Google 무료)가 바로 답합니다. 비밀번호·개인정보는 적지 마세요.</p>}
       {log.length > 0 && (
         <button
           type="button"
           className="link-btn small"
           onClick={() => {
-            // 대화를 지우면 미나가 기다리던 요청(접수 확인·프로젝트 이름·저장소 만들기)도 취소한다.
+            // 대화를 지우면 미니엉이 기다리던 요청(접수 확인·프로젝트 이름·저장소 만들기)도 취소한다.
             // 이미 접수된 업무는 기록이라 지우지 않는다(업무 카드에서 삭제).
             const hadPending = pending !== null;
             photoStore.held = [];

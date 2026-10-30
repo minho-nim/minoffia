@@ -141,6 +141,25 @@ export function titleFrom(text: string): string {
 }
 
 /** ChatGPT에 붙여넣을 질문(규칙·Gemini가 못 답할 때) */
+/** Gemini가 먼저 답한 질문을 ChatGPT에 이어서 물을 글(질문 + Gemini 답을 참고로) */
+export function chatGptFollowup(question: string, geminiAnswer: string): string {
+  return [
+    '아래 질문에 한국어로 답해 주세요. 아래 Gemini 답은 참고용이며 틀릴 수 있으니, 틀린 점은 바로잡고 더 정확하게 답해 주세요.',
+    '개발 작업이 필요하면 어떤 작업인지만 정리해 주세요.',
+    '',
+    '## 질문',
+    question.trim(),
+    '',
+    '## Gemini 1차 답(참고)',
+    geminiAnswer.trim(),
+  ].join('\n');
+}
+
+/** 질문에 프로젝트 이름이 들어 있으면 프로젝트 판단이 필요한 질문으로 보고 GPT를 먼저 권한다. */
+export function questionProject(text: string, projects: Project[]): Project | null {
+  return matchProjects(text, projects)[0] ?? null;
+}
+
 export function chatGptQuestion(text: string): string {
   return ['아래 질문에 한국어로 답해 주세요. 개발 작업이 필요하면 어떤 작업인지만 정리해 주세요.', '', text.trim()].join('\n');
 }

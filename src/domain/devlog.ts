@@ -27,7 +27,7 @@ export interface DevlogEvent {
   text: string;
 }
 
-const ROLE_LABEL: Record<ChatRole, string> = { me: '나', office: '미나', gemini: 'Gemini' };
+const ROLE_LABEL: Record<ChatRole, string> = { me: '나', office: '미니엉', gemini: 'Gemini' };
 
 /** 프로젝트가 없는 대화를 묶는 이름 */
 export const NO_PROJECT = '일반 대화(프로젝트 없음)';

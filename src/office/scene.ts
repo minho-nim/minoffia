@@ -82,7 +82,7 @@ export function buildScene(tasks: Task[], assignments: AgentAssignment[] = []): 
     const rest: Spot = { ...LOUNGE_SPOTS[index % LOUNGE_SPOTS.length], zone: 'lounge' };
 
     if (agent.id === 'mina') {
-      // 미나는 접수·검토·차단 메모가 하나라도 있으면 복도 데스크를 지킨다.
+      // 미니엉은 접수·검토·차단 메모가 하나라도 있으면 복도 데스크를 지킨다.
       const memos = openTasks.filter((t) => t.status !== 'in_progress');
       result.push({
         agent: agent.id,
