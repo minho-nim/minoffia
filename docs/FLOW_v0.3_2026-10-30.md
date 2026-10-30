@@ -45,6 +45,7 @@
 | 일반 질문은 Gemini 버튼 / ChatGPT 복사 중 선택 | 보내면 Gemini가 바로 답, GPT로 이어서 묻기 | 소유자 2026-10-30 제안 승인 |
 | 운영 배포는 소유자가 PC에서 `git push origin origin/main:refs/heads/release` | C 승인 시 서버가 release를 앞당김 | 소유자 2026-10-30 선택. release 직접 커밋은 여전히 안 함, 갈라진 release는 덮어쓰지 않음 |
 | `CLAUDE.md` "v0.2.1 플로우 수정 금지" | v0.3 플로우가 기준 | 소유자가 새 플로우를 줌 |
+| 04 기획은 ChatGPT(수동 복사·붙여넣기) | 기본은 Gemini 무료 초안(접수 시 자동), 어렵거나 중요한 업무만 ChatGPT. A 승인 → PM 전송 자동 | 소유자 2026-10-30: "GPT도 자동 하고싶어" → Gemini 초안 + GPT는 필요할 때 선택. 최종 목표 "내가 하는 건 질문·승인·검토 및 수정 요청뿐" |
 
 ## 남은 결정·확인
 - **08 모바일 Codex**: ChatGPT 모바일 앱에서 Codex Cloud 작업을 시작·확인할 수 있는지 소유자 실측.

@@ -14,6 +14,8 @@ import { newId, type InboxState, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
 import { attachmentsOf, isImage, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
+import { buildGptPackage } from './domain/handoffV2';
+import { clarificationsOf, linksOf } from './domain/requestContext';
 import { routeTask } from './domain/router';
 import { canTransition } from './domain/status';
 import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/types';
@@ -369,7 +371,35 @@ export function App() {
   const nextRevision = (list: { taskId: string }[], taskId: string, key: (x: never) => number) =>
     Math.max(0, ...list.filter((x) => x.taskId === taskId).map((x) => key(x as never))) + 1;
 
+  /**
+   * Gemini 기획서 초안(무료, 서버 저장). 최신 기록으로 ChatGPT용과 같은 기획 요청 문서를 만들어 보낸다.
+   * A에서 수정 요청이 있었으면 그 내용도 함께 들어간다. 소유자 결정(2026-10-30): 사용자는 질문·승인·검토·수정 요청만 한다.
+   */
+  const draftSpec = async (taskId: string): Promise<boolean> => {
+    if (store.mode !== 'supabase') return false;
+    const now = await store.load();
+    const task = now.tasks.find((t) => t.id === taskId);
+    if (!task) return false;
+    const view = deriveWorkflow(task, now.workflow);
+    if (view.aApproved) return false;
+    const text = buildGptPackage(
+      task,
+      now.projects.find((p) => p.id === task.projectId),
+      view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null,
+      attachmentsOf(now.workflow.attachments, task.id, 'request'),
+      linksOf(now.workflow.links, task.id),
+      clarificationsOf(now.workflow.clarifications, task.id),
+      now.workflow.imageAnalyses.filter((a) => a.taskId === task.id),
+    );
+    say('ok', `Gemini가 '${task.title}' 기획서 초안을 쓰고 있어요(무료).`);
+    return step(task.id, async () => {
+      const r = await store.draftSpec(task.id, text);
+      say('ok', r.intent === 'ambiguous' ? `Gemini가 확인 질문을 남겼어요(v${r.revision}). 업무 카드에서 답을 적고 초안을 다시 만드세요.` : `Gemini 기획서 초안 v${r.revision}을 저장했어요. 보고 A 승인하거나 수정 요청하세요.`);
+    });
+  };
+
   const workflowActions: WorkflowActions = {
+    draftSpec: (task) => draftSpec(task.id),
     // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.
     copy: async (text) => {
       try {
@@ -401,8 +431,8 @@ export function App() {
           }),
         '기획서 새 버전을 저장했습니다.',
       ),
-    decide: (task, gate, revision, decision, workItemId = '', scope = {}) =>
-      step(
+    decide: async (task, gate, revision, decision, workItemId = '', scope = {}) => {
+      const ok = await step(
         task.id,
         async () => {
           const previous = snap.workflow.approvals
@@ -431,7 +461,15 @@ export function App() {
           : gate === 'C'
             ? 'C 승인을 기록했습니다. 끝난 업무는 열린 업무 목록에서 빠지고 "완료" 필터에 남습니다.'
             : `${gate} 승인을 기록했습니다.`,
-      ),
+      );
+      // 소유자 결정(2026-10-30): A 승인 한 번이면 PM 전송까지, Gemini 초안에 수정 요청하면 Gemini가 다시 쓴다.
+      if (ok && gate === 'A' && store.mode === 'supabase') {
+        const spec = snap.workflow.specs.find((x) => x.taskId === task.id && x.revision === revision);
+        if (decision === 'approved' && projectById.get(task.projectId)?.repo) await dispatch(task, false);
+        if (decision === 'rejected' && spec?.planner === 'gemini_draft') await draftSpec(task.id);
+      }
+      return ok;
+    },
     approvePrototype: (task) =>
       step(
         task.id,
@@ -857,6 +895,7 @@ export function App() {
                 onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
                 sync={inboxSync}
                 onArchive={(entries) => store.appendChat(entries)}
+                onAutoDraft={store.mode === 'supabase' ? (t) => void draftSpec(t.id) : undefined}
                 onShowTask={(id) => {
                   if (!visibleTasks.some((t) => t.id === id)) setFilter('all');
                   window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
