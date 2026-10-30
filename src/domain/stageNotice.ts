@@ -65,7 +65,11 @@ export function noticeFor(task: Task, all: WorkflowData): StageNotice {
     lines.push(`결과 v${v.result.revision}: ${clip(v.result.summary, 160)}`);
     actions.unshift('B');
   }
-  lines.push(NEXT[v.stage] ?? '');
+  if (v.stage === 'needs_clarification' && v.spec?.answer) {
+    const q = v.spec.answer.trim();
+    lines.push(`확인 질문:\n${q.length > 600 ? `${q.slice(0, 599)}…` : q}`);
+    lines.push(v.spec.planner === 'gemini_draft' ? '아래 입력창에 답을 쓰면 Gemini가 기획서를 다시 써요.' : 'ChatGPT에 답하고 새 기획서를 저장하세요.');
+  } else lines.push(NEXT[v.stage] ?? '');
   return {
     id: `stage-${task.id}-${stageSignature(task, all)}`,
     taskId: task.id,

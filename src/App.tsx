@@ -617,8 +617,9 @@ export function App() {
       }
     },
     deleteLink: (l) => step(l.taskId, () => store.deleteLink(l), '링크를 지웠습니다.'),
-    addClarification: (task, question, answer) =>
-      step(
+    addClarification: async (task, question, answer) => {
+      const latest = snap.workflow.specs.filter((x) => x.taskId === task.id).sort((a, b) => b.revision - a.revision)[0];
+      const ok = await step(
         task.id,
         () =>
           store.addClarification({
@@ -629,8 +630,12 @@ export function App() {
             answer: answer.trim(),
             createdAt: new Date().toISOString(),
           }),
-        '확인 질문·답변을 기록했습니다. ChatGPT용 자료에 함께 들어갑니다.',
-      ),
+        '확인 질문·답변을 기록했습니다. 기획 자료에 함께 들어갑니다.',
+      );
+      // Gemini 초안이 확인 질문을 남겼으면, 답을 받은 즉시 Gemini가 다시 쓴다(사용자는 답만 한다).
+      if (ok && latest?.planner === 'gemini_draft' && latest.intent === 'ambiguous') await draftSpec(task.id);
+      return ok;
+    },
     attachmentUrl: (a) => store.attachmentUrl(a),
     analyzeImage:
       store.mode === 'supabase'
@@ -896,6 +901,7 @@ export function App() {
                 sync={inboxSync}
                 onArchive={(entries) => store.appendChat(entries)}
                 onAutoDraft={store.mode === 'supabase' ? (t) => void draftSpec(t.id) : undefined}
+                onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={(id) => {
                   if (!visibleTasks.some((t) => t.id === id)) setFilter('all');
                   window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);

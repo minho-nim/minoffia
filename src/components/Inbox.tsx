@@ -56,6 +56,8 @@ interface Props {
   onArchive?: (entries: NewChatEntry[]) => Promise<void>;
   /** 접수 직후 Gemini 기획서 초안을 자동으로 시작한다(Supabase 모드). 없으면 ChatGPT 기획을 안내한다. */
   onAutoDraft?: (task: Task) => void;
+  /** Gemini 초안의 확인 질문에 입력창으로 답했을 때: 답을 기록하면 Gemini가 다시 쓴다 */
+  onClarify?: (task: Task, question: string, answer: string) => Promise<boolean>;
   /** 단계 알림의 "업무 카드 보기" */
   onShowTask?: (taskId: string) => void;
   /** 단계 알림에서 바로 A·B 승인(업무 카드의 같은 버튼과 같은 규칙). 성공하면 true */
@@ -161,7 +163,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: 'A 승인', B: 'B 승인(GitHub 업로드)' };
 
-export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft }: Props) {
+export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const logRef = useRef(log);
   logRef.current = log;
@@ -328,6 +330,16 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
   }, [snap.tasks, snap.workflow, syncReady]);
 
+  /** 마지막 메시지가 지금도 답을 기다리는 Gemini 확인 질문 알림이면 그 업무와 질문 */
+  const openClarify = (): { task: Task; question: string } | null => {
+    const last = log[log.length - 1];
+    const task = snap.tasks.find((t) => t.id === last?.taskId);
+    if (!last || !task || last.stage !== 'needs_clarification') return null;
+    const v = deriveWorkflow(task, snap.workflow);
+    if (v.stage !== 'needs_clarification' || v.spec?.planner !== 'gemini_draft' || v.spec.intent !== 'ambiguous') return null;
+    return { task, question: v.spec.answer };
+  };
+
   /** 마지막 메시지가 지금도 유효한 승인 알림이면 그 승인(글로 "응", "승인"이라고 답할 때) */
   const openNoticeGate = (): { msg: Msg; gate: 'A' | 'B' } | null => {
     const last = log[log.length - 1];
@@ -423,6 +435,15 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     say('me', sent.length ? `${text}\n(첨부 ${sent.length}개: ${sent.map((f) => f.name).join(', ')})` : text);
     // 확인 질문에 버튼 대신 글로 답한 경우("응", "만들어", "아니" 등)
     const yn = replyIntent(text);
+    // Gemini 확인 질문 바로 뒤에 쓴 글은 그 답으로 기록하고, Gemini가 기획서를 다시 쓴다.
+    const clarify = !pending && onClarify ? openClarify() : null;
+    if (clarify) {
+      archive({ role: 'me', text, projectId: clarify.task.projectId, taskId: clarify.task.id });
+      void run(async () => {
+        if (!(await onClarify!(clarify.task, clarify.question, text))) say('office', '답을 기록하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드의 확인 질문 칸에서 하세요.');
+      });
+      return;
+    }
     const notice = !pending && onApprove ? openNoticeGate() : null;
     if (notice && (yn === 'yes' || /^(승인|[ab]\s?승인)/i.test(text))) {
       const task = snap.tasks.find((t) => t.id === notice.msg.taskId)!;
