@@ -35,6 +35,8 @@ export interface WorkflowActions {
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
   recordStart: (assignment: AgentAssignment, url: string) => Promise<boolean>;
+  /** 시작한 작업을 중단으로 기록(동시 실행 1개 제한을 푼다) */
+  stopAssignment: (assignment: AgentAssignment) => Promise<boolean>;
   /** 결과 패키지와 스크린샷(결과를 저장한 뒤 올린다) */
   addResult: (task: Task, fields: ResultFields, images?: PendingImage[]) => Promise<boolean>;
   setPrUrl: (task: Task, url: string) => Promise<boolean>;
@@ -502,8 +504,11 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, link
                         >
                           {copied === a.id ? '복사됨' : '지시서 복사'}
                         </button>
-                        {a.dispatchStatus !== 'started' ? (
+                        {a.dispatchStatus === 'completed' ? (
+                          <p className="small ok-text">결과를 받아 끝난 작업입니다.</p>
+                        ) : a.dispatchStatus !== 'started' ? (
                           <span className="wf-inline">
+                            {a.dispatchStatus === 'failed' && <span className="muted small">중단된 작업 · 다시 시작할 수 있습니다</span>}
                             <input
                               id={`start-${a.id}`}
                               placeholder="시작한 작업 주소(선택)"
@@ -530,7 +535,10 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, link
                                 </a>
                               </>
                             )}{' '}
-                            <span className="muted">(서버 확인 아님)</span>
+                            <span className="muted">(서버 확인 아님)</span>{' '}
+                            <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => void run(() => actions.stopAssignment(a))}>
+                              중단 기록
+                            </button>
                           </p>
                         )}
                       </>

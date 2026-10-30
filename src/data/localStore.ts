@@ -153,6 +153,11 @@ export function createLocalStore(): OfficeStore {
         (a) => a.taskId === prev.taskId && a.gate === 'E' && a.decision === 'approved' && a.approvedRevision === prev.planRevision && a.workItemId === prev.workItemId,
       );
       if (executing && !eOk) throw new Error('E approval required before recording execution');
+      // DB와 같은 규칙: 새로 시작하는 작업은 동시에 하나만
+      const starting = (next.dispatchStatus === 'started' || next.dispatchStatus === 'starting') && prev.dispatchStatus !== 'started' && prev.dispatchStatus !== 'starting';
+      if (starting && state.workflow.assignments.some((a) => a.id !== prev.id && (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting'))) {
+        throw new Error('concurrent execution limit: finish or stop the running work item first');
+      }
       const locked = { ...next, taskId: prev.taskId, planRevision: prev.planRevision, workItemId: prev.workItemId, assignee: prev.assignee, executionMode: prev.executionMode };
       commit({ ...state, workflow: { ...state.workflow, assignments: state.workflow.assignments.map((a) => (a.id === prev.id ? locked : a)) } });
     },
