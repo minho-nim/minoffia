@@ -8,7 +8,7 @@ import { buildCodexHandoff, buildCodexPrRequest, buildGptPackage } from '../doma
 import type { Project, Task } from '../domain/types';
 import { startBlocker } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
-import type { AgentAssignment, Gate, Intent, PrCheck } from '../domain/workflow-types';
+import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
 import { DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
 
 export interface SpecFields {
@@ -43,6 +43,8 @@ export interface WorkflowActions {
   setPrUrl: (task: Task, url: string) => Promise<boolean>;
   /** 서버가 GitHub에서 PR·CI를 확인(Supabase 모드만) */
   checkPr?: (task: Task) => Promise<boolean>;
+  /** C 승인 뒤 서버가 release를 앞당긴다(Supabase 모드만) */
+  deploy?: (task: Task) => Promise<boolean>;
   /** 결과 검토 → Claude PM 수정 요청 */
   requestRevision: (task: Task, feedback: string) => Promise<boolean>;
   attachmentUrl: (attachment: Attachment) => Promise<string>;
@@ -71,6 +73,8 @@ interface Props {
   allAssignments: AgentAssignment[];
   /** 이 업무 PR 주소에 대한 최신 서버 확인 */
   prCheck?: PrCheck | null;
+  /** 이 업무의 최신 운영 배포 기록 */
+  deployment?: Deployment | null;
   /** AI별 동시 작업 상한 */
   agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
   /** 모든 업무의 링크·확인 질문(이 업무 것만 골라 쓴다) */
@@ -106,7 +110,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -750,10 +754,30 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         <section className="wf-section">
           <h4>6. {GATE_LABEL.C}</h4>
           {view.cApproved ? (
-            <>
-              <p className="ok-text">배포 승인됨. PC의 저장소 폴더에서 아래 두 줄을 실행하면 운영 사이트(release)에 반영됩니다.</p>
-              <pre className="diff-view">{'git fetch origin\ngit push origin origin/main:refs/heads/release'}</pre>
-            </>
+            actions.deploy ? (
+              <div className="wf-manual">
+                {deployment?.ok ? (
+                  <p className="ok-text">
+                    운영 배포됨: release → {deployment.toSha.slice(0, 7)} ({new Date(deployment.createdAt).toLocaleString('ko-KR')}). Cloudflare 빌드가 끝나면 사이트에 반영됩니다.
+                  </p>
+                ) : (
+                  <>
+                    <p className="small">
+                      배포 승인됨. {deployment ? <span className="task-error">마지막 배포 실패: {deployment.error}</span> : '아직 배포하지 않았습니다.'}
+                    </p>
+                    <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.deploy!(task))}>
+                      {deployment ? '운영 배포 다시 시도' : '운영 배포'}
+                    </button>
+                  </>
+                )}
+                <p className="muted small">서버가 release 브랜치를 main으로 앞당깁니다(직접 커밋 없음). 이 버튼은 배포 시작이고, 사이트 반영은 Cloudflare 빌드 뒤입니다.</p>
+              </div>
+            ) : (
+              <>
+                <p className="ok-text">배포 승인됨. PC의 저장소 폴더에서 아래 두 줄을 실행하면 운영 사이트(release)에 반영됩니다(로컬 데모).</p>
+                <pre className="diff-view">{'git fetch origin\ngit push origin origin/main:refs/heads/release'}</pre>
+              </>
+            )
           ) : (
             <>
               {actions.checkPr ? (
@@ -793,9 +817,15 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                 type="button"
                 className="btn btn-small btn-primary"
                 disabled={busy || !cCheck.ok || !task.prUrl || (actions.checkPr ? !prCheckPasses(prCheck ?? null) : !ciChecked)}
-                onClick={() => void run(() => actions.decide(task, 'C', view.result!.revision, 'approved', '', { pr_url: task.prUrl, ci: prCheck ? { state: prCheck.ciState, merged: prCheck.merged, sha: prCheck.headSha } : 'manual' }))}
+                onClick={() =>
+                  void run(async () => {
+                    const ok = await actions.decide(task, 'C', view.result!.revision, 'approved', '', { pr_url: task.prUrl, ci: prCheck ? { state: prCheck.ciState, merged: prCheck.merged, sha: prCheck.headSha } : 'manual' });
+                    // 소유자 결정(2026-10-30): C 승인 = 운영 배포. 승인이 기록되면 바로 서버가 release를 앞당긴다.
+                    if (ok && actions.deploy) await actions.deploy(task);
+                  })
+                }
               >
-                C: 운영 배포 승인
+                {actions.deploy ? 'C: 운영 배포 승인 + 배포' : 'C: 운영 배포 승인'}
               </button>
               {!task.prUrl && <p className="muted small">PR 주소를 먼저 기록하세요.</p>}
             </>

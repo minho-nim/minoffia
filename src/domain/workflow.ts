@@ -14,6 +14,7 @@ export function forTask(data: WorkflowData, taskId: string): WorkflowData {
     imageAnalyses: data.imageAnalyses.filter((x) => x.taskId === taskId),
     links: data.links.filter((x) => x.taskId === taskId),
     prChecks: data.prChecks.filter((x) => x.taskId === taskId),
+    deployments: data.deployments.filter((x) => x.taskId === taskId),
     clarifications: data.clarifications.filter((x) => x.taskId === taskId),
   };
 }
@@ -182,4 +183,9 @@ export function latestPrCheck(task: Task, data: WorkflowData): import('./workflo
 
 export function prCheckPasses(check: import('./workflow-types').PrCheck | null): boolean {
   return !!check && check.ciState === 'success' && check.merged;
+}
+
+/** 이 업무의 최신 운영 배포 기록 */
+export function latestDeployment(task: Task, data: WorkflowData): import('./workflow-types').Deployment | null {
+  return data.deployments.filter((d) => d.taskId === task.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
 }

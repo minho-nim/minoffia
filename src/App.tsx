@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentRoster } from './components/AgentPanel';
+import { DevlogPanel } from './components/DevlogPanel';
 import { Inbox } from './components/Inbox';
 import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
@@ -9,7 +10,7 @@ import { TaskForm, type TaskDraft } from './components/TaskForm';
 import type { PendingImage } from './components/Attachments';
 import { WorkflowPanel, type WorkflowActions } from './components/WorkflowPanel';
 import { createLocalStore, resetLocalDemo } from './data/localStore';
-import { newId, type OfficeStore } from './data/store';
+import { newId, type InboxState, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
 import { attachmentsOf, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
@@ -19,7 +20,7 @@ import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/type
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
 import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
-import { deriveWorkflow, latestPrCheck, officeStatus, sha256Hex } from './domain/workflow';
+import { deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, sha256Hex } from './domain/workflow';
 import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
@@ -149,6 +150,12 @@ export function App() {
   }, [handoff]);
 
   const projectById = useMemo(() => new Map(snap.projects.map((p) => [p.id, p])), [snap.projects]);
+
+  // 입력창 대화를 계정에 저장(Supabase 모드). 로컬 데모는 이 브라우저에만 남는다.
+  const inboxSync = useMemo(
+    () => (store && store.mode === 'supabase' ? { load: () => store.loadInbox(), save: (st: InboxState) => store.saveInbox(st) } : undefined),
+    [store],
+  );
 
   const visibleTasks = useMemo(() => {
     const list = snap.tasks.filter((t) => {
@@ -586,6 +593,21 @@ export function App() {
             }
           }
         : undefined,
+    deploy:
+      store.mode === 'supabase'
+        ? async (task) => {
+            try {
+              const r = await store.deployRelease(task.id);
+              say('ok', r.updated ? `운영 배포를 시작했습니다: release를 ${r.to.slice(0, 7)}로 앞당겼습니다. Cloudflare 빌드가 끝나면(1~2분) 사이트에 반영됩니다.` : `release가 이미 최신(${r.to.slice(0, 7)})입니다. 다시 배포할 것이 없습니다.`);
+              return true;
+            } catch (e) {
+              say('error', `운영 배포를 하지 못했습니다: ${(e as Error).message}`);
+              return false;
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
     requestRevision: (task, feedback) =>
       step(
         task.id,
@@ -755,6 +777,8 @@ export function App() {
                 }}
                 onCopy={workflowActions.copy}
                 onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
+                sync={inboxSync}
+                onArchive={(entries) => store.appendChat(entries)}
               />
               <details className="direct-entry">
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
@@ -793,6 +817,7 @@ export function App() {
                         analyses={snap.workflow.imageAnalyses.filter((a) => a.taskId === t.id)}
                         allAssignments={snap.workflow.assignments}
                         prCheck={latestPrCheck(t, snap.workflow)}
+                        deployment={latestDeployment(t, snap.workflow)}
                         agentLimits={snap.agentLimits}
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}
@@ -825,6 +850,7 @@ export function App() {
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
             />
           )}
+          {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} onCopy={workflowActions.copy} />}
 
           {tab === 'agent' && (
             <AgentRoster

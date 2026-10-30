@@ -4,6 +4,7 @@ import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/
 import { chatGptQuestion, replyIntent, titleFrom, triage } from '../domain/triage';
 import { MAX_REQUEST_FILES, validateFile, fileNameFor } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
+import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
 import { RepoCreate } from './RepoCreate';
 import type { TaskDraft } from './TaskForm';
@@ -41,12 +42,57 @@ interface Props {
   onCopy: (text: string) => Promise<boolean>;
   /** 저장소 만들기를 쓸 수 있으면 함수(Supabase 모드) */
   onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
+  /** 대화를 계정에 저장해 다른 기기에서 이어 본다(Supabase 모드). 없으면 이 기기에만 남는다. */
+  sync?: { load: () => Promise<InboxState | null>; save: (state: InboxState) => Promise<void> };
+  /** 대화 기록(개발일지 원본)에 추가. 화면의 '대화 지우기'와 상관없이 남는다. */
+  onArchive?: (entries: NewChatEntry[]) => Promise<void>;
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
 /** 미나가 기다리는 선택(탭을 옮겨도 남게) */
 const PENDING_KEY = 'minlab-ai-office:inbox-pending:v1';
+/** 아직 서버 대화 기록에 못 올린 메시지(연결이 끊겼을 때 다음에 다시 올린다) */
+const OUTBOX_KEY = 'minlab-ai-office:chat-outbox:v1';
+
+function readOutbox(): NewChatEntry[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(OUTBOX_KEY) ?? '[]') as NewChatEntry[];
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOutbox(list: NewChatEntry[]) {
+  try {
+    if (list.length) localStorage.setItem(OUTBOX_KEY, JSON.stringify(list.slice(-500)));
+    else localStorage.removeItem(OUTBOX_KEY);
+  } catch {
+    // 저장이 막힌 브라우저
+  }
+}
+
+/** 이 기기 대화를 마지막으로 바꾼(또는 서버에서 받은) 시각 */
+const STAMP_KEY = 'minlab-ai-office:inbox-updated:v1';
 const KEEP = 40;
+/** 다른 기기에서 바꾼 대화를 확인하는 간격 */
+const SYNC_POLL_MS = 15_000;
+
+function readStamp(): string {
+  try {
+    return localStorage.getItem(STAMP_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function writeStamp(v: string) {
+  try {
+    localStorage.setItem(STAMP_KEY, v);
+  } catch {
+    // 저장이 막힌 브라우저
+  }
+}
 const mid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 function readLog(): Msg[] {
@@ -86,7 +132,7 @@ const toBase64 = (file: File) =>
     r.readAsDataURL(file);
   });
 
-export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo }: Props) {
+export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const [input, setInput] = useState('');
   const [pending, setPending] = useState<Pending | null>(readPending);
@@ -139,6 +185,72 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
   }, [pending]);
 
+  // 계정 동기화: 이 기기에서 바꾼 대화는 잠시 뒤 서버에 저장하고, 다른 기기에서 바꾼 것은 주기적으로 받아 온다.
+  // 마지막에 바꾼 쪽이 이긴다(한 사람이 쓰는 앱이라 동시에 두 기기에서 쓰는 일은 드물다).
+  const adopting = useRef(false);
+  const dirty = useRef(false);
+  const loaded = useRef(false);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+  useEffect(() => {
+    if (!sync) return;
+    let alive = true;
+    const pull = async () => {
+      if (dirty.current || busyRef.current) return;
+      try {
+        const remote = await sync.load();
+        if (!alive) return;
+        if (!remote) {
+          // 서버에 아직 없으면 이 기기 대화를 올린다(처음 한 번).
+          if (!loaded.current && readLog().length) dirty.current = true;
+        } else if (remote.updatedAt > readStamp()) {
+          adopting.current = true;
+          setLog((Array.isArray(remote.messages) ? (remote.messages as Msg[]) : []).slice(-KEEP));
+          setPending((remote.pending as Pending | null) ?? null);
+          writeStamp(remote.updatedAt);
+        }
+      } catch {
+        // 연결이 끊겨도 이 기기 대화는 그대로 쓴다.
+      } finally {
+        loaded.current = true;
+      }
+    };
+    void pull();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void pull();
+    }, SYNC_POLL_MS);
+    const onVisible = () => document.visibilityState === 'visible' && void pull();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [sync]);
+
+  useEffect(() => {
+    if (!sync) return;
+    if (adopting.current) {
+      adopting.current = false;
+      return;
+    }
+    if (!loaded.current && !dirty.current) return;
+    dirty.current = true;
+    const t = window.setTimeout(() => {
+      const updatedAt = new Date().toISOString();
+      sync
+        .save({ messages: log.slice(-KEEP), pending, updatedAt })
+        .then(() => {
+          writeStamp(updatedAt);
+          dirty.current = false;
+        })
+        .catch(() => {
+          // 저장 실패: 다음 변경 때 다시 올린다. 이 기기 대화는 남아 있다.
+        });
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [sync, log, pending]);
+
   // 저장된 선택이 가리키는 프로젝트가 지워졌거나 이미 저장소가 생겼으면 선택을 접는다.
   useEffect(() => {
     if (!pending || !('project' in pending)) return;
@@ -146,7 +258,35 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     if (!now || (pending.kind === 'repo' && now.repo)) setPending(null);
   }, [snap.projects, pending]);
 
-  const say = (from: From, text: string) => setLog((l) => [...l, { id: mid(), from, text }].slice(-KEEP));
+  // 대화 기록: 실패하면 이 기기에 모아 두었다가 다음 메시지 때 함께 올린다(순서 유지).
+  const flushing = useRef(false);
+  const archive = (entry?: NewChatEntry) => {
+    if (!onArchive) return;
+    const queue = entry ? [...readOutbox(), entry] : readOutbox();
+    writeOutbox(queue);
+    if (!queue.length || flushing.current) return;
+    flushing.current = true;
+    onArchive(queue)
+      .then(() => {
+        // 올리는 동안 새로 쌓인 것은 남겨 이어서 올린다.
+        const rest = readOutbox().slice(queue.length);
+        writeOutbox(rest);
+        flushing.current = false;
+        if (rest.length) archive();
+      })
+      .catch(() => {
+        // 다음 메시지 때 다시 올린다.
+        flushing.current = false;
+      });
+  };
+  useEffect(() => {
+    archive();
+    // 처음 열 때 남은 것만 올린다.
+  }, []);
+  const say = (from: From, text: string, link: { projectId?: string; taskId?: string } = {}) => {
+    setLog((l) => [...l, { id: mid(), from, text }].slice(-KEEP));
+    archive({ role: from, text, projectId: link.projectId ?? null, taskId: link.taskId ?? null });
+  };
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -258,7 +398,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
     const project = await onCreateProject(name);
     if (!project) return say('office', '프로젝트를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
-    say('office', `'${project.name}' 프로젝트를 만들었습니다.`);
+    say('office', `'${project.name}' 프로젝트를 만들었습니다.`, { projectId: project.id });
     if (original) await create(original, project);
     if (onCreateRepo) {
       setPending({ kind: 'repo', project });
@@ -282,6 +422,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     say(
       'office',
       `'${project.name}'에 접수했어요: ${task.title}\n담당 ${AGENT_BY_ID[task.assignee].name} · ${task.routeReason}\n아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.`,
+      { projectId: project.id, taskId: task.id },
     );
     if (images.length) say('office', `사진 ${images.length}장을 이 업무의 요청 자료로 올렸어요(역할은 '기타 참고', 업무 카드에서 바꿀 수 있어요).`);
   };
@@ -290,7 +431,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     if (!pending || pending.kind === 'repo') return;
     const text = pending.text;
     setPending(null);
-    say('me', `${project.name} 맞아요`);
+    say('me', `${project.name} 맞아요`, { projectId: project.id });
     void run(() => create(text, project));
   };
 
@@ -521,7 +662,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
             setLog(hadPending ? [{ id: mid(), from: 'office', text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).' }] : []);
           }}
         >
-          {pending ? '대화 지우기 · 진행 중인 요청 취소' : '대화 지우기(이 기기)'}
+          {pending ? '대화 지우기 · 진행 중인 요청 취소' : sync ? '대화 지우기(모든 기기)' : '대화 지우기(이 기기)'}
         </button>
       )}
     </section>

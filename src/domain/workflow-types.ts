@@ -142,6 +142,18 @@ export interface PrCheck {
   checkedAt: string;
 }
 
+/** 서버가 C 승인 뒤 release를 main으로 앞당긴 기록(0011_inbox_deployments.sql). 성공 = release 갱신이지 Cloudflare 빌드 완료가 아니다. */
+export interface Deployment {
+  id: string;
+  taskId: string;
+  repo: string;
+  fromSha: string;
+  toSha: string;
+  ok: boolean;
+  error: string;
+  createdAt: string;
+}
+
 export interface WorkflowData {
   specs: TaskSpec[];
   approvals: Approval[];
@@ -157,11 +169,13 @@ export interface WorkflowData {
   links: LinkRef[];
   /** PR·CI 확인 기록 */
   prChecks: PrCheck[];
+  /** 운영 배포(release 갱신) 기록 */
+  deployments: Deployment[];
   /** GPT 확인 질문·답변 */
   clarifications: Clarification[];
 }
 
-export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], clarifications: [] };
+export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] };
 
 export const STAGE_LABEL: Record<Stage, string> = {
   received: '접수',
