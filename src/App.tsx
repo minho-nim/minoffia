@@ -193,6 +193,13 @@ export function App() {
     return list;
   }, [snap.tasks, filter]);
 
+  // PM 세션이 보낸 계획 옮기기(아래 planInboxRef.current). 업무 기록이 바뀔 때마다 확인한다.
+  const importingInbox = useRef(false);
+  const planInboxRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    planInboxRef.current?.();
+  }, [snap]);
+
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
@@ -438,8 +445,8 @@ export function App() {
   };
 
   // PM 세션이 보낸 계획(pm_plan_inbox)을 자동으로 옮긴다(v0.4.2). 먼저 처리함으로 표시한 기기만 저장한다(중복 방지).
-  const importingInbox = useRef(false);
-  useEffect(() => {
+  // 훅은 위(첫 return 전)에 있고, 여기서는 매번 최신 snap을 쓰는 함수만 바꿔 끼운다.
+  planInboxRef.current = () => {
     if (store.mode !== 'supabase' || importingInbox.current) return;
     importingInbox.current = true;
     void (async () => {
@@ -468,7 +475,7 @@ export function App() {
         importingInbox.current = false;
       }
     })();
-  }, [snap]);
+  };
 
   const workflowActions: WorkflowActions = {
     draftSpec: (task) => draftSpec(task.id),
