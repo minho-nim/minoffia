@@ -703,11 +703,11 @@ export function App() {
               <Inbox
                 snap={snap}
                 canAskGemini={store.mode === 'supabase'}
-                onCreateTask={(d) => addTask(d)}
+                onCreateTask={(d, images) => addTask(d, images)}
                 onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
-                onAskGemini={async (q, history) => {
+                onAskGemini={async (q, history, images) => {
                   try {
-                    return (await store.askGemini(q, history)).answer;
+                    return (await store.askGemini(q, history, images)).answer;
                   } finally {
                     setSnap(await store.load());
                   }
@@ -783,6 +783,8 @@ export function App() {
               tasks={snap.tasks}
               usage={snap.usage}
               assignments={snap.workflow.assignments}
+              aiCalls={snap.aiCalls ?? []}
+              serverMode={store.mode === 'supabase'}
               onOpenTask={() => {
                 setFilter('all');
                 setTab('tasks');

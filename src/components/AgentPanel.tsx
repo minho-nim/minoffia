@@ -1,8 +1,8 @@
-import { ADAPTER_STATE_LABEL, ADAPTERS } from '../domain/adapters';
+import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
 import { AGENT_BY_ID, MODE_LABEL } from '../domain/agents';
 import type { AgentAssignment } from '../domain/workflow-types';
 import { remainingToday, runsToday } from '../domain/usage';
-import type { AgentId, Task, UsageRun } from '../domain/types';
+import type { AgentId, AiCall, Task, UsageRun } from '../domain/types';
 import { STATUS_LABEL } from '../domain/types';
 import { ACTIVITY_LABEL, buildScene } from '../office/scene';
 import { spriteFor } from '../office/sprites';
@@ -13,15 +13,19 @@ interface Props {
   usage: UsageRun[];
   assignments: AgentAssignment[];
   onOpenTask: (task: Task) => void;
+  /** Gemini 실제 호출 기록(연결 상태 표시용) */
+  aiCalls?: AiCall[];
+  /** 서버(Supabase) 모드인가 */
+  serverMode?: boolean;
 }
 
 /** 오피스 캐릭터 → 실행 경로(어댑터) */
 const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision', mina: 'gpt' };
 
-export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask }: Props) {
+export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false }: Props) {
   const a = AGENT_BY_ID[agentId];
   const scene = buildScene(tasks, assignments).find((s) => s.agent === agentId);
-  const adapter = ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
+  const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
   const mine = tasks.filter((t) => t.assignee === agentId);
   const used = runsToday(usage, agentId);
   const left = remainingToday(usage, agentId);

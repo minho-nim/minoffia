@@ -1,4 +1,4 @@
-# MinLab AI Office v0.2.9
+# MinLab AI Office v0.2.10
 
 개인 AI 개발팀을 운영하는 **2D 도트 사무실형 작업 관리 웹앱**. 회사 Windows PC, 집 PC, 모바일에서 프로젝트와 업무를 보고, 지원되는 Claude Code Cloud Routines 실행을 지시할 수 있다. 다른 AI는 *연동 확인 전까지* 수동 인계만 제공한다.
 
