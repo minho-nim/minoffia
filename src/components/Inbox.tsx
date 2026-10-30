@@ -145,6 +145,14 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
   const [previews, setPreviews] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // 입력칸은 쓴 만큼 늘어난다(최대 높이는 CSS max-height). 보내서 비우면 다시 줄어든다.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [input]);
 
   const setPhotos = (next: File[]) => {
     photoStore.draft = next;
@@ -661,6 +669,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
             }
           }}
           id="inbox-input"
+          ref={inputRef}
           rows={2}
           value={input}
           maxLength={4000}

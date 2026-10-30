@@ -302,6 +302,10 @@ a {
   .stage-note {
     display: none;
   }
+  /* 사무실이 위에 고정되므로, 대화 목록은 사무실 아래 남는 화면을 거의 다 쓴다(사무실 높이 ≈ 화면 너비 × 224/300). */
+  .inbox-log {
+    max-height: max(300px, calc(100svh - (100vw - 32px) * 0.747 - 150px));
+  }
 }
 
 .stage-note {
@@ -1604,6 +1608,9 @@ a {
   background: var(--bg);
   resize: vertical;
   font-size: 15px;
+  line-height: 1.45;
+  /* 글을 쓰면 늘어난다(Inbox에서 높이 조절). 너무 길면 안에서 스크롤 */
+  max-height: 40svh;
 }
 
 .inbox-form .btn {
