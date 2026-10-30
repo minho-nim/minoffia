@@ -850,7 +850,7 @@ export function App() {
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
             />
           )}
-          {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} onCopy={workflowActions.copy} />}
+          {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}
 
           {tab === 'agent' && (
             <AgentRoster

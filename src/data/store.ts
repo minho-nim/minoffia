@@ -6,7 +6,7 @@ import type { AgentAssignment, Approval, PmPlan, PrCheck, ResultPackage, Revisio
 
 export type StoreMode = 'local' | 'supabase';
 
-/** 입력창 대화와 미나가 기다리는 선택. 모양은 Inbox가 정한다(저장소는 그대로 보관만). */
+/** 입력창 대화와 미니엉이 기다리는 선택. 모양은 Inbox가 정한다(저장소는 그대로 보관만). */
 export type NewChatEntry = Omit<ChatEntry, 'id' | 'createdAt'>;
 
 export interface InboxState {
@@ -57,8 +57,10 @@ export interface OfficeStore {
   /** 입력창 대화(계정에 저장해 여러 기기에서 이어 본다. 로컬 데모는 이 브라우저에만) */
   loadInbox(): Promise<InboxState | null>;
   saveInbox(state: InboxState): Promise<void>;
-  /** 대화 기록(개발일지 원본)에 추가만 한다. 지우거나 고칠 수 없다. */
+  /** 대화 기록(개발일지 원본)에 추가. 고칠 수는 없다. */
   appendChat(entries: NewChatEntry[]): Promise<void>;
+  /** 기간(프로젝트를 주면 그 프로젝트만)의 대화 기록을 지운다. 업무 기록(승인·결과 등)은 지우지 않는다. 지운 수를 돌려준다. */
+  deleteChat(fromIso: string, toIso: string, projectId?: string): Promise<number>;
   /** 기간의 대화 기록(시간순) */
   loadChat(fromIso: string, toIso: string): Promise<ChatEntry[]>;
   /** AI별 동시 작업 상한(1~5) */

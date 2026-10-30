@@ -1,8 +1,8 @@
 -- MinLab AI Office v0.3.0: 여러 기기에서 같은 입력창을 보고, 대화·개발 내역을 프로젝트별·날짜별 개발일지로 모은다.
--- 소유자 결정(2026-10-30): 대화는 계정에 저장해 기기를 옮겨도 이어 보고, 개발일지를 위해 지우지 않고 모아 둔다.
---   (이전 결정 '일반 질문 글은 저장하지 않는다'를 바꾼다. Gemini에 보낸 질문·답변도 대화 기록에 남는다.)
+-- 소유자 결정(2026-10-30): 화면 대화는 계정에 저장해 기기를 옮겨도 이어 본다.
+--   개발일지용 대화 기록은 프로젝트 업무와 연결된 메시지만 남기고(일반 대화·질문은 남기지 않음), 소유자가 나중에 지울 수 있다.
 
--- 1) 입력창 화면 상태(계정당 한 행): 지금 보이는 최근 대화와 미나가 기다리는 선택. '대화 지우기'는 이 화면만 비운다.
+-- 1) 입력창 화면 상태(계정당 한 행): 지금 보이는 최근 대화와 미니엉이 기다리는 선택. '대화 지우기'는 이 화면만 비운다.
 create table public.inbox_state (
   owner_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
   messages jsonb not null default '[]'::jsonb
@@ -19,8 +19,8 @@ create policy inbox_state_update on public.inbox_state for update to authenticat
   using (owner_id = (select auth.uid())) with check (owner_id = (select auth.uid()));
 create policy inbox_state_delete on public.inbox_state for delete to authenticated using (owner_id = (select auth.uid()));
 
--- 2) 대화 기록(개발일지 원본). 추가만 가능하고 고치거나 지울 수 없다(계정을 지우면 함께 지워진다).
---    업무 접수 안내처럼 프로젝트·업무가 정해진 메시지는 그 프로젝트·업무에 연결한다. 프로젝트·업무를 지워도 기록은 남는다.
+-- 2) 대화 기록(개발일지 원본). 프로젝트·업무에 연결된 메시지만. 고칠 수 없고 소유자가 지울 수는 있다.
+--    프로젝트·업무를 지워도 기록은 남는다(연결만 끊김).
 create table public.chat_messages (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
@@ -37,6 +37,7 @@ alter table public.chat_messages enable row level security;
 
 create policy chat_messages_select on public.chat_messages for select to authenticated using (owner_id = (select auth.uid()));
 create policy chat_messages_insert on public.chat_messages for insert to authenticated with check (owner_id = (select auth.uid()));
+create policy chat_messages_delete on public.chat_messages for delete to authenticated using (owner_id = (select auth.uid()));
 
 create or replace function public.chat_messages_guard()
 returns trigger

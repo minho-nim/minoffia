@@ -244,6 +244,16 @@ export function createLocalStore(): OfficeStore {
         // 저장이 막힌 브라우저
       }
     },
+    async deleteChat(fromIso, toIso, projectId) {
+      const all = readChat();
+      const hit = (m: ChatEntry) => m.createdAt >= fromIso && m.createdAt < toIso && (!projectId || m.projectId === projectId);
+      try {
+        localStorage.setItem(CHAT_KEY, JSON.stringify(all.filter((m) => !hit(m))));
+      } catch {
+        // 저장이 막힌 브라우저
+      }
+      return all.filter(hit).length;
+    },
     async loadChat(fromIso, toIso) {
       return readChat().filter((m) => m.createdAt >= fromIso && m.createdAt < toIso);
     },

@@ -49,7 +49,7 @@ describe('buildScene', () => {
     expect(of([task({ id: 'a', type: 'qa', assignee: 'ci', status: 'done' })], 'ci').spot.zone).toBe('lounge');
   });
 
-  it('접수 메모가 있으면 미나가 복도 데스크를 지킨다', () => {
+  it('접수 메모가 있으면 미니엉이 복도 데스크를 지킨다', () => {
     const s = of([task({ id: 'a', type: 'planning', assignee: 'claude', status: 'queued' })], 'mina');
     expect(s.spot.zone).toBe('corridor');
     expect(s.open).toBe(1);

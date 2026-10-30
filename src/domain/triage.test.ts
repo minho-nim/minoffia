@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sampleSnapshot } from '../data/sample';
-import { answerStatus, matchProjects, replyIntent, titleFrom, triage } from './triage';
+import { answerStatus, chatGptFollowup, matchProjects, questionProject, replyIntent, titleFrom, triage } from './triage';
 
 const snap = sampleSnapshot();
 const now = new Date('2026-10-29T03:00:00Z');
@@ -67,5 +67,20 @@ describe('새 프로젝트·흔한 이름', () => {
     expect(matchProjects('테스트 코드 추가해줘', withGeneric.projects)).toEqual([]);
     expect(matchProjects('프로젝트 화면 고쳐줘', withGeneric.projects)).toEqual([]);
     expect(matchProjects('MuscleMap 화면 고쳐줘', withGeneric.projects).map((p) => p.name)).toEqual(['MuscleMap']);
+  });
+});
+
+describe('질문 흐름(v0.3.1)', () => {
+  it('GPT 이어서 묻기 글에 질문과 Gemini 답이 함께 들어간다', () => {
+    const t = chatGptFollowup(' useEffect가 뭐야? ', '렌더 뒤에 실행되는 훅');
+    expect(t).toContain('## 질문\nuseEffect가 뭐야?');
+    expect(t).toContain('## Gemini 1차 답(참고)\n렌더 뒤에 실행되는 훅');
+    expect(t).toContain('틀린 점은 바로잡고');
+  });
+
+  it('프로젝트 이름이 든 질문은 그 프로젝트를 돌려준다', () => {
+    const projects = [{ id: 'p1', name: 'MuscleMap', repo: null, description: '', createdAt: '' }];
+    expect(questionProject('MuscleMap 타이머 구조 어떻게 생각해?', projects)?.id).toBe('p1');
+    expect(questionProject('useEffect가 뭐야?', projects)).toBeNull();
   });
 });
