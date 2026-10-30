@@ -158,7 +158,7 @@ export function createLocalStore(): OfficeStore {
       const starting = (next.dispatchStatus === 'started' || next.dispatchStatus === 'starting') && prev.dispatchStatus !== 'started' && prev.dispatchStatus !== 'starting';
       if (starting) {
         const plan = state.workflow.plans.find((p) => p.taskId === prev.taskId && p.planRevision === prev.planRevision) ?? null;
-        const blocked = startBlocker(prev, state.workflow.assignments, plan);
+        const blocked = startBlocker(prev, state.workflow.assignments, plan, state.agentLimits);
         if (blocked) throw new Error(blocked.includes('앞 작업') ? `dependency not finished: ${blocked}` : `concurrent execution limit: ${blocked}`);
       }
       const locked = { ...next, taskId: prev.taskId, planRevision: prev.planRevision, workItemId: prev.workItemId, assignee: prev.assignee, executionMode: prev.executionMode };
@@ -207,6 +207,10 @@ export function createLocalStore(): OfficeStore {
       if (blocked) throw new Error(blocked);
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
       dropUnusedFiles();
+    },
+    async setAgentLimit(assignee, maxRunning) {
+      if (!Number.isInteger(maxRunning) || maxRunning < 1 || maxRunning > 5) throw new Error('상한은 1~5입니다.');
+      commit({ ...state, agentLimits: { ...(state.agentLimits ?? {}), [assignee]: maxRunning } });
     },
     async analyzeImage() {
       throw new Error('로컬 데모에서는 Gemini 이미지 분석을 쓸 수 없습니다.');

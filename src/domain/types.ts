@@ -80,6 +80,8 @@ export interface Snapshot {
   workflow: WorkflowData;
   /** 최근 Gemini 질문 기록(Supabase 모드만) */
   aiCalls?: AiCall[];
+  /** AI별 동시 작업 상한(소유자가 바꾼 것만, 나머지는 기본값) */
+  agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
 }
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;

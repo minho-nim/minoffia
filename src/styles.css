@@ -1759,3 +1759,15 @@ a {
   background: var(--surface-2);
   color: var(--muted);
 }
+
+.agent-limit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.agent-limit .muted {
+  flex-basis: 100%;
+}

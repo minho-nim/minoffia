@@ -43,22 +43,27 @@ insert into approvals (task_id, gate, decision, approved_revision, work_item_id)
   ('efefefef-0000-4000-8000-000000000001', 'E', 'approved', 1, 'W3'),
   ('efefefef-0000-4000-8000-000000000001', 'E', 'approved', 1, 'W4');
 
--- 다른 AI끼리는 동시에
-update agent_assignments set dispatch_status = 'started', status_source = 'user_reported' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W1';
-update agent_assignments set dispatch_status = 'started', status_source = 'user_reported' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W2';
-select pg_temp.check((select count(*) from agent_assignments where dispatch_status = 'started') = 2, 'Codex·Claude 동시 진행 가능');
--- 같은 AI(Codex)의 두 번째 작업은 막힘
-select pg_temp.expect_fail($q$update agent_assignments set dispatch_status = 'started' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W4'$q$, 'concurrent execution limit');
--- 시작된 작업의 다른 값(주소) 수정은 된다
-update agent_assignments set provider_task_url = 'https://example.invalid/t' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W1';
--- W3는 W1이 끝나야 시작(Claude는 W2를 중단해 비워도 순서 때문에 막힘)
+-- 기본 상한: Codex 3 → W1·W4 동시 가능, Claude 3
+update agent_assignments set dispatch_status = 'started', status_source = 'user_reported' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id in ('W1', 'W2', 'W4');
+select pg_temp.check((select count(*) from agent_assignments where dispatch_status = 'started') = 3, '기본 상한에서 Codex 2개·Claude 1개 동시 진행');
+-- 상한을 1로 낮추면 같은 AI의 새 작업은 막힘(이미 돌고 있는 것은 그대로)
+insert into agent_limits (assignee, max_running) values ('claude', 1);
+select pg_temp.expect_fail($q$insert into agent_limits (assignee, max_running) values ('codex', 9)$q$, 'check');
+-- 순서: W3는 W1이 끝나야 시작
 update agent_assignments set dispatch_status = 'failed', actual_provider_status = 'user_stopped' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W2';
 select pg_temp.expect_fail($q$update agent_assignments set dispatch_status = 'started' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W3'$q$, 'dependency not finished: W1');
 update agent_assignments set dispatch_status = 'completed' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W1';
 update agent_assignments set dispatch_status = 'started' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W3';
-select pg_temp.check((select dispatch_status from agent_assignments where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W3') = 'started', '앞 작업이 끝나면 시작');
--- Codex가 비었으니 W4 시작 가능
-update agent_assignments set dispatch_status = 'started' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W4';
-select pg_temp.check((select count(*) from agent_assignments where dispatch_status = 'started') = 2, '완료 뒤 같은 AI 다음 작업 시작');
+-- Claude 상한 1: W2 재시작은 막힘
+select pg_temp.expect_fail($q$update agent_assignments set dispatch_status = 'started' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W2'$q$, 'concurrent execution limit');
+-- 시작된 작업의 다른 값(주소) 수정은 된다
+update agent_assignments set provider_task_url = 'https://example.invalid/t' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W3';
+-- 상한을 다시 2로 올리면 시작 가능
+update agent_limits set max_running = 2 where assignee = 'claude';
+update agent_assignments set dispatch_status = 'started' where task_id = 'efefefef-0000-4000-8000-000000000001' and work_item_id = 'W2';
+select pg_temp.check((select count(*) from agent_assignments where assignee = 'claude' and dispatch_status = 'started') = 2, '상한을 올리면 같은 AI 작업을 더 시작');
+-- 다른 사용자는 내 상한을 못 봄
+select set_config('request.jwt.claims', json_build_object('sub', '22222222-2222-4222-8222-222222222222', 'role', 'authenticated')::text, false);
+select pg_temp.check((select count(*) from agent_limits) = 0, '다른 사용자는 상한 설정을 볼 수 없음');
 reset role;
 \echo 동시 실행 테스트 완료
