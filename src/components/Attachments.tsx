@@ -107,14 +107,14 @@ const previewable = (mime: string) => !isRaster(mime) && previewKind(mime) !== n
 /** 비공개 주소를 새 탭으로 바로 열어도 되는 파일(HTML·SVG는 글로 저장돼 있어 미리보기로만 본다) */
 const linkable = (mime: string) => mime !== 'text/html' && mime !== 'image/svg+xml';
 
-function PreviewToggle({ name, mime, load }: { name: string; mime: string; load: () => Promise<Blob> }) {
+function PreviewToggle({ name, mime, load, openUrl }: { name: string; mime: string; load: () => Promise<Blob>; openUrl?: string | null }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className="btn btn-small btn-ghost att-analyze" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? '미리보기 닫기' : '미리보기'}
       </button>
-      {open && <FilePreview name={name} mime={mime} load={load} />}
+      {open && <FilePreview name={name} mime={mime} load={load} openUrl={openUrl} />}
     </>
   );
 }
@@ -265,6 +265,7 @@ export function AttachmentGallery({
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({});
   const editable = !blocker && !!onUpdate;
 
   useEffect(() => {
@@ -332,27 +333,18 @@ export function AttachmentGallery({
                   </p>
                 )}
                 {previewable(a.mime) && (
-                  <PreviewToggle
-                    name={a.fileName}
-                    mime={a.mime}
-                    load={async () => {
-                      const res = await fetch(urls[a.id] ?? (await urlFor(a)));
-                      if (!res.ok) throw new Error(`파일을 받지 못했습니다(HTTP ${res.status}).`);
-                      return res.blob();
-                    }}
-                  />
+                  <button type="button" className="btn btn-small btn-ghost att-analyze" aria-expanded={!!previewOpen[a.id]} onClick={() => setPreviewOpen({ ...previewOpen, [a.id]: !previewOpen[a.id] })}>
+                    {previewOpen[a.id] ? '미리보기 닫기' : '미리보기'}
+                  </button>
                 )}
-                {analyses?.get(a.id) ? (
-                  <AnalysisView analysis={analyses.get(a.id)!} doc={!isImage(a.mime)} />
-                ) : (
+                {!analyses?.get(a.id) &&
                   onAnalyze &&
                   !analyzeBlocker &&
                   canGeminiRead(a) && (
                     <button type="button" className="btn btn-small btn-ghost att-analyze" disabled={busy} onClick={() => void act(() => onAnalyze(a))}>
                       {isImage(a.mime) ? 'Gemini로 분석' : 'Gemini로 요약'}
                     </button>
-                  )
-                )}
+                  )}
               </div>
               {editable && (
                 <span className="att-tools">
@@ -372,6 +364,24 @@ export function AttachmentGallery({
                     </button>
                   )}
                 </span>
+              )}
+              {/* 미리보기·요약은 좁은 칸 대신 이 줄 아래 전체 폭으로 */}
+              {(previewOpen[a.id] || analyses?.get(a.id)) && (
+                <div className="att-wide">
+                  {previewOpen[a.id] && (
+                    <FilePreview
+                      name={a.fileName}
+                      mime={a.mime}
+                      openUrl={linkable(a.mime) ? urls[a.id] : null}
+                      load={async () => {
+                        const res = await fetch(urls[a.id] ?? (await urlFor(a)));
+                        if (!res.ok) throw new Error(`파일을 받지 못했습니다(HTTP ${res.status}).`);
+                        return res.blob();
+                      }}
+                    />
+                  )}
+                  {analyses?.get(a.id) && <AnalysisView analysis={analyses.get(a.id)!} doc={!isImage(a.mime)} />}
+                </div>
               )}
             </li>
           ))}
