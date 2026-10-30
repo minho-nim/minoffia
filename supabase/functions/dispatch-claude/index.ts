@@ -159,6 +159,21 @@ Deno.serve(async (req) => {
     });
   }
 
+  // PM 계획 자동 저장(v0.4.2): 이 업무·이 기획서 버전 전용 1회용 제출표. 해시만 저장한다(6시간, 3번까지).
+  // 로그인 정보가 아니라 계획 한 개를 AI Office에 넣는 데만 쓰이고, 들어온 계획도 E 승인 전에는 아무것도 실행하지 않는다.
+  const ticket = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '');
+  const ticketHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ticket)))]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  const { error: ticketError } = await admin.from('plan_submit_tokens').insert({
+    owner_id: user.id,
+    task_id: task.id,
+    spec_revision: spec.revision,
+    token_hash: ticketHash,
+    expires_at: new Date(Date.now() + 6 * 3600_000).toISOString(),
+  });
+  const submitUrl = `${env('SUPABASE_URL')}/functions/v1/submit-plan`;
+
   const fail = async (message: string, status: number) => {
     await admin
       .from('tasks')
@@ -203,6 +218,17 @@ Deno.serve(async (req) => {
     `- "direct": 버그·기존 기능 수정·DB·성능 개선. 견본 없이 Codex로 바로 개발한다.`,
     ``,
     `규칙: 작업 분해·배정 계획(JSON)만 작성한다. 저장소 쓰기·커밋·브랜치·푸시·PR·병합·배포 금지(B 승인 전 GitHub 업로드 금지).`,
+    ...(ticketError
+      ? []
+      : [
+          ``,
+          `## 계획 보내기(자동 저장, 필수)`,
+          `계획 JSON을 다 쓰면 저장소 밖 /tmp/plan-submit.json 에 {"task_id":"${task.id}","token":"${ticket}","plan":<계획 JSON 객체>} 를 저장하고 아래를 한 번 실행한다.`,
+          `curl -sS -X POST '${submitUrl}' -H 'content-type: application/json' --data-binary @/tmp/plan-submit.json`,
+          `- 이 token은 이 업무의 계획 제출 전용(6시간, 3번까지)이다. 다른 곳에 쓰거나 파일·커밋에 남기지 않는다.`,
+          `- 응답이 {"ok":true,...}가 아니거나 접속이 막히면, 응답(또는 오류)을 한 줄로 보고한다. 계획을 고쳐 다시 보낼 때만 재시도한다.`,
+          `- 보낸 뒤에도 마지막 메시지의 \`\`\`json 블록은 그대로 남긴다(사용자가 직접 붙여넣을 수 있게).`,
+        ]),
   ]
     .filter((l) => l !== '')
     .join('\n')
