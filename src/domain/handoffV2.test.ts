@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff, codexBranch } from './handoffV2';
+import { buildCodexHandoff, buildGptPackage, buildCodexPrRequest, buildPrototypeHandoff, codexBranch } from './handoffV2';
 import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
 
@@ -79,5 +79,14 @@ describe('Claude 보조 개발 PR 요청(v0.3.8)', () => {
     expect(t).toContain('이 세션의 작업 브랜치 ai/claude/28333f7e-w2');
     expect(t).toContain('병합하지 않는다');
     expect(codexBranch(task, 'W2', 'claude')).toBe('ai/claude/28333f7e-w2');
+  });
+});
+
+describe('기획 요청에 요청 전 대화(v0.3.9)', () => {
+  it('원문에 없는 설명(앞 대화)은 따로 붙이고, 원문과 같은 설명은 두 번 넣지 않는다', () => {
+    const withCtx = buildGptPackage({ ...task, userOriginalText: '그거 만들어줘', description: '## 요청 전 대화(Gemini 무료, 참고용 · 틀릴 수 있음)\n질문: q' }, project, null);
+    expect(withCtx).toContain('## 요청 전 대화');
+    const same = buildGptPackage({ ...task, userOriginalText: '긴 요청 원문', description: '긴 요청 원문' }, project, null);
+    expect(same.split('긴 요청 원문').length).toBe(2);
   });
 });

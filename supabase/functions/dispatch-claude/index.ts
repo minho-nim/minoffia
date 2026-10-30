@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     .eq('id', body.taskId)
     .maybeSingle();
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
-  if (task.assignee !== 'claude') return reply(400, { ok: false, error: 'Claude 담당 업무만 실행할 수 있습니다.' });
+  // PM은 업무의 처음 배정과 상관없이 늘 Claude다(실제 담당은 PM 계획이 정한다, 0018).
 
   // 3. A 승인된 최신 기획서만 (RLS를 거쳐 내 기록만 읽는다)
   const { data: spec } = await userClient

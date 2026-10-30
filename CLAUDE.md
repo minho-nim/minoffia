@@ -52,6 +52,8 @@
 - 입력창 일반 질문: 앱 상태는 규칙, 일반 질문은 보내면 Gemini 무료(`supabase/functions/ask-gemini`)가 답하고 "GPT에게 이어서 묻기"(복사)를 둔다. 프로젝트 이름이 든 질문은 GPT를 먼저 권한다(소유자 결정 2026-10-30). 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`, `docs/FLOW_v0.3_2026-10-30.md`.
 - 입력창 화면 대화는 계정에 저장해 기기 간 이어 본다(`inbox_state`). 개발일지용 대화 기록(`chat_messages`)은 프로젝트·업무에 연결된 메시지만 남기고 일반 대화·질문은 남기지 않으며, 소유자가 개발일지 화면에서 지울 수 있다. 개발일지 Markdown은 `src/domain/devlog.ts`.
 - 입력창 접수 매니저 이름은 **미니엉**(코드 id는 `mina` 그대로).
+- 미니엉은 업무 단계·버전이 바뀌면 입력창에 알리고 버튼(A·B 승인, 업무 카드 보기)을 둔다(`src/domain/stageNotice.ts`, 규칙만). 승인은 업무 카드와 같은 `canApprove`를 지난다.
+- Gemini 답 바로 뒤의 개발 요청은 앞 질문·답을 업무에 함께 넣고, 애매한 말만 "질문인가요, 업무 요청인가요?"로 묻는다. 개발 전(E 승인 없음)에 지운 업무의 대화 기록은 함께 지운다(`0017_predev_task_chat.sql`).
 - 업무로 만들기 전에는 반드시 프로젝트를 사용자에게 확인받는다("이 프로젝트 맞아요?").
 - 새 프로젝트의 GitHub 저장소는 사용자가 버튼을 누를 때만 서버(`supabase/functions/create-repo`)가 비공개 빈 저장소로 만든다(소유자 결정 2026-10-29). Claude PM은 `CLAUDE_ALLOWED_REPOSITORY`와 `managed_repos`의 저장소에서만 일한다.
 - C(운영 배포) 승인은 서버(`supabase/functions/pr-status`)가 확인한 최신 'CI 성공 + 병합됨' 기록이 있어야 한다(`0010_pr_checks.sql`).
