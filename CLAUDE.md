@@ -23,13 +23,15 @@
 3. PR은 `gh api repos/minho-nim/MinLab-AI-Office/pulls`로 만든다(GraphQL 기반 `gh pr`은 막혀 있음). 병합은
    `verify` 통과를 확인한 뒤 `gh api -X PUT repos/minho-nim/MinLab-AI-Office/pulls/<번호>/merge -f merge_method=squash`.
 4. 화면이 바뀌면 Artifact(Claude 안 데모 페이지)도 다시 게시한다: https://claude.ai/artifact/KymYCpMcfjW7Cskyjyf7Ph
-5. 운영 배포는 소유자가 요청할 때만 한다. Cloudflare Pages는 `release` 브랜치만 배포하므로,
-   배포 명령은 `git fetch origin && git push origin origin/main:refs/heads/release`(release를 main에 맞춤)이다.
-   현재 권한 설정은 `main`이 들어간 push를 막으므로 이 명령은 소유자가 직접 실행한다.
-   `main` 병합만으로는 배포되지 않는다. `release`에 직접 커밋하지 않는다.
+5. 운영 배포는 소유자가 요청할 때만 한다. Cloudflare Pages는 `release` 브랜치만 배포한다.
+   앱 업무는 C 승인 시 서버(`supabase/functions/deploy-release`)가 release를 main으로 앞당긴다(v0.3.0, 소유자 결정 2026-10-30).
+   이 저장소 자체 배포를 소유자가 요청하면 명령은 `git fetch origin && git push origin origin/main:refs/heads/release`이고,
+   현재 권한 설정은 `main`이 들어간 push를 막으므로 소유자가 직접 실행한다. `main` 병합만으로는 배포되지 않는다. `release`에 직접 커밋하지 않는다.
 6. 운영 Supabase에 마이그레이션 적용·Edge Function 배포도 운영 변경이다. 병합과 별개로 소유자 승인 후에만 한다.
 
-## 앱이 다루는 업무 플로우 (v0.2.1, 수정 금지)
+## 앱이 다루는 업무 플로우 (v0.3, 소유자 수정 2026-10-30)
+
+기준 문서: `docs/FLOW_v0.3_2026-10-30.md`(12단계, 모바일만으로 요청~결과 확인). 아래 v0.2.1 규칙은 그대로 유지하고, 바뀐 점은 그 문서의 '이전 결정과 바뀐 것'을 따른다.
 
 사용자 요청 → ChatGPT 기획(수동 인계) → **A 승인** → Claude PM 계획(저장소 쓰기 금지) → **E 실행 승인** → Codex Cloud 주 개발(자동 시작 미검증 → 수동 인계) → 결과 패키지 검토 → **B 승인** 후 GitHub 업로드·PR → **C 승인** 후 운영 배포.
 - 수정 루프: A에서 수정 요청 → ChatGPT 재기획. 결과 검토에서 수정 요청 → Claude PM 재계획(같은 기획서 버전, 새 계획은 E 재승인). 보조 AI(Claude·Gemini·Grok)도 E 승인을 받는다(소유자 결정, 2026-10-29).
@@ -42,10 +44,12 @@
 - 비밀값(Claude Routine 토큰, service_role 키, 비밀번호)을 코드·커밋·채팅에 남기지 않는다. `.env.local`은 커밋 금지.
 - 유료 API·크레딧이 드는 방법을 쓰지 않는다. 배정·입력창 분류는 규칙 기반(LLM 호출 없음).
 - 요청 자료 이미지는 사용자가 "Gemini로 분석"을 누를 때만 서버(`supabase/functions/analyze-image`)가 Gemini 무료 API로 분석한다(관찰·추정 구분, 원본 대체 아님, 규칙은 `0008_image_analyses.sql`).
-- 입력창의 일반 질문만 사용자가 버튼을 누를 때 Gemini 무료 API로 보낸다(소유자 결정 2026-10-29, `supabase/functions/ask-gemini`). 질문 글은 저장하지 않는다. 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`.
+- 입력창의 일반 질문만 사용자가 버튼을 누를 때 Gemini 무료 API로 보낸다(소유자 결정 2026-10-29, `supabase/functions/ask-gemini`). 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`.
+- 입력창 대화는 계정에 저장하고 지우지 않는다(`inbox_state` 화면 상태, `chat_messages` 추가만, 소유자 결정 2026-10-30). 개발일지는 이 기록과 업무 기록으로 프로젝트별·날짜별 Markdown을 만든다(`src/domain/devlog.ts`).
 - 업무로 만들기 전에는 반드시 프로젝트를 사용자에게 확인받는다("이 프로젝트 맞아요?").
 - 새 프로젝트의 GitHub 저장소는 사용자가 버튼을 누를 때만 서버(`supabase/functions/create-repo`)가 비공개 빈 저장소로 만든다(소유자 결정 2026-10-29). Claude PM은 `CLAUDE_ALLOWED_REPOSITORY`와 `managed_repos`의 저장소에서만 일한다.
 - C(운영 배포) 승인은 서버(`supabase/functions/pr-status`)가 확인한 최신 'CI 성공 + 병합됨' 기록이 있어야 한다(`0010_pr_checks.sql`).
+  C 승인 뒤 배포는 `deploy-release`가 fast-forward로만 release를 앞당기고 `deployments`에 기록한다(갈라진 release는 덮어쓰지 않음, 성공 기록은 C 승인 필수 `0011_inbox_deployments.sql`).
 - 캐릭터 위치·말풍선·모니터·경고등은 **업무 데이터로만** 움직인다. 꾸며낸 활동을 넣지 않는다.
 - 원격 실행이 성공해도 상태는 `in_progress`까지. 완료는 사람이 검토 대기 → 완료로 승인한다.
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
@@ -61,7 +65,8 @@
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase
-- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`, `supabase/functions/create-repo`, `supabase/functions/analyze-image`, `supabase/functions/pr-status`
+- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`, `supabase/functions/create-repo`, `supabase/functions/analyze-image`, `supabase/functions/pr-status`, `supabase/functions/deploy-release`
+- `src/domain/devlog.ts`·`src/components/DevlogPanel.tsx` 개발일지(대화 + 업무 기록 → 프로젝트별·날짜별 Markdown)
 
 ## Supabase
 

@@ -1,4 +1,4 @@
-# MinLab AI Office v0.2.15
+# MinLab AI Office v0.3.0
 
 > **목표** — MinLab AI Office는 여러 AI(ChatGPT·Claude·Codex·Gemini·Grok)에게 내 요청에 맞는 일을 효율적으로 나눠 맡기고, 각 AI의 토큰·사용량은 최소로 쓰도록 관리하는 개인 AI 개발팀 사무실이다.
 >
@@ -83,7 +83,7 @@ npm run build
 | 3. PM | "Claude PM에 전달" → 세션의 JSON 계획을 붙여넣기 → 검증 후 저장 | 세션 시작은 자동, 계획 회수는 수동 |
 | 4. **E** | 작업마다 실행 승인. Codex 자동 시작은 미검증이라 버튼이 꺼져 있고, 수동 인계(지시서 복사 → Codex 웹에서 시작 → "직접 시작했어요") | 수동 인계 |
 | 5. 결과·**B** | diff·테스트 로그·스크린샷으로 결과 패키지 저장 → 검토 → **수정 요청(Claude PM으로)** 또는 B 승인. B 승인 후에만 PR | — |
-| 6. **C** | "PR·CI 확인"(서버가 GitHub에서 CI 성공·병합을 읽음) → C 승인 → `release` 갱신 명령 | CI 확인은 자동 |
+| 6. **C** | "PR·CI 확인"(서버가 GitHub에서 CI 성공·병합을 읽음) → C 승인 → 서버가 `release`를 `main`으로 앞당김(`deploy-release`) | CI 확인·release 갱신은 서버, 모바일만으로 가능 |
 
 이미지는 Supabase 비공개 버킷 `attachments`에 저장된다(파일 하나 5MB, 요청 10장·결과 6장, 합계 900MB). 요청 자료는 A 승인 뒤 잠기고, 결과 스크린샷은 추가만 된다. 이미지는 "Gemini로 분석"을 누르면 서버 함수 `analyze-image`가 Gemini 무료 API로 분석해 ChatGPT 자료에 넣는다(원본을 대신하지 않음, 하루 20회).
 
@@ -176,7 +176,8 @@ OFFICE_ALLOWED_ORIGIN       = https://your-office.pages.dev  # 선택. CORS 허�
 4. Save and Deploy. 끝나면 `https://<이름>.pages.dev` 주소가 생긴다.
 5. 브랜치마다 미리보기 사이트가 생기지 않게: Settings → Builds → Branch control → Preview branches를 **None**으로.
 
-배포(승인 후): 로컬에서 `git fetch origin && git push origin origin/main:refs/heads/release`. 되돌릴 때는 이전 커밋으로 같은 명령을 쓴다.
+배포(승인 후): 앱에서 C 승인을 누르면 서버가 `release`를 `main`으로 앞당긴다(fast-forward만, `release`가 갈라져 있으면 거절). 토큰 `GITHUB_REPO_TOKEN`에 그 저장소의 **Contents: Read and write** 권한이 필요하다.
+직접 할 때는 로컬에서 `git fetch origin && git push origin origin/main:refs/heads/release`. 되돌릴 때는 이전 커밋으로 같은 명령을 쓴다(서버는 되돌리지 않는다).
 
 - 반드시 로그인과 Supabase RLS를 쓴다. **GitHub가 Private이어도 웹사이트는 공개다.**
 - 관리자용 AI Office와 친구에게 공개할 프로젝트 사이트는 분리한다.

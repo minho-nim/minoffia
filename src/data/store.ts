@@ -1,9 +1,19 @@
 import type { Attachment, ImageAnalysis } from '../domain/attachments';
+import type { ChatEntry } from '../domain/devlog';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Snapshot, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 
 export type StoreMode = 'local' | 'supabase';
+
+/** 입력창 대화와 미나가 기다리는 선택. 모양은 Inbox가 정한다(저장소는 그대로 보관만). */
+export type NewChatEntry = Omit<ChatEntry, 'id' | 'createdAt'>;
+
+export interface InboxState {
+  messages: unknown[];
+  pending: unknown | null;
+  updatedAt: string;
+}
 
 export interface OfficeStore {
   mode: StoreMode;
@@ -42,6 +52,15 @@ export interface OfficeStore {
   /** 입력창 일반 질문을 Gemini 무료 API에 묻는다(서버가 키·하루 상한을 관리). 로컬 데모는 지원하지 않음. */
   /** 업무의 PR 상태와 CI 결과를 서버가 GitHub에서 읽어 기록한다(로컬 데모는 지원하지 않음). */
   checkPr(taskId: string): Promise<PrCheck>;
+  /** C 승인 뒤 서버가 release를 main으로 앞당긴다(운영 배포). 로컬 데모는 지원하지 않음. */
+  deployRelease(taskId: string): Promise<{ updated: boolean; to: string }>;
+  /** 입력창 대화(계정에 저장해 여러 기기에서 이어 본다. 로컬 데모는 이 브라우저에만) */
+  loadInbox(): Promise<InboxState | null>;
+  saveInbox(state: InboxState): Promise<void>;
+  /** 대화 기록(개발일지 원본)에 추가만 한다. 지우거나 고칠 수 없다. */
+  appendChat(entries: NewChatEntry[]): Promise<void>;
+  /** 기간의 대화 기록(시간순) */
+  loadChat(fromIso: string, toIso: string): Promise<ChatEntry[]>;
   /** AI별 동시 작업 상한(1~5) */
   setAgentLimit(assignee: 'codex' | 'claude' | 'gemini' | 'grok', maxRunning: number): Promise<void>;
   /** 새 프로젝트의 GitHub 저장소를 서버가 만들고 연결한다(로컬 데모는 지원하지 않음). */

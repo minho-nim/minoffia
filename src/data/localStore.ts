@@ -5,7 +5,21 @@ import type { Snapshot } from '../domain/types';
 import { canApprove, canRequestRevision, deriveWorkflow } from '../domain/workflow';
 import { EMPTY_WORKFLOW } from '../domain/workflow-types';
 import { sampleSnapshot } from './sample';
-import type { OfficeStore } from './store';
+import type { ChatEntry } from '../domain/devlog';
+import { newId, type OfficeStore } from './store';
+
+/** 로컬 데모의 대화 기록(이 브라우저에만, 최근 2000줄) */
+const CHAT_KEY = 'minlab-ai-office:chat-archive:v1';
+const CHAT_KEEP = 2000;
+
+function readChat(): ChatEntry[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHAT_KEY) ?? '[]') as ChatEntry[];
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
 
 const KEY = 'minlab-ai-office:v1';
 /** 로컬 데모의 이미지 파일(sha256 → data URL). 업무 기록과 따로 둔다. */
@@ -73,7 +87,7 @@ export function createLocalStore(): OfficeStore {
     const keep = <T extends { taskId: string }>(list: T[]) => list.filter((x) => alive.has(x.taskId));
     commit({
       ...state,
-      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), imageAnalyses: keep(w.imageAnalyses), links: keep(w.links), prChecks: keep(w.prChecks), clarifications: keep(w.clarifications) },
+      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), imageAnalyses: keep(w.imageAnalyses), links: keep(w.links), prChecks: keep(w.prChecks), deployments: keep(w.deployments), clarifications: keep(w.clarifications) },
     });
     dropUnusedFiles();
   };
@@ -217,6 +231,27 @@ export function createLocalStore(): OfficeStore {
     },
     async analyzeImage() {
       throw new Error('로컬 데모에서는 Gemini 이미지 분석을 쓸 수 없습니다.');
+    },
+    async deployRelease() {
+      throw new Error('로컬 데모에서는 운영 배포를 할 수 없습니다.');
+    },
+    async appendChat(entries) {
+      try {
+        const now = new Date().toISOString();
+        const list = [...readChat(), ...entries.map((e) => ({ ...e, id: newId(), createdAt: now }))].slice(-CHAT_KEEP);
+        localStorage.setItem(CHAT_KEY, JSON.stringify(list));
+      } catch {
+        // 저장이 막힌 브라우저
+      }
+    },
+    async loadChat(fromIso, toIso) {
+      return readChat().filter((m) => m.createdAt >= fromIso && m.createdAt < toIso);
+    },
+    async loadInbox() {
+      return null;
+    },
+    async saveInbox() {
+      // 로컬 데모: 입력창이 이 브라우저(localStorage)에 직접 남긴다.
     },
     async createRepo() {
       throw new Error('로컬 데모에서는 GitHub 저장소를 만들 수 없습니다.');
