@@ -257,8 +257,11 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             <p>
               <b>v{view.spec.revision}</b> · {INTENT_LABEL[view.spec.intent]} · {view.spec.planner === 'gemini_draft' ? 'Gemini 초안' : 'ChatGPT 기획'}
             </p>
-            {view.spec.intent === 'question' ? (
-              <p className="wf-pre">{view.spec.answer || '(답변 없음)'}</p>
+            {view.spec.intent === 'question' || view.spec.intent === 'ambiguous' ? (
+              <>
+                {view.spec.intent === 'ambiguous' && <p className="small">확인 질문</p>}
+                <p className="wf-pre">{view.spec.answer || '(답변 없음)'}</p>
+              </>
             ) : (
               <>
                 <p className="wf-pre">{view.spec.finalPrompt || '(프롬프트 없음)'}</p>
@@ -341,7 +344,11 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         <section className="wf-section">
           <h4>2. {GATE_LABEL.A}</h4>
           {view.spec.intent === 'ambiguous' ? (
-            <p className="muted small">의도가 불분명합니다. ChatGPT의 확인 질문에 답한 뒤 기획서를 다시 저장하세요.</p>
+            <p className="muted small">
+              {view.spec.planner === 'gemini_draft'
+                ? '의도가 불분명합니다. 위 확인 질문에 입력창(또는 확인 질문 칸)에서 답하면 Gemini가 기획서를 다시 씁니다.'
+                : '의도가 불분명합니다. ChatGPT의 확인 질문에 답한 뒤 기획서를 다시 저장하세요.'}
+            </p>
           ) : view.aApproved ? (
             <p className="ok-text">v{view.spec.revision} 승인됨. 이 버전만 Claude PM에 전달됩니다.</p>
           ) : (
