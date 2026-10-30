@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import { FilePreview } from './FilePreview';
 import {
   ACCEPT_IMAGES,
   ACCEPT_REQUEST,
   canGeminiRead,
   isImage,
+  isRaster,
   MIME_EXT,
   prepareFile,
+  previewKind,
   ROLE_LABEL,
   validateFile,
   type Attachment,
@@ -82,7 +85,7 @@ function DropZone({ onFiles, disabled, label, allowDocs = false }: { onFiles: (f
         {label}
       </button>
       <span className="muted small">
-        또는 이 칸을 누르고 Ctrl+V · 끌어다 놓기 · 이미지(PNG·JPG·WEBP·GIF) 5MB{allowDocs ? ' · 문서(PDF·TXT·MD·CSV·JSON·DOCX·XLSX·PPTX·ZIP) 20MB' : ''}까지
+        또는 이 칸을 누르고 Ctrl+V · 끌어다 놓기 · 이미지(PNG·JPG·WEBP·GIF{allowDocs ? '·SVG' : ''}) 5MB{allowDocs ? ' · 문서(PDF·TXT·MD·CSV·JSON·HTML·DOCX·XLSX·PPTX·ZIP) 20MB' : ''}까지
       </span>
       <input
         ref={input}
@@ -99,9 +102,26 @@ function DropZone({ onFiles, disabled, label, allowDocs = false }: { onFiles: (f
   );
 }
 
+/** 그림이 아니어서 열어 볼 수 있는 파일(SVG·HTML·문서·ZIP) */
+const previewable = (mime: string) => !isRaster(mime) && previewKind(mime) !== null;
+/** 비공개 주소를 새 탭으로 바로 열어도 되는 파일(HTML·SVG는 글로 저장돼 있어 미리보기로만 본다) */
+const linkable = (mime: string) => mime !== 'text/html' && mime !== 'image/svg+xml';
+
+function PreviewToggle({ name, mime, load }: { name: string; mime: string; load: () => Promise<Blob> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn btn-small btn-ghost att-analyze" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? '미리보기 닫기' : '미리보기'}
+      </button>
+      {open && <FilePreview name={name} mime={mime} load={load} />}
+    </>
+  );
+}
+
 function Thumb({ src, alt, mime }: { src: string | null; alt: string; mime: string }) {
-  // 문서는 미리보기 대신 확장자 표시
-  if (!isImage(mime)) return <span className="att-thumb att-thumb-doc" aria-hidden="true">{(MIME_EXT[mime] ?? 'file').toUpperCase()}</span>;
+  // 그림이 아니면(SVG 포함) 미리보기 대신 확장자 표시
+  if (!isRaster(mime)) return <span className="att-thumb att-thumb-doc" aria-hidden="true">{(MIME_EXT[mime] ?? 'file').toUpperCase()}</span>;
   return src ? <img className="att-thumb" src={src} alt={alt} /> : <span className="att-thumb att-thumb-empty" aria-hidden="true" />;
 }
 
@@ -174,6 +194,7 @@ export function ImagePicker({
                 </p>
                 <RoleChips roles={rolesOf(roles, it.file.type)} value={it.role} onChange={(role) => set(it.key, { role })} />
                 <input className="att-note" placeholder="설명(선택): 예) 버튼이 잘려 보임" value={it.note} maxLength={500} onChange={(e) => set(it.key, { note: e.target.value })} />
+                {previewable(it.file.type) && <PreviewToggle name={it.file.name} mime={it.file.type} load={async () => it.file} />}
               </div>
               <span className="att-tools">
                 <button type="button" className="btn btn-small btn-ghost" aria-label="위로" disabled={i === 0} onClick={() => move(i, -1)}>
@@ -278,7 +299,7 @@ export function AttachmentGallery({
         <ol className="att-list">
           {items.map((a, i) => (
             <li key={a.id} className="att-item">
-              {urls[a.id] ? (
+              {urls[a.id] && linkable(a.mime) ? (
                 <a href={urls[a.id]!} target="_blank" rel="noreferrer" title={isImage(a.mime) ? '원본 보기' : '열기·내려받기'}>
                   <Thumb src={urls[a.id]!} alt={a.fileName} mime={a.mime} />
                 </a>
@@ -309,6 +330,17 @@ export function AttachmentGallery({
                   <p className="small">
                     <span className="pill">{ROLE_LABEL[a.role]}</span> {a.note}
                   </p>
+                )}
+                {previewable(a.mime) && (
+                  <PreviewToggle
+                    name={a.fileName}
+                    mime={a.mime}
+                    load={async () => {
+                      const res = await fetch(urls[a.id] ?? (await urlFor(a)));
+                      if (!res.ok) throw new Error(`파일을 받지 못했습니다(HTTP ${res.status}).`);
+                      return res.blob();
+                    }}
+                  />
                 )}
                 {analyses?.get(a.id) ? (
                   <AnalysisView analysis={analyses.get(a.id)!} doc={!isImage(a.mime)} />
@@ -347,7 +379,7 @@ export function AttachmentGallery({
       )}
       {blocker && items.length > 0 && <p className="muted small">{blocker}</p>}
       {onAnalyze && !analyzeBlocker && items.some((a) => !analyses?.get(a.id) && canGeminiRead(a)) && (
-        <p className="muted small">"Gemini로 분석·요약"을 누르면 그 파일이 Google(Gemini 무료)로 갑니다. 개인정보·기밀이 담긴 파일은 보내지 마세요. 분석은 원본을 대신하지 않습니다. DOCX·XLSX·PPTX·ZIP과 10MB 넘는 문서는 보관만 합니다.</p>
+        <p className="muted small">"Gemini로 분석·요약"을 누르면 그 파일이 Google(Gemini 무료)로 갑니다. 개인정보·기밀이 담긴 파일은 보내지 마세요. 분석은 원본을 대신하지 않습니다. ZIP·SVG와 10MB 넘는 문서는 미리보기만 합니다(미리보기는 이 브라우저 안에서만, AI 사용 없음).</p>
       )}
       {!blocker && onAdd && items.length < max && (
         <DropZone

@@ -24,7 +24,7 @@
 
 | # | 상태 | 비고 |
 | --- | --- | --- |
-| 01 | 됨 | 입력창 + "이 프로젝트 맞아요?" 확인, 사진·링크 첨부. 문서(PDF·TXT·MD·CSV·JSON·DOCX·XLSX·PPTX·ZIP 20MB) 첨부(v0.3.2), PDF·글 문서는 Gemini 요약 |
+| 01 | 됨 | 입력창 + "이 프로젝트 맞아요?" 확인, 사진·링크 첨부. 문서(PDF·TXT·MD·CSV·JSON·HTML·DOCX·XLSX·PPTX·ZIP 20MB)·SVG 첨부와 앱 안 미리보기(v0.3.2~0.3.3), 문서는 Gemini 요약(SVG·ZIP 제외) |
 | 02 | 됨(수동 GPT) | Gemini 이미지 분석 → ChatGPT용 자료에 포함. GPT는 무료 API가 없어 복사·붙여넣기(모바일 ChatGPT 앱으로 가능) |
 | 03 | **됨(v0.3.1)** | 앱 상태는 규칙, 일반 질문은 보내면 Gemini가 바로 답하고 "GPT에게 이어서 묻기"(질문 + Gemini 답 복사). 프로젝트 이름이 든 질문은 GPT 먼저 권함 |
 | 04~06 | 됨 | ChatGPT 기획서 → A → Claude PM 루틴(서버 자동, 모바일 가능) |
