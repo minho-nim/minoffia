@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptQuestion, replyIntent, titleFrom, triage } from '../domain/triage';
+import { MAX_REQUEST_FILES, validateFile, fileNameFor } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
+import type { PendingImage } from './Attachments';
 import { RepoCreate } from './RepoCreate';
 import type { TaskDraft } from './TaskForm';
 
@@ -32,9 +34,10 @@ type Pending =
 interface Props {
   snap: Snapshot;
   canAskGemini: boolean;
-  onCreateTask: (draft: TaskDraft) => Promise<Task | null>;
+  /** 업무 접수(사진이 있으면 요청 자료로 함께 올린다) */
+  onCreateTask: (draft: TaskDraft, images: PendingImage[]) => Promise<Task | null>;
   onCreateProject: (name: string) => Promise<Project | null>;
-  onAskGemini: (question: string, history: { role: 'user' | 'model'; text: string }[]) => Promise<string>;
+  onAskGemini: (question: string, history: { role: 'user' | 'model'; text: string }[], images: { mime: string; data: string }[]) => Promise<string>;
   onCopy: (text: string) => Promise<boolean>;
   /** 저장소 만들기를 쓸 수 있으면 함수(Supabase 모드) */
   onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
@@ -66,13 +69,57 @@ function readPending(): Pending | null {
 
 const FROM_LABEL: Record<From, string> = { me: '나', office: '미나', gemini: 'Gemini' };
 
+/** Gemini 질문에 함께 보낼 수 있는 사진 수(무료 한도·요청 크기 때문) */
+const MAX_GEMINI_IMAGES = 3;
+
+/**
+ * 탭을 옮겨 입력창이 다시 그려져도 고른 사진이 남도록 화면 밖에 둔다(이 기기, 새로고침하면 사라짐).
+ * draft = 입력창에 붙어 있는 사진, held = 보낸 메시지에 딸려 미나의 확인을 기다리는 사진.
+ */
+const photoStore: { draft: File[]; held: File[] } = { draft: [], held: [] };
+
+const toBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
+    r.onerror = () => reject(new Error(`${file.name}을(를) 읽지 못했습니다.`));
+    r.readAsDataURL(file);
+  });
+
 export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const [input, setInput] = useState('');
   const [pending, setPending] = useState<Pending | null>(readPending);
   const [busy, setBusy] = useState(false);
   const [showOther, setShowOther] = useState(false);
+  const [photos, setPhotosState] = useState<File[]>(photoStore.draft);
+  const [photoErrors, setPhotoErrors] = useState<string[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const setPhotos = (next: File[]) => {
+    photoStore.draft = next;
+    setPhotosState(next);
+  };
+  const addPhotos = (list: FileList | File[]) => {
+    const errors: string[] = [];
+    const ok: File[] = [];
+    [...list].forEach((raw, i) => {
+      const file = raw.name && raw.name.includes('.') ? raw : new File([raw], fileNameFor(raw.name, raw.type, photos.length + i), { type: raw.type });
+      const err = validateFile(file);
+      if (err) errors.push(err);
+      else if (photos.length + ok.length >= MAX_REQUEST_FILES) errors.push(`${file.name}: 사진은 ${MAX_REQUEST_FILES}장까지입니다.`);
+      else ok.push(file);
+    });
+    setPhotoErrors(errors);
+    if (ok.length) setPhotos([...photos, ...ok]);
+  };
+  useEffect(() => {
+    const urls = photos.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [photos]);
 
   useEffect(() => {
     try {
@@ -126,7 +173,16 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     const text = raw.trim();
     if (!text || busy) return;
     setInput('');
-    say('me', text);
+    // 이 메시지에 사진이 있으면 미나의 다음 확인까지 들고 간다. 사진 없는 새 메시지는 이전 사진을 놓는다(확인 답만 할 때는 유지).
+    const sent = photos;
+    if (sent.length) {
+      photoStore.held = sent;
+      setPhotos([]);
+      setPhotoErrors([]);
+    } else if (!pending || !replyIntent(text)) {
+      if (pending?.kind !== 'naming') photoStore.held = [];
+    }
+    say('me', sent.length ? `${text}\n📷 사진 ${sent.length}장` : text);
     // 확인 질문에 버튼 대신 글로 답한 경우("응", "만들어", "아니" 등)
     const yn = replyIntent(text);
     if (pending?.kind === 'repo' && yn) {
@@ -169,7 +225,11 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
     setPending(null);
     const t = triage(text, snap);
-    if (t.kind === 'status') say('office', t.answer);
+    if (t.kind === 'status') {
+      say('office', t.answer);
+      if (sent.length) say('office', '사진은 업무 요청이나 질문에만 써요. 다음 메시지에 다시 붙여 주세요.');
+      photoStore.held = [];
+    }
     else if (t.kind === 'new_project') {
       if (t.name) void run(() => makeProject(t.name!, null));
       else {
@@ -208,6 +268,8 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
 
   const create = async (text: string, project: Project) => {
     const title = titleFrom(text);
+    const images: PendingImage[] = photoStore.held.map((file, i) => ({ key: `${i}-${file.name}`, file, role: 'reference', note: '' }));
+    photoStore.held = [];
     const task = await onCreateTask({
       projectId: project.id,
       title,
@@ -215,12 +277,13 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       requestedType: 'auto',
       priority: 'normal',
       originalText: text,
-    });
+    }, images);
     if (!task) return say('office', '업무를 저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
     say(
       'office',
       `'${project.name}'에 접수했어요: ${task.title}\n담당 ${AGENT_BY_ID[task.assignee].name} · ${task.routeReason}\n아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.`,
     );
+    if (images.length) say('office', `사진 ${images.length}장을 이 업무의 요청 자료로 올렸어요(역할은 '기타 참고', 업무 카드에서 바꿀 수 있어요).`);
   };
 
   const choose = (project: Project) => {
@@ -239,8 +302,12 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       log.forEach((m, i) => {
         if (m.from === 'gemini' && log[i - 1]?.from === 'me') history.push({ role: 'user', text: log[i - 1].text }, { role: 'model', text: m.text });
       });
+      const images = photoStore.held.slice(0, MAX_GEMINI_IMAGES);
+      if (photoStore.held.length > MAX_GEMINI_IMAGES) say('office', `사진은 앞의 ${MAX_GEMINI_IMAGES}장만 Gemini에 보냅니다.`);
       try {
-        say('gemini', await onAskGemini(text, history.slice(-6)));
+        const encoded = await Promise.all(images.map(async (f) => ({ mime: f.type, data: await toBase64(f) })));
+        say('gemini', await onAskGemini(text, history.slice(-6), encoded));
+        photoStore.held = [];
       } catch (e) {
         setPending({ kind: 'question', text });
         say('office', `${(e as Error).message}`);
@@ -330,7 +397,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
               </button>
               <p className="muted small inbox-note">
                 {canAskGemini
-                  ? 'Gemini에게 묻기를 누르면 이 질문이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 질문 글은 AI Office에 저장하지 않습니다.'
+                  ? `Gemini에게 묻기를 누르면 이 질문${photoStore.held.length ? `과 사진 ${Math.min(photoStore.held.length, MAX_GEMINI_IMAGES)}장` : ''}이 Google(Gemini 무료)로 갑니다. 비밀번호·개인정보는 넣지 마세요. 질문 글·사진은 AI Office에 저장하지 않습니다.`
                   : '로컬 데모에서는 Gemini를 쓸 수 없습니다.'}
               </p>
             </>
@@ -368,14 +435,59 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       {busy && <p className="muted small inbox-note">처리 중…</p>}
       <div ref={endRef} />
 
+      {photos.length > 0 && (
+        <ul className="inbox-photos" aria-label="보낼 사진">
+          {photos.map((f, i) => (
+            <li key={`${i}-${f.name}`}>
+              {previews[i] && <img src={previews[i]} alt={f.name} />}
+              <button type="button" className="inbox-photo-x" aria-label={`${f.name} 빼기`} onClick={() => setPhotos(photos.filter((_, j) => j !== i))}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {photoErrors.length > 0 && (
+        <ul className="task-error small">
+          {photoErrors.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      )}
       <form
         className="inbox-form"
         onSubmit={(e) => {
           e.preventDefault();
           submit(input);
         }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer.files.length) addPhotos(e.dataTransfer.files);
+        }}
       >
+        <button type="button" className="btn btn-ghost inbox-attach" aria-label="사진 첨부" title="사진 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
+          📎
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files?.length) addPhotos(e.target.files);
+            e.target.value = '';
+          }}
+        />
         <textarea
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+            if (files.length) {
+              e.preventDefault();
+              addPhotos(files);
+            }
+          }}
           id="inbox-input"
           rows={2}
           value={input}
@@ -403,6 +515,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
             // 대화를 지우면 미나가 기다리던 요청(접수 확인·프로젝트 이름·저장소 만들기)도 취소한다.
             // 이미 접수된 업무는 기록이라 지우지 않는다(업무 카드에서 삭제).
             const hadPending = pending !== null;
+            photoStore.held = [];
             setPending(null);
             setShowOther(false);
             setLog(hadPending ? [{ id: mid(), from: 'office', text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).' }] : []);

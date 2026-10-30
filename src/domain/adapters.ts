@@ -52,7 +52,7 @@ export const ADAPTERS: AdapterInfo[] = [
   {
     agent: 'gemini_vision',
     label: 'Gemini A/B (이미지 분석)',
-    role: '사진의 시각 정보 선행 분석',
+    role: '사진 분석·입력창 일반 질문 답변',
     state: 'not_connected',
     autoStart: false,
     worksWithPcOff: true,
@@ -70,6 +70,30 @@ export const ADAPTERS: AdapterInfo[] = [
     checkedAt: '2026-10-29',
   },
 ];
+
+/**
+ * Gemini 연결 상태는 고정 문구가 아니라 실제 호출 기록으로 정한다.
+ * 성공 기록이 있으면 '연결 확인됨', Supabase(서버 키) 모드인데 기록이 없으면 '실호출 전', 로컬 데모면 '미연결'.
+ */
+export function geminiAdapter(calls: { ok: boolean; createdAt: string }[], serverMode: boolean): AdapterInfo {
+  const base = ADAPTERS.find((a) => a.agent === 'gemini_vision')!;
+  const okCalls = calls.filter((c) => c.ok);
+  if (okCalls.length) {
+    const last = okCalls[okCalls.length - 1].createdAt.slice(0, 10);
+    return { ...base, state: 'verified', reason: `서버 키로 실제 호출에 성공했다(최근 ${last}). 입력창 질문·이미지 분석에 쓴다.`, checkedAt: last };
+  }
+  if (serverMode) {
+    const failed = calls.length > 0;
+    return {
+      ...base,
+      state: 'not_verified',
+      reason: failed
+        ? '서버 키로 호출했지만 아직 성공한 기록이 없다. 위쪽 알림의 오류 이유(한도·키·모델 이름)를 확인한다.'
+        : '서버에 키(GEMINI_API_KEY)를 두는 방식으로 연결해 두었다. 아직 실제 호출 기록이 없다. 입력창의 "Gemini에게 묻기"나 이미지 "Gemini로 분석"을 누르면 확인된다.',
+    };
+  }
+  return { ...base, reason: '로컬 데모에서는 Gemini를 쓰지 않는다.' };
+}
 
 export const ADAPTER_STATE_LABEL: Record<AdapterState, string> = {
   verified: '연결 확인됨',

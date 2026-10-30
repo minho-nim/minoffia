@@ -64,3 +64,15 @@ describe('sha256OfBytes', () => {
     expect(a).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   });
 });
+
+import { geminiAdapter } from './adapters';
+describe('geminiAdapter', () => {
+  it('실제 호출 기록으로 연결 상태를 정한다', () => {
+    expect(geminiAdapter([], false).state).toBe('not_connected');
+    expect(geminiAdapter([], true).state).toBe('not_verified');
+    expect(geminiAdapter([{ ok: false, createdAt: '2026-10-30T00:00:00Z' }], true).reason).toContain('성공한 기록이 없다');
+    const ok = geminiAdapter([{ ok: true, createdAt: '2026-10-30T01:00:00Z' }], true);
+    expect(ok.state).toBe('verified');
+    expect(ok.checkedAt).toBe('2026-10-30');
+  });
+});
