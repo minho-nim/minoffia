@@ -20,7 +20,7 @@ import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/type
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
 import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
-import { deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, sha256Hex } from './domain/workflow';
+import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, sha256Hex } from './domain/workflow';
 import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
@@ -857,6 +857,17 @@ export function App() {
                 onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
                 sync={inboxSync}
                 onArchive={(entries) => store.appendChat(entries)}
+                onShowTask={(id) => {
+                  if (!visibleTasks.some((t) => t.id === id)) setFilter('all');
+                  window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+                }}
+                onApprove={async (task, gate) => {
+                  // 업무 카드의 A·B 버튼과 같은 규칙(canApprove)을 지나야 한다.
+                  const view = deriveWorkflow(task, snap.workflow);
+                  if (!canApprove(view, gate).ok) return false;
+                  if (gate === 'A') return view.spec ? workflowActions.decide(task, 'A', view.spec.revision, 'approved') : false;
+                  return view.result ? workflowActions.decide(task, 'B', view.result.revision, 'approved', '', { result_sha256: view.result.sha256 }) : false;
+                }}
               />
               <details className="direct-entry">
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>

@@ -155,6 +155,22 @@ export function chatGptFollowup(question: string, geminiAnswer: string): string 
   ].join('\n');
 }
 
+/** 바로 앞 Gemini 질문·답(대화를 이어서 개발 요청으로 접수할 때 업무에 함께 넣는다) */
+export interface PriorChat {
+  question: string;
+  answer: string;
+}
+
+/** 업무 설명에 넣을 앞 대화. 답은 2000자까지(기획서 지시문이 너무 길어지지 않게). */
+export function priorChatText(c: PriorChat): string {
+  const answer = c.answer.trim();
+  return [
+    '## 요청 전 대화(Gemini 무료, 참고용 · 틀릴 수 있음)',
+    `질문: ${c.question.trim()}`,
+    `답: ${answer.length > 2000 ? `${answer.slice(0, 2000)}…(줄임)` : answer}`,
+  ].join('\n');
+}
+
 /** 질문에 프로젝트 이름이 들어 있으면 프로젝트 판단이 필요한 질문으로 보고 GPT를 먼저 권한다. */
 export function questionProject(text: string, projects: Project[]): Project | null {
   return matchProjects(text, projects)[0] ?? null;

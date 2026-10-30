@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sampleSnapshot } from '../data/sample';
-import { answerStatus, chatGptFollowup, matchProjects, questionProject, replyIntent, titleFrom, triage } from './triage';
+import { answerStatus, chatGptFollowup, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage } from './triage';
 
 const snap = sampleSnapshot();
 const now = new Date('2026-10-29T03:00:00Z');
@@ -82,5 +82,20 @@ describe('질문 흐름(v0.3.1)', () => {
     const projects = [{ id: 'p1', name: 'MuscleMap', repo: null, description: '', createdAt: '' }];
     expect(questionProject('MuscleMap 타이머 구조 어떻게 생각해?', projects)?.id).toBe('p1');
     expect(questionProject('useEffect가 뭐야?', projects)).toBeNull();
+  });
+});
+
+describe('앞 대화를 이어서 개발 요청(v0.3.9)', () => {
+  it('"그럼 그거 만들어줘"는 개발 요청으로 분류된다', () => {
+    expect(triage('그럼 그거 만들어줘', snap).kind).toBe('request');
+    expect(triage('더 자세히', snap).kind).toBe('unclear');
+  });
+
+  it('앞 질문·답을 참고용으로 붙이고 긴 답은 줄인다', () => {
+    const t = priorChatText({ question: '다크 모드 어떻게 해?', answer: 'CSS 변수로'.padEnd(2500, '.') });
+    expect(t).toContain('요청 전 대화');
+    expect(t).toContain('질문: 다크 모드 어떻게 해?');
+    expect(t).toContain('(줄임)');
+    expect(t.length).toBeLessThan(2200);
   });
 });

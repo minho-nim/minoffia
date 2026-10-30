@@ -40,6 +40,8 @@ export function buildGptPackage(
     '',
     '## 사용자 요청 원문 (수정하지 말고 그대로 해석)',
     task.userOriginalText ?? [task.title, task.description].filter(Boolean).join('\n\n'),
+    // 원문에 없는 설명(입력창에서 이어 온 앞 대화 등)은 따로 붙인다.
+    ...(task.userOriginalText && task.description.trim() && !task.userOriginalText.includes(task.description.trim()) ? ['', task.description.trim()] : []),
     ...(images ? ['', '## 첨부 파일 (사용자가 적은 역할·설명)', images] : []),
     ...(analysisText ? ['', '## Gemini 분석·요약 (원본을 대신하지 않음 · 보이는 것과 추정을 나눔)', analysisText] : []),
     ...(linkText ? ['', '## 링크', linkText] : []),
