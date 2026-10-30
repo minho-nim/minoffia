@@ -202,3 +202,5 @@ OFFICE_ALLOWED_ORIGIN       = https://your-office.pages.dev  # 선택. CORS 허�
 정책과 구조는 `docs/ARCHITECTURE.md`, 요구사항은 `docs/REQUIREMENTS.md`.
 
 글꼴: 갈무리(Galmuri11 Bold, SIL OFL 1.1, `src/assets/fonts/Galmuri-OFL.md`).
+
+문의: 소유자
