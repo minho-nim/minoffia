@@ -73,7 +73,7 @@ export function createLocalStore(): OfficeStore {
     const keep = <T extends { taskId: string }>(list: T[]) => list.filter((x) => alive.has(x.taskId));
     commit({
       ...state,
-      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), imageAnalyses: keep(w.imageAnalyses), links: keep(w.links), clarifications: keep(w.clarifications) },
+      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), imageAnalyses: keep(w.imageAnalyses), links: keep(w.links), prChecks: keep(w.prChecks), clarifications: keep(w.clarifications) },
     });
     dropUnusedFiles();
   };
@@ -207,6 +207,9 @@ export function createLocalStore(): OfficeStore {
       if (blocked) throw new Error(blocked);
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
       dropUnusedFiles();
+    },
+    async checkPr() {
+      throw new Error('로컬 데모에서는 GitHub PR·CI를 확인할 수 없습니다.');
     },
     async setAgentLimit(assignee, maxRunning) {
       if (!Number.isInteger(maxRunning) || maxRunning < 1 || maxRunning > 5) throw new Error('상한은 1~5입니다.');

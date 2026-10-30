@@ -129,6 +129,19 @@ export interface RevisionRequest {
   createdAt: string;
 }
 
+/** 서버가 GitHub에서 읽은 PR·CI 확인 기록(0010_pr_checks.sql) */
+export interface PrCheck {
+  id: string;
+  taskId: string;
+  prUrl: string;
+  prState: 'open' | 'closed';
+  merged: boolean;
+  headSha: string;
+  ciState: 'success' | 'failure' | 'pending' | 'none';
+  checks: { name: string; status: string; conclusion: string | null }[];
+  checkedAt: string;
+}
+
 export interface WorkflowData {
   specs: TaskSpec[];
   approvals: Approval[];
@@ -142,11 +155,13 @@ export interface WorkflowData {
   imageAnalyses: ImageAnalysis[];
   /** 서버가 읽은 링크 결과 */
   links: LinkRef[];
+  /** PR·CI 확인 기록 */
+  prChecks: PrCheck[];
   /** GPT 확인 질문·답변 */
   clarifications: Clarification[];
 }
 
-export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], clarifications: [] };
+export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], clarifications: [] };
 
 export const STAGE_LABEL: Record<Stage, string> = {
   received: '접수',

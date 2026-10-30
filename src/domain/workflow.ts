@@ -13,6 +13,7 @@ export function forTask(data: WorkflowData, taskId: string): WorkflowData {
     attachments: data.attachments.filter((x) => x.taskId === taskId),
     imageAnalyses: data.imageAnalyses.filter((x) => x.taskId === taskId),
     links: data.links.filter((x) => x.taskId === taskId),
+    prChecks: data.prChecks.filter((x) => x.taskId === taskId),
     clarifications: data.clarifications.filter((x) => x.taskId === taskId),
   };
 }
@@ -169,4 +170,16 @@ export async function sha256Hex(text: string): Promise<string> {
   const bytes = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** 이 업무 PR 주소에 대한 최신 서버 확인. C 승인은 이것이 'CI 성공 + 병합됨'일 때만 된다(DB와 같은 규칙). */
+export function latestPrCheck(task: Task, data: WorkflowData): import('./workflow-types').PrCheck | null {
+  const url = (task.prUrl ?? '').trim().replace(/\/$/, '');
+  const mine = data.prChecks.filter((c) => c.taskId === task.id).sort((a, b) => b.checkedAt.localeCompare(a.checkedAt));
+  const last = mine[0];
+  return last && last.prUrl === url ? last : null;
+}
+
+export function prCheckPasses(check: import('./workflow-types').PrCheck | null): boolean {
+  return !!check && check.ciState === 'success' && check.merged;
 }

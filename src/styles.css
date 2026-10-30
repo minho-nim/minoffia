@@ -1771,3 +1771,24 @@ a {
 .agent-limit .muted {
   flex-basis: 100%;
 }
+
+.pill-ci-success {
+  background: var(--st-done);
+  color: var(--st-done-ink);
+}
+
+.pill-ci-failure {
+  background: var(--st-blocked);
+  color: var(--st-blocked-ink);
+}
+
+.pill-ci-pending,
+.pill-ci-none {
+  background: var(--st-queued);
+  color: var(--st-queued-ink);
+}
+
+.ci-list {
+  margin: 0;
+  padding-left: 18px;
+}
