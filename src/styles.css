@@ -565,6 +565,11 @@ a {
   min-width: 0;
 }
 
+.done-link {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
 .empty {
   margin: 0;
   padding: 14px;

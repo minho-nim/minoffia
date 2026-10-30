@@ -71,7 +71,8 @@ export function buildCodexHandoff(
     `# Codex Cloud 작업 — ${item.title}`,
     '',
     `- 업무 ID: ${task.id} / 작업 ${item.id} / 기획서 버전 ${spec.revision}`,
-    `- 저장소: ${project?.repo ?? '(미연결)'}${baseRevision ? ` @ ${baseRevision}` : ''}`,
+    `- 저장소: ${project?.repo ?? '(미연결)'}`,
+    baseRevision ? `- 계획 당시 기준 커밋: ${baseRevision} (참고용. 작업은 최신 기본 브랜치에서 한다)` : '',
     '',
     '## 목표',
     item.goal || item.title,
@@ -90,10 +91,38 @@ export function buildCodexHandoff(
     ...[...item.acceptance_tests, spec.testCriteria].filter(Boolean).map((x) => `- ${x}`),
     '',
     '## 규칙',
+    '- 작업 전에 최신 기본 브랜치(main)를 받아 그 위에서 작업한다. 계획 당시 기준 커밋 이후 이 작업이 고칠 파일이 바뀌어 지시와 맞지 않으면 고치지 말고 멈춰서 보고한다.',
+    '- 저장소가 정한 시험(README·AGENTS.md 기준, 없으면 package.json의 typecheck·test·build)을 돌리고 결과를 줄이지 말고 그대로 보고한다.',
     '- 결과는 diff와 테스트 로그로만 보고한다.',
     '- **PR 생성·브랜치 푸시를 하지 않는다.** GitHub 업로드는 사용자의 B 승인 뒤에만 한다.',
     '- 비밀키·토큰·.env 내용을 출력하거나 커밋하지 않는다.',
   ]
     .filter((line, i, all) => !(line === '' && all[i - 1] === ''))
     .join('\n');
+}
+
+/** 짧은 업무 ID(브랜치 이름용) */
+const shortId = (id: string) => id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
+
+/** Codex PR 브랜치 이름: ai/codex/<업무 앞 8자>-<작업> */
+export function codexBranch(task: Task, workItemId: string): string {
+  const item = workItemId.replace(/[^a-z0-9-]/gi, '').toLowerCase();
+  return `ai/codex/${shortId(task.id)}${item ? `-${item}` : ''}`;
+}
+
+/** B 승인 뒤, 같은 Codex 작업 창에 붙여넣을 PR 요청. 승인된 결과 버전만 올리고 병합은 하지 않는다. */
+export function buildCodexPrRequest(task: Task, resultRevision: number, workItemId: string, project: Project | undefined): string {
+  return [
+    `# B 승인됨 — 결과 v${resultRevision}을 PR로 올려 주세요`,
+    '',
+    `- 업무 ID: ${task.id}`,
+    `- 저장소: ${project?.repo ?? '(미연결)'}`,
+    '',
+    '1. 최신 origin/main을 받아 그 위에 이 작업에서 보고한 변경만 적용한다(승인된 결과와 다른 변경을 더하지 않는다).',
+    `2. 새 브랜치 ${codexBranch(task, workItemId)} 에 커밋한다. 커밋 메시지는 한국어로 변경 내용을 한 줄로 쓴다.`,
+    '3. 저장소가 정한 시험(typecheck·test·build 등)을 다시 돌리고 결과를 그대로 알려 준다.',
+    '4. 브랜치를 푸시하고 main 대상으로 PR을 만든다. 병합하지 않는다. PR 설명은 한국어로 바뀐 파일과 시험 결과를 적는다.',
+    '5. 시험이 하나라도 실패하면 PR을 만들지 말고 실패 내용을 보고한다.',
+    '6. 만든 PR 주소를 알려 준다.',
+  ].join('\n');
 }

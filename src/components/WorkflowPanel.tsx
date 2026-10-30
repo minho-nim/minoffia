@@ -4,7 +4,7 @@ import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments
 import { RequestContext } from './RequestContext';
 import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../domain/requestContext';
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
-import { buildCodexHandoff, buildGptPackage } from '../domain/handoffV2';
+import { buildCodexHandoff, buildCodexPrRequest, buildGptPackage } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { startBlocker } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
@@ -163,6 +163,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
   const aCheck = canApprove(view, 'A');
   const bCheck = canApprove(view, 'B');
   const cCheck = canApprove(view, 'C');
+  // 결과를 만든 Codex 작업(B 승인 뒤 같은 창에 PR 요청을 붙여넣는다)
+  const codexItem = view.assignments.find((a) => a.assignee === 'codex');
   const failed = task.dispatch.state === 'failed';
   // 수정 요청이 있으면, 요청 뒤에 보냈을 때만 '보냄'으로 본다.
   const sentThisRevision =
@@ -705,9 +707,24 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
           {view.bApproved && (
             <div className="wf-manual">
               <p className="ok-text">결과 v{view.result!.revision} 업로드 승인됨.</p>
-              <p className="small">
-                이제 Codex 웹에서 <b>PR 만들기</b>를 누르거나 Claude에게 "결과 v{view.result!.revision} 올려줘"라고 하세요. PR 주소를 기록해 두면 C 단계에서 씁니다.
-              </p>
+              {codexItem ? (
+                <>
+                  <p className="small">
+                    이제 결과를 만든 <b>같은 Codex 작업 창</b>에 아래 PR 요청을 붙여넣으세요. Codex가 최신 main 위에 브랜치를 만들고 PR을 엽니다(병합은 안 함). 받은 PR 주소를 기록하면 C 단계에서 씁니다.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-small btn-ghost"
+                    onClick={() => void copy('pr-request', buildCodexPrRequest(task, view.result!.revision, codexItem.workItemId, project))}
+                  >
+                    {copied === 'pr-request' ? '복사됨' : 'Codex PR 요청 복사'}
+                  </button>
+                </>
+              ) : (
+                <p className="small">
+                  이제 Claude에게 "결과 v{view.result!.revision} 올려줘"라고 하세요. PR 주소를 기록해 두면 C 단계에서 씁니다.
+                </p>
+              )}
               {task.prUrl ? (
                 <p className="small">
                   PR:{' '}
