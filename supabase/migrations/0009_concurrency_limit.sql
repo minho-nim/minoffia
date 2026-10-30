@@ -1,5 +1,7 @@
--- MinLab AI Office v0.2.11: 동시 개발 작업 기본 1개(v0.2 §6)
--- 이미 시작(starting·started)된 작업이 있으면 다른 작업을 시작으로 기록하지 못한다.
+-- MinLab AI Office v0.2.11: 동시 개발 작업 규칙(v0.2 §6, 소유자 결정 2026-10-30)
+-- AI마다 동시에 1개: 같은 AI(assignee)에게 이미 시작(starting·started)된 작업이 있으면 그 AI의 다른 작업을 시작하지 못한다.
+--   다른 AI끼리는 동시에 진행할 수 있다(여러 AI에게 나눠 맡기는 목표).
+-- 순서 지키기: PM 계획의 dependencies에 적힌 작업이 끝나기(completed) 전에는 시작하지 못한다(같은 파일 충돌 방지).
 -- 결과를 등록(completed)하거나 중단(failed)을 기록하면 풀린다. 서버(service_role)도 같은 규칙을 따른다.
 
 create or replace function public.agent_assignments_guard()
@@ -11,6 +13,7 @@ as $$
 declare
   v_is_service boolean := coalesce(current_setting('request.jwt.claims', true)::json ->> 'role', '') = 'service_role';
   v_running integer;
+  v_waiting text;
 begin
   if tg_op = 'UPDATE' then
     new.task_id := old.task_id;
@@ -37,9 +40,22 @@ begin
   if new.dispatch_status in ('starting', 'started')
      and (tg_op = 'INSERT' or old.dispatch_status not in ('starting', 'started')) then
     select count(*) into v_running from agent_assignments
-    where owner_id = new.owner_id and dispatch_status in ('starting', 'started') and id <> new.id;
+    where owner_id = new.owner_id and assignee = new.assignee and dispatch_status in ('starting', 'started') and id <> new.id;
     if v_running >= 1 then
-      raise exception 'concurrent execution limit: finish or stop the running work item first';
+      raise exception 'concurrent execution limit: this AI already has a running work item';
+    end if;
+    -- 계획에 적힌 앞 작업(dependencies)이 모두 끝나야 시작한다.
+    select string_agg(dep, ', ') into v_waiting
+    from pm_plans p,
+      jsonb_array_elements(coalesce(p.plan -> 'work_items', '[]'::jsonb)) as item,
+      jsonb_array_elements_text(coalesce(item -> 'dependencies', '[]'::jsonb)) as dep
+    where p.task_id = new.task_id and p.plan_revision = new.plan_revision and item ->> 'id' = new.work_item_id
+      and not exists (
+        select 1 from agent_assignments d
+        where d.task_id = new.task_id and d.plan_revision = new.plan_revision and d.work_item_id = dep and d.dispatch_status = 'completed'
+      );
+    if v_waiting is not null then
+      raise exception 'dependency not finished: %', v_waiting;
     end if;
   end if;
   new.updated_at := now();
