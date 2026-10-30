@@ -281,6 +281,12 @@ export function createLocalStore(): OfficeStore {
     async createRepo() {
       throw new Error('로컬 데모에서는 GitHub 저장소를 만들 수 없습니다.');
     },
+    async loadPlanInbox() {
+      return [];
+    },
+    async markPlanInbox() {
+      return false;
+    },
     async draftSpec() {
       throw new Error('로컬 데모에서는 Gemini 기획서 초안을 쓸 수 없습니다. ChatGPT로 기획하세요.');
     },

@@ -193,6 +193,13 @@ export function App() {
     return list;
   }, [snap.tasks, filter]);
 
+  // PM 세션이 보낸 계획 옮기기(아래 planInboxRef.current). 업무 기록이 바뀔 때마다 확인한다.
+  const importingInbox = useRef(false);
+  const planInboxRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    planInboxRef.current?.();
+  }, [snap]);
+
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
@@ -398,6 +405,78 @@ export function App() {
     });
   };
 
+  /** PM 계획 글을 검증해 계획·배정으로 저장한다. 손으로 붙여넣기와 PM 세션 자동 전송이 같은 규칙을 쓴다. 문제가 있으면 이유 목록. */
+  const importPlanText = async (task: Task, text: string, source: PmPlan['source'], data: Snapshot): Promise<string[] | null> => {
+    const view = deriveWorkflow(task, data.workflow);
+    const parsed = parsePmPlan(text, task.id);
+    if (!parsed.ok) return parsed.errors;
+    if (!view.spec || !view.aApproved) return ['최신 기획서의 A 승인이 먼저 필요합니다.'];
+    const planRevision = nextRevision(data.workflow.plans, task.id, (x: { planRevision: number }) => x.planRevision);
+    const plan: PmPlan = {
+      id: newId(),
+      taskId: task.id,
+      planRevision,
+      approvedSpecRevision: view.spec.revision,
+      targetBaseRevision: parsed.plan.target_base_revision,
+      source,
+      plan: { ...parsed.plan, plan_revision: planRevision },
+      createdAt: new Date().toISOString(),
+    };
+    const assignments: AgentAssignment[] = parsed.plan.work_items.map((w) => ({
+      id: newId(),
+      taskId: task.id,
+      planRevision,
+      workItemId: w.id,
+      title: w.title,
+      assignee: PREF_AGENT[w.assignee_preference],
+      // 자동 실행 경로가 검증되기 전까지는 계획이 codex_cloud라고 해도 수동 인계로 둔다.
+      executionMode: 'manual_handoff',
+      dispatchStatus: 'awaiting_user_execution_approval',
+      statusSource: 'none',
+      providerExecutionId: null,
+      providerTaskUrl: null,
+      actualProviderStatus: 'unknown',
+      startedAt: null,
+      lastVerifiedAt: null,
+      updatedAt: new Date().toISOString(),
+    }));
+    const saved = await step(task.id, () => store.addPlan(plan, assignments), `PM 계획 v${planRevision}을 저장했습니다.`);
+    return saved ? null : ['저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.'];
+  };
+
+  // PM 세션이 보낸 계획(pm_plan_inbox)을 자동으로 옮긴다(v0.4.2). 먼저 처리함으로 표시한 기기만 저장한다(중복 방지).
+  // 훅은 위(첫 return 전)에 있고, 여기서는 매번 최신 snap을 쓰는 함수만 바꿔 끼운다.
+  planInboxRef.current = () => {
+    if (store.mode !== 'supabase' || importingInbox.current) return;
+    importingInbox.current = true;
+    void (async () => {
+      try {
+        for (const item of await store.loadPlanInbox()) {
+          const task = snap.tasks.find((t) => t.id === item.taskId);
+          if (!task) continue;
+          const view = deriveWorkflow(task, snap.workflow);
+          const errors =
+            !view.spec || view.spec.revision !== item.specRevision
+              ? [`기획서 v${item.specRevision}의 계획인데 지금 기획서는 v${view.spec?.revision ?? 0}입니다.`]
+              : view.plan && view.plan.approvedSpecRevision === item.specRevision && !view.pendingRevision
+                ? ['이 기획서 버전의 계획이 이미 있습니다.']
+                : null;
+          const parsed = parsePmPlan(item.planText, task.id);
+          const parsedErrors = errors ?? (parsed.ok ? null : parsed.errors);
+          if (parsedErrors) {
+            if (await store.markPlanInbox(item.id, 'invalid', parsedErrors.join(' / '))) say('error', `PM이 보낸 계획을 쓰지 못했습니다(${task.title}): ${parsedErrors.join(' / ')}`);
+            continue;
+          }
+          if (!(await store.markPlanInbox(item.id, 'imported', ''))) continue;
+          const failed = await importPlanText(task, item.planText, 'routine_session_auto', snap);
+          if (failed) say('error', `PM 계획 자동 저장 실패(${task.title}): ${failed.join(' / ')} — PM 세션의 JSON을 업무 카드에 붙여넣으세요.`);
+        }
+      } finally {
+        importingInbox.current = false;
+      }
+    })();
+  };
+
   const workflowActions: WorkflowActions = {
     draftSpec: (task) => draftSpec(task.id),
     // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.
@@ -499,43 +578,7 @@ export function App() {
         'P(견본 승인)를 기록했습니다. 이제 Codex 작업을 실행 승인하세요. Codex 지시서에 승인된 견본이 들어갑니다.',
       ),
     dispatchPm: (task, ack) => dispatch(task, ack),
-    importPlan: async (task, text) => {
-      const view = deriveWorkflow(task, snap.workflow);
-      const parsed = parsePmPlan(text, task.id);
-      if (!parsed.ok) return parsed.errors;
-      if (!view.spec || !view.aApproved) return ['최신 기획서의 A 승인이 먼저 필요합니다.'];
-      const planRevision = nextRevision(snap.workflow.plans, task.id, (x: { planRevision: number }) => x.planRevision);
-      const plan: PmPlan = {
-        id: newId(),
-        taskId: task.id,
-        planRevision,
-        approvedSpecRevision: view.spec.revision,
-        targetBaseRevision: parsed.plan.target_base_revision,
-        source: task.dispatch.sessionUrl ? 'routine_session_manual_import' : 'manual',
-        plan: { ...parsed.plan, plan_revision: planRevision },
-        createdAt: new Date().toISOString(),
-      };
-      const assignments: AgentAssignment[] = parsed.plan.work_items.map((w) => ({
-        id: newId(),
-        taskId: task.id,
-        planRevision,
-        workItemId: w.id,
-        title: w.title,
-        assignee: PREF_AGENT[w.assignee_preference],
-        // 자동 실행 경로가 검증되기 전까지는 계획이 codex_cloud라고 해도 수동 인계로 둔다.
-        executionMode: 'manual_handoff',
-        dispatchStatus: 'awaiting_user_execution_approval',
-        statusSource: 'none',
-        providerExecutionId: null,
-        providerTaskUrl: null,
-        actualProviderStatus: 'unknown',
-        startedAt: null,
-        lastVerifiedAt: null,
-        updatedAt: new Date().toISOString(),
-      }));
-      const saved = await step(task.id, () => store.addPlan(plan, assignments), `PM 계획 v${planRevision}을 저장했습니다.`);
-      return saved ? null : ['저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.'];
-    },
+    importPlan: (task, text) => importPlanText(task, text, task.dispatch.sessionUrl ? 'routine_session_manual_import' : 'manual', snap),
     recordStart: (a, url) =>
       step(
         a.taskId,

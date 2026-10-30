@@ -416,7 +416,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   <a href={task.dispatch.sessionUrl} target="_blank" rel="noreferrer">
                     열기
                   </a>{' '}
-                  <span className="muted">— 마지막 메시지의 JSON을 복사해 아래에 붙여넣으세요.</span>
+                  <span className="muted">— 계획은 PM이 자동으로 보내요. 끝났는데 안 오면 마지막 메시지의 JSON을 아래에 붙여넣으세요.</span>
                 </p>
               )}
               {!sentThisRevision && (

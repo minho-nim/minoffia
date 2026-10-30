@@ -74,6 +74,10 @@ export interface OfficeStore {
   setAgentLimit(assignee: 'codex' | 'claude' | 'gemini' | 'grok', maxRunning: number): Promise<void>;
   /** 새 프로젝트의 GitHub 저장소를 서버가 만들고 연결한다(로컬 데모는 지원하지 않음). */
   createRepo(projectId: string, name: string): Promise<{ repo: string; url: string; warning?: string }>;
+  /** PM 세션이 보내 온 계획 중 아직 처리하지 않은 것(v0.4.2) */
+  loadPlanInbox(): Promise<PlanInboxItem[]>;
+  /** 받은 계획을 처리함으로 표시. 이미 다른 기기가 처리했으면 false */
+  markPlanInbox(id: string, status: 'imported' | 'invalid', note: string): Promise<boolean>;
   /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
   askGemini(
@@ -81,6 +85,13 @@ export interface OfficeStore {
     history: { role: 'user' | 'model'; text: string }[],
     images?: { mime: string; data: string }[],
   ): Promise<{ answer: string; keySlot: number }>;
+}
+
+export interface PlanInboxItem {
+  id: string;
+  taskId: string;
+  specRevision: number;
+  planText: string;
 }
 
 export function newId(): string {
