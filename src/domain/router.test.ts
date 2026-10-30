@@ -70,3 +70,17 @@ describe('routeTask', () => {
     expect(r.assignee).toBe('claude');
   });
 });
+
+describe('영어 키워드는 단어 단위(v0.3.4)', () => {
+  it('저장소 이름 안의 test, 단어 안의 ci는 키워드가 아니다', () => {
+    expect(classify('TestRepo 문서 검토해줘')?.type).not.toBe('qa');
+    expect(classify('decision 로그 정리')).toBeNull();
+  });
+
+  it('따로 쓴 영어 키워드와 조사가 붙은 한국어는 그대로 잡는다', () => {
+    expect(classify('CI 결과 봐줘')?.type).toBe('qa');
+    expect(classify('run the test please')?.type).toBe('qa');
+    expect(classify('로그인 테스트를 돌려줘')?.type).toBe('qa');
+    expect(classify('bug-fix 해줘')?.type).toBe('dev');
+  });
+});

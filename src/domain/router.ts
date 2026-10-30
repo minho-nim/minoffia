@@ -27,11 +27,20 @@ export interface RouteResult {
   reason: string;
 }
 
+/**
+ * 키워드가 문장에 있는지. 영어 키워드는 단어 단위로만 본다('TestRepo'의 test, 'decision'의 ci는 아님).
+ * 한국어는 조사가 붙으므로('테스트를') 들어 있기만 하면 된다.
+ */
+function hasKeyword(lower: string, k: string): boolean {
+  if (!/^[a-z]+$/.test(k)) return lower.includes(k);
+  return new RegExp(`(^|[^a-z0-9])${k}([^a-z0-9]|$)`).test(lower);
+}
+
 export function classify(text: string): { type: WorkType; hits: string[] } | null {
   const lower = text.toLowerCase();
   let best: { type: WorkType; hits: string[] } | null = null;
   for (const type of TIE_ORDER) {
-    const hits = KEYWORDS[type].filter((k) => lower.includes(k));
+    const hits = KEYWORDS[type].filter((k) => hasKeyword(lower, k));
     if (hits.length > 0 && (!best || hits.length > best.hits.length)) best = { type, hits };
   }
   return best;
