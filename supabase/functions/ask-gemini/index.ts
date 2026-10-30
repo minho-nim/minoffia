@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('ok', true).gte('created_at', kstMidnight);
+  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'question').eq('ok', true).gte('created_at', kstMidnight);
   if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
 
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
@@ -124,14 +124,14 @@ Deno.serve(async (req) => {
     }
     const slot = i + 1;
     if (r.status === 200 && r.text) {
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: r.text.length });
+      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: r.text.length });
       return reply(200, { ok: true, answer: r.text, keySlot: slot, model });
     }
     last = { status: r.status, message: r.message };
     // 요청 자체가 잘못된 경우(400·404)는 B로 넘겨도 같으므로 멈춘다. 한도(429)·인증·서버 오류만 B를 쓴다.
     if (r.status === 400 || r.status === 404) break;
   }
-  await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
+  await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
   const hint =
     last.status === 429
       ? 'Gemini 무료 한도에 걸렸습니다.'
