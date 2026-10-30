@@ -8,6 +8,8 @@ interface Props {
   snap: Snapshot;
   /** 기간의 대화 기록(시간순) */
   loadChat: (fromIso: string, toIso: string) => Promise<ChatEntry[]>;
+  /** 기간(·프로젝트)의 대화 기록을 지우고 지운 수를 돌려준다 */
+  deleteChat: (fromIso: string, toIso: string, projectId?: string) => Promise<number>;
   onCopy: (text: string) => Promise<boolean>;
 }
 
@@ -19,7 +21,7 @@ const nextDay = (day: string) => new Date(new Date(`${day}T00:00:00Z`).getTime()
  * 개발일지: 입력창 대화와 업무 기록을 프로젝트별·날짜별 Markdown으로 모은다(AI 호출 없음).
  * 이 글을 개발일지 프로젝트에 올리면 AI가 정리한다.
  */
-export function DevlogPanel({ snap, loadChat, onCopy }: Props) {
+export function DevlogPanel({ snap, loadChat, deleteChat, onCopy }: Props) {
   const today = kstDay();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -27,6 +29,21 @@ export function DevlogPanel({ snap, loadChat, onCopy }: Props) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const remove = async () => {
+    setBusy(true);
+    setConfirmDelete(false);
+    try {
+      const n = await deleteChat(kstStart(from), kstStart(nextDay(to)), projectId || undefined);
+      setNote(`대화 기록 ${n}건을 지웠습니다. 업무 기록(기획서·승인·결과 등)은 그대로입니다.`);
+      setText('');
+    } catch (e) {
+      setNote(`대화 기록을 지우지 못했습니다: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const build = async () => {
     if (from > to) return setNote('시작 날짜가 끝 날짜보다 늦습니다.');
@@ -55,7 +72,7 @@ export function DevlogPanel({ snap, loadChat, onCopy }: Props) {
   return (
     <section className="devlog" aria-labelledby="devlog-title">
       <h3 id="devlog-title">개발일지</h3>
-      <p className="muted small">입력창 대화와 업무 기록(기획서·승인·계획·결과·PR·배포)을 프로젝트별·날짜별로 모읍니다. 대화 기록은 '대화 지우기'를 해도 남습니다.</p>
+      <p className="muted small">프로젝트 업무 대화와 업무 기록(기획서·승인·계획·결과·PR·배포)을 프로젝트별·날짜별로 모읍니다. 일반 대화·질문은 기록하지 않습니다.</p>
       <div className="devlog-controls">
         <label className="field">
           <span>시작</span>
@@ -82,7 +99,7 @@ export function DevlogPanel({ snap, loadChat, onCopy }: Props) {
           {busy ? '모으는 중…' : '개발일지 만들기'}
         </button>
       </div>
-      {note && <p className="task-error small">{note}</p>}
+      {note && <p className="small">{note}</p>}
       {text && (
         <>
           <textarea id="devlog-text" className="devlog-text mono" readOnly value={text} rows={12} />
@@ -100,6 +117,25 @@ export function DevlogPanel({ snap, loadChat, onCopy }: Props) {
           </div>
         </>
       )}
+      <div className="devlog-actions">
+        {confirmDelete ? (
+          <>
+            <span className="small">
+              {from === to ? from : `${from} ~ ${to}`} {projectId ? `'${snap.projects.find((p) => p.id === projectId)?.name ?? ''}'` : '전체 프로젝트'}의 대화 기록을 지울까요? 되돌릴 수 없습니다.
+            </span>
+            <button type="button" className="btn btn-small btn-danger" disabled={busy} onClick={() => void remove()}>
+              지우기
+            </button>
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirmDelete(false)}>
+              취소
+            </button>
+          </>
+        ) : (
+          <button type="button" className="link-btn small" disabled={busy} onClick={() => setConfirmDelete(true)}>
+            이 기간 대화 기록 지우기
+          </button>
+        )}
+      </div>
     </section>
   );
 }

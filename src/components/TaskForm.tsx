@@ -124,7 +124,7 @@ export function TaskForm({ projects, usage, onSubmit }: Props) {
               배정 예정 <b>{AGENT_BY_ID[preview.assignee].name}</b> · {preview.reason}
             </>
           ) : (
-            '할 일을 적으면 미나가 규칙으로 담당자를 고릅니다.'
+            '할 일을 적으면 미니엉이 규칙으로 담당자를 고릅니다.'
           )}
         </p>
         <button type="submit" className="btn btn-primary" disabled={busy || !title.trim()}>

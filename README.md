@@ -1,4 +1,4 @@
-# MinLab AI Office v0.3.0
+# MinLab AI Office v0.3.1
 
 > **목표** — MinLab AI Office는 여러 AI(ChatGPT·Claude·Codex·Gemini·Grok)에게 내 요청에 맞는 일을 효율적으로 나눠 맡기고, 각 AI의 토큰·사용량은 최소로 쓰도록 관리하는 개인 AI 개발팀 사무실이다.
 >
@@ -63,7 +63,7 @@ npm run build
 | 터미널실 · CI | 검수·QA | CI 봇 |
 | 기획실 | 기획·설계, UI·디자인, 프로토타입 | Claude, Studio A, Studio B |
 | 휴게실 | 열린 업무가 없을 때 | 모두 |
-| 복도 | 접수·검토 대기·차단 메모(대기열), 접수 매니저 미나 | 미나 |
+| 복도 | 접수·검토 대기·차단 메모(대기열), 접수 매니저 미니엉 | 미니엉 |
 
 - 위치와 말풍선은 **업무 상태만** 따른다. 꾸며낸 활동은 없다.
   - 진행 중: 그 업무 유형의 방 책상. 자기 방이 아니면 그 방 빈자리에서 *도와주는 중*.
@@ -101,7 +101,7 @@ src/assets/office/characters/<id>-stand.png
 src/assets/office/characters/<id>-walk.png  (없으면 stand만 쓰고 살짝 들썩인다)
 ```
 
-`<id>`: `mina`, `claude`, `codex`, `grok`, `studioA`, `studioB`, `ci`. Grok·Codex·CI 봇·Claude는 받은 그림 그대로, 미나·Studio A·Studio B는 받은 그림의 머리·옷 색만 바꿔 만들었다(미나←Claude, Studio A←Grok, Studio B←Codex). 그림이 없는 캐릭터는 코드 도트로 그린다. 자리 좌표는 `src/office/layout.ts`에 있다.
+`<id>`: `mina`, `claude`, `codex`, `grok`, `studioA`, `studioB`, `ci`. Grok·Codex·CI 봇·Claude는 받은 그림 그대로, 미니엉·Studio A·Studio B는 받은 그림의 머리·옷 색만 바꿔 만들었다(미니엉←Claude, Studio A←Grok, Studio B←Codex). 그림이 없는 캐릭터는 코드 도트로 그린다. 자리 좌표는 `src/office/layout.ts`에 있다.
 
 ## 2. GitHub 저장소
 

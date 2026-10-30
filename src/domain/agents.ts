@@ -36,7 +36,7 @@ export const MODE_LABEL: Record<AgentMode, string> = {
 export const AGENTS: Agent[] = [
   {
     id: 'mina',
-    name: '미나',
+    name: '미니엉',
     role: '접수 매니저',
     provider: 'AI Office 규칙 엔진',
     mode: 'rule',

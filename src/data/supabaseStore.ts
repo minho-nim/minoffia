@@ -500,6 +500,11 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       if (!entries.length) return;
       check(await client.from('chat_messages').insert(entries.map((e) => ({ role: e.role, text: e.text.slice(0, 20000), project_id: e.projectId, task_id: e.taskId }))));
     },
+    async deleteChat(fromIso, toIso, projectId) {
+      let q = client.from('chat_messages').delete().gte('created_at', fromIso).lt('created_at', toIso);
+      if (projectId) q = q.eq('project_id', projectId);
+      return (check(await q.select('id')) ?? []).length;
+    },
     async loadChat(fromIso, toIso) {
       const rows: Row[] = [];
       // 한 번에 1000행씩(Supabase 기본 상한) 끝까지 읽는다.

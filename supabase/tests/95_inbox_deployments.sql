@@ -46,7 +46,7 @@ select pg_temp.as_user('22222222-2222-4222-8222-222222222222');
 select pg_temp.check((select count(*) from inbox_state) = 0, 'other user sees nothing');
 \o /dev/null
 
--- 대화 기록: 추가만, 남의 프로젝트에 연결 불가, 고치거나 지울 수 없음
+-- 대화 기록: 남의 프로젝트에 연결 불가, 고칠 수 없음, 본인은 지울 수 있음
 select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
 insert into chat_messages (role, text) values ('me', '안녕');
 insert into chat_messages (role, text, project_id) values ('office', '접수했어요', 'aaaaaaaa-0000-4000-8000-000000000001');
@@ -54,10 +54,14 @@ select pg_temp.expect_fail($q$insert into chat_messages (role, text) values ('bo
 select pg_temp.expect_fail($q$insert into chat_messages (role, text) values ('me', '')$q$, 'chat_messages_text_check');
 select pg_temp.expect_fail($q$insert into chat_messages (owner_id, role, text) values ('22222222-2222-4222-8222-222222222222', 'me', 'x')$q$, 'row-level security');
 with u as (update chat_messages set text = '바꿈' returning 1) select pg_temp.check((select count(*) from u) = 0, 'chat cannot be edited');
-with d as (delete from chat_messages returning 1) select pg_temp.check((select count(*) from d) = 0, 'chat cannot be deleted');
 select pg_temp.check((select count(*) from chat_messages) = 2, 'chat kept');
 select pg_temp.as_user('22222222-2222-4222-8222-222222222222');
 select pg_temp.check((select count(*) from chat_messages) = 0, 'other user sees no chat');
+with d as (delete from chat_messages returning 1) select pg_temp.check((select count(*) from d) = 0, 'other user cannot delete chat');
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
+with d as (delete from chat_messages where role = 'me' returning 1) select pg_temp.check((select count(*) from d) = 1, 'owner deletes own chat');
+select pg_temp.check((select count(*) from chat_messages) = 1, 'rest kept');
+select pg_temp.as_user('22222222-2222-4222-8222-222222222222');
 select pg_temp.expect_fail($q$insert into chat_messages (role, text, project_id) values ('me', 'x', 'aaaaaaaa-0000-4000-8000-000000000001')$q$, 'project does not belong to owner');
 
 -- 배포 기록: 사용자는 쓸 수 없고, 서버도 C 승인 없이는 성공 기록을 남길 수 없다

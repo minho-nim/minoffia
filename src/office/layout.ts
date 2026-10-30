@@ -116,7 +116,7 @@ export const LOUNGE_SPOTS: Point[] = [
   { x: 205, y: 205 },
 ];
 
-/** 복도 메모 보드 아래, 미나가 서는 자리. */
+/** 복도 메모 보드 아래, 미니엉이 서는 자리. */
 export const RECEPTION: Point = { x: 150, y: 196 };
 /** 복도 메모 보드(HTML 오버레이) 위치. */
 export const MEMO_BOARD = { x: 122, y: 143, w: 52, h: 34 };
