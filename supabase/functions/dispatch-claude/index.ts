@@ -197,6 +197,11 @@ Deno.serve(async (req) => {
     revision && previousResult?.summary ? `이전 결과 요약: ${previousResult.summary}` : '',
     revision && previousResult?.remaining_issues ? `이전 결과의 남은 문제: ${previousResult.remaining_issues}` : '',
     ``,
+    `## 개발 방식 결정(필수, 07단계)`,
+    `계획 JSON 최상위에 "development_mode"와 "mode_reason"(한 줄 이유)을 넣는다.`,
+    `- "prototype_first": 신규 앱·UI 전면 개편·새 인터랙션. 첫 작업을 assignee_preference "gemini_optional"인 AI Studio Build 시안 작업으로 두고, Codex 작업은 dependencies로 그 시안 작업 뒤에 잇는다. 사용자가 시안을 승인(P)해야 Codex를 시작한다.`,
+    `- "direct": 버그·기존 기능 수정·DB·성능 개선. 시안 없이 Codex로 바로 개발한다.`,
+    ``,
     `규칙: 작업 분해·배정 계획(JSON)만 작성한다. 저장소 쓰기·커밋·브랜치·푸시·PR·병합·배포 금지(B 승인 전 GitHub 업로드 금지).`,
   ]
     .filter((l) => l !== '')

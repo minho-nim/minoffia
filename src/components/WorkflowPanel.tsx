@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { attachmentBlocker, attachmentsOf, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind, type ImageAnalysis } from '../domain/attachments';
+import { attachmentBlocker, attachmentsOf, MAX_PROTOTYPE_FILES, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind, type ImageAnalysis } from '../domain/attachments';
 import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments';
 import { RequestContext } from './RequestContext';
 import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../domain/requestContext';
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
-import { buildCodexHandoff, buildCodexPrRequest, buildGptPackage } from '../domain/handoffV2';
+import { buildCodexHandoff, buildCodexPrRequest, buildGptPackage, buildPrototypeHandoff } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { startBlocker } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
 import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
-import { DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
+import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
 
 export interface SpecFields {
   intent: Intent;
@@ -34,6 +34,8 @@ export interface WorkflowActions {
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   decide: (task: Task, gate: Gate, revision: number, decision: 'approved' | 'rejected', workItemId?: string, scope?: Record<string, unknown>) => Promise<boolean>;
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
+  /** 시안 먼저: P(시안 승인) + 시안 작업 끝냄 */
+  approvePrototype: (task: Task) => Promise<boolean>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
   recordStart: (assignment: AgentAssignment, url: string) => Promise<boolean>;
   /** 시작한 작업을 중단으로 기록(동시 실행 1개 제한을 푼다) */
@@ -131,6 +133,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
   const requestImages = attachmentsOf(attachments, task.id, 'request');
   const analysisById = new Map(analyses.map((a) => [a.attachmentId, a]));
   const taskLinks = linksOf(links, task.id);
+  // 시안 먼저 계획의 시안(최신 계획 버전)
+  const prototypeFiles = view.plan ? attachmentsOf(attachments, task.id, 'prototype', view.plan.planRevision) : [];
   const taskQa = clarificationsOf(clarifications, task.id);
   const resultShots = view.result ? attachmentsOf(attachments, task.id, 'result', view.result.revision) : [];
 
@@ -450,10 +454,16 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             </>
           )}
           {view.plan && view.planCurrent && (
-            <p className="ok-text">
-              계획 v{view.plan.planRevision} 저장됨 (기획서 v{view.plan.approvedSpecRevision} 기준
-              {view.plan.targetBaseRevision ? `, main ${view.plan.targetBaseRevision.slice(0, 7)}` : ''})
-            </p>
+            <>
+              <p className="ok-text">
+                계획 v{view.plan.planRevision} 저장됨 (기획서 v{view.plan.approvedSpecRevision} 기준
+                {view.plan.targetBaseRevision ? `, main ${view.plan.targetBaseRevision.slice(0, 7)}` : ''})
+              </p>
+              <p className="small">
+                <span className={`pill ${view.prototypeFirst ? 'pill-mode-proto' : ''}`}>개발 방식: {DEVELOPMENT_MODE_LABEL[view.plan.plan.development_mode ?? 'direct']}</span>{' '}
+                {view.plan.plan.mode_reason && <span className="muted">{view.plan.plan.mode_reason}</span>}
+              </p>
+            </>
           )}
           {view.plan?.plan.status === 'needs_clarification' && view.planCurrent && (
             <div className="wf-pre">PM 질문: {view.plan.plan.questions.join(' / ')}</div>
@@ -518,9 +528,17 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                         <button
                           type="button"
                           className="btn btn-small btn-ghost"
-                          onClick={() => item && void copy(a.id, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks))}
+                          onClick={() =>
+                            item &&
+                            void copy(
+                              a.id,
+                              view.prototypeFirst && a.assignee === 'gemini'
+                                ? buildPrototypeHandoff(task, view.spec!, item, project, view.plan!.plan.mode_reason ?? '', requestImages, taskLinks)
+                                : buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : []),
+                            )
+                          }
                         >
-                          {copied === a.id ? '복사됨' : '지시서 복사'}
+                          {copied === a.id ? '복사됨' : view.prototypeFirst && a.assignee === 'gemini' ? 'AI Studio 시안 지시서 복사' : '지시서 복사'}
                         </button>
                         {a.dispatchStatus === 'completed' ? (
                           <p className="small ok-text">결과를 받아 끝난 작업입니다.</p>
@@ -567,6 +585,40 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
               );
             })}
           </ul>
+        </section>
+      )}
+
+      {/* 4-1. 시안 먼저: AI Studio 시안 → 미리보기 검토 → P 승인 */}
+      {view.planCurrent && view.prototypeFirst && (
+        <section className="wf-section">
+          <h4>4-1. 시안 검토 — {GATE_LABEL.P}</h4>
+          <p className="muted small">
+            Claude PM이 <b>시안 먼저</b>를 골랐습니다. 위 시안 작업의 "AI Studio 시안 지시서"를 Google AI Studio Build에 붙여넣어 시안을 만들고, 결과(ZIP·HTML·스크린샷)를 여기에 올려 미리보기로 확인하세요.
+            시안을 승인(P)하면 Codex 지시서에 이 시안이 들어가고, Codex는 시안의 화면 구성과 흐름을 보존하며 실제 코드에 통합합니다.
+          </p>
+          <AttachmentGallery
+            items={prototypeFiles}
+            roles={ROLES_FOR.prototype}
+            blocker={attachmentBlocker(view, 'prototype', 'add', prototypeFiles.length, view.plan!.planRevision)}
+            max={MAX_PROTOTYPE_FILES}
+            urlFor={actions.attachmentUrl}
+            onAdd={(files) => actions.addAttachments(task, 'prototype', view.plan!.planRevision, files)}
+            onUpdate={actions.updateAttachment}
+            onDelete={actions.deleteAttachment}
+            onMove={(id, d) => actions.moveAttachment(task, id, d)}
+            emptyText="아직 올린 시안이 없습니다."
+            allowDocs
+          />
+          {view.pApproved ? (
+            <p className="ok-text">시안 승인됨(P). 이제 Codex 작업을 실행 승인하세요.</p>
+          ) : (
+            <>
+              <button type="button" className="btn btn-small btn-primary" disabled={busy || !canApprove(view, 'P').ok} onClick={() => void run(() => actions.approvePrototype(task))}>
+                P: 시안 승인
+              </button>
+              {!canApprove(view, 'P').ok && <p className="muted small">{(canApprove(view, 'P') as { reason: string }).reason}</p>}
+            </>
+          )}
         </section>
       )}
 

@@ -2034,3 +2034,9 @@ a {
   padding: 2px 0;
   overflow-wrap: anywhere;
 }
+
+/* 개발 방식: 시안 먼저 */
+.pill-mode-proto {
+  background: var(--st-review, var(--surface-2));
+  color: var(--st-review-ink, var(--ink));
+}

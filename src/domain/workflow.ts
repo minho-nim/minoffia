@@ -46,6 +46,12 @@ export interface WorkflowView {
   resultRevised: boolean;
   /** 결과 검토에서 PM에 보낸 수정 요청 중, 아직 새 계획이 오지 않은 것 */
   pendingRevision: RevisionRequest | null;
+  /** 최신 계획이 시안 먼저(Prototype First)인가 */
+  prototypeFirst: boolean;
+  /** 최신 계획의 시안을 P 승인했는가 */
+  pApproved: boolean;
+  /** 최신 계획에 올린 시안 수 */
+  prototypeCount: number;
 }
 
 /** DB 기록만으로 현재 단계를 계산한다. 배정 완료 ≠ 실행 중, PM 세션 시작 ≠ 계획 완료. */
@@ -72,6 +78,9 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
   const bApproved = result ? approved(d.approvals, 'B', result.revision) : false;
   const cApproved = result ? bApproved && approved(d.approvals, 'C', result.revision) : false;
   const eApproved = (id: string) => (plan ? approved(d.approvals, 'E', plan.planRevision, id) : false);
+  const prototypeFirst = plan?.plan.development_mode === 'prototype_first';
+  const pApproved = !!plan && prototypeFirst && approved(d.approvals, 'P', plan.planRevision);
+  const prototypeCount = plan ? d.attachments.filter((a) => a.kind === 'prototype' && a.planRevision === plan.planRevision).length : 0;
 
   const stage = ((): Stage => {
     if (task.status === 'done' && !spec) return 'completed';
@@ -100,7 +109,7 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
     return 'agent_handoff_pending';
   })();
 
-  return { stage, spec, aApproved, aStale, plan, planCurrent, assignments, eApproved, result, bApproved, cApproved, plannerFeedback, pendingRevision, resultRevised };
+  return { stage, spec, aApproved, aStale, plan, planCurrent, assignments, eApproved, result, bApproved, cApproved, plannerFeedback, pendingRevision, resultRevised, prototypeFirst, pApproved, prototypeCount };
 }
 
 export type GateCheck = { ok: true } | { ok: false; reason: string };
@@ -118,8 +127,15 @@ export function canApprove(view: WorkflowView, gate: Gate, workItemId = ''): Gat
       if (!view.planCurrent) return { ok: false, reason: 'A 승인된 최신 기획서 기준의 PM 계획이 필요합니다.' };
       if (!view.assignments.some((a) => a.workItemId === workItemId)) return { ok: false, reason: '계획에 없는 작업입니다.' };
       if (view.eApproved(workItemId)) return { ok: false, reason: '이미 실행 승인한 작업입니다.' };
+      if (view.prototypeFirst && !view.pApproved && view.assignments.find((a) => a.workItemId === workItemId)?.assignee === 'codex')
+        return { ok: false, reason: '시안 먼저 계획입니다. 시안을 올리고 P(시안 승인)를 한 뒤 Codex를 실행 승인하세요.' };
       return { ok: true };
     }
+    case 'P':
+      if (!view.planCurrent || !view.prototypeFirst) return { ok: false, reason: '시안 먼저 계획에서만 시안을 승인합니다.' };
+      if (view.pApproved) return { ok: false, reason: '이미 시안을 승인했습니다.' };
+      if (!view.prototypeCount) return { ok: false, reason: '승인할 시안(AI Studio 결과)을 먼저 올리세요.' };
+      return { ok: true };
     case 'B':
       if (!view.result) return { ok: false, reason: '검토할 결과 패키지가 없습니다.' };
       if (view.pendingRevision || view.resultRevised) return { ok: false, reason: 'PM에 수정을 요청한 결과입니다. 새 결과를 받은 뒤 승인하세요.' };

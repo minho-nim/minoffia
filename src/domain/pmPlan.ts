@@ -1,4 +1,4 @@
-import type { AgentKind, AssigneePreference, ExecutionMode, PlanBody, WorkItem } from './workflow-types';
+import type { AgentKind, AssigneePreference, DevelopmentMode, ExecutionMode, PlanBody, WorkItem } from './workflow-types';
 
 const PREFS: AssigneePreference[] = ['codex_primary', 'claude_support', 'gemini_optional', 'grok_optional'];
 const MODES: ExecutionMode[] = ['codex_cloud', 'manual_handoff'];
@@ -76,11 +76,19 @@ export function parsePmPlan(text: string, expectedTaskId: string): ParseResult {
     for (const dep of item.dependencies) if (!ids.has(dep)) errors.push(`${item.id}의 의존 작업 ${dep}가 계획에 없습니다.`);
   }
   if (o.status === 'planned' && items.length === 0) errors.push('planned인데 work_items가 비어 있습니다.');
+  // 개발 방식(07단계). 없으면 바로 개발(이전 계획 호환).
+  const mode = o.development_mode === undefined ? 'direct' : o.development_mode;
+  if (mode !== 'prototype_first' && mode !== 'direct') errors.push('development_mode는 prototype_first 또는 direct여야 합니다.');
+  if (o.mode_reason !== undefined && typeof o.mode_reason !== 'string') errors.push('mode_reason은 문자열이어야 합니다.');
+  if (mode === 'prototype_first' && o.status === 'planned' && !items.some((i) => i.assignee_preference === 'gemini_optional'))
+    errors.push('prototype_first면 AI Studio 시안 작업(assignee_preference: gemini_optional)이 하나 있어야 합니다.');
   if (errors.length) return { ok: false, errors };
 
   return {
     ok: true,
     plan: {
+      development_mode: mode as DevelopmentMode,
+      mode_reason: typeof o.mode_reason === 'string' ? o.mode_reason.slice(0, 300) : '',
       task_id: String(o.task_id),
       repository: String(o.repository),
       target_base_revision: typeof o.target_base_revision === 'string' ? o.target_base_revision : '',
