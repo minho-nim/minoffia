@@ -393,7 +393,11 @@ export function App() {
             if (a) await store.updateAssignment({ ...a, dispatchStatus: 'ready' });
           }
         },
-        decision === 'approved' ? `${gate} 승인을 기록했습니다.` : '수정 요청을 기록했습니다. ChatGPT용 자료를 다시 복사해 재기획하세요.',
+        decision !== 'approved'
+          ? '수정 요청을 기록했습니다. ChatGPT용 자료를 다시 복사해 재기획하세요.'
+          : gate === 'C'
+            ? 'C 승인을 기록했습니다. 끝난 업무는 열린 업무 목록에서 빠지고 "완료" 필터에 남습니다.'
+            : `${gate} 승인을 기록했습니다.`,
       ),
     dispatchPm: (task, ack) => dispatch(task, ack),
     importPlan: async (task, text) => {
@@ -803,6 +807,11 @@ export function App() {
                     onCopy={copyHandoff}
                   />
                 ))
+              )}
+              {filter === 'open' && counts('done') > 0 && (
+                <button type="button" className="btn btn-small btn-ghost done-link" onClick={() => setFilter('done')}>
+                  완료된 업무 {counts('done')}건 보기
+                </button>
               )}
             </div>
           )}
