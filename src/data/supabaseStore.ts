@@ -170,6 +170,13 @@ const toPrCheck = (r: Row): PrCheck => ({
   checkedAt: r.checked_at as string,
 });
 
+/** 실시간으로 지켜보는 표(0015_realtime.sql과 같아야 함) */
+const REALTIME_TABLES = [
+  'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
+  'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits',
+];
+
 const toDeployment = (r: Row): Deployment => ({
   id: r.id as string,
   taskId: r.task_id as string,
@@ -484,6 +491,17 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       }
       if (!data?.ok || !data.check) throw new Error(data?.error ?? 'PR을 확인하지 못했습니다.');
       return toPrCheck(data.check as Row);
+    },
+    subscribe(onChange) {
+      // 0015_realtime.sql의 표들. RLS를 따르므로 내 행의 변경만 온다.
+      const channel = client.channel('office-changes');
+      for (const table of REALTIME_TABLES) {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChange(table));
+      }
+      channel.subscribe();
+      return () => {
+        void client.removeChannel(channel);
+      };
     },
     async deployRelease(taskId) {
       const data = await invoke('deploy-release', { taskId });

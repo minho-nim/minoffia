@@ -20,6 +20,7 @@ run supabase/tests/90_pr_checks.sql
 run supabase/tests/95_inbox_deployments.sql
 run supabase/tests/96_document_attachments.sql
 run supabase/tests/97_prototype_first.sql
+run supabase/tests/98_realtime.sql
 
 # 기존 v0.1 데이터가 0003 적용 후에도 남는지
 psql -q -c "drop database if exists ${DB}_mig" -c "create database ${DB}_mig"
@@ -40,5 +41,6 @@ runm supabase/migrations/0011_inbox_deployments.sql
 runm supabase/migrations/0012_document_attachments.sql
 runm supabase/migrations/0013_html_svg_attachments.sql
 runm supabase/migrations/0014_prototype_first.sql
+runm supabase/migrations/0015_realtime.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"

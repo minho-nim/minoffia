@@ -239,7 +239,11 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     };
   }, [sync]);
 
+  // 저장은 대화가 바뀔 때만 한다. 다른 기기 변경 알림으로 sync가 새로 와도 저장하지 않는다(받아 오기 전 옛 대화로 덮어쓰지 않게).
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
   useEffect(() => {
+    const sync = syncRef.current;
     if (!sync) return;
     if (adopting.current) {
       adopting.current = false;
@@ -260,7 +264,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         });
     }, 800);
     return () => window.clearTimeout(t);
-  }, [sync, log, pending]);
+  }, [log, pending]);
 
   // 저장된 선택이 가리키는 프로젝트가 지워졌거나 이미 저장소가 생겼으면 선택을 접는다.
   useEffect(() => {
