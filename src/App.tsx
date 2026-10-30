@@ -656,6 +656,21 @@ export function App() {
             }
           }
         : undefined,
+    startClaudeDev:
+      store.mode === 'supabase'
+        ? async (a, ack) => {
+            try {
+              const r = await store.startClaudeDev(a.id, ack);
+              say('ok', `Claude 보조 개발 세션을 시작했습니다(완료 아님).${r.sessionUrl ? ' 세션에서 진행을 보고, 마지막 결과 보고를 결과 패키지로 옮기세요.' : ''}`);
+              return true;
+            } catch (e) {
+              say('error', `Claude 보조 개발을 시작하지 못했습니다: ${(e as Error).message}`);
+              return false;
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
     deploy:
       store.mode === 'supabase'
         ? async (task) => {

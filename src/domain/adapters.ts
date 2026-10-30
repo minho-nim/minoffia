@@ -4,7 +4,7 @@ import type { AgentKind } from './workflow-types';
 export type AdapterState = 'verified' | 'not_verified' | 'not_connected' | 'manual_only';
 
 export interface AdapterInfo {
-  agent: AgentKind | 'gpt' | 'gemini_vision';
+  agent: AgentKind | 'gpt' | 'gemini_vision' | 'claude_dev';
   label: string;
   role: string;
   state: AdapterState;
@@ -27,6 +27,17 @@ export const ADAPTERS: AdapterInfo[] = [
     worksWithPcOff: true,
     reason: 'Routines API 트리거로 세션 시작을 실제 확인(2026-10-29). 계획 JSON은 세션에서 복사해 가져온다.',
     checkedAt: '2026-10-29',
+  },
+  {
+    agent: 'claude_dev',
+    label: 'Claude Code Cloud (보조 개발)',
+    role: 'PM이 Claude에 배정한 작은 작업 구현(B 승인 전 푸시·PR 없음)',
+    state: 'not_verified',
+    autoStart: true,
+    worksWithPcOff: true,
+    reason:
+      'E 승인 뒤 서버가 두 번째 루틴(보조 개발)으로 세션을 시작한다. 세션 시작(HTTP 200)은 서버가 확인하지만 개발 완료는 아니다. 결과는 세션의 마지막 보고를 결과 패키지로 옮긴다. 운영 첫 실행 전이라 미검증.',
+    checkedAt: '2026-10-30',
   },
   {
     agent: 'codex',
@@ -102,6 +113,8 @@ export const ADAPTER_STATE_LABEL: Record<AdapterState, string> = {
   manual_only: '수동 인계',
 };
 
+/** 배정된 작업의 실행 경로. Claude 작업은 PM이 아니라 보조 개발 루틴이다. */
 export function adapterFor(agent: AgentKind): AdapterInfo {
-  return ADAPTERS.find((a) => a.agent === agent) ?? ADAPTERS.find((a) => a.agent === 'codex')!;
+  const key = agent === 'claude' ? 'claude_dev' : agent;
+  return ADAPTERS.find((a) => a.agent === key) ?? ADAPTERS.find((a) => a.agent === 'codex')!;
 }

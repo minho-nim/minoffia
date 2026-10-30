@@ -117,14 +117,14 @@ export function buildCodexHandoff(
 /** 짧은 업무 ID(브랜치 이름용) */
 const shortId = (id: string) => id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
 
-/** Codex PR 브랜치 이름: ai/codex/<업무 앞 8자>-<작업> */
-export function codexBranch(task: Task, workItemId: string): string {
+/** PR 브랜치 이름: ai/<codex|claude>/<업무 앞 8자>-<작업> (Claude 보조 개발 지시문 dispatch-claude-dev/payload.ts와 같은 규칙) */
+export function codexBranch(task: Task, workItemId: string, tool: 'codex' | 'claude' = 'codex'): string {
   const item = workItemId.replace(/[^a-z0-9-]/gi, '').toLowerCase();
-  return `ai/codex/${shortId(task.id)}${item ? `-${item}` : ''}`;
+  return `ai/${tool}/${shortId(task.id)}${item ? `-${item}` : ''}`;
 }
 
-/** B 승인 뒤, 같은 Codex 작업 창에 붙여넣을 PR 요청. 승인된 결과 버전만 올리고 병합은 하지 않는다. */
-export function buildCodexPrRequest(task: Task, resultRevision: number, workItemId: string, project: Project | undefined): string {
+/** B 승인 뒤, 결과를 만든 같은 작업 창(Codex 작업 또는 Claude 세션)에 붙여넣을 PR 요청. 승인된 결과 버전만 올리고 병합은 하지 않는다. */
+export function buildCodexPrRequest(task: Task, resultRevision: number, workItemId: string, project: Project | undefined, tool: 'codex' | 'claude' = 'codex'): string {
   return [
     `# B 승인됨 — 결과 v${resultRevision}을 PR로 올려 주세요`,
     '',
@@ -132,7 +132,9 @@ export function buildCodexPrRequest(task: Task, resultRevision: number, workItem
     `- 저장소: ${project?.repo ?? '(미연결)'}`,
     '',
     '1. 최신 origin/main을 받아 그 위에 이 작업에서 보고한 변경만 적용한다(승인된 결과와 다른 변경을 더하지 않는다).',
-    `2. 새 브랜치 ${codexBranch(task, workItemId)} 에 커밋한다. 커밋 메시지는 한국어로 변경 내용을 한 줄로 쓴다.`,
+    tool === 'claude'
+      ? `2. 이 세션의 작업 브랜치 ${codexBranch(task, workItemId, 'claude')} 를 최신 main 위로 맞추고 커밋한다. 커밋 메시지는 한국어로 변경 내용을 한 줄로 쓴다.`
+      : `2. 새 브랜치 ${codexBranch(task, workItemId)} 에 커밋한다. 커밋 메시지는 한국어로 변경 내용을 한 줄로 쓴다.`,
     '3. 저장소가 정한 시험(typecheck·test·build 등)을 다시 돌리고 결과를 그대로 알려 준다.',
     '4. 브랜치를 푸시하고 main 대상으로 PR을 만든다. 병합하지 않는다. PR 설명은 한국어로 바뀐 파일과 시험 결과를 적는다.',
     '5. 시험이 하나라도 실패하면 PR을 만들지 말고 실패 내용을 보고한다.',

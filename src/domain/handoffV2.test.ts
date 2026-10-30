@@ -72,3 +72,12 @@ describe('견본 먼저(v0.3.5)', () => {
     expect(buildCodexHandoff(task, spec, item, project, '', [], [])).not.toContain('승인된 견본');
   });
 });
+
+describe('Claude 보조 개발 PR 요청(v0.3.8)', () => {
+  it('세션의 작업 브랜치(ai/claude/)를 푸시하고 병합하지 않는다', () => {
+    const t = buildCodexPrRequest(task, 1, 'W2', project, 'claude');
+    expect(t).toContain('이 세션의 작업 브랜치 ai/claude/28333f7e-w2');
+    expect(t).toContain('병합하지 않는다');
+    expect(codexBranch(task, 'W2', 'claude')).toBe('ai/claude/28333f7e-w2');
+  });
+});
