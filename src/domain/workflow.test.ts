@@ -141,7 +141,7 @@ describe('수정 루프', () => {
   });
 });
 
-describe('시안 먼저(P 게이트)', () => {
+describe('견본 먼저(P 게이트)', () => {
   const protoPlan = (): PmPlan => {
     const p = plan(1, 1);
     return { ...p, plan: { ...p.plan, development_mode: 'prototype_first' } };
@@ -154,7 +154,7 @@ describe('시안 먼저(P 게이트)', () => {
   };
   const base = { specs: [spec(1)], approvals: [ok('A', 1)], plans: [protoPlan()], assignments: [gemini, codex] };
 
-  it('시안 없이는 P 불가, Codex E는 P 전에 불가, 시안 작업 E는 가능', () => {
+  it('견본 없이는 P 불가, Codex E는 P 전에 불가, 견본 작업 E는 가능', () => {
     const v = deriveWorkflow(task, data(base));
     expect(v.prototypeFirst).toBe(true);
     expect(canApprove(v, 'P').ok).toBe(false);
@@ -162,7 +162,7 @@ describe('시안 먼저(P 게이트)', () => {
     expect(canApprove(v, 'E', 'W1').ok).toBe(true);
   });
 
-  it('시안을 올리면 P 가능, P 뒤에는 Codex E 가능', () => {
+  it('견본을 올리면 P 가능, P 뒤에는 Codex E 가능', () => {
     const withFile = deriveWorkflow(task, data({ ...base, attachments: [protoFile] }));
     expect(canApprove(withFile, 'P').ok).toBe(true);
     const after = deriveWorkflow(task, data({ ...base, attachments: [protoFile], approvals: [ok('A', 1), ok('P', 1)] }));
