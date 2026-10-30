@@ -27,7 +27,7 @@ begin
   raise notice 'ok: %', label;
 end $$;
 
-select pg_temp.check((select public = false and file_size_limit = 5242880 from storage.buckets where id = 'attachments'), '비공개 버킷, 5MB 상한');
+select pg_temp.check((select public = false and file_size_limit = 20971520 from storage.buckets where id = 'attachments'), '비공개 버킷, 20MB 상한(0012 문서 첨부, 이미지 5MB는 표 규칙)');
 
 select pg_temp.as_user('11111111-1111-4111-8111-111111111111', 'owner@example.invalid');
 insert into tasks (id, project_id, title, type, assignee) values

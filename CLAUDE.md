@@ -44,6 +44,7 @@
 - 비밀값(Claude Routine 토큰, service_role 키, 비밀번호)을 코드·커밋·채팅에 남기지 않는다. `.env.local`은 커밋 금지.
 - 유료 API·크레딧이 드는 방법을 쓰지 않는다. 배정·입력창 분류는 규칙 기반(LLM 호출 없음).
 - 요청 자료 이미지는 사용자가 "Gemini로 분석"을 누를 때만 서버(`supabase/functions/analyze-image`)가 Gemini 무료 API로 분석한다(관찰·추정 구분, 원본 대체 아님, 규칙은 `0008_image_analyses.sql`).
+- 요청 자료에는 문서도 올린다(PDF·TXT·MD·CSV·JSON·DOCX·XLSX·PPTX·ZIP 20MB, 역할 `document`, `0012_document_attachments.sql`). 결과 스크린샷은 이미지만. PDF·글 문서(10MB 이하)만 "Gemini로 요약", 나머지는 보관·내려받기.
 - 입력창 일반 질문: 앱 상태는 규칙, 일반 질문은 보내면 Gemini 무료(`supabase/functions/ask-gemini`)가 답하고 "GPT에게 이어서 묻기"(복사)를 둔다. 프로젝트 이름이 든 질문은 GPT를 먼저 권한다(소유자 결정 2026-10-30). 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`, `docs/FLOW_v0.3_2026-10-30.md`.
 - 입력창 화면 대화는 계정에 저장해 기기 간 이어 본다(`inbox_state`). 개발일지용 대화 기록(`chat_messages`)은 프로젝트·업무에 연결된 메시지만 남기고 일반 대화·질문은 남기지 않으며, 소유자가 개발일지 화면에서 지울 수 있다. 개발일지 Markdown은 `src/domain/devlog.ts`.
 - 입력창 접수 매니저 이름은 **미니엉**(코드 id는 `mina` 그대로).
@@ -62,7 +63,7 @@
 - `src/components/WorkflowPanel.tsx` 업무 카드의 진행 단계 패널
 - `src/domain/triage.ts`·`src/components/Inbox.tsx` 업무 탭 입력창(규칙 분류, 프로젝트 확인, Gemini·ChatGPT 선택)
 - `src/domain/requestContext.ts`·`src/components/RequestContext.tsx` 링크 읽기 결과·GPT 확인 질문(규칙은 `0005_links_clarifications.sql`), 서버 `supabase/functions/fetch-link`(내부망 차단은 `safety.ts`, 시험 있음)
-- `src/domain/attachments.ts`·`src/components/Attachments.tsx` 이미지 첨부(비공개 버킷 `attachments`, 규칙은 `0004_attachments.sql`과 같아야 함)
+- `src/domain/attachments.ts`·`src/components/Attachments.tsx` 이미지·문서 첨부(비공개 버킷 `attachments`, 규칙은 `0004_attachments.sql`·`0012_document_attachments.sql`과 같아야 함)
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase

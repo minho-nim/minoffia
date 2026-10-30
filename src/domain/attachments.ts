@@ -2,13 +2,14 @@ import type { ImageAnalysisBody } from '../../supabase/functions/analyze-image/a
 import type { WorkflowView } from './workflow';
 
 /**
- * 이미지 첨부(v0.2 §4, §7). 원본은 비공개 저장소에 두고, 화면에는 만료되는 주소로만 보여 준다.
- * 규칙은 supabase/migrations/0004_attachments.sql 과 같아야 한다.
+ * 첨부(v0.2 §4, §7, v0.3 01단계). 원본은 비공개 저장소에 두고, 화면에는 만료되는 주소로만 보여 준다.
+ * 요청 자료는 이미지(5MB)와 문서(20MB), 결과 스크린샷은 이미지만.
+ * 규칙은 supabase/migrations/0004_attachments.sql, 0012_document_attachments.sql 과 같아야 한다.
  */
 
 /** request = 업무 요청 자료(GPT·PM·개발 AI에 넘김), result = 결과 패키지의 스크린샷 */
 export type AttachmentKind = 'request' | 'result';
-export type AttachmentRole = 'current' | 'target' | 'error' | 'reference' | 'before' | 'after';
+export type AttachmentRole = 'current' | 'target' | 'error' | 'reference' | 'document' | 'before' | 'after';
 
 export interface Attachment {
   id: string;
@@ -34,24 +35,69 @@ export const ROLE_LABEL: Record<AttachmentRole, string> = {
   target: '목표·참고 디자인',
   error: '오류 화면',
   reference: '기타 참고',
+  document: '문서·자료',
   before: '변경 전',
   after: '변경 후',
 };
 
+/** 이미지 역할(문서는 'document' 하나뿐) */
 export const ROLES_FOR: Record<AttachmentKind, AttachmentRole[]> = {
   request: ['current', 'target', 'error', 'reference'],
   result: ['after', 'before'],
 };
+
+export const isImage = (mime: string) => mime.startsWith('image/');
+
+/** 이 파일에 고를 수 있는 역할 */
+export const rolesFor = (kind: AttachmentKind, mime: string): AttachmentRole[] => (kind === 'request' && !isImage(mime) ? ['document'] : ROLES_FOR[kind]);
 
 export const MIME_EXT: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'application/pdf': 'pdf',
+  'text/plain': 'txt',
+  'text/markdown': 'md',
+  'text/csv': 'csv',
+  'application/json': 'json',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/zip': 'zip',
 };
 
-/** 파일 하나 5MB. Supabase 무료 저장소(1GB)를 아끼려고 둔 상한이다. */
+/**
+ * 문서 확장자 → 저장할 형식. 브라우저·OS마다 같은 파일을 다른 형식 이름으로 주거나(예: Windows ZIP, CSV) 비워 주므로
+ * 확장자로 정하고, 브라우저가 준 형식이 아래 별칭 중 하나(또는 빈 값)일 때만 받는다.
+ */
+const DOC_TYPES: Record<string, { mime: string; aliases: string[] }> = {
+  pdf: { mime: 'application/pdf', aliases: [] },
+  txt: { mime: 'text/plain', aliases: [] },
+  md: { mime: 'text/markdown', aliases: ['text/x-markdown', 'text/plain'] },
+  csv: { mime: 'text/csv', aliases: ['application/vnd.ms-excel', 'text/x-csv', 'application/csv', 'text/plain'] },
+  json: { mime: 'application/json', aliases: ['text/json', 'text/plain'] },
+  docx: { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', aliases: [] },
+  xlsx: { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', aliases: [] },
+  pptx: { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', aliases: [] },
+  zip: { mime: 'application/zip', aliases: ['application/x-zip-compressed', 'application/x-zip', 'multipart/x-zip'] },
+};
+
+/** 파일 고르기 창에 줄 형식 목록 */
+export const ACCEPT_REQUEST = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', ...Object.keys(DOC_TYPES).map((e) => `.${e}`)].join(',');
+export const ACCEPT_IMAGES = 'image/png,image/jpeg,image/webp,image/gif';
+
+/** Gemini로 요약할 수 있는 문서(그 밖의 문서·ZIP은 보관·내려받기만) */
+const GEMINI_DOC_MIMES = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json'];
+/** Gemini 요청 크기 한도 때문에 요약은 10MB 이하 문서만 */
+export const MAX_GEMINI_DOC_BYTES = 10 * 1024 * 1024;
+export const canGeminiRead = (a: { mime: string; sizeBytes: number }) =>
+  isImage(a.mime) || (GEMINI_DOC_MIMES.includes(a.mime) && a.sizeBytes <= MAX_GEMINI_DOC_BYTES);
+
+/** 이미지 하나 5MB. Supabase 무료 저장소(1GB)를 아끼려고 둔 상한이다. */
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+/** 문서 하나 20MB */
+export const MAX_DOC_BYTES = 20 * 1024 * 1024;
 export const MAX_REQUEST_FILES = 10;
 export const MAX_RESULT_FILES = 6;
 /** 계정 전체 첨부 합계 상한(무료 1GB 중 900MB) */
@@ -65,9 +111,35 @@ const EXT_OK: Record<string, string[]> = {
   gif: ['image/gif'],
 };
 
-/** 문제가 있으면 한국어 이유, 없으면 null */
-export function validateFile(file: { name: string; type: string; size: number }): string | null {
-  if (!MIME_EXT[file.type]) return `${file.name}: PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.`;
+const extOf = (name: string) => (name.includes('.') ? name.split('.').pop()!.toLowerCase() : '');
+
+/** 문서면 저장할 형식(확장자 기준), 문서가 아니거나 형식이 맞지 않으면 null */
+export function docMime(file: { name: string; type: string }): string | null {
+  const t = DOC_TYPES[extOf(file.name)];
+  if (!t) return null;
+  return file.type === '' || file.type === t.mime || t.aliases.includes(file.type) ? t.mime : null;
+}
+
+/**
+ * 받은 파일을 저장할 모양으로: 이름이 없으면 붙이고, 문서는 형식을 확장자 기준으로 맞춘다.
+ * 이미지·문서가 아니면 그대로 돌려주고 validateFile이 거절한다.
+ */
+export function prepareFile(raw: File, index: number, allowDocs: boolean): File {
+  const named = raw.name && raw.name.includes('.') ? raw : new File([raw], fileNameFor(raw.name, raw.type, index), { type: raw.type });
+  if (!allowDocs || isImage(named.type)) return named;
+  const mime = docMime(named);
+  return mime && mime !== named.type ? new File([named], named.name, { type: mime }) : named;
+}
+
+/** 문제가 있으면 한국어 이유, 없으면 null. allowDocs = 요청 자료(문서도 받음) */
+export function validateFile(file: { name: string; type: string; size: number }, allowDocs = false): string | null {
+  if (allowDocs && !isImage(file.type)) {
+    if (!docMime(file)) return `${file.name}: 이미지(PNG·JPG·WEBP·GIF)나 문서(PDF·TXT·MD·CSV·JSON·DOCX·XLSX·PPTX·ZIP)만 올릴 수 있습니다.`;
+    if (file.size <= 0) return `${file.name}: 빈 파일입니다.`;
+    if (file.size > MAX_DOC_BYTES) return `${file.name}: 문서는 20MB까지입니다(${(file.size / 1024 / 1024).toFixed(1)}MB).`;
+    return null;
+  }
+  if (!MIME_EXT[file.type] || !isImage(file.type)) return `${file.name}: PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.`;
   const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
   // 붙여넣은 이미지는 이름에 확장자가 없을 수 있다. 확장자가 있으면 형식과 맞아야 한다.
   if (ext && !(EXT_OK[ext] ?? []).includes(file.type)) return `${file.name}: 확장자와 파일 형식이 다릅니다.`;
@@ -160,12 +232,13 @@ export function describeAnalyses(items: Attachment[], analyses: ImageAnalysis[])
       const a = byId.get(att.id);
       if (!a) return null;
       const b = a.analysis;
+      const doc = !isImage(att.mime);
       const lines = [`${i + 1}. ${att.fileName} [${ROLE_LABEL[att.role]}]`];
-      if (b.observations?.length) lines.push(`   보이는 것: ${b.observations.join(' / ')}`);
-      if (b.ui_structure) lines.push(`   화면 구조: ${b.ui_structure}`);
-      if (b.visible_text?.length) lines.push(`   글자: ${b.visible_text.join(' / ')}`);
-      if (b.colors_layout) lines.push(`   색·배치: ${b.colors_layout}`);
-      if (b.role_fit) lines.push(`   역할과 맞는지: ${b.role_fit}`);
+      if (b.observations?.length) lines.push(`   ${doc ? '문서에 적힌 핵심' : '보이는 것'}: ${b.observations.join(' / ')}`);
+      if (b.ui_structure) lines.push(`   ${doc ? '구성·요약' : '화면 구조'}: ${b.ui_structure}`);
+      if (b.visible_text?.length) lines.push(`   ${doc ? '원문 인용' : '글자'}: ${b.visible_text.join(' / ')}`);
+      if (b.colors_layout && !doc) lines.push(`   색·배치: ${b.colors_layout}`);
+      if (b.role_fit) lines.push(`   ${doc ? '요청과의 관련' : '역할과 맞는지'}: ${b.role_fit}`);
       if (b.uncertainties?.length) lines.push(`   추정·불확실: ${b.uncertainties.join(' / ')}`);
       if (b.raw) lines.push(`   (형식 밖 답변) ${b.raw.slice(0, 1500)}`);
       return lines.join('\n');

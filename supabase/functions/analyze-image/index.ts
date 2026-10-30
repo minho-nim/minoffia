@@ -1,8 +1,9 @@
 // 요청 자료 이미지 하나를 Gemini 무료 API로 분석한다(소유자가 버튼을 눌렀을 때만, v0.2 §4).
+// v0.3.2: PDF·TXT·MD·CSV·JSON 문서(10MB 이하)는 요약한다. DOCX·XLSX·PPTX·ZIP은 받지 않는다.
 // 같은 이미지(sha256)를 전에 분석했으면 Gemini를 부르지 않고 그 결과를 다시 쓴다.
 // 키 A가 한도·인증·서버 오류로 실패할 때만 B(예비)를 쓴다. 하루 상한을 넘으면 묻지 않는다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { buildPrompt, parseAnalysis, toBase64 } from './analysis.ts';
+import { buildDocPrompt, buildPrompt, geminiMime, parseAnalysis, toBase64 } from './analysis.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -58,11 +59,14 @@ Deno.serve(async (req) => {
   // RLS를 거쳐 내 요청 자료인지 확인
   const { data: att } = await userClient
     .from('attachments')
-    .select('id, task_id, kind, role, note, mime, sha256, storage_path')
+    .select('id, task_id, kind, role, note, mime, size_bytes, sha256, storage_path')
     .eq('id', body.attachmentId)
     .maybeSingle();
   if (!att) return reply(404, { ok: false, error: '첨부를 찾을 수 없습니다.' });
-  if (att.kind !== 'request') return reply(400, { ok: false, error: '요청 자료 이미지만 분석합니다.' });
+  if (att.kind !== 'request') return reply(400, { ok: false, error: '요청 자료만 분석합니다.' });
+  const sendMime = geminiMime(String(att.mime), Number(att.size_bytes));
+  if (!sendMime) return reply(400, { ok: false, error: 'Gemini로 요약할 수 없는 파일입니다(PDF·TXT·MD·CSV·JSON 10MB 이하만). 이 파일은 보관만 합니다.' });
+  const isDoc = !String(att.mime).startsWith('image/');
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: existing } = await admin.from('image_analyses').select('*').eq('attachment_id', att.id).maybeSingle();
@@ -103,14 +107,14 @@ Deno.serve(async (req) => {
     .eq('purpose', 'image')
     .eq('ok', true)
     .gte('created_at', kstMidnight);
-  if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 이미지 분석 ${cap}회를 모두 썼습니다.` });
+  if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 이미지·문서 분석 ${cap}회를 모두 썼습니다.` });
 
   const file = await admin.storage.from('attachments').download(att.storage_path);
   if (file.error || !file.data) return reply(500, { ok: false, error: '저장된 이미지를 읽지 못했습니다.' });
   const data = toBase64(new Uint8Array(await file.data.arrayBuffer()));
 
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
-  const prompt = buildPrompt(String(att.role), String(att.note ?? ''));
+  const prompt = isDoc ? buildDocPrompt(String(att.note ?? '')) : buildPrompt(String(att.role), String(att.note ?? ''));
   let last = { status: 0, message: '' };
   for (const [i, key] of keys.entries()) {
     if (!key) continue;
@@ -122,7 +126,7 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ inline_data: { mime_type: att.mime, data } }, { text: prompt }] }],
+          contents: [{ role: 'user', parts: [{ inline_data: { mime_type: sendMime, data } }, { text: prompt }] }],
           generationConfig: { maxOutputTokens: 1500, temperature: 0.2, responseMimeType: 'application/json' },
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),

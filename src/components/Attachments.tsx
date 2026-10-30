@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  fileNameFor,
+  ACCEPT_IMAGES,
+  ACCEPT_REQUEST,
+  canGeminiRead,
+  isImage,
+  MIME_EXT,
+  prepareFile,
   ROLE_LABEL,
   validateFile,
   type Attachment,
@@ -8,7 +13,7 @@ import {
   type ImageAnalysis,
 } from '../domain/attachments';
 
-/** 아직 저장하지 않은 이미지(업무 접수·결과 등록 폼에서 고르는 중) */
+/** 아직 저장하지 않은 이미지·문서(업무 접수·결과 등록 폼에서 고르는 중) */
 export interface PendingImage {
   key: string;
   file: File;
@@ -16,16 +21,15 @@ export interface PendingImage {
   note: string;
 }
 
-const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
 const kb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
 
-/** 파일 선택·붙여넣기·끌어다 놓기로 들어온 파일을 검사해서 이미지만 돌려준다. */
-function takeImages(list: FileList | File[] | null, room: number): { files: File[]; errors: string[] } {
+/** 파일 선택·붙여넣기·끌어다 놓기로 들어온 파일을 검사해서 받을 수 있는 것만 돌려준다(allowDocs면 문서도). */
+function takeImages(list: FileList | File[] | null, room: number, allowDocs: boolean): { files: File[]; errors: string[] } {
   const files: File[] = [];
   const errors: string[] = [];
   [...(list ?? [])].forEach((raw, i) => {
-    const file = raw.name && raw.name.includes('.') ? raw : new File([raw], fileNameFor(raw.name, raw.type, i), { type: raw.type });
-    const err = validateFile(file);
+    const file = prepareFile(raw, i, allowDocs);
+    const err = validateFile(file, allowDocs);
     if (err) errors.push(err);
     else if (files.length >= room) errors.push(`${file.name}: 장수 상한을 넘어 넣지 않았습니다.`);
     else files.push(file);
@@ -46,7 +50,7 @@ function RoleChips({ roles, value, onChange, disabled }: { roles: AttachmentRole
 }
 
 /** 선택 버튼 + 붙여넣기/끌어다 놓기 칸 */
-function DropZone({ onFiles, disabled, label }: { onFiles: (files: FileList | File[]) => void; disabled?: boolean; label: string }) {
+function DropZone({ onFiles, disabled, label, allowDocs = false }: { onFiles: (files: FileList | File[]) => void; disabled?: boolean; label: string; allowDocs?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   return (
@@ -77,11 +81,13 @@ function DropZone({ onFiles, disabled, label }: { onFiles: (files: FileList | Fi
       <button type="button" className="btn btn-small btn-ghost" disabled={disabled} onClick={() => input.current?.click()}>
         {label}
       </button>
-      <span className="muted small">또는 이 칸을 누르고 Ctrl+V · 끌어다 놓기 · PNG·JPG·WEBP·GIF 5MB까지</span>
+      <span className="muted small">
+        또는 이 칸을 누르고 Ctrl+V · 끌어다 놓기 · 이미지(PNG·JPG·WEBP·GIF) 5MB{allowDocs ? ' · 문서(PDF·TXT·MD·CSV·JSON·DOCX·XLSX·PPTX·ZIP) 20MB' : ''}까지
+      </span>
       <input
         ref={input}
         type="file"
-        accept={ACCEPT}
+        accept={allowDocs ? ACCEPT_REQUEST : ACCEPT_IMAGES}
         multiple
         hidden
         onChange={(e) => {
@@ -93,9 +99,14 @@ function DropZone({ onFiles, disabled, label }: { onFiles: (files: FileList | Fi
   );
 }
 
-function Thumb({ src, alt }: { src: string | null; alt: string }) {
+function Thumb({ src, alt, mime }: { src: string | null; alt: string; mime: string }) {
+  // 문서는 미리보기 대신 확장자 표시
+  if (!isImage(mime)) return <span className="att-thumb att-thumb-doc" aria-hidden="true">{(MIME_EXT[mime] ?? 'file').toUpperCase()}</span>;
   return src ? <img className="att-thumb" src={src} alt={alt} /> : <span className="att-thumb att-thumb-empty" aria-hidden="true" />;
 }
+
+/** 이 파일에 보일 역할(문서는 '문서·자료' 하나) */
+const rolesOf = (roles: AttachmentRole[], mime: string): AttachmentRole[] => (isImage(mime) ? roles : ['document']);
 
 /** 폼 안에서 고르는 중인 이미지. 저장은 폼을 낼 때 한다. */
 export function ImagePicker({
@@ -104,12 +115,15 @@ export function ImagePicker({
   roles,
   max,
   label = '이미지 추가',
+  allowDocs = false,
 }: {
   items: PendingImage[];
   onChange: (items: PendingImage[]) => void;
   roles: AttachmentRole[];
   max: number;
   label?: string;
+  /** 요청 자료면 문서도 받는다 */
+  allowDocs?: boolean;
 }) {
   const [errors, setErrors] = useState<string[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -126,11 +140,16 @@ export function ImagePicker({
   useEffect(() => () => Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u)), []);
 
   const add = (list: FileList | File[]) => {
-    const { files, errors } = takeImages(list, max - items.length);
+    const { files, errors } = takeImages(list, max - items.length, allowDocs);
     setErrors(errors);
     onChange([
       ...items,
-      ...files.map((file, i) => ({ key: `${Date.now()}-${i}-${file.name}`, file, role: items.length + i === 0 ? roles[0] : roles[roles.length > 1 ? 1 : 0], note: '' })),
+      ...files.map((file, i) => ({
+        key: `${Date.now()}-${i}-${file.name}`,
+        file,
+        role: !isImage(file.type) ? ('document' as const) : items.length + i === 0 ? roles[0] : roles[roles.length > 1 ? 1 : 0],
+        note: '',
+      })),
     ]);
   };
   const set = (key: string, patch: Partial<PendingImage>) => onChange(items.map((it) => (it.key === key ? { ...it, ...patch } : it)));
@@ -148,12 +167,12 @@ export function ImagePicker({
         <ol className="att-list">
           {items.map((it, i) => (
             <li key={it.key} className="att-item">
-              <Thumb src={urls[it.key] ?? null} alt={it.file.name} />
+              <Thumb src={urls[it.key] ?? null} alt={it.file.name} mime={it.file.type} />
               <div className="att-body">
                 <p className="att-name small">
                   {i + 1}. {it.file.name} <span className="muted">· {kb(it.file.size)}</span>
                 </p>
-                <RoleChips roles={roles} value={it.role} onChange={(role) => set(it.key, { role })} />
+                <RoleChips roles={rolesOf(roles, it.file.type)} value={it.role} onChange={(role) => set(it.key, { role })} />
                 <input className="att-note" placeholder="설명(선택): 예) 버튼이 잘려 보임" value={it.note} maxLength={500} onChange={(e) => set(it.key, { note: e.target.value })} />
               </div>
               <span className="att-tools">
@@ -171,7 +190,7 @@ export function ImagePicker({
           ))}
         </ol>
       )}
-      {items.length < max && <DropZone onFiles={add} label={label} />}
+      {items.length < max && <DropZone onFiles={add} label={label} allowDocs={allowDocs} />}
       {errors.length > 0 && (
         <ul className="task-error small">
           {errors.map((e) => (
@@ -198,6 +217,7 @@ export function AttachmentGallery({
   analyses,
   onAnalyze,
   analyzeBlocker,
+  allowDocs = false,
 }: {
   items: Attachment[];
   roles: AttachmentRole[];
@@ -216,6 +236,8 @@ export function AttachmentGallery({
   onAnalyze?: (a: Attachment) => Promise<boolean>;
   /** 분석할 수 없는 이유(예: A 승인 뒤 잠김) */
   analyzeBlocker?: string | null;
+  /** 요청 자료면 문서도 받는다 */
+  allowDocs?: boolean;
 }) {
   const [urls, setUrls] = useState<Record<string, string | null>>({});
   const [failed, setFailed] = useState<Record<string, string>>({});
@@ -257,11 +279,11 @@ export function AttachmentGallery({
           {items.map((a, i) => (
             <li key={a.id} className="att-item">
               {urls[a.id] ? (
-                <a href={urls[a.id]!} target="_blank" rel="noreferrer" title="원본 보기">
-                  <Thumb src={urls[a.id]!} alt={a.fileName} />
+                <a href={urls[a.id]!} target="_blank" rel="noreferrer" title={isImage(a.mime) ? '원본 보기' : '열기·내려받기'}>
+                  <Thumb src={urls[a.id]!} alt={a.fileName} mime={a.mime} />
                 </a>
               ) : (
-                <Thumb src={null} alt={a.fileName} />
+                <Thumb src={null} alt={a.fileName} mime={a.mime} />
               )}
               <div className="att-body">
                 <p className="att-name small">
@@ -270,7 +292,7 @@ export function AttachmentGallery({
                 </p>
                 {editable ? (
                   <>
-                    <RoleChips roles={roles} value={a.role} disabled={busy} onChange={(role) => void act(() => onUpdate!({ ...a, role }))} />
+                    <RoleChips roles={rolesOf(roles, a.mime)} value={a.role} disabled={busy} onChange={(role) => void act(() => onUpdate!({ ...a, role }))} />
                     <input
                       className="att-note"
                       placeholder="설명(선택)"
@@ -289,12 +311,13 @@ export function AttachmentGallery({
                   </p>
                 )}
                 {analyses?.get(a.id) ? (
-                  <AnalysisView analysis={analyses.get(a.id)!} />
+                  <AnalysisView analysis={analyses.get(a.id)!} doc={!isImage(a.mime)} />
                 ) : (
                   onAnalyze &&
-                  !analyzeBlocker && (
+                  !analyzeBlocker &&
+                  canGeminiRead(a) && (
                     <button type="button" className="btn btn-small btn-ghost att-analyze" disabled={busy} onClick={() => void act(() => onAnalyze(a))}>
-                      Gemini로 분석
+                      {isImage(a.mime) ? 'Gemini로 분석' : 'Gemini로 요약'}
                     </button>
                   )
                 )}
@@ -323,16 +346,17 @@ export function AttachmentGallery({
         </ol>
       )}
       {blocker && items.length > 0 && <p className="muted small">{blocker}</p>}
-      {onAnalyze && !analyzeBlocker && items.some((a) => !analyses?.get(a.id)) && (
-        <p className="muted small">"Gemini로 분석"을 누르면 그 이미지가 Google(Gemini 무료)로 갑니다. 개인정보·기밀이 보이는 이미지는 보내지 마세요. 분석은 원본을 대신하지 않습니다.</p>
+      {onAnalyze && !analyzeBlocker && items.some((a) => !analyses?.get(a.id) && canGeminiRead(a)) && (
+        <p className="muted small">"Gemini로 분석·요약"을 누르면 그 파일이 Google(Gemini 무료)로 갑니다. 개인정보·기밀이 담긴 파일은 보내지 마세요. 분석은 원본을 대신하지 않습니다. DOCX·XLSX·PPTX·ZIP과 10MB 넘는 문서는 보관만 합니다.</p>
       )}
       {!blocker && onAdd && items.length < max && (
         <DropZone
           disabled={busy}
-          label={busy ? '올리는 중…' : '이미지 추가'}
+          label={busy ? '올리는 중…' : allowDocs ? '이미지·문서 추가' : '이미지 추가'}
+          allowDocs={allowDocs}
           onFiles={(list) =>
             void act(async () => {
-              const { files, errors } = takeImages(list, max - items.length);
+              const { files, errors } = takeImages(list, max - items.length, allowDocs);
               setErrors([...errors, ...(files.length ? await onAdd(files) : [])]);
             })
           }
@@ -350,33 +374,37 @@ export function AttachmentGallery({
 }
 
 /** Gemini 분석 결과 보기. 보이는 것과 추정을 나눠 보여 준다. */
-function AnalysisView({ analysis }: { analysis: ImageAnalysis }) {
+function AnalysisView({ analysis, doc }: { analysis: ImageAnalysis; doc: boolean }) {
   const b = analysis.analysis;
+  // 문서 요약도 같은 칸을 쓴다: 핵심 내용 / 구성·요약 / 원문 인용 / 요청과의 관련
+  const L = doc
+    ? { obs: '문서에 적힌 핵심', ui: '구성·요약', text: '원문 인용', fit: '요청과의 관련', same: '같은 문서의 이전 요약', title: 'Gemini 요약 보기' }
+    : { obs: '보이는 것', ui: '화면 구조', text: '글자', fit: '역할과 맞는지', same: '같은 이미지의 이전 분석', title: 'Gemini 분석 보기' };
   return (
     <details className="att-analysis">
       <summary className="small">
-        Gemini 분석 보기 <span className="muted">· {analysis.keySlot === null ? '같은 이미지의 이전 분석' : analysis.model}</span>
+        {L.title} <span className="muted">· {analysis.keySlot === null ? L.same : analysis.model}</span>
       </summary>
       <dl className="small">
         {b.observations?.length > 0 && (
           <>
-            <dt>보이는 것</dt>
+            <dt>{L.obs}</dt>
             <dd>{b.observations.join(' / ')}</dd>
           </>
         )}
         {b.ui_structure && (
           <>
-            <dt>화면 구조</dt>
+            <dt>{L.ui}</dt>
             <dd>{b.ui_structure}</dd>
           </>
         )}
         {b.visible_text?.length > 0 && (
           <>
-            <dt>글자</dt>
+            <dt>{L.text}</dt>
             <dd>{b.visible_text.join(' / ')}</dd>
           </>
         )}
-        {b.colors_layout && (
+        {b.colors_layout && !doc && (
           <>
             <dt>색·배치</dt>
             <dd>{b.colors_layout}</dd>
@@ -384,7 +412,7 @@ function AnalysisView({ analysis }: { analysis: ImageAnalysis }) {
         )}
         {b.role_fit && (
           <>
-            <dt>역할과 맞는지</dt>
+            <dt>{L.fit}</dt>
             <dd>{b.role_fit}</dd>
           </>
         )}
