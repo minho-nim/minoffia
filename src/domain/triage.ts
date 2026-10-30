@@ -15,17 +15,29 @@ import { STAGE_LABEL, type Stage } from './workflow-types';
 export type Triage =
   | { kind: 'status'; answer: string }
   | { kind: 'request'; candidates: Project[]; reason: string }
+  /** "새 프로젝트 만들어줘": 업무가 아니라 프로젝트 만들기. 이름이 따옴표로 있으면 함께 */
+  | { kind: 'new_project'; name: string | null }
   | { kind: 'question' }
   | { kind: 'unclear' };
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s_\-./·]+/g, '');
+
+/**
+ * 흔한 낱말과 같은 프로젝트 이름은 문장에서 자동으로 짐작하지 않는다
+ * ("새 프로젝트 만들어줘"를 '프로젝트' 프로젝트로 착각하지 않게). 목록에서 고르면 된다.
+ */
+const GENERIC_NAMES = new Set(
+  ['프로젝트', 'project', '테스트', 'test', '시험', '앱', 'app', '웹', 'web', '사이트', 'site', '기능', '화면', '데모', 'demo', '업무', '작업', '새', 'new'].map(norm),
+);
+
+const NEW_PROJECT = /((새|신규|새로운)\s*프로젝트|프로젝트\s*(를|을)?\s*(새로|하나)?\s*(만들|생성|추가|시작))/;
 
 /** 문장에 나온 프로젝트. 이름·저장소 이름이 들어 있으면 후보, 긴 이름이 먼저. */
 export function matchProjects(text: string, projects: Project[]): Project[] {
   const t = norm(text);
   return projects
     .map((p) => {
-      const keys = [p.name, p.repo?.split('/')[1] ?? ''].map(norm).filter((k) => k.length >= 2);
+      const keys = [p.name, p.repo?.split('/')[1] ?? ''].map(norm).filter((k) => k.length >= 2 && !GENERIC_NAMES.has(k));
       const hit = keys.filter((k) => t.includes(k)).sort((a, b) => b.length - a.length)[0];
       return hit ? { p, len: hit.length } : null;
     })
@@ -101,6 +113,10 @@ export function triage(text: string, snap: Snapshot, now: Date = new Date()): Tr
   const isQuestion = QUESTION.test(s);
   // "알려줘·설명해줘"처럼 묻는 말이면서 '해줘'가 붙은 경우는 질문으로 본다.
   const explainOnly = /(알려|설명해|추천해|비교해)\s?(줘|주세요|줄래)/.test(s) && !/(만들어|추가|수정|고쳐|바꿔|구현|삭제|넣어|적용)/.test(s);
+  if (isRequest && !explainOnly && NEW_PROJECT.test(s)) {
+    const quoted = s.match(/["'“‘「]([^"'”’」]{1,60})["'”’」]/)?.[1]?.trim() ?? null;
+    return { kind: 'new_project', name: quoted || null };
+  }
   if (isRequest && !explainOnly) {
     const candidates = matchProjects(s, snap.projects);
     const reason = candidates.length ? `문장에 '${candidates[0].name}'이(가) 들어 있음` : '문장에 프로젝트 이름이 없음';

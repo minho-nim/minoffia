@@ -25,7 +25,8 @@ type Pending =
   | { kind: 'pick'; text: string }
   | { kind: 'question'; text: string }
   | { kind: 'unclear'; text: string }
-  | { kind: 'naming'; text: string }
+  /** 새 프로젝트 이름을 기다림. text가 있으면 이름을 받은 뒤 그 요청을 업무로 만든다 */
+  | { kind: 'naming'; text: string; createTask?: boolean }
   | { kind: 'repo'; project: Project };
 
 interface Props {
@@ -161,23 +162,21 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       return;
     }
     if (pending?.kind === 'naming') {
-      const original = pending.text;
+      const original = pending.createTask === false ? null : pending.text;
       setPending(null);
-      void run(async () => {
-        const project = await onCreateProject(text.slice(0, 60));
-        if (!project) return say('office', '프로젝트를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
-        say('office', `'${project.name}' 프로젝트를 만들었습니다.`);
-        await create(original, project);
-        if (onCreateRepo) {
-          setPending({ kind: 'repo', project });
-          say('office', 'GitHub 저장소도 만들까요? 비공개 빈 저장소(README만)를 만들고 이 프로젝트에 연결합니다.');
-        } else say('office', 'GitHub 저장소는 아직 연결되지 않았습니다(프로젝트 탭에서 owner/repo 입력).');
-      });
+      void run(() => makeProject(text, original));
       return;
     }
     setPending(null);
     const t = triage(text, snap);
     if (t.kind === 'status') say('office', t.answer);
+    else if (t.kind === 'new_project') {
+      if (t.name) void run(() => makeProject(t.name!, null));
+      else {
+        setPending({ kind: 'naming', text: '', createTask: false });
+        say('office', '새 프로젝트 이름을 알려주세요.');
+      }
+    }
     else if (t.kind === 'request') handleRequest(text, t.candidates);
     else if (t.kind === 'question') {
       setPending({ kind: 'question', text });
@@ -186,6 +185,25 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       setPending({ kind: 'unclear', text });
       say('office', '질문인가요, 업무 요청인가요?');
     }
+  };
+
+  /** 프로젝트를 만들고, 원래 요청이 있으면 업무로 접수한 뒤 저장소를 만들지 묻는다. */
+  const makeProject = async (rawName: string, original: string | null) => {
+    const name = rawName.trim().slice(0, 60);
+    const same = snap.projects.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (same) {
+      say('office', `'${same.name}' 프로젝트는 이미 있어요. 그 프로젝트를 쓰거나 다른 이름을 알려주세요.`);
+      setPending({ kind: 'naming', text: original ?? '', createTask: original !== null });
+      return;
+    }
+    const project = await onCreateProject(name);
+    if (!project) return say('office', '프로젝트를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
+    say('office', `'${project.name}' 프로젝트를 만들었습니다.`);
+    if (original) await create(original, project);
+    if (onCreateRepo) {
+      setPending({ kind: 'repo', project });
+      say('office', 'GitHub 저장소도 만들까요? 비공개 빈 저장소(README만)를 만들고 이 프로젝트에 연결합니다. ("응"이라고 써도 됩니다)');
+    } else say('office', 'GitHub 저장소는 아직 연결되지 않았습니다(프로젝트 탭에서 owner/repo 입력).');
   };
 
   const create = async (text: string, project: Project) => {
@@ -378,8 +396,19 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         </button>
       </form>
       {log.length > 0 && (
-        <button type="button" className="link-btn small" onClick={() => { setLog([]); setPending(null); }}>
-          대화 지우기(이 기기)
+        <button
+          type="button"
+          className="link-btn small"
+          onClick={() => {
+            // 대화를 지우면 미나가 기다리던 요청(접수 확인·프로젝트 이름·저장소 만들기)도 취소한다.
+            // 이미 접수된 업무는 기록이라 지우지 않는다(업무 카드에서 삭제).
+            const hadPending = pending !== null;
+            setPending(null);
+            setShowOther(false);
+            setLog(hadPending ? [{ id: mid(), from: 'office', text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).' }] : []);
+          }}
+        >
+          {pending ? '대화 지우기 · 진행 중인 요청 취소' : '대화 지우기(이 기기)'}
         </button>
       )}
     </section>
