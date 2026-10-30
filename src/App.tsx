@@ -33,6 +33,8 @@ type Filter = 'open' | 'all' | TaskStatus;
 
 const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
 const POLL_MS = 15_000;
+/** 실시간 연결이 있으면 혹시 놓친 변경만 잡는 느린 확인 */
+const POLL_WITH_REALTIME_MS = 120_000;
 
 /** DB·저장소 규칙 위반 메시지를 사용자 말로 바꾼다. */
 function explainDbError(message: string): string {
@@ -141,14 +143,30 @@ export function App() {
     }
   }, [store, say]);
 
+  // 입력창 대화가 다른 기기에서 바뀌면 올려서 Inbox가 바로 다시 받게 한다.
+  const [inboxTick, setInboxTick] = useState(0);
   useEffect(() => {
     if (!store) return;
     void reload();
     if (store.mode !== 'supabase') return;
+    // 실시간: 바뀐 기록이 오면 잠깐 모았다가 한 번만 다시 읽는다(여러 표가 한꺼번에 바뀌는 경우).
+    let timer: number | undefined;
+    const unsubscribe = store.subscribe?.((table) => {
+      if (table === 'inbox_state') {
+        setInboxTick((n) => n + 1);
+        return;
+      }
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void reload(), 400);
+    });
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') void reload();
-    }, POLL_MS);
-    return () => window.clearInterval(id);
+    }, unsubscribe ? POLL_WITH_REALTIME_MS : POLL_MS);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(timer);
+      unsubscribe?.();
+    };
   }, [store, reload]);
 
   useEffect(() => {
@@ -159,8 +177,9 @@ export function App() {
 
   // 입력창 대화를 계정에 저장(Supabase 모드). 로컬 데모는 이 브라우저에만 남는다.
   const inboxSync = useMemo(
-    () => (store && store.mode === 'supabase' ? { load: () => store.loadInbox(), save: (st: InboxState) => store.saveInbox(st) } : undefined),
-    [store],
+    // inboxTick이 바뀌면 새 객체가 되어 Inbox가 바로 다시 받아 온다.
+    () => (store && store.mode === 'supabase' ? { load: () => store.loadInbox(), save: (st: InboxState) => store.saveInbox(st), tick: inboxTick } : undefined),
+    [store, inboxTick],
   );
 
   const visibleTasks = useMemo(() => {
