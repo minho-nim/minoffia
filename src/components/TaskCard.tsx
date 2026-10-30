@@ -34,7 +34,7 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
   const canReassign = (task.status === 'queued' || task.status === 'blocked') && task.dispatch.state !== 'dispatching';
 
   return (
-    <article className={`task-card status-${task.status}`}>
+    <article id={`task-${task.id}`} className={`task-card status-${task.status}`}>
       <header className="task-head">
         <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>
         <h3>{task.title}</h3>

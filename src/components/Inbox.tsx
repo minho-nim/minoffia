@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
-import { chatGptFollowup, chatGptQuestion, questionProject, replyIntent, titleFrom, triage } from '../domain/triage';
+import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
+import { stageNotices, type NoticeAction } from '../domain/stageNotice';
+import { deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
 import { RepoCreate } from './RepoCreate';
@@ -20,18 +22,23 @@ interface Msg {
   id: string;
   from: From;
   text: string;
+  /** 단계 알림: 그 업무가 아직 이 단계일 때만 버튼을 보인다 */
+  taskId?: string;
+  stage?: string;
+  actions?: NoticeAction[];
 }
 
 /** 마지막 안내 메시지에 붙는 선택지 */
 type Pending =
-  | { kind: 'confirm'; text: string; project: Project }
-  | { kind: 'pick'; text: string }
+  /** context: 바로 앞 Gemini 질문·답을 이어서 개발 요청으로 접수할 때 */
+  | { kind: 'confirm'; text: string; project: Project; context?: PriorChat }
+  | { kind: 'pick'; text: string; context?: PriorChat }
   | { kind: 'question'; text: string; projectName?: string }
   /** Gemini가 답한 뒤: GPT에게 이어서 묻기 */
   | { kind: 'followup'; text: string; answer: string }
   | { kind: 'unclear'; text: string }
   /** 새 프로젝트 이름을 기다림. text가 있으면 이름을 받은 뒤 그 요청을 업무로 만든다 */
-  | { kind: 'naming'; text: string; createTask?: boolean }
+  | { kind: 'naming'; text: string; createTask?: boolean; context?: PriorChat }
   | { kind: 'repo'; project: Project };
 
 interface Props {
@@ -48,9 +55,17 @@ interface Props {
   sync?: { load: () => Promise<InboxState | null>; save: (state: InboxState) => Promise<void> };
   /** 대화 기록(개발일지 원본)에 추가. 프로젝트 업무와 연결된 메시지만 보낸다(일반 대화·질문은 남기지 않음). */
   onArchive?: (entries: NewChatEntry[]) => Promise<void>;
+  /** 단계 알림의 "업무 카드 보기" */
+  onShowTask?: (taskId: string) => void;
+  /** 단계 알림에서 바로 A·B 승인(업무 카드의 같은 버튼과 같은 규칙). 성공하면 true */
+  onApprove?: (task: Task, gate: 'A' | 'B') => Promise<boolean>;
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
+/** 이 기기가 마지막으로 본 업무 단계(업무 id → 단계·버전). 바뀌면 미니엉이 알린다. */
+const SEEN_KEY = 'minlab-ai-office:stage-seen:v1';
+/** Gemini 답 바로 뒤에 이어 묻는 말로 보는 길이(이보다 길고 애매하면 질문인지 업무인지 묻는다) */
+const FOLLOWUP_MAX = 60;
 /** 미니엉이 기다리는 선택(탭을 옮겨도 남게) */
 const PENDING_KEY = 'minlab-ai-office:inbox-pending:v1';
 /** 아직 서버 대화 기록에 못 올린 메시지(연결이 끊겼을 때 다음에 다시 올린다) */
@@ -134,11 +149,26 @@ const toBase64 = (file: File) =>
     r.readAsDataURL(file);
   });
 
-export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive }: Props) {
+function readSeen(): Record<string, string> | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(SEEN_KEY) ?? 'null') as Record<string, string> | null;
+    return v && typeof v === 'object' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: 'A 승인', B: 'B 승인(GitHub 업로드)' };
+
+export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
+  const logRef = useRef(log);
+  logRef.current = log;
   const [input, setInput] = useState('');
   const [pending, setPending] = useState<Pending | null>(readPending);
   const [busy, setBusy] = useState(false);
+  // 계정 대화를 처음 받아 온 뒤에 단계 알림을 넣는다(받아 온 대화에 덮이지 않게).
+  const [syncReady, setSyncReady] = useState(!sync);
   const [showOther, setShowOther] = useState(false);
   const [photos, setPhotosState] = useState<File[]>(photoStore.draft);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
@@ -224,6 +254,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         // 연결이 끊겨도 이 기기 대화는 그대로 쓴다.
       } finally {
         loaded.current = true;
+        setSyncReady(true);
       }
     };
     void pull();
@@ -273,6 +304,45 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     if (!now || (pending.kind === 'repo' && now.repo)) setPending(null);
   }, [snap.projects, pending]);
 
+  // 단계 알림: 업무 단계·버전이 바뀌면 미니엉이 알리고, 아래에 버튼을 둔다(규칙만, 토큰 0).
+  // 다른 기기가 이미 넣은 알림(같은 id)은 다시 넣지 않는다. 처음 쓰는 기기는 지금 상태를 기억만 한다.
+  useEffect(() => {
+    if (!syncReady) return;
+    const before = readSeen();
+    const { notices, seen } = stageNotices(snap.tasks, snap.workflow, before ?? Object.fromEntries(snap.tasks.map((t) => [t.id, ''])));
+    try {
+      localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+    } catch {
+      // 저장이 막힌 브라우저: 이번 화면에서만 알린다.
+    }
+    const have = new Set(logRef.current.map((m) => m.id));
+    const add = (before ? notices : []).filter((n) => !have.has(n.id));
+    if (!add.length) return;
+    add.forEach((n) => archive({ role: 'office', text: n.text, projectId: n.projectId, taskId: n.taskId }));
+    const msgs: Msg[] = add.map((n) => ({ id: n.id, from: 'office', text: n.text, taskId: n.taskId, stage: n.stage, actions: n.actions }));
+    setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
+  }, [snap.tasks, snap.workflow, syncReady]);
+
+  /** 마지막 메시지가 지금도 유효한 승인 알림이면 그 승인(글로 "응", "승인"이라고 답할 때) */
+  const openNoticeGate = (): { msg: Msg; gate: 'A' | 'B' } | null => {
+    const last = log[log.length - 1];
+    const gate = last?.actions?.find((a): a is 'A' | 'B' => a === 'A' || a === 'B');
+    const task = snap.tasks.find((t) => t.id === last?.taskId);
+    if (!last || !gate || !task || deriveWorkflow(task, snap.workflow).stage !== last.stage) return null;
+    return { msg: last, gate };
+  };
+
+  const noticeAct = (m: Msg, action: NoticeAction) => {
+    const task = snap.tasks.find((t) => t.id === m.taskId);
+    if (!task) return say('office', '이 업무는 지워졌어요.');
+    if (action === 'open') return onShowTask?.(task.id);
+    if (!onApprove) return;
+    say('me', ACTION_LABEL[action], { projectId: task.projectId, taskId: task.id });
+    void run(async () => {
+      if (!(await onApprove(task, action))) say('office', '승인하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
+    });
+  };
+
   // 대화 기록: 실패하면 이 기기에 모아 두었다가 다음 메시지 때 함께 올린다(순서 유지).
   const flushing = useRef(false);
   const archive = (entry?: NewChatEntry) => {
@@ -312,17 +382,24 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
   };
 
-  const askProject = (text: string) => {
+  const askProject = (text: string, context?: PriorChat) => {
     setShowOther(false);
-    setPending({ kind: 'pick', text });
-    say('office', '어느 프로젝트 업무인가요? 아래에서 고르거나 새 프로젝트를 만드세요.');
+    setPending({ kind: 'pick', text, context });
+    say('office', `${context ? '앞 대화를 이어서 개발 요청으로 접수할게요. ' : ''}어느 프로젝트 업무인가요? 아래에서 고르거나 새 프로젝트를 만드세요.`);
   };
 
-  const handleRequest = (text: string, candidates: Project[]) => {
+  const short = (t: string) => (t.length > 30 ? `${t.slice(0, 29)}…` : t);
+
+  const handleRequest = (text: string, candidates: Project[], context?: PriorChat) => {
     if (candidates.length === 1) {
-      setPending({ kind: 'confirm', text, project: candidates[0] });
-      say('office', `'${candidates[0].name}' 프로젝트 업무로 접수할까요?`);
-    } else askProject(text);
+      setPending({ kind: 'confirm', text, project: candidates[0], context });
+      say(
+        'office',
+        context
+          ? `앞 대화('${short(context.question)}')를 이어서 개발 요청으로 접수할까요? 프로젝트는 '${candidates[0].name}' 맞아요?`
+          : `'${candidates[0].name}' 프로젝트 업무로 접수할까요?`,
+      );
+    } else askProject(text, context);
   };
 
   const submit = (raw: string) => {
@@ -341,6 +418,14 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     say('me', sent.length ? `${text}\n(첨부 ${sent.length}개: ${sent.map((f) => f.name).join(', ')})` : text);
     // 확인 질문에 버튼 대신 글로 답한 경우("응", "만들어", "아니" 등)
     const yn = replyIntent(text);
+    const notice = !pending && onApprove ? openNoticeGate() : null;
+    if (notice && (yn === 'yes' || /^(승인|[ab]\s?승인)/i.test(text))) {
+      const task = snap.tasks.find((t) => t.id === notice.msg.taskId)!;
+      void run(async () => {
+        if (!(await onApprove!(task, notice.gate))) say('office', '승인하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
+      });
+      return;
+    }
     if (pending?.kind === 'repo' && yn) {
       const project = pending.project;
       if (yn === 'no') {
@@ -364,9 +449,9 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
     if (pending?.kind === 'confirm' && yn) {
       if (yn === 'yes') {
-        const { text: original, project } = pending;
+        const { text: original, project, context } = pending;
         setPending(null);
-        void run(() => create(original, project));
+        void run(() => create(original, project, context));
       } else {
         setShowOther(true);
         say('office', '그럼 어느 프로젝트인가요? 아래에서 고르세요.');
@@ -375,10 +460,13 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     }
     if (pending?.kind === 'naming') {
       const original = pending.createTask === false ? null : pending.text;
+      const context = pending.context;
       setPending(null);
-      void run(() => makeProject(text, original));
+      void run(() => makeProject(text, original, context));
       return;
     }
+    // Gemini 답 바로 뒤의 개발 요청("그럼 그거 만들어줘")은 앞 대화를 함께 업무에 넣는다.
+    const prior: PriorChat | undefined = pending?.kind === 'followup' ? { question: pending.text, answer: pending.answer } : undefined;
     setPending(null);
     const t = triage(text, snap);
     if (t.kind === 'status') {
@@ -393,7 +481,10 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         say('office', '새 프로젝트 이름을 알려주세요.');
       }
     }
-    else if (t.kind === 'request') handleRequest(text, t.candidates);
+    else if (t.kind === 'request') {
+      const candidates = t.candidates.length || !prior ? t.candidates : matchProjects(prior.question, snap.projects);
+      handleRequest(text, candidates, prior);
+    }
     else if (t.kind === 'question') {
       // 소유자 결정(2026-10-30): 일반 질문은 보내기 한 번에 Gemini 무료가 답하고, GPT로 이어서 물을 수 있다.
       // 프로젝트 판단이 필요한 질문(프로젝트 이름이 들어 있음)은 GPT를 먼저 권한다.
@@ -406,6 +497,9 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         setPending({ kind: 'question', text });
         say('office', '업무 기록으로는 답할 수 없는 질문이에요. 어디에 물어볼까요?');
       }
+    } else if (prior && canAskGemini && text.length <= FOLLOWUP_MAX) {
+      // Gemini 답 바로 뒤의 짧은 말("더 자세히", "예시도")은 이어지는 질문으로 본다. 개발하라는 말이 있으면 위에서 확인한다.
+      askGemini(text);
     } else {
       setPending({ kind: 'unclear', text });
       say('office', '질문인가요, 업무 요청인가요?');
@@ -413,38 +507,42 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
   };
 
   /** 프로젝트를 만들고, 원래 요청이 있으면 업무로 접수한 뒤 저장소를 만들지 묻는다. */
-  const makeProject = async (rawName: string, original: string | null) => {
+  const makeProject = async (rawName: string, original: string | null, context?: PriorChat) => {
     const name = rawName.trim().slice(0, 60);
     const same = snap.projects.find((p) => p.name.toLowerCase() === name.toLowerCase());
     if (same) {
       say('office', `'${same.name}' 프로젝트는 이미 있어요. 그 프로젝트를 쓰거나 다른 이름을 알려주세요.`);
-      setPending({ kind: 'naming', text: original ?? '', createTask: original !== null });
+      setPending({ kind: 'naming', text: original ?? '', createTask: original !== null, context });
       return;
     }
     const project = await onCreateProject(name);
     if (!project) return say('office', '프로젝트를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
     say('office', `'${project.name}' 프로젝트를 만들었습니다.`, { projectId: project.id });
-    if (original) await create(original, project);
+    if (original) await create(original, project, context);
     if (onCreateRepo) {
       setPending({ kind: 'repo', project });
       say('office', 'GitHub 저장소도 만들까요? 비공개 빈 저장소(README만)를 만들고 이 프로젝트에 연결합니다. ("응"이라고 써도 됩니다)');
     } else say('office', 'GitHub 저장소는 아직 연결되지 않았습니다(프로젝트 탭에서 owner/repo 입력).');
   };
 
-  const create = async (text: string, project: Project) => {
+  const create = async (text: string, project: Project, context?: PriorChat) => {
     const title = titleFrom(text);
     const images: PendingImage[] = photoStore.held.map((file, i) => ({ key: `${i}-${file.name}`, file, role: isImage(file.type) ? 'reference' : 'document', note: '' }));
     photoStore.held = [];
     const task = await onCreateTask({
       projectId: project.id,
       title,
-      description: text === title ? '' : text,
+      description: context ? priorChatText(context) : text === title ? '' : text,
       requestedType: 'auto',
       priority: 'normal',
       originalText: text,
     }, images);
     if (!task) return say('office', '업무를 저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
-    // 접수된 요청 원문은 화면에 이미 있으므로 기록에만 남긴다.
+    // 접수된 요청 원문은 화면에 이미 있으므로 기록에만 남긴다. 이어 온 앞 대화도 이 업무 기록이 된다(개발 전 삭제 시 함께 지워짐).
+    if (context) {
+      archive({ role: 'me', text: context.question, projectId: project.id, taskId: task.id });
+      archive({ role: 'gemini', text: context.answer, projectId: project.id, taskId: task.id });
+    }
     archive({ role: 'me', text, projectId: project.id, taskId: task.id });
     say(
       'office',
@@ -456,10 +554,11 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
 
   const choose = (project: Project) => {
     if (!pending || pending.kind === 'repo') return;
-    const text = pending.text;
+    const { text } = pending;
+    const context = 'context' in pending ? pending.context : undefined;
     setPending(null);
     say('me', `${project.name} 맞아요`, { projectId: project.id });
-    void run(() => create(text, project));
+    void run(() => create(text, project, context));
   };
 
   const askGemini = (text: string) => {
@@ -508,6 +607,20 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
             <li key={m.id} className={`inbox-msg from-${m.from}`}>
               <span className="inbox-who">{FROM_LABEL[m.from]}</span>
               <p>{m.text}</p>
+              {m.actions && !busy && (() => {
+                // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
+                const task = snap.tasks.find((t) => t.id === m.taskId);
+                if (!task || deriveWorkflow(task, snap.workflow).stage !== m.stage) return null;
+                return (
+                  <span className="inbox-choices" role="group" aria-label="이 업무에 답하기">
+                    {m.actions.filter((a) => a === 'open' || onApprove).map((a) => (
+                      <button key={a} type="button" className={`btn btn-small ${a === 'open' ? 'btn-ghost' : 'btn-primary'}`} onClick={() => noticeAct(m, a)}>
+                        {ACTION_LABEL[a]}
+                      </button>
+                    ))}
+                  </span>
+                );
+              })()}
             </li>
           ))}
         </ol>
@@ -533,7 +646,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
                       {p.name}
                     </button>
                   ))}
-                  <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'naming', text: pending.text })}>
+                  <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'naming', text: pending.text, context: pending.context })}>
                     + 새 프로젝트
                   </button>
                 </span>
@@ -547,7 +660,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
                   {p.name}
                 </button>
               ))}
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'naming', text: pending.text })}>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'naming', text: pending.text, context: pending.context })}>
                 + 새 프로젝트
               </button>
               <button type="button" className="btn btn-small btn-ghost" onClick={() => setPending({ kind: 'question', text: pending.text })}>
@@ -560,7 +673,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
               <button type="button" className="btn btn-small btn-ghost" onClick={() => void copyGpt(pending.text, pending.answer)}>
                 GPT에게 이어서 묻기
               </button>
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text)}>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text, { question: pending.text, answer: pending.answer })}>
                 업무로 만들기
               </button>
               <p className="muted small inbox-note">GPT에게 이어서 묻기: 질문과 Gemini 답을 함께 복사합니다. ChatGPT 앱에 붙여넣으세요(Plus 구독 안, 추가 비용 없음).</p>
