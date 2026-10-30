@@ -503,6 +503,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         void client.removeChannel(channel);
       };
     },
+    async startClaudeDev(assignmentId, acknowledgeRetry) {
+      const data = await invoke('dispatch-claude-dev', { assignmentId, acknowledgeRetry });
+      return { sessionUrl: (data.sessionUrl as string | null) ?? null };
+    },
     async deployRelease(taskId) {
       const data = await invoke('deploy-release', { taskId });
       return { updated: Boolean(data.updated), to: String(data.to ?? '') };
