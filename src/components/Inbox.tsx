@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { AGENT_BY_ID } from '../domain/agents';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
@@ -55,6 +54,8 @@ interface Props {
   sync?: { load: () => Promise<InboxState | null>; save: (state: InboxState) => Promise<void> };
   /** 대화 기록(개발일지 원본)에 추가. 프로젝트 업무와 연결된 메시지만 보낸다(일반 대화·질문은 남기지 않음). */
   onArchive?: (entries: NewChatEntry[]) => Promise<void>;
+  /** 접수 직후 Gemini 기획서 초안을 자동으로 시작한다(Supabase 모드). 없으면 ChatGPT 기획을 안내한다. */
+  onAutoDraft?: (task: Task) => void;
   /** 단계 알림의 "업무 카드 보기" */
   onShowTask?: (taskId: string) => void;
   /** 단계 알림에서 바로 A·B 승인(업무 카드의 같은 버튼과 같은 규칙). 성공하면 true */
@@ -160,7 +161,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: 'A 승인', B: 'B 승인(GitHub 업로드)' };
 
-export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove }: Props) {
+export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const logRef = useRef(log);
   logRef.current = log;
@@ -550,9 +551,12 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     archive({ role: 'me', text, projectId: project.id, taskId: task.id });
     say(
       'office',
-      `'${project.name}'에 접수했어요: ${task.title}\n담당 ${AGENT_BY_ID[task.assignee].name} · ${task.routeReason}\n아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.`,
+      `'${project.name}'에 접수했어요: ${task.title}\n${
+        onAutoDraft ? 'Gemini(무료)가 기획서 초안을 써요. 다 되면 여기서 알려 드릴게요.' : '아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.'
+      }`,
       { projectId: project.id, taskId: task.id },
     );
+    onAutoDraft?.(task);
     if (images.length) say('office', `첨부 ${images.length}개를 이 업무의 요청 자료로 올렸어요(이미지 역할은 '기타 참고', 업무 카드에서 바꿀 수 있어요).`);
   };
 

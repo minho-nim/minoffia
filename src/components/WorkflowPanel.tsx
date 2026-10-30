@@ -32,6 +32,8 @@ export interface WorkflowActions {
   copy: (text: string) => Promise<boolean>;
   /** 성공하면 true. 실패 이유는 App이 알림으로 보여준다. */
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
+  /** Gemini 무료 기획서 초안(서버가 새 버전으로 저장) */
+  draftSpec: (task: Task) => Promise<boolean>;
   decide: (task: Task, gate: Gate, revision: number, decision: 'approved' | 'rejected', workItemId?: string, scope?: Record<string, unknown>) => Promise<boolean>;
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
   /** Claude 보조 개발: E 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
@@ -201,16 +203,17 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         </ol>
       </div>
 
-      {/* 1. 기획(ChatGPT 수동 인계) */}
+      {/* 1. 기획: 기본은 Gemini 무료 초안(자동), 어렵거나 중요한 업무만 ChatGPT(수동 인계) */}
       <section className="wf-section">
-        <h4>1. 기획 — ChatGPT</h4>
+        <h4>1. 기획 — Gemini 초안 · ChatGPT</h4>
         {view.plannerFeedback && (
           <p className="task-error">
-            v{view.spec?.revision}에 수정 요청: {view.plannerFeedback} — 자료를 다시 복사하면 이 내용이 함께 들어갑니다. ChatGPT 결과로 새 버전을 저장하세요.
+            v{view.spec?.revision}에 수정 요청: {view.plannerFeedback} —{' '}
+            {view.spec?.planner === 'gemini_draft' ? 'Gemini가 이 내용을 반영해 다시 씁니다(안 되면 아래 버튼).' : '자료를 다시 복사하면 이 내용이 함께 들어갑니다. ChatGPT 결과로 새 버전을 저장하세요.'}
           </p>
         )}
         <p className="muted small">
-          ChatGPT 자동 연결은 없습니다(수동 인계). 자료를 복사해 ChatGPT에서 기획한 뒤, 결과를 아래에 저장하세요. 이미지는 아래에서 열어 ChatGPT 대화에 직접 첨부하세요(Gemini 이미지 분석은 아직 연결되지 않았습니다). 링크는 서버가 읽어 본문을 자료에 넣고, ChatGPT가 물어본 확인 질문은 답과 함께 기록해 두면 다음 자료에 들어갑니다.
+          기본은 Gemini(무료)가 기획서 초안을 씁니다. 초안을 보고 A 승인하거나 수정 요청만 하세요. 어렵거나 중요한 업무는 "ChatGPT용 자료 복사"로 ChatGPT에서 기획해 저장할 수 있습니다(수동). 링크·확인 질문·이미지 분석은 두 쪽 모두에 들어갑니다.
         </p>
         <div className="wf-sub">
           <p className="small">
@@ -235,6 +238,11 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         </div>
         <RequestContext task={task} view={view} links={taskLinks} clarifications={taskQa} canReadLinks={canReadLinks} actions={actions} />
         <div className="task-actions">
+          {canReadLinks && !view.aApproved && (
+            <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.draftSpec(task))}>
+              {view.spec ? 'Gemini로 초안 다시 쓰기' : 'Gemini 기획서 초안(무료)'}
+            </button>
+          )}
           <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project, view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null, requestImages, taskLinks, taskQa, analyses))}>
             {copied === 'gpt' ? '복사됨' : 'ChatGPT용 자료 복사'}
           </button>
@@ -247,7 +255,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         {view.spec && !editing && (
           <div className="wf-spec">
             <p>
-              <b>v{view.spec.revision}</b> · {INTENT_LABEL[view.spec.intent]}
+              <b>v{view.spec.revision}</b> · {INTENT_LABEL[view.spec.intent]} · {view.spec.planner === 'gemini_draft' ? 'Gemini 초안' : 'ChatGPT 기획'}
             </p>
             {view.spec.intent === 'question' ? (
               <p className="wf-pre">{view.spec.answer || '(답변 없음)'}</p>
@@ -349,7 +357,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   A 승인 (v{view.spec.revision})
                 </button>
                 <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => setShowAFeedback((v) => !v)}>
-                  수정 요청(ChatGPT로)
+                  {view.spec.planner === 'gemini_draft' ? '수정 요청(Gemini가 다시 씀)' : '수정 요청(ChatGPT로)'}
                 </button>
               </div>
               {showAFeedback && (

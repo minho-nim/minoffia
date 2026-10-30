@@ -46,7 +46,7 @@ const toSpec = (r: Row): TaskSpec => ({
   taskId: r.task_id as string,
   revision: r.revision as number,
   intent: r.intent as TaskSpec['intent'],
-  planner: 'chatgpt_manual',
+  planner: r.planner === 'gemini_draft' ? 'gemini_draft' : 'chatgpt_manual',
   userOriginalText: r.user_original_text as string,
   finalPrompt: r.final_prompt as string,
   changeScope: r.change_scope as string,
@@ -502,6 +502,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       return () => {
         void client.removeChannel(channel);
       };
+    },
+    async draftSpec(taskId, text) {
+      const data = await invoke('draft-spec', { taskId, text });
+      return { revision: Number(data.revision), intent: String(data.intent ?? '') };
     },
     async startClaudeDev(assignmentId, acknowledgeRetry) {
       const data = await invoke('dispatch-claude-dev', { assignmentId, acknowledgeRetry });
