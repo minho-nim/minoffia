@@ -174,6 +174,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLOListElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // 입력칸은 쓴 만큼 늘어난다(최대 높이는 CSS max-height). 보내서 비우면 다시 줄어든다.
@@ -214,8 +215,11 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     } catch {
       // 저장이 막힌 브라우저에서는 이번 화면에서만 남는다.
     }
+    // 대화 상자 안을 맨 아래(새 메시지)로 내리고, 화면도 입력창이 보이게 맞춘다.
+    const box = listRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
     endRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [log, pending]);
+  }, [log, pending, busy]);
 
   useEffect(() => {
     try {
@@ -602,7 +606,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
         </p>
       )}
       {log.length > 0 && (
-        <ol className="inbox-log" aria-live="polite">
+        <ol ref={listRef} className="inbox-log" aria-live="polite">
           {log.map((m) => (
             <li key={m.id} className={`inbox-msg from-${m.from}`}>
               <span className="inbox-who">{FROM_LABEL[m.from]}</span>
