@@ -46,4 +46,13 @@ describe('단계 알림(v0.3.9)', () => {
   it('지운 업무는 기억에서 뺀다', () => {
     expect(stageNotices([], data({}), { t1: 'x' }).seen).toEqual({});
   });
+
+  it('Gemini 초안이 확인 질문을 남기면 질문과 "입력창에 답하기"를 알린다', () => {
+    const { seen } = stageNotices([task], data({}), {});
+    const ask = { ...spec(1), intent: 'ambiguous' as const, planner: 'gemini_draft' as const, finalPrompt: '', answer: '1. 어느 화면인가요?' };
+    const r = stageNotices([task], data({ specs: [ask] }), seen);
+    expect(r.notices[0].stage).toBe('needs_clarification');
+    expect(r.notices[0].text).toContain('확인 질문:\n1. 어느 화면인가요?');
+    expect(r.notices[0].text).toContain('입력창에 답을 쓰면 Gemini');
+  });
 });
