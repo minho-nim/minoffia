@@ -55,3 +55,17 @@ describe('replyIntent', () => {
     for (const x of ['MuscleMap에 다크 모드 추가해줘', 'useEffect가 뭐야?', '음']) expect(replyIntent(x), x).toBeNull();
   });
 });
+
+describe('새 프로젝트·흔한 이름', () => {
+  const withGeneric = { ...snap, projects: [...snap.projects, { id: 'p-x', name: '프로젝트', repo: null, description: '', createdAt: '' }, { id: 'p-t', name: '테스트', repo: null, description: '', createdAt: '' }] };
+  it('"새 프로젝트 만들어줘"는 업무가 아니라 프로젝트 만들기', () => {
+    expect(triage('새 프로젝트 만들어줘', withGeneric, now)).toEqual({ kind: 'new_project', name: null });
+    expect(triage('프로젝트 하나 만들어줘 "ShopApp"', withGeneric, now)).toEqual({ kind: 'new_project', name: 'ShopApp' });
+    expect(triage('MuscleMap 프로젝트에 로그인 추가해줘', withGeneric, now).kind).toBe('request');
+  });
+  it('흔한 낱말 이름은 자동으로 짐작하지 않는다', () => {
+    expect(matchProjects('테스트 코드 추가해줘', withGeneric.projects)).toEqual([]);
+    expect(matchProjects('프로젝트 화면 고쳐줘', withGeneric.projects)).toEqual([]);
+    expect(matchProjects('MuscleMap 화면 고쳐줘', withGeneric.projects).map((p) => p.name)).toEqual(['MuscleMap']);
+  });
+});
