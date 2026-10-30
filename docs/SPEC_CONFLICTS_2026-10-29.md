@@ -22,3 +22,6 @@
 - 두 Gemini 키가 서로 다른 무료 프로젝트인지, 무료 한도(RPM·RPD) 숫자 — 소유자가 AI Studio에서 확인.
 - `ask-gemini` 실제 호출(모델 이름이 맞는지) — 운영 배포 후 실측.
 - GitHub 저장소 만들기 — 소유자가 토큰(`GITHUB_REPO_TOKEN`)을 넣은 뒤 운영에서 실측.
+
+## 운영 실측 메모 (2026-10-30)
+- 첫 호출에서 Google이 `gemini-2.5-flash-lite`를 "새 사용자에게 더 이상 제공되지 않음(404)"으로 거절하고 `gemini-3.5-flash-lite`를 권했다. 기본 모델을 `gemini-3.5-flash-lite`로 바꿨다(`ask-gemini`, `analyze-image`). 모델이 다시 바뀌면 코드 수정 없이 secret `GEMINI_MODEL`로 바꿀 수 있다.

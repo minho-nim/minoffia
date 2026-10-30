@@ -8,7 +8,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 /** 코드 상한. GEMINI_DAILY_CAP을 더 크게 줘도 넘지 않는다(이미지 분석과 무료 한도를 나눠 쓴다). */
 const HARD_DAILY_CAP = 100;
 const DEFAULT_DAILY_CAP = 40;
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const MAX_QUESTION = 4000;
 const MAX_HISTORY = 6;
 /** 질문에 함께 보낼 사진: 최대 3장, 합계 6MB(원본 기준). 저장하지 않는다. */
