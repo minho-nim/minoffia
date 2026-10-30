@@ -69,7 +69,7 @@
 - `src/domain/attachments.ts`·`src/components/Attachments.tsx` 이미지·문서 첨부(비공개 버킷 `attachments`, 규칙은 `0004_attachments.sql`·`0012_document_attachments.sql`과 같아야 함)
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
-- `src/data` 저장소: localStorage 데모 / Supabase
+- `src/data` 저장소: localStorage 데모 / Supabase(여러 기기 실시간 반영은 Supabase Realtime, 표 목록은 `0015_realtime.sql`과 `supabaseStore.ts`의 `REALTIME_TABLES`가 같아야 함)
 - `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`, `supabase/functions/create-repo`, `supabase/functions/analyze-image`, `supabase/functions/pr-status`, `supabase/functions/deploy-release`
 - `src/domain/devlog.ts`·`src/components/DevlogPanel.tsx` 개발일지(대화 + 업무 기록 → 프로젝트별·날짜별 Markdown)
 

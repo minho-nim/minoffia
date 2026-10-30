@@ -54,6 +54,11 @@ export interface OfficeStore {
   checkPr(taskId: string): Promise<PrCheck>;
   /** C 승인 뒤 서버가 release를 main으로 앞당긴다(운영 배포). 로컬 데모는 지원하지 않음. */
   deployRelease(taskId: string): Promise<{ updated: boolean; to: string }>;
+  /**
+   * 다른 기기에서 바뀐 기록을 바로 알려 준다(Supabase Realtime, 바뀐 표 이름). 끊을 함수를 돌려준다.
+   * 로컬 데모는 없음(이 브라우저에만 저장).
+   */
+  subscribe?(onChange: (table: string) => void): () => void;
   /** 입력창 대화(계정에 저장해 여러 기기에서 이어 본다. 로컬 데모는 이 브라우저에만) */
   loadInbox(): Promise<InboxState | null>;
   saveInbox(state: InboxState): Promise<void>;
