@@ -34,6 +34,8 @@ export interface WorkflowActions {
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   decide: (task: Task, gate: Gate, revision: number, decision: 'approved' | 'rejected', workItemId?: string, scope?: Record<string, unknown>) => Promise<boolean>;
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
+  /** Claude 보조 개발: E 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
+  startClaudeDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** 견본 먼저: P(견본 승인) + 견본 작업 끝냄 */
   approvePrototype: (task: Task) => Promise<boolean>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
@@ -129,6 +131,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
   const [showAFeedback, setShowAFeedback] = useState(false);
   const [revisionText, setRevisionText] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  // 실패한 Claude 보조 개발을 다시 시작하기 전 '세션 기록 확인함'
+  const [devAck, setDevAck] = useState<Record<string, boolean>>({});
   const [resultImages, setResultImages] = useState<PendingImage[]>([]);
   const requestImages = attachmentsOf(attachments, task.id, 'request');
   const analysisById = new Map(analyses.map((a) => [a.attachmentId, a]));
@@ -173,6 +177,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
   const cCheck = canApprove(view, 'C');
   // 결과를 만든 Codex 작업(B 승인 뒤 같은 창에 PR 요청을 붙여넣는다)
   const codexItem = view.assignments.find((a) => a.assignee === 'codex');
+  // Claude 보조 개발 세션(서버가 시작함). Codex 작업이 없으면 이 세션에 PR 요청을 붙여넣는다.
+  const claudeItem = view.assignments.find((a) => a.assignee === 'claude' && a.providerTaskUrl);
   const failed = task.dispatch.state === 'failed';
   // 수정 요청이 있으면, 요청 뒤에 보냈을 때만 '보냄'으로 본다.
   const sentThisRevision =
@@ -495,10 +501,39 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   {item && item.dependencies.length > 0 && <p className="muted small">먼저 끝나야 할 작업: {item.dependencies.join(', ')}</p>}
 
                   {/* 자동 실행: 검증된 경로만 버튼이 켜진다 */}
-                  <button type="button" className="btn btn-small" disabled title={adapter.reason}>
-                    {a.assignee === 'codex' ? 'Codex 실행 승인' : '실행 승인'} — 자동 실행 준비 중
-                  </button>
-                  <p className="muted small">{adapter.reason}</p>
+                  {a.assignee === 'claude' && actions.startClaudeDev ? (
+                    <div className="wf-auto">
+                      {eOk && (a.dispatchStatus === 'ready' || a.dispatchStatus === 'failed') ? (
+                        <span className="wf-inline">
+                          {a.dispatchStatus === 'failed' && (
+                            <label className="check small">
+                              <input type="checkbox" checked={!!devAck[a.id]} onChange={(e) => setDevAck({ ...devAck, [a.id]: e.target.checked })} />
+                              Routines 기록에서 실제로 시작되지 않았음을 확인했습니다
+                            </label>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-small btn-primary"
+                            disabled={busy || (a.dispatchStatus === 'failed' && !devAck[a.id]) || !!startBlocker(a, allAssignments, view.plan, agentLimits)}
+                            onClick={() => void run(() => actions.startClaudeDev!(a, !!devAck[a.id]))}
+                          >
+                            Claude 보조 개발 시작(자동)
+                          </button>
+                        </span>
+                      ) : (
+                        !eOk && <p className="muted small">E 승인 뒤 Claude가 클라우드에서 바로 개발을 시작합니다(PM과 함께 하루 상한).</p>
+                      )}
+                      {a.dispatchStatus === 'failed' && a.actualProviderStatus && a.actualProviderStatus !== 'unknown' && <p className="task-error small">{a.actualProviderStatus}</p>}
+                      <p className="muted small">{adapter.reason}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <button type="button" className="btn btn-small" disabled title={adapter.reason}>
+                        {a.assignee === 'codex' ? 'Codex 실행 승인' : '실행 승인'} — 자동 실행 준비 중
+                      </button>
+                      <p className="muted small">{adapter.reason}</p>
+                    </>
+                  )}
 
                   {/* 임시 폴백: 수동 인계. 자동 실행 버튼처럼 보이지 않게 따로 둔다 */}
                   <div className="wf-manual">
@@ -563,16 +598,17 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                           </span>
                         ) : (
                           <p className="small">
-                            사용자 기록: 시작함{a.providerTaskUrl && (
+                            {a.statusSource === 'server_verified' ? '서버 확인: 세션 시작됨(완료 아님)' : '사용자 기록: 시작함'}
+                            {a.providerTaskUrl && (
                               <>
                                 {' '}
                                 ·{' '}
                                 <a href={a.providerTaskUrl} target="_blank" rel="noreferrer">
-                                  작업 열기
+                                  {a.statusSource === 'server_verified' ? '세션 열기' : '작업 열기'}
                                 </a>
                               </>
                             )}{' '}
-                            <span className="muted">(서버 확인 아님)</span>{' '}
+                            {a.statusSource !== 'server_verified' && <span className="muted">(서버 확인 아님)</span>}{' '}
                             <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => void run(() => actions.stopAssignment(a))}>
                               중단 기록
                             </button>
@@ -775,6 +811,23 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                     onClick={() => void copy('pr-request', buildCodexPrRequest(task, view.result!.revision, codexItem.workItemId, project))}
                   >
                     {copied === 'pr-request' ? '복사됨' : 'Codex PR 요청 복사'}
+                  </button>
+                </>
+              ) : claudeItem ? (
+                <>
+                  <p className="small">
+                    이제 결과를 만든{' '}
+                    <a href={claudeItem.providerTaskUrl!} target="_blank" rel="noreferrer">
+                      Claude 세션
+                    </a>
+                    에 아래 PR 요청을 붙여넣으세요. Claude가 작업 브랜치를 푸시하고 PR을 엽니다(병합은 안 함). 받은 PR 주소를 기록하면 C 단계에서 씁니다.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-small btn-ghost"
+                    onClick={() => void copy('pr-request', buildCodexPrRequest(task, view.result!.revision, claudeItem.workItemId, project, 'claude'))}
+                  >
+                    {copied === 'pr-request' ? '복사됨' : 'Claude PR 요청 복사'}
                   </button>
                 </>
               ) : (

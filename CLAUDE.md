@@ -35,6 +35,7 @@
 
 사용자 요청 → ChatGPT 기획(수동 인계) → **A 승인** → Claude PM 계획(저장소 쓰기 금지, 개발 방식 `prototype_first`/`direct` 제안) → (견본 먼저면: AI Studio Build 견본 → 견본 올리기·미리보기 → **P 견본 승인**) → **E 실행 승인** → Codex Cloud 주 개발(자동 시작 미검증 → 수동 인계) → 결과 패키지 검토 → **B 승인** 후 GitHub 업로드·PR → **C 승인** 후 운영 배포.
 - 견본 먼저 계획에서 Codex 작업의 E는 P 뒤에만(`0014_prototype_first.sql`). P를 하면 견본 작업(gemini)은 끝난 것으로 기록되고 Codex 지시서에 승인된 견본이 들어간다.
+- Claude 보조 개발: PM이 Claude(`claude_support`)에 배정한 작업은 E 승인 뒤 서버(`supabase/functions/dispatch-claude-dev`, 예약 `claim_claude_dev` 0016)가 두 번째 루틴으로 시작한다. B 승인 전 push·PR 금지, 세션 시작은 '시작됨'까지만, 결과는 사용자가 결과 패키지로 옮긴다. 루틴·secrets는 `docs/CLAUDE_ROUTINE.md`.
 - 수정 루프: A에서 수정 요청 → ChatGPT 재기획. 결과 검토에서 수정 요청 → Claude PM 재계획(같은 기획서 버전, 새 계획은 E 재승인). 보조 AI(Claude·Gemini·Grok)도 E 승인을 받는다(소유자 결정, 2026-10-29).
 - 배정 완료 ≠ 실행 중, 세션 시작(HTTP 200) ≠ 완료. 검증하지 않은 자동 실행을 성공으로 표시하지 않는다.
 - Claude 세션 안에 Codex CLI·Grok CLI를 설치·실행하지 않는다. 하위 에이전트를 Codex라고 부르지 않는다.
@@ -70,7 +71,7 @@
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase(여러 기기 실시간 반영은 Supabase Realtime, 표 목록은 `0015_realtime.sql`과 `supabaseStore.ts`의 `REALTIME_TABLES`가 같아야 함)
-- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`, `supabase/functions/create-repo`, `supabase/functions/analyze-image`, `supabase/functions/pr-status`, `supabase/functions/deploy-release`
+- `supabase/migrations`, `supabase/functions/dispatch-claude`, `supabase/functions/fetch-link`, `supabase/functions/ask-gemini`, `supabase/functions/create-repo`, `supabase/functions/analyze-image`, `supabase/functions/pr-status`, `supabase/functions/deploy-release`, `supabase/functions/dispatch-claude-dev`
 - `src/domain/devlog.ts`·`src/components/DevlogPanel.tsx` 개발일지(대화 + 업무 기록 → 프로젝트별·날짜별 Markdown)
 
 ## Supabase
