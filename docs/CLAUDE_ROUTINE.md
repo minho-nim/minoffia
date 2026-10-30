@@ -18,6 +18,7 @@ GitHub 업로드는 사용자의 B 승인 뒤에만 하므로, 이 루틴은 저
 출력
 마지막 메시지에 아래 JSON 하나만 ```json 코드블록으로 남긴다.
 { "task_id", "repository", "target_base_revision", "plan_revision": 1,
+  "development_mode": "prototype_first" | "direct", "mode_reason": "한 줄 이유",
   "status": "planned" | "needs_clarification", "questions": [],
   "work_items": [ { "id", "title", "goal", "dependencies", "assignee_preference": "codex_primary|claude_support|gemini_optional|grok_optional",
                     "execution_mode": "codex_cloud|manual_handoff", "acceptance_tests", "preserve_constraints", "attachment_refs",
@@ -28,3 +29,9 @@ GitHub 업로드는 사용자의 B 승인 뒤에만 하므로, 이 루틴은 저
 - 루틴 설정에는 여전히 저장소 쓰기 도구가 켜져 있을 수 있다. 루틴 화면에서 쓰기 도구를 끌 수 있는지 확인한다(미확인).
 
 - 결과 검토에서 "수정 요청(Claude PM으로)"을 기록하면, 같은 기획서 버전으로 한 번 더 보낼 수 있다. payload에 `결과 vN 검토 후 사용자 수정 요청` 절이 붙고, PM은 그 내용을 반영한 새 계획(새 `plan_revision`)을 만든다. 새 계획의 작업은 E 승인을 다시 받는다.
+
+## 개발 방식(v0.3.5, 새 플로우 07단계)
+
+- 저장 프롬프트를 바꾸지 않아도 `dispatch-claude`가 보내는 payload 끝에 "개발 방식 결정" 절이 붙는다. PM은 `development_mode`와 `mode_reason`을 계획 JSON에 넣는다.
+- `prototype_first`: 첫 작업을 `gemini_optional`(AI Studio Build 시안)으로, Codex 작업은 그 뒤에 `dependencies`로 잇는다. 앱에서 시안을 올리고 **P(시안 승인)** 해야 Codex 작업을 E 승인할 수 있다(DB `0014_prototype_first.sql`).
+- `direct`(또는 값 없음): 지금처럼 Codex로 바로.

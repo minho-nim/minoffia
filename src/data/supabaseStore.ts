@@ -136,6 +136,7 @@ const toAttachment = (r: Row): Attachment => ({
   taskId: r.task_id as string,
   kind: r.kind as Attachment['kind'],
   resultRevision: (r.result_revision as number | null) ?? null,
+  planRevision: (r.plan_revision as number | null) ?? null,
   position: r.position as number,
   role: r.role as Attachment['role'],
   note: (r.note as string) ?? '',
@@ -432,6 +433,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         task_id: x.taskId,
         kind: x.kind,
         result_revision: x.resultRevision,
+        // 시안일 때만 보낸다(0014 적용 전 DB에서도 다른 첨부는 올라가게)
+        ...(x.kind === 'prototype' ? { plan_revision: x.planRevision ?? null } : {}),
         position: x.position,
         role: x.role,
         note: x.note,

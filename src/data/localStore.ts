@@ -8,6 +8,9 @@ import { sampleSnapshot } from './sample';
 import type { ChatEntry } from '../domain/devlog';
 import { newId, type OfficeStore } from './store';
 
+/** 첨부 묶음 버전: 결과 스크린샷은 결과 버전, 시안은 계획 버전 */
+const revOf = (a: { kind: string; resultRevision: number | null; planRevision?: number | null }) => (a.kind === 'prototype' ? a.planRevision ?? null : a.resultRevision);
+
 /** 로컬 데모의 대화 기록(이 브라우저에만, 최근 2000줄) */
 const CHAT_KEY = 'minlab-ai-office:chat-archive:v1';
 const CHAT_KEEP = 2000;
@@ -194,8 +197,9 @@ export function createLocalStore(): OfficeStore {
       const task = state.tasks.find((t) => t.id === att.taskId);
       if (!task) throw new Error('task not found');
       const view = deriveWorkflow(task, state.workflow);
-      const count = attachmentsOf(state.workflow.attachments, att.taskId, att.kind, att.resultRevision).length;
-      const blocked = attachmentBlocker(view, att.kind, 'add', count, att.resultRevision);
+      const rev = revOf(att);
+      const count = attachmentsOf(state.workflow.attachments, att.taskId, att.kind, rev).length;
+      const blocked = attachmentBlocker(view, att.kind, 'add', count, rev);
       if (blocked) throw new Error(blocked);
       if (totalBytes(state.workflow.attachments) + att.sizeBytes > MAX_TOTAL_BYTES) throw new Error('attachment storage quota exceeded');
       if (!files[att.sha256]) {
@@ -208,7 +212,7 @@ export function createLocalStore(): OfficeStore {
       const prev = state.workflow.attachments.find((a) => a.id === next.id);
       const task = prev && state.tasks.find((t) => t.id === prev.taskId);
       if (!prev || !task) throw new Error('attachment not found');
-      const blocked = attachmentBlocker(deriveWorkflow(task, state.workflow), prev.kind, 'change', 0, prev.resultRevision);
+      const blocked = attachmentBlocker(deriveWorkflow(task, state.workflow), prev.kind, 'change', 0, revOf(prev));
       if (blocked) throw new Error(blocked);
       const kept = { ...prev, position: next.position, role: next.role, note: next.note };
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.map((a) => (a.id === prev.id ? kept : a)) } });
@@ -217,7 +221,7 @@ export function createLocalStore(): OfficeStore {
       const prev = state.workflow.attachments.find((a) => a.id === att.id);
       const task = prev && state.tasks.find((t) => t.id === prev.taskId);
       if (!prev || !task) throw new Error('attachment not found');
-      const blocked = attachmentBlocker(deriveWorkflow(task, state.workflow), prev.kind, 'change', 0, prev.resultRevision);
+      const blocked = attachmentBlocker(deriveWorkflow(task, state.workflow), prev.kind, 'change', 0, revOf(prev));
       if (blocked) throw new Error(blocked);
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
       dropUnusedFiles();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCodexHandoff, buildCodexPrRequest, codexBranch } from './handoffV2';
+import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff, codexBranch } from './handoffV2';
 import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
 
@@ -46,5 +46,29 @@ describe('buildCodexPrRequest', () => {
   it('브랜치 이름에 안전한 글자만 쓴다', () => {
     expect(codexBranch(task, 'W 1;rm')).toBe('ai/codex/28333f7e-w1rm');
     expect(codexBranch(task, '')).toBe('ai/codex/28333f7e');
+  });
+});
+
+describe('시안 먼저(v0.3.5)', () => {
+  const proto = {
+    id: 'abcdef12-0000', taskId: task.id, kind: 'prototype' as const, resultRevision: null, planRevision: 1, position: 0, role: 'prototype' as const,
+    note: 'AI Studio 1차', fileName: 'proto.zip', mime: 'application/zip', sizeBytes: 10, sha256: 'x', storagePath: 'p', createdAt: '',
+  };
+
+  it('AI Studio 지시서: 이유·기획서·저장소 금지·ZIP 올리기', () => {
+    const t = buildPrototypeHandoff(task, spec, item, project, '새 화면이라 시안부터');
+    expect(t).toContain('# AI Studio Build 시안');
+    expect(t).toContain('새 화면이라 시안부터');
+    expect(t).toContain('README 맨 아래에 한 줄 추가');
+    expect(t).toContain('저장소는 바꾸지 않는다');
+    expect(t).toContain('ZIP');
+  });
+
+  it('Codex 지시서: 승인된 시안을 보존하며 통합', () => {
+    const t = buildCodexHandoff(task, spec, item, project, '', [], [], [proto]);
+    expect(t).toContain('## 승인된 시안');
+    expect(t).toContain('proto.zip');
+    expect(t).toContain('보존하면서');
+    expect(buildCodexHandoff(task, spec, item, project, '', [], [])).not.toContain('승인된 시안');
   });
 });

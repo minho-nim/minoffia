@@ -140,3 +140,41 @@ describe('수정 루프', () => {
     expect(canApprove(withNew, 'B').ok).toBe(true);
   });
 });
+
+describe('시안 먼저(P 게이트)', () => {
+  const protoPlan = (): PmPlan => {
+    const p = plan(1, 1);
+    return { ...p, plan: { ...p.plan, development_mode: 'prototype_first' } };
+  };
+  const gemini = { ...assignment(1), id: 'g1', workItemId: 'W1', assignee: 'gemini' as const };
+  const codex = { ...assignment(1), id: 'c1', workItemId: 'W2', assignee: 'codex' as const };
+  const protoFile = {
+    id: 'f1', taskId: 't1', kind: 'prototype' as const, resultRevision: null, planRevision: 1, position: 0, role: 'prototype' as const,
+    note: '', fileName: 'proto.zip', mime: 'application/zip', sizeBytes: 10, sha256: 'x', storagePath: 'p', createdAt: '',
+  };
+  const base = { specs: [spec(1)], approvals: [ok('A', 1)], plans: [protoPlan()], assignments: [gemini, codex] };
+
+  it('시안 없이는 P 불가, Codex E는 P 전에 불가, 시안 작업 E는 가능', () => {
+    const v = deriveWorkflow(task, data(base));
+    expect(v.prototypeFirst).toBe(true);
+    expect(canApprove(v, 'P').ok).toBe(false);
+    expect(canApprove(v, 'E', 'W2').ok).toBe(false);
+    expect(canApprove(v, 'E', 'W1').ok).toBe(true);
+  });
+
+  it('시안을 올리면 P 가능, P 뒤에는 Codex E 가능', () => {
+    const withFile = deriveWorkflow(task, data({ ...base, attachments: [protoFile] }));
+    expect(canApprove(withFile, 'P').ok).toBe(true);
+    const after = deriveWorkflow(task, data({ ...base, attachments: [protoFile], approvals: [ok('A', 1), ok('P', 1)] }));
+    expect(after.pApproved).toBe(true);
+    expect(canApprove(after, 'E', 'W2').ok).toBe(true);
+    expect(canApprove(after, 'P').ok).toBe(false);
+  });
+
+  it('바로 개발 계획은 P가 없고 Codex E 바로 가능', () => {
+    const v = deriveWorkflow(task, data({ ...base, plans: [plan(1, 1)] }));
+    expect(v.prototypeFirst).toBe(false);
+    expect(canApprove(v, 'P').ok).toBe(false);
+    expect(canApprove(v, 'E', 'W2').ok).toBe(true);
+  });
+});
