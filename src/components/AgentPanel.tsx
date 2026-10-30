@@ -1,6 +1,8 @@
 import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
 import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
 import { quotaFor, QUOTA_STATE_LABEL, type QuotaInfo } from '../domain/quota';
+import { limitFor, MAX_AGENT_LIMIT } from '../domain/concurrency';
+import type { AgentKind } from '../domain/workflow-types';
 import type { AgentAssignment } from '../domain/workflow-types';
 import { remainingToday, runsToday } from '../domain/usage';
 import type { AgentId, AiCall, Snapshot, Task, UsageRun } from '../domain/types';
@@ -20,12 +22,17 @@ interface Props {
   serverMode?: boolean;
   /** 오늘 한도 상태 */
   quota?: QuotaInfo;
+  /** 동시 작업 상한(이 에이전트가 개발 작업을 맡는 AI일 때) */
+  limit?: { kind: AgentKind; value: number; running: number; onSet: (n: number) => void };
 }
+
+/** 오피스 캐릭터 → 개발 작업을 맡는 AI(동시 작업 상한 대상) */
+const KIND_OF: Partial<Record<AgentId, AgentKind>> = { codex: 'codex', claude: 'claude', grok: 'grok', studioA: 'gemini', studioB: 'gemini' };
 
 /** 오피스 캐릭터 → 실행 경로(어댑터) */
 const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision', mina: 'gpt' };
 
-export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false, quota }: Props) {
+export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false, quota, limit }: Props) {
   const a = AGENT_BY_ID[agentId];
   const scene = buildScene(tasks, assignments).find((s) => s.agent === agentId);
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
@@ -66,6 +73,19 @@ export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiC
           <br />
           <span className="muted">{quota.detail}</span>
         </p>
+      )}
+      {limit && (
+        <div className="small agent-limit">
+          동시 작업 상한 · 지금 {limit.running}개 진행
+          <span className="att-roles" role="group" aria-label="동시 작업 상한">
+            {Array.from({ length: MAX_AGENT_LIMIT }, (_, i) => i + 1).map((n) => (
+              <button key={n} type="button" className="att-role" aria-pressed={limit.value === n} onClick={() => limit.onSet(n)}>
+                {n}
+              </button>
+            ))}
+          </span>
+          <span className="muted">같은 AI에게 동시에 시작할 수 있는 개발 작업 수. 계획의 순서(앞 작업)는 따로 지킵니다.</span>
+        </div>
       )}
       <p className="small">
         오늘 등록된 실행 <b className="num">{used}</b>
@@ -108,8 +128,10 @@ export function AgentRoster({
   onSelect,
   onOpenTask,
   serverMode,
+  onSetLimit,
 }: {
   snap: Snapshot;
+  onSetLimit: (kind: AgentKind, n: number) => void;
   selected: AgentId | null;
   onSelect: (id: AgentId) => void;
   onOpenTask: (task: Task) => void;
@@ -131,6 +153,16 @@ export function AgentRoster({
                 aiCalls={snap.aiCalls ?? []}
                 serverMode={serverMode}
                 quota={quotaFor(a.id, snap)}
+                limit={
+                  KIND_OF[a.id]
+                    ? {
+                        kind: KIND_OF[a.id]!,
+                        value: limitFor(KIND_OF[a.id]!, snap.agentLimits),
+                        running: snap.workflow.assignments.filter((x) => x.assignee === KIND_OF[a.id] && (x.dispatchStatus === 'started' || x.dispatchStatus === 'starting')).length,
+                        onSet: (n) => onSetLimit(KIND_OF[a.id]!, n),
+                      }
+                    : undefined
+                }
                 onOpenTask={onOpenTask}
               />
             </section>

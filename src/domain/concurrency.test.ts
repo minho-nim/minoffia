@@ -23,10 +23,12 @@ const a = (id: string, assignee: AgentAssignment['assignee'], dispatchStatus: Ag
 const plan = { plan: { work_items: [{ id: 'W1', dependencies: [] }, { id: 'W2', dependencies: [] }, { id: 'W3', dependencies: ['W1'] }] } } as unknown as PmPlan;
 
 describe('startBlocker', () => {
-  it('다른 AI끼리는 동시에, 같은 AI는 하나만', () => {
-    const all = [a('W1', 'codex', 'started'), a('W2', 'claude'), a('W4', 'codex')];
+  it('AI별 상한까지는 동시에, 넘으면 기다림(기본 Codex 3)', () => {
+    const all = [a('W1', 'codex', 'started'), a('W2', 'claude'), a('W4', 'codex'), a('W5', 'codex', 'started'), a('W6', 'codex', 'started')];
     expect(startBlocker(all[1], all, plan)).toBeNull();
-    expect(startBlocker(all[2], all, plan)).toContain('Codex가 이미 다른 작업(W1');
+    expect(startBlocker(all[2], all, plan)).toContain('3개 작업(W1, W5, W6)');
+    expect(startBlocker(all[2], all, plan, { codex: 4 })).toBeNull();
+    expect(startBlocker(all[1], [a('W9', 'claude', 'started'), all[1]], plan, { claude: 1 })).toContain('동시 상한 1개');
   });
 
   it('앞 작업이 끝나야 시작', () => {

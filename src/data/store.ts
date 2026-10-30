@@ -40,6 +40,8 @@ export interface OfficeStore {
   /** GPT 확인 질문·답변(추가만) */
   addClarification(item: Clarification): Promise<void>;
   /** 입력창 일반 질문을 Gemini 무료 API에 묻는다(서버가 키·하루 상한을 관리). 로컬 데모는 지원하지 않음. */
+  /** AI별 동시 작업 상한(1~5) */
+  setAgentLimit(assignee: 'codex' | 'claude' | 'gemini' | 'grok', maxRunning: number): Promise<void>;
   /** 새 프로젝트의 GitHub 저장소를 서버가 만들고 연결한다(로컬 데모는 지원하지 않음). */
   createRepo(projectId: string, name: string): Promise<{ repo: string; url: string; warning?: string }>;
   askGemini(
