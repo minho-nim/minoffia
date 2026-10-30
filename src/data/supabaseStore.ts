@@ -2,7 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { MIME_EXT, type Attachment, type ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Task, UsageRun } from '../domain/types';
-import type { AgentAssignment, Approval, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
+import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
+import type { ChatEntry } from '../domain/devlog';
 import type { OfficeStore } from './store';
 
 type Row = Record<string, unknown>;
@@ -168,6 +169,17 @@ const toPrCheck = (r: Row): PrCheck => ({
   checkedAt: r.checked_at as string,
 });
 
+const toDeployment = (r: Row): Deployment => ({
+  id: r.id as string,
+  taskId: r.task_id as string,
+  repo: r.repo as string,
+  fromSha: (r.from_sha as string) ?? '',
+  toSha: (r.to_sha as string) ?? '',
+  ok: Boolean(r.ok),
+  error: (r.error as string) ?? '',
+  createdAt: r.created_at as string,
+});
+
 const toLink = (r: Row): LinkRef => ({
   id: r.id as string,
   taskId: r.task_id as string,
@@ -215,11 +227,30 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     if (!count) await client.storage.from(BUCKET).remove([path]);
   };
   const urlCache = new Map<string, { url: string; until: number }>();
+  /** Edge Function을 부르고, 실패하면 서버가 준 한국어 오류를 그대로 던진다. */
+  const invoke = async (name: string, body: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const { data, error } = await client.functions.invoke(name, { body });
+    if (error) {
+      let message = error.message;
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        try {
+          const b = await ctx.json();
+          if (b?.error) message = b.error;
+        } catch {
+          // 본문이 JSON이 아니면 기본 메시지
+        }
+      }
+      throw new Error(message);
+    }
+    if (!data?.ok) throw new Error(data?.error ?? `${name} 호출에 실패했습니다.`);
+    return data as Record<string, unknown>;
+  };
   return {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -237,6 +268,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('image_analyses').select('*').order('created_at'),
         client.from('agent_limits').select('assignee, max_running'),
         client.from('pr_checks').select('*').order('checked_at'),
+        client.from('deployments').select('*').order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -255,6 +287,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
           imageAnalyses: imageAnalyses.error ? [] : (imageAnalyses.data ?? []).map(toAnalysis),
           prChecks: prChecks.error ? [] : (prChecks.data ?? []).map(toPrCheck),
+          deployments: deployments.error ? [] : (deployments.data ?? []).map(toDeployment),
         },
         agentLimits: agentLimits.error ? {} : Object.fromEntries((agentLimits.data ?? []).map((r: Row) => [r.assignee as string, r.max_running as number])),
         // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
@@ -447,6 +480,35 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       }
       if (!data?.ok || !data.check) throw new Error(data?.error ?? 'PR을 확인하지 못했습니다.');
       return toPrCheck(data.check as Row);
+    },
+    async deployRelease(taskId) {
+      const data = await invoke('deploy-release', { taskId });
+      return { updated: Boolean(data.updated), to: String(data.to ?? '') };
+    },
+    async loadInbox() {
+      const { data, error } = await client.from('inbox_state').select('messages, pending, updated_at').maybeSingle();
+      // 표가 아직 없는 운영 DB(마이그레이션 전)면 이 기기 저장만 쓴다.
+      if (error || !data) return null;
+      return { messages: (data.messages as unknown[]) ?? [], pending: data.pending ?? null, updatedAt: data.updated_at as string };
+    },
+    async saveInbox(state) {
+      const { data: auth } = await client.auth.getUser();
+      if (!auth.user) return;
+      check(await client.from('inbox_state').upsert({ owner_id: auth.user.id, messages: state.messages, pending: state.pending, updated_at: state.updatedAt }));
+    },
+    async appendChat(entries) {
+      if (!entries.length) return;
+      check(await client.from('chat_messages').insert(entries.map((e) => ({ role: e.role, text: e.text.slice(0, 20000), project_id: e.projectId, task_id: e.taskId }))));
+    },
+    async loadChat(fromIso, toIso) {
+      const rows: Row[] = [];
+      // 한 번에 1000행씩(Supabase 기본 상한) 끝까지 읽는다.
+      for (let start = 0; ; start += 1000) {
+        const page = check(await client.from('chat_messages').select('*').gte('created_at', fromIso).lt('created_at', toIso).order('created_at').range(start, start + 999)) ?? [];
+        rows.push(...page);
+        if (page.length < 1000) break;
+      }
+      return rows.map((r) => ({ id: r.id as string, role: r.role as ChatEntry['role'], text: r.text as string, projectId: (r.project_id as string | null) ?? null, taskId: (r.task_id as string | null) ?? null, createdAt: r.created_at as string }));
     },
     async setAgentLimit(assignee, maxRunning) {
       check(await client.from('agent_limits').upsert({ assignee, max_running: maxRunning, updated_at: new Date().toISOString() }));

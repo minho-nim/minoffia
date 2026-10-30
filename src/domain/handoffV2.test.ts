@@ -30,6 +30,7 @@ describe('buildCodexHandoff', () => {
   it('PR·푸시는 B 승인 뒤에만, 시험 결과는 그대로 보고', () => {
     expect(text).toContain('PR 생성·브랜치 푸시를 하지 않는다');
     expect(text).toContain('그대로 보고');
+    expect(text).toContain('모바일(약 400px) 스크린샷');
   });
 });
 

@@ -1797,3 +1797,43 @@ a {
   margin: 0;
   padding-left: 18px;
 }
+
+/* 개발일지 */
+.devlog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+
+.devlog h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.devlog-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.devlog-controls .field {
+  flex: 1 1 130px;
+  min-width: 0;
+}
+
+.devlog-text {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.devlog-actions {
+  display: flex;
+  gap: 8px;
+}
