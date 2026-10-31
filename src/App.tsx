@@ -206,8 +206,14 @@ export function App() {
     planInboxRef.current?.();
   }, [snap]);
   // 기록이 바뀌지 않아도 PR·CI 진행은 1분마다 다시 본다(화면이 보일 때만).
+  // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
+  const [, setMinuteTick] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => document.visibilityState === 'visible' && planInboxRef.current?.(), 60_000);
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      setMinuteTick((n) => n + 1);
+      planInboxRef.current?.();
+    }, 60_000);
     return () => window.clearInterval(id);
   }, []);
 
