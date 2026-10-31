@@ -213,6 +213,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         if (!s) return null;
         const say = speech.get(a.id);
         const talking = say && say.kind !== 'busy';
+        const sayTask = say ? tasks.find((t) => t.id === say.taskId) : undefined;
         const badge = say?.kind === 'busy' ? say.text : talking ? undefined : badgeFor(s);
         const isSel = selected === a.id;
         const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${say ? `. ${say.label}` : ''}`;
@@ -250,15 +251,30 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
               </span>
             )}
             {isSel && (
+              // 누르면: 표시(단계[표시] 또는 [상태]) 이름 / 무슨 뜻인지 / 어느 업무인지
               <span className="bubble" role="status">
-                <b>[{ACTIVITY_LABEL[s.activity]}]</b> {a.name}
-                {s.task && (
+                <b>{say ? say.text : badge ?? `[${ACTIVITY_LABEL[s.activity]}]`}</b> {a.name}
+                {say ? (
                   <>
                     <br />
-                    {s.task.title}
-                    {s.activity === 'waiting' && s.open > 1 ? ` 외 ${s.open - 1}건` : ''}
-                    {a.id === 'mina' && ` (${STATUS_LABEL[s.task.status]})`}
+                    {say.label}
+                    {sayTask && (
+                      <>
+                        <br />
+                        <span className="bubble-task">{sayTask.title}</span>
+                      </>
+                    )}
                   </>
+                ) : (
+                  s.task && (
+                    <>
+                      <br />
+                      {badge && <>{ACTIVITY_LABEL[s.activity]} · </>}
+                      <span className="bubble-task">{s.task.title}</span>
+                      {s.activity === 'waiting' && s.open > 1 ? ` 외 ${s.open - 1}건` : ''}
+                      {a.id === 'mina' && ` (${STATUS_LABEL[s.task.status]})`}
+                    </>
+                  )
                 )}
               </span>
             )}
