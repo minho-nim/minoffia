@@ -10,7 +10,7 @@ import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
 export type SpeechKind = 'ask' | 'busy' | 'alert';
 
 export interface Speech {
-  /** 말풍선 표시: ? = 내 손이 가는 일(승인·답), ! = 막힘, … = 진행 중 */
+  /** 말풍선: 단계[표시] — ? 내 손이 가는 일(승인·답·시작), … 진행 중, ! 막힘 */
   text: string;
   /** 화면 읽기용 전체 문장 */
   label: string;
@@ -33,45 +33,59 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
     const v = deriveWorkflow(t, all);
     const planner: AgentId = v.spec?.planner === 'gemini_draft' ? 'studioA' : 'mina';
     const mine = v.plan ? all.assignments.filter((a) => a.taskId === t.id && a.planRevision === v.plan!.planRevision) : [];
+    // 말풍선 = 단계[표시]: ? 내 손이 가는 일, … 진행 중, ! 막힘(소유자 요청 2026-10-31)
+    const mark = { ask: '?', busy: '…', alert: '!' } as const;
+    const tag = (agent: AgentId, kind: SpeechKind, word: string, label: string) => say(agent, kind, `${word}[${mark[kind]}]`, t, label);
+    // 실행 승인된 작업: 시작 전이면 내가 넘겨야 함(Codex 지시서 등), 진행 중이면 …, 실패면 !
+    const work = () => {
+      for (const a of mine) {
+        if (a.dispatchStatus === 'ready') tag(agentOf(a.assignee), 'ask', '개발', `${a.workItemId} 개발 시작이 필요해요`);
+        else if (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting') tag(agentOf(a.assignee), 'busy', '개발', `${a.workItemId} 개발하는 중`);
+        else if (a.dispatchStatus === 'failed' || a.dispatchStatus.startsWith('blocked')) tag(agentOf(a.assignee), 'alert', '개발', `${a.workItemId} 개발이 막혔어요`);
+      }
+    };
     switch (v.stage) {
       case 'needs_clarification':
-        say(planner, 'ask', '?', t, '확인할 게 있어요');
+        tag(planner, 'ask', '질문', '확인할 게 있어요');
         break;
       case 'spec_ready':
       case 'development_approval_pending':
-        say(planner, 'ask', '?', t, '기획 승인해 주세요');
+        tag(planner, 'ask', '기획', '기획 승인해 주세요');
         break;
       case 'dispatching':
-        say('claude', 'busy', '…', t, 'PM 계획을 쓰는 중');
+        tag('claude', 'busy', '계획', 'PM 계획을 쓰는 중');
         break;
       case 'agent_handoff_pending':
-        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) say('studioA', 'ask', '?', t, '견본 승인해 주세요');
-        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) say('claude', 'ask', '?', t, '실행 승인해 주세요');
+        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) tag('studioA', 'ask', '견본', '견본 승인해 주세요');
+        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) tag('claude', 'ask', '실행', '실행 승인해 주세요');
+        work();
         break;
       case 'executing':
-        for (const a of mine) if (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting') say(agentOf(a.assignee), 'busy', '…', t, '개발하는 중');
+        work();
         break;
       case 'result_review':
       case 'github_approval_pending': {
         const by = mine.find((a) => a.workItemId === v.result?.workItemId) ?? mine[0];
-        say(by ? agentOf(by.assignee) : t.assignee, 'ask', '?', t, '결과 보고, 올리기 승인해 주세요');
+        tag(by ? agentOf(by.assignee) : t.assignee, 'ask', '결과', '결과 보고, 올리기 승인해 주세요');
         break;
       }
       case 'github_uploading':
       case 'pr_review':
+        tag('ci', 'busy', 'PR', 'PR·CI를 확인하는 중');
+        break;
       case 'deploying':
-        say('ci', 'busy', '…', t, 'PR·배포를 확인하는 중');
+        tag('ci', 'busy', '배포', '배포하는 중');
         break;
       case 'deployment_approval_pending':
         // 올리기 승인 뒤 PR·CI가 끝나야 내 차례다. 그 전에는 CI 봇이 일하는 중.
-        if (prCheckPasses(latestPrCheck(t, all))) say('ci', 'ask', '?', t, '배포 승인해 주세요');
-        else say('ci', 'busy', '…', t, 'PR·CI를 확인하는 중');
+        if (prCheckPasses(latestPrCheck(t, all))) tag('ci', 'ask', '배포', '배포 승인해 주세요');
+        else tag('ci', 'busy', 'PR', 'PR·CI를 확인하는 중');
         break;
       case 'failed':
       case 'integration_blocked':
       case 'rate_limited':
-        say('mina', 'alert', '!', t, '막혔어요, 업무 카드를 확인해 주세요');
-        break;
+        tag('mina', 'alert', '막힘', '막혔어요, 업무 카드를 확인해 주세요');
+        break
       default:
         break;
     }
