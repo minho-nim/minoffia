@@ -93,6 +93,22 @@ export function App() {
   // v0.4.16(소유자): 대화(입력창)와 업무 목록을 탭으로 나눈다. 처음은 대화.
   const [tab, setTab] = useState<Tab>('chat');
   const [filter, setFilter] = useState<Filter>('open');
+  // 업무 탭 프로젝트 칩(v0.4.18): 'all' 또는 프로젝트 id. 마지막 선택은 이 기기에 기억한다.
+  const [projectFilter, setProjectFilterState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('minlab-ai-office:project-filter:v1') ?? 'all';
+    } catch {
+      return 'all';
+    }
+  });
+  const setProjectFilter = (id: string) => {
+    setProjectFilterState(id);
+    try {
+      localStorage.setItem('minlab-ai-office:project-filter:v1', id);
+    } catch {
+      // 저장이 막힌 브라우저: 이번 화면에서만
+    }
+  };
   const [selected, setSelected] = useState<AgentId | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [handoff, setHandoff] = useState<string | null>(null);
@@ -190,12 +206,13 @@ export function App() {
 
   const visibleTasks = useMemo(() => {
     const list = snap.tasks.filter((t) => {
+      if (projectFilter !== 'all' && t.projectId !== projectFilter && snap.projects.some((p) => p.id === projectFilter)) return false;
       if (filter === 'all') return true;
       if (filter === 'open') return t.status !== 'done';
       return t.status === filter;
     });
     return list;
-  }, [snap.tasks, filter]);
+  }, [snap.tasks, snap.projects, filter, projectFilter]);
 
   // PM 세션이 보낸 계획 옮기기(아래 planInboxRef.current). 업무 기록이 바뀔 때마다 확인한다.
   const importingInbox = useRef(false);
@@ -611,7 +628,11 @@ export function App() {
   /** 업무 카드로 이동(입력창 알림·사무실 말풍선). 지금 필터에 없으면 '전체'로 바꾼다. */
   const showTask = (id: string) => {
     setTab('tasks');
-    if (!visibleTasks.some((t) => t.id === id)) setFilter('all');
+    if (!visibleTasks.some((t) => t.id === id)) {
+      setFilter('all');
+      const t = snap.tasks.find((x) => x.id === id);
+      if (t && projectFilter !== 'all' && t.projectId !== projectFilter) setProjectFilter('all');
+    }
     window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   };
 
@@ -1028,8 +1049,16 @@ export function App() {
     setTab('agent');
   };
 
-  const openCount = snap.tasks.filter((t) => t.status !== 'done').length;
-  const counts = (s: TaskStatus) => snap.tasks.filter((t) => t.status === s).length;
+  // 프로젝트 칩을 고르면 상태 칩 숫자도 그 프로젝트 것만 센다. 지운 프로젝트를 고른 채면 전체로 본다.
+  const pf = projectFilter !== 'all' && snap.projects.some((p) => p.id === projectFilter) ? projectFilter : 'all';
+  const inProject = pf === 'all' ? snap.tasks : snap.tasks.filter((t) => t.projectId === pf);
+  const openCount = inProject.filter((t) => t.status !== 'done').length;
+  const counts = (s: TaskStatus) => inProject.filter((t) => t.status === s).length;
+  const turnsByProject = new Map<string, number>();
+  for (const it of turns) {
+    const pid = snap.tasks.find((t) => t.id === it.taskId)?.projectId;
+    if (pid) turnsByProject.set(pid, (turnsByProject.get(pid) ?? 0) + 1);
+  }
 
   return (
     <div className="app">
@@ -1188,11 +1217,24 @@ export function App() {
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
                 <TaskForm projects={snap.projects} usage={snap.usage} onSubmit={addTask} />
               </details>
+              {snap.projects.length > 1 && (
+                <div className="filters project-chips" role="group" aria-label="프로젝트">
+                  {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects].map((p) => {
+                    const n = p.id === 'all' ? turns.length : (turnsByProject.get(p.id) ?? 0);
+                    return (
+                      <button key={p.id} type="button" className="chip chip-project" aria-pressed={pf === p.id} onClick={() => setProjectFilter(p.id)}>
+                        {p.name}
+                        {n > 0 && <span className="num num-turn">{n}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <div className="filters" role="group" aria-label="업무 필터">
                 {(
                   [
                     ['open', `열린 업무 ${openCount}`],
-                    ['all', `전체 ${snap.tasks.length}`],
+                    ['all', `전체 ${inProject.length}`],
                     ...(['queued', 'in_progress', 'review', 'blocked', 'done'] as TaskStatus[]).map(
                       (s) => [s, `${STATUS_LABEL[s]} ${counts(s)}`] as [Filter, string],
                     ),
@@ -1249,6 +1291,13 @@ export function App() {
             <ProjectPanel
               projects={snap.projects}
               tasks={snap.tasks}
+              turnsByProject={turnsByProject}
+              onOpen={(id) => {
+                setProjectFilter(id);
+                setFilter('open');
+                setTab('tasks');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               onSave={saveProject}
               onDelete={(p) => void mutate(() => store.deleteProject(p.id), `${p.name} 프로젝트를 삭제했습니다.`)}
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
