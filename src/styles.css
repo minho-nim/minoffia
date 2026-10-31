@@ -574,49 +574,36 @@ a {
   border-radius: 4px;
 }
 
-.agent-badge {
-  position: absolute;
-  /* 얼굴을 가리지 않게 머리 위에 띄운다(말풍선과 같은 자리) */
-  bottom: calc(100% + 1px);
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: var(--font-display);
-  font-size: max(9px, 1.5cqw);
-  line-height: 1;
-  padding: 0.2em 0.35em;
-  border-radius: 3px;
-  background: #fffaf0;
-  color: #3b2416;
-  border: 1px solid #3b2416;
-  white-space: nowrap;
-}
 
 .bubble-task {
   opacity: 0.75;
 }
 
-.agent-speech {
+/* 표시 하나(v0.4.21): ? 내 차례(주황) · ••• 일하는 중(흰 바탕 점 세 개) · ! 막힘(빨강). 괄호 없이 기호 + 단어 */
+.agent-mark {
   position: absolute;
-  bottom: calc(100% + 2px);
+  z-index: 8;
+  bottom: calc(100% + 3px);
   left: 50%;
   transform: translateX(-50%);
-  width: max-content;
-  max-width: max(96px, 18cqw);
-  padding: 0.3em 0.5em;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.25em 0.55em 0.25em 0.3em;
+  border-radius: 999px;
   border: 1px solid #3b2416;
-  background: #fbe7b5;
+  background: #fffaf0;
   color: #2a1a10;
   font-family: var(--font-display);
-  font-size: max(9px, 1.4cqw);
-  line-height: 1.25;
-  white-space: pre-line;
-  text-align: center;
+  font-size: max(10px, 1.55cqw);
+  line-height: 1;
+  white-space: nowrap;
   pointer-events: none;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
   animation: speech-pop 0.25s ease-out;
 }
 
-.agent-speech::after {
+.agent-mark::after {
   content: '';
   position: absolute;
   top: 100%;
@@ -626,8 +613,64 @@ a {
   border-top-color: #3b2416;
 }
 
-.agent-speech[data-kind='alert'] {
-  background: #f6ad91;
+.mark-symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: 50%;
+  background: #fffaf0;
+  color: inherit;
+  font-weight: 700;
+}
+
+.agent-mark[data-kind='ask'] {
+  background: #f0975a;
+  color: #fffaf0;
+  animation: speech-pop 0.25s ease-out, mark-bob 1.6s ease-in-out 0.3s infinite;
+}
+
+.agent-mark[data-kind='ask'] .mark-symbol {
+  color: #c25f22;
+}
+
+.agent-mark[data-kind='alert'] {
+  background: #d9483b;
+  border-color: #6e1d14;
+  color: #fffaf0;
+}
+
+.agent-mark[data-kind='alert']::after {
+  border-top-color: #6e1d14;
+}
+
+.agent-mark[data-kind='alert'] .mark-symbol {
+  color: #b5302a;
+}
+
+.agent-mark[data-kind='busy'] {
+  padding: 0.35em 0.5em;
+}
+
+.mark-dots {
+  display: inline-flex;
+  gap: 0.22em;
+}
+
+.mark-dots i {
+  width: 0.38em;
+  height: 0.38em;
+  border-radius: 50%;
+  background: #6e5a48;
+  animation: inbox-dot 1.1s infinite ease-in-out;
+}
+
+.mark-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.mark-dots i:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 @keyframes speech-pop {
@@ -637,22 +680,27 @@ a {
   }
 }
 
+@keyframes mark-bob {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -2px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .agent-speech {
+  .agent-mark,
+  .agent-mark[data-kind='ask'],
+  .mark-dots i {
     animation: none;
   }
 }
 
-.agent[data-activity='blocked'] .agent-badge {
-  background: #f6ad91;
+/* 작아진 사무실(휴대폰 스크롤 중): 단어는 숨기고 기호만 크게 */
+.stage.is-mini .agent-mark {
+  font-size: max(18px, 3cqw);
+  padding: 0.2em;
 }
 
-.agent[data-activity='review'] .agent-badge {
-  background: #b9dcf4;
-}
-
-.agent[data-activity='helping'] .agent-badge {
-  background: #c8e8b8;
+.stage.is-mini .agent-mark .mark-word {
+  display: none;
 }
 
 .bubble {

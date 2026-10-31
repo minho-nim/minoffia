@@ -45,6 +45,15 @@ function badgeFor(s: AgentScene): string | undefined {
   return `${s.activity === 'review' ? '검토' : WORK_WORD[s.task.type]}[${mark}]`;
 }
 
+/** 표시 하나(v0.4.21): "단계[표시]" 글을 기호와 단어로 나눈다. ? 내 차례 · … 일하는 중 · ! 막힘 */
+type MarkKind = 'ask' | 'busy' | 'alert';
+const SYMBOL: Record<MarkKind, string> = { ask: '?', busy: '…', alert: '!' };
+function splitMark(text: string): { word: string; kind: MarkKind } | null {
+  const m = /^(.*)\[(.)\]$/.exec(text);
+  if (!m) return null;
+  return { word: m[1], kind: m[2] === '?' ? 'ask' : m[2] === '!' ? 'alert' : 'busy' };
+}
+
 export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRefs = useRef(new Map<AgentId, HTMLButtonElement>());
@@ -197,16 +206,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         }}
       >
         <div className="memo-head">대기열 {memos.length}</div>
-        <ul className="memo-list">
-          {memos.slice(0, 3).map((t) => (
-            <li key={t.id} className={`memo memo-${t.status}`}>
-              <span className="memo-mark">{t.status === 'blocked' ? '!' : t.status === 'review' ? '?' : '□'}</span>
-              <span className="memo-text">{t.title}</span>
-            </li>
-          ))}
-          {memos.length > 3 && <li className="memo memo-more">+{memos.length - 3}건 더</li>}
-          {memos.length === 0 && <li className="memo memo-more">비어 있음</li>}
-        </ul>
+        {/* 대기열은 숫자만(제목 목록은 업무 탭에): 미니엉 말풍선과 겹치지 않게(v0.4.21) */}
       </div>
       {AGENTS.map((a) => {
         const s = scene.find((x) => x.agent === a.id);
@@ -215,6 +215,9 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         const talking = say && say.kind !== 'busy';
         const sayTask = say ? tasks.find((t) => t.id === say.taskId) : undefined;
         const badge = say?.kind === 'busy' ? say.text : talking ? undefined : badgeFor(s);
+        // 말풍선(단계)과 작은 표시(업무 상태)를 한 모양으로: 말풍선이 있으면 그것, 없으면 작은 표시
+        const mark = splitMark(talking ? say!.text : (badge ?? ''));
+        const markText = mark ? `${SYMBOL[mark.kind]} ${mark.word}` : '';
         const isSel = selected === a.id;
         const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${say ? `. ${say.label}` : ''}`;
         const sprite = spriteFor(a, 'stand');
@@ -244,16 +247,26 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
             aria-pressed={isSel}
           >
             <img src={sprite.src} alt="" draggable={false} />
-            {badge && !isSel && <span className="agent-badge">{badge}</span>}
-            {talking && !isSel && (
-              <span className="agent-speech" data-kind={say.kind}>
-                {say.text}
+            {mark && !isSel && (
+              <span className="agent-mark" data-kind={mark.kind} aria-hidden="true">
+                {mark.kind === 'busy' ? (
+                  <span className="mark-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                ) : (
+                  <>
+                    <b className="mark-symbol">{SYMBOL[mark.kind]}</b>
+                    <span className="mark-word">{mark.word}</span>
+                  </>
+                )}
               </span>
             )}
             {isSel && (
               // 누르면: 표시(단계[표시] 또는 [상태]) 이름 / 무슨 뜻인지 / 어느 업무인지
               <span className="bubble" role="status">
-                <b>{say ? say.text : badge ?? `[${ACTIVITY_LABEL[s.activity]}]`}</b> {a.name}
+                <b>{markText || ACTIVITY_LABEL[s.activity]}</b> {a.name}
                 {say ? (
                   <>
                     <br />
