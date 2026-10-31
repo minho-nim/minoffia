@@ -66,33 +66,19 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
       )}
       {expanded && (
       <>
-      <dl className="task-meta">
-        <div>
-          <dt>담당</dt>
-          <dd>
-            {onShowAgent ? (
-              <button type="button" className="link-btn" title="사무실에서 보기" onClick={() => onShowAgent(task)}>
-                {agent.name}
-              </button>
-            ) : (
-              agent.name
-            )}{' '}
-            <span className="muted">· {MODE_LABEL[agent.mode]}</span>
-          </dd>
-        </div>
-        <div>
-          <dt>프로젝트</dt>
-          <dd>{project?.name ?? '삭제됨'}</dd>
-        </div>
-        <div>
-          <dt>유형</dt>
-          <dd>
-            {WORK_TYPE_LABEL[task.type]} · {PRIORITY_LABEL[task.priority]}
-          </dd>
-        </div>
-      </dl>
+      {/* 간단히(v0.4.22): 프로젝트·담당·단계는 위 요약 줄에 있으니 유형·방식만 한 줄로 */}
+      <p className="task-meta-line">
+        {WORK_TYPE_LABEL[task.type]} · {PRIORITY_LABEL[task.priority]} · {MODE_LABEL[agent.mode]}
+        {onShowAgent && (
+          <>
+            {' · '}
+            <button type="button" className="link-btn" onClick={() => onShowAgent(task)}>
+              사무실에서 {agent.name} 보기
+            </button>
+          </>
+        )}
+      </p>
       {task.description && <p className="task-desc">{task.description}</p>}
-      <p className="route-reason">배정 근거: {task.routeReason}</p>
 
       {task.dispatch.error && (
         <p className="task-error" role="alert">
@@ -181,6 +167,11 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
         </summary>
         {workflow}
       </details>
+      {onToggle && (
+        <button type="button" className="btn btn-small btn-ghost task-fold" onClick={() => onToggle(task)}>
+          접기 ▴
+        </button>
+      )}
       </>
       )}
     </article>

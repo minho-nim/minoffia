@@ -375,7 +375,8 @@ a {
     max-height: max(260px, calc(100svh - (100vw - 32px) * 0.747 * 0.5 - 250px - env(safe-area-inset-top, 0px)));
   }
   /* 말풍선·알림에서 업무 카드로 갈 때 위에 고정된 사무실에 가리지 않게 */
-  .task-card {
+  .task-card,
+  .task-card .wf-section {
     scroll-margin-top: calc((100vw - 32px) * 0.747 * 0.5 + 100px + env(safe-area-inset-top, 0px));
   }
   /* 아래로 내리면(얇은 머리가 보일 때) 사무실도 절반 크기로 줄여 위에 둔다. 크기는 transform으로만 바꿔서
@@ -567,6 +568,10 @@ a {
 .agent:hover img,
 .agent.is-selected img {
   filter: drop-shadow(0 0 2px #fff3c4) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35));
+}
+
+.agent.is-selected {
+  z-index: 40;
 }
 
 .agent:focus-visible {
@@ -1087,6 +1092,17 @@ a {
   flex-wrap: wrap;
 }
 
+.task-meta-line {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.task-fold {
+  align-self: center;
+  min-width: 120px;
+}
+
 /* 접힌 업무 카드(v0.4.21): 한 줄 요약을 눌러 펼친다 */
 .task-card.is-folded {
   padding: 8px 12px;
@@ -1547,10 +1563,19 @@ a {
 }
 
 .wf-steps li {
-  padding: 1px 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
   color: var(--muted);
+}
+
+/* 단계를 누르면 아래 그 칸으로 간다(v0.4.22) */
+.wf-steps button {
+  padding: 3px 9px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 
 .wf-steps li.is-done {
@@ -1567,6 +1592,7 @@ a {
 }
 
 .wf-section {
+  scroll-margin-top: 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
