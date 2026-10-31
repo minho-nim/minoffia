@@ -12,9 +12,9 @@ import { WorkflowPanel, type WorkflowActions } from './components/WorkflowPanel'
 import { createLocalStore, resetLocalDemo } from './data/localStore';
 import { newId, type InboxState, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
-import { attachmentsOf, isImage, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
+import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
-import { buildGptPackage } from './domain/handoffV2';
+import { buildGptPackage, buildPrototypeHandoff } from './domain/handoffV2';
 import { clarificationsOf, linksOf } from './domain/requestContext';
 import { routeTask } from './domain/router';
 import { canTransition } from './domain/status';
@@ -198,6 +198,8 @@ export function App() {
   const planInboxRef = useRef<(() => void) | null>(null);
   /** 업무별 마지막 자동 PR·CI 확인 시각(너무 자주 묻지 않게) */
   const autoPrAt = useRef(new Map<string, number>());
+  /** 이 기기에서 Gemini 견본을 이미 시도한 계획(업무:계획 버전) */
+  const prototypeTried = useRef(new Set<string>());
   useEffect(() => {
     planInboxRef.current?.();
   }, [snap]);
@@ -391,11 +393,27 @@ export function App() {
    */
   const draftSpec = async (taskId: string): Promise<boolean> => {
     if (store.mode !== 'supabase') return false;
-    const now = await store.load();
+    let now = await store.load();
     const task = now.tasks.find((t) => t.id === taskId);
     if (!task) return false;
-    const view = deriveWorkflow(task, now.workflow);
+    let view = deriveWorkflow(task, now.workflow);
     if (view.aApproved) return false;
+    // 사진은 Gemini가 먼저 보고(무료, 아직 분석 안 한 것만·3장까지) 그 내용을 초안에 넣는다(소유자 승인 2026-10-31).
+    const unseen = attachmentsOf(now.workflow.attachments, task.id, 'request')
+      .filter((a) => isRaster(a.mime) && !now.workflow.imageAnalyses.some((x) => x.attachmentId === a.id))
+      .slice(0, 3);
+    if (unseen.length) {
+      say('ok', `Gemini가 사진 ${unseen.length}장을 먼저 보고 있어요(무료).`);
+      for (const a of unseen) {
+        try {
+          await store.analyzeImage(a.id);
+        } catch {
+          // 분석이 안 되면 사진 이름·역할만으로 초안을 쓴다.
+        }
+      }
+      now = await store.load();
+      view = deriveWorkflow(task, now.workflow);
+    }
     const text = buildGptPackage(
       task,
       now.projects.find((p) => p.id === task.projectId),
@@ -527,6 +545,15 @@ export function App() {
           );
           if (!ok) say('error', `결과 자동 저장 실패(${task.title}) — Claude 세션의 마지막 메시지를 결과 패키지에 붙여넣으세요.`);
         }
+        // 견본 먼저 계획이 들어왔는데 견본이 없으면 Gemini가 한 번 만든다(계획 버전마다 한 번, v0.4.7).
+        for (const t of snap.tasks) {
+          const v = deriveWorkflow(t, snap.workflow);
+          if (!v.plan || !v.prototypeFirst || v.pApproved || v.prototypeCount > 0 || t.status === 'done') continue;
+          const key = `${t.id}:${v.plan.planRevision}`;
+          if (prototypeTried.current.has(key)) continue;
+          prototypeTried.current.add(key);
+          await makePrototype(t.id);
+        }
         // 올리기 승인(B) 뒤 PR·CI를 자동으로 확인한다(v0.4.5). 결과가 정해지면(성공·실패·닫힘) 멈춘다. 손으로 다시 확인하는 버튼은 그대로.
         let checked = false;
         for (const t of snap.tasks) {
@@ -558,8 +585,53 @@ export function App() {
     window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   };
 
+  /**
+   * Gemini 견본(무료, v0.4.7): 견본 먼저 계획이면 견본 지시서로 HTML 견본 한 장을 만들어 견본으로 올린다.
+   * 사용자는 미리보기를 보고 견본 승인(P)만 한다. AI Studio 수동 견본도 그대로 올릴 수 있다.
+   */
+  const makePrototype = async (taskId: string): Promise<boolean> => {
+    if (store.mode !== 'supabase') return false;
+    const now = await store.load();
+    const task = now.tasks.find((t) => t.id === taskId);
+    if (!task) return false;
+    const view = deriveWorkflow(task, now.workflow);
+    if (!view.plan || !view.spec || !view.prototypeFirst || view.pApproved || view.prototypeCount > 0) return false;
+    const item = view.plan.plan.work_items.find((w) => w.assignee_preference === 'gemini_optional') ?? view.plan.plan.work_items[0];
+    if (!item) return false;
+    const text = [
+      '아래는 AI Studio Build용 견본 지시서다. 너는 같은 내용을 HTML 파일 한 장(HTML·CSS만)으로 만든다. 지시서의 React·ZIP 관련 문장은 무시한다.',
+      '',
+      buildPrototypeHandoff(
+        task,
+        view.spec,
+        item,
+        now.projects.find((p) => p.id === task.projectId),
+        view.plan.plan.mode_reason ?? '',
+        attachmentsOf(now.workflow.attachments, task.id, 'request'),
+        linksOf(now.workflow.links, task.id),
+      ),
+    ].join('\n');
+    say('ok', `Gemini가 '${task.title}' 견본을 만들고 있어요(무료, HTML 한 장).`);
+    try {
+      const r = await store.draftPrototype(task.id, text);
+      const file = new File([r.html], `견본-v${r.planRevision}.html`, { type: 'text/html' });
+      const errors = await uploadImages(task.id, 'prototype', r.planRevision, [{ file, role: 'prototype', note: 'Gemini 견본(자동, HTML)' }], 0);
+      setSnap(await store.load());
+      if (errors.length) {
+        say('error', `견본을 올리지 못했습니다: ${errors[0]}`);
+        return false;
+      }
+      say('ok', '견본이 올라왔어요. 업무 카드의 4-1에서 미리보기를 보고 견본 승인(P)하세요.');
+      return true;
+    } catch (e) {
+      say('error', `Gemini 견본을 만들지 못했습니다: ${(e as Error).message}`);
+      return false;
+    }
+  };
+
   const workflowActions: WorkflowActions = {
     draftSpec: (task) => draftSpec(task.id),
+    makePrototype: (task) => makePrototype(task.id),
     // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.
     copy: async (text) => {
       try {

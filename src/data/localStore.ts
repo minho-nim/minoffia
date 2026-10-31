@@ -296,6 +296,9 @@ export function createLocalStore(): OfficeStore {
     async markResultInbox() {
       return false;
     },
+    async draftPrototype() {
+      throw new Error('로컬 데모에서는 Gemini 견본을 만들 수 없습니다. AI Studio 견본 지시서로 진행하세요.');
+    },
     async draftSpec() {
       throw new Error('로컬 데모에서는 Gemini 기획서 초안을 쓸 수 없습니다. ChatGPT로 기획하세요.');
     },

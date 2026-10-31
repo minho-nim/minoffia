@@ -535,6 +535,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const { data, error } = await client.from('dev_result_inbox').update({ status, note: note.slice(0, 2000) }).eq('id', id).eq('status', 'new').select('id');
       return !error && Boolean(data?.length);
     },
+    async draftPrototype(taskId, text) {
+      const data = await invoke('draft-prototype', { taskId, text });
+      return { html: String(data.html ?? ''), planRevision: Number(data.planRevision) };
+    },
     async draftSpec(taskId, text) {
       const data = await invoke('draft-spec', { taskId, text });
       return { revision: Number(data.revision), intent: String(data.intent ?? '') };
