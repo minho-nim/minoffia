@@ -40,6 +40,8 @@ GitHub 업로드는 사용자의 B 승인 뒤에만 하므로, 이 루틴은 저
 
 ## 보조 개발 루틴(v0.3.8)
 
+- **v0.4.3 결과 자동 저장**: `dispatch-claude-dev`가 payload 끝에 "결과 보내기" 절과 이 작업 전용 1회용 제출표(24시간, 3번까지)를 붙인다. 세션이 시험까지 끝나면 `submit-result`로 결과를 보내고 앱이 결과 패키지로 저장한다. **소유자 설정**: 보조 개발 루틴이 쓰는 클라우드 환경 Network access에도 `kmmicksimbredbyvdmvx.supabase.co`를 허용한다(PM 루틴과 같은 환경이면 이미 됨).
+
 루틴 `MinLab AI Office 보조 개발`(trig_01GC5Hzeaj3razY5wM7ZF9n1, 2026-10-30 생성, 일정 없음). PM 계획에서 Claude(`claude_support`)에 배정한 작업을
 E 승인 뒤 앱의 **"Claude 보조 개발 시작(자동)"**으로 서버(`supabase/functions/dispatch-claude-dev`)가 시작한다.
 

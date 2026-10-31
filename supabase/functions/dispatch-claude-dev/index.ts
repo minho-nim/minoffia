@@ -120,6 +120,21 @@ Deno.serve(async (req) => {
     return reply(row?.reason === 'daily_cap' ? 429 : 409, { ok: false, error: why[row?.reason] ?? '시작할 수 없습니다.' });
   }
 
+  // 결과 자동 저장(v0.4.3): 이 작업 전용 1회용 제출표. 해시만 저장한다(24시간, 3번까지). 로그인 정보가 아니고 결과 한 개를 넣는 데만 쓰인다.
+  const ticket = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '');
+  const ticketHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ticket)))]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  const { error: ticketError } = await admin.from('plan_submit_tokens').insert({
+    owner_id: user.id,
+    task_id: a.task_id,
+    spec_revision: spec.revision,
+    token_hash: ticketHash,
+    expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+    kind: 'result',
+    assignment_id: a.id,
+  });
+
   const text = buildDevPayload({
     taskId: a.task_id,
     repo: project.repo,
@@ -139,6 +154,7 @@ Deno.serve(async (req) => {
     },
     attachments: (files ?? []).filter((f) => f.kind === 'request').map(line),
     prototypes: pApproval?.length ? (files ?? []).filter((f) => f.kind === 'prototype' && f.plan_revision === a.plan_revision).map(line) : [],
+    submit: ticketError ? undefined : { url: `${env('SUPABASE_URL')}/functions/v1/submit-result`, token: ticket },
   });
 
   const fail = async (message: string, status: number) => {

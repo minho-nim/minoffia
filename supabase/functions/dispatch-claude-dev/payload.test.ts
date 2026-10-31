@@ -39,4 +39,12 @@ describe('Claude 보조 개발 지시문', () => {
   it('브랜치 규칙은 Codex와 같은 모양(ai/<도구>/)', () => {
     expect(claudeBranch(input.taskId, 'W1').replace('ai/claude/', '')).toBe(codexBranch({ id: input.taskId } as never, 'W1').replace('ai/codex/', ''));
   });
+
+  it('결과 자동 저장: 제출표가 있으면 보내는 방법을 붙이고, 없으면 붙이지 않는다', () => {
+    const withSubmit = buildDevPayload({ ...input, submit: { url: 'https://x.supabase.co/functions/v1/submit-result', token: 't'.repeat(64) } });
+    expect(withSubmit).toContain('## 결과 보내기');
+    expect(withSubmit).toContain("curl -sS -X POST 'https://x.supabase.co/functions/v1/submit-result'");
+    expect(withSubmit).toContain('"branch":"ai/claude/28333f7e-w1"');
+    expect(t).not.toContain('결과 보내기');
+  });
 });
