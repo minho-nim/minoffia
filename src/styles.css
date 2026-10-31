@@ -483,6 +483,10 @@ a {
   white-space: nowrap;
 }
 
+.bubble-task {
+  opacity: 0.75;
+}
+
 .agent-speech {
   position: absolute;
   bottom: calc(100% + 2px);
