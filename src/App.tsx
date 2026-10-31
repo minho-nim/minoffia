@@ -208,6 +208,17 @@ export function App() {
   }, [snap]);
   // 기록이 바뀌지 않아도 PR·CI 진행은 1분마다 다시 본다(화면이 보일 때만).
   // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
+  // 휴대폰: 위 머리(이름·사용량)가 화면 밖으로 나가면 맨 위에 얇은 한 줄 머리를 고정한다(v0.4.14).
+  const [mini, setMini] = useState(false);
+  const topIo = useRef<IntersectionObserver | null>(null);
+  const topRef = useCallback((el: HTMLElement | null) => {
+    topIo.current?.disconnect();
+    topIo.current = null;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setMini(!e.isIntersecting), { rootMargin: '-36px 0px 0px 0px' });
+    io.observe(el);
+    topIo.current = io;
+  }, []);
   const [, setMinuteTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -1021,7 +1032,7 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
+      <header className="topbar" ref={topRef}>
         <div className="brand-block">
           <h1 className="brand">
             MINLAB AI OFFICE <span className="ver">v{version}</span>
@@ -1064,6 +1075,17 @@ export function App() {
           )}
         </ul>
       </header>
+
+      <div className={`topbar-mini${mini ? ' is-on' : ''}`} aria-hidden={!mini}>
+        <button type="button" tabIndex={mini ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
+          MINLAB AI OFFICE <span className="ver">v{version}</span>
+        </button>
+        {turns.length > 0 && (
+          <span className="num num-turn" aria-label={`내 차례 ${turns.length}개`}>
+            {turns.length}
+          </span>
+        )}
+      </div>
 
       <main className="layout">
         <section className="stage" aria-label="오피스">
