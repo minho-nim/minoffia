@@ -44,27 +44,27 @@ const POLL_WITH_REALTIME_MS = 120_000;
 function explainDbError(message: string): string {
   const rules: [string, string][] = [
     ['approvals_once', '이미 승인한 항목입니다. 중복으로 기록하지 않았습니다.'],
-    ['A must approve the latest spec', '최신 기획서만 A 승인할 수 있습니다.'],
+    ['A must approve the latest spec', '최신 기획서만 기획 승인할 수 있습니다.'],
     ['question/ambiguous', '단순 질문이나 의도 불분명 기획서는 개발 승인 대상이 아닙니다.'],
-    ['A approval required', '최신 기획서의 A 승인이 먼저 필요합니다.'],
+    ['A approval required', '최신 기획서의 기획 승인이 먼저 필요합니다.'],
     ['plan is stale', '기획서가 바뀌어 이 계획으로는 실행 승인할 수 없습니다. PM 계획을 다시 받으세요.'],
     ['E must', '최신 계획에 있는 작업만 실행 승인할 수 있습니다.'],
     ['E approval required', 'E 실행 승인 전에는 시작을 기록할 수 없습니다.'],
-    ['B must approve the latest', '최신 결과 패키지만 B 승인할 수 있습니다.'],
-    ['C requires B', '같은 결과의 B 승인이 먼저 필요합니다.'],
-    ['approve the prototype (P)', '견본 먼저 계획입니다. 견본을 올리고 P(견본 승인)를 한 뒤 Codex를 실행 승인하세요.'],
+    ['B must approve the latest', '최신 결과 패키지만 올리기 승인할 수 있습니다.'],
+    ['C requires B', '같은 결과의 올리기 승인이 먼저 필요합니다.'],
+    ['approve the prototype (P)', '견본 먼저 계획입니다. 견본을 올리고 견본 승인을 한 뒤 Codex를 실행 승인하세요.'],
     ['P requires an uploaded prototype', '승인할 견본(AI Studio 결과)을 먼저 올리세요.'],
     ['P is only for prototype_first', '견본 먼저 계획에서만 견본을 승인합니다.'],
-    ['prototype is locked after P approval', 'P(견본 승인) 뒤에는 견본을 바꿀 수 없습니다.'],
+    ['prototype is locked after P approval', '견본 승인 뒤에는 견본을 바꿀 수 없습니다.'],
     ['plan is not prototype_first', '이 계획은 바로 개발이라 견본을 올리지 않습니다.'],
     ['prototype must target the latest plan', '최신 계획에만 견본을 올릴 수 있습니다.'],
     ['revision must be', '다른 기기에서 먼저 새 버전이 저장됐습니다. 새로고침 후 다시 시도하세요.'],
     ['only the server', '서버가 확인한 상태는 화면에서 기록할 수 없습니다.'],
-    ['revision request needs', 'A 승인된 최신 기획서가 있어야 수정 요청할 수 있습니다.'],
+    ['revision request needs', '기획 승인된 최신 기획서가 있어야 수정 요청할 수 있습니다.'],
     ['revision request must target', '최신 결과에만 수정 요청할 수 있습니다.'],
     ['already approved for GitHub', '이미 GitHub 업로드를 승인한 결과는 수정 요청할 수 없습니다.'],
     ['새 결과를 받은 뒤', 'PM에 수정을 요청한 상태입니다. 새 결과를 받은 뒤 승인하세요.'],
-    ['locked after A approval', 'A 승인 뒤에는 요청 자료를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
+    ['locked after A approval', '기획 승인 뒤에는 요청 자료를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
     ['append-only', '결과 스크린샷은 검토 기록이라 고치거나 지울 수 없습니다.'],
     ['result attachment must target', '최신 결과 패키지에만 스크린샷을 붙일 수 있습니다.'],
     ['too many attachments', '이미지 장수 상한(요청 10장, 결과 6장)을 넘었습니다.'],
@@ -72,10 +72,10 @@ function explainDbError(message: string): string {
     ['invalid storage path', '파일 저장 위치가 올바르지 않습니다. 다시 로그인한 뒤 시도하세요.'],
     ['mime type', 'PNG·JPG·WEBP·GIF 이미지만 올릴 수 있습니다.'],
     ['concurrent execution limit', '이 AI의 동시 작업 상한에 닿았습니다. 하나를 끝내거나 "중단 기록"을 누르거나, 에이전트 탭에서 상한을 올리세요.'],
-    ['C requires a passing CI', 'PR의 CI 성공과 main 병합을 서버가 확인해야 C 승인을 할 수 있습니다. "PR·CI 확인"을 누르세요.'],
+    ['C requires a passing CI', 'PR의 CI 성공을 서버가 확인해야 배포 승인을 할 수 있습니다(병합은 배포 승인 때 서버가 해요). "PR·CI 확인"을 누르세요.'],
     ['dependency not finished', '계획상 앞 작업이 끝나야 시작할 수 있습니다. 앞 작업의 결과를 먼저 등록하세요.'],
     ['exceeded the maximum allowed size', '파일이 5MB를 넘습니다.'],
-    ['links are locked after A approval', 'A 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
+    ['links are locked after A approval', '기획 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.'],
     ['clarification must target', '다른 기기에서 기획서가 새로 저장됐습니다. 새로고침 후 다시 기록하세요.'],
     ['too many clarifications', '확인 질문은 업무당 30건까지 기록합니다.'],
   ];
@@ -352,7 +352,7 @@ export function App() {
     const project = projectById.get(task.projectId);
     if (!project?.repo) return '프로젝트에 GitHub 저장소(owner/repo)를 먼저 입력하세요.';
     if (runsToday(snap.usage, 'claude') >= (AGENT_BY_ID.claude.dailyCap ?? 0)) return `오늘 Claude Cloud 실행 ${AGENT_BY_ID.claude.dailyCap}회를 모두 썼습니다.`;
-    if (!deriveWorkflow(task, snap.workflow).aApproved) return '최신 기획서의 A 승인이 먼저 필요합니다.';
+    if (!deriveWorkflow(task, snap.workflow).aApproved) return '최신 기획서의 기획 승인이 먼저 필요합니다.';
     return null;
   };
 
@@ -428,7 +428,7 @@ export function App() {
     say('ok', `Gemini가 '${task.title}' 기획서 초안을 쓰고 있어요(무료).`);
     return step(task.id, async () => {
       const r = await store.draftSpec(task.id, text);
-      say('ok', r.intent === 'ambiguous' ? `Gemini가 확인 질문을 남겼어요(v${r.revision}). 업무 카드에서 답을 적고 초안을 다시 만드세요.` : `Gemini 기획서 초안 v${r.revision}을 저장했어요. 보고 A 승인하거나 수정 요청하세요.`);
+      say('ok', r.intent === 'ambiguous' ? `Gemini가 확인 질문을 남겼어요(v${r.revision}). 업무 카드에서 답을 적고 초안을 다시 만드세요.` : `Gemini 기획서 초안 v${r.revision}을 저장했어요. 보고 기획 승인하거나 수정 요청하세요.`);
     });
   };
 
@@ -437,7 +437,7 @@ export function App() {
     const view = deriveWorkflow(task, data.workflow);
     const parsed = parsePmPlan(text, task.id);
     if (!parsed.ok) return parsed.errors;
-    if (!view.spec || !view.aApproved) return ['최신 기획서의 A 승인이 먼저 필요합니다.'];
+    if (!view.spec || !view.aApproved) return ['최신 기획서의 기획 승인이 먼저 필요합니다.'];
     const planRevision = nextRevision(data.workflow.plans, task.id, (x: { planRevision: number }) => x.planRevision);
     const plan: PmPlan = {
       id: newId(),
@@ -702,7 +702,7 @@ export function App() {
         decision !== 'approved'
           ? '수정 요청을 기록했습니다. ChatGPT용 자료를 다시 복사해 재기획하세요.'
           : gate === 'C'
-            ? 'C 승인을 기록했습니다. 끝난 업무는 열린 업무 목록에서 빠지고 "완료" 필터에 남습니다.'
+            ? '배포 승인을 기록했습니다. 끝난 업무는 열린 업무 목록에서 빠지고 "완료" 필터에 남습니다.'
             : `${gate} 승인을 기록했습니다.`,
       );
       // 소유자 승인(2026-10-31): 실행 승인(E) → Claude 작업 자동 시작, 올리기 승인(B) → Claude 결과면 Claude가 PR을 연다.
@@ -725,7 +725,7 @@ export function App() {
           }
         }
       }
-      // 소유자 결정(2026-10-30): A 승인 한 번이면 PM 전송까지, Gemini 초안에 수정 요청하면 Gemini가 다시 쓴다.
+      // 소유자 결정(2026-10-30): 기획 승인 한 번이면 PM 전송까지, Gemini 초안에 수정 요청하면 Gemini가 다시 쓴다.
       if (ok && gate === 'A' && store.mode === 'supabase') {
         const spec = snap.workflow.specs.find((x) => x.taskId === task.id && x.revision === revision);
         if (decision === 'approved' && projectById.get(task.projectId)?.repo) await dispatch(task, false);
@@ -759,7 +759,7 @@ export function App() {
             await store.updateAssignment({ ...a, dispatchStatus: 'completed' });
           }
         },
-        'P(견본 승인)를 기록했습니다. 이제 Codex 작업을 실행 승인하세요. Codex 지시서에 승인된 견본이 들어갑니다.',
+        '견본 승인을 기록했습니다. 이제 Codex 작업을 실행 승인하세요. Codex 지시서에 승인된 견본이 들어갑니다.',
       ),
     dispatchPm: (task, ack) => dispatch(task, ack),
     importPlan: (task, text) => importPlanText(task, text, task.dispatch.sessionUrl ? 'routine_session_manual_import' : 'manual', snap),
@@ -1069,7 +1069,11 @@ export function App() {
           <nav className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'tasks'} onClick={() => setTab('tasks')}>
               업무 <span className="num">{openCount}</span>
-              {turns.length > 0 && <span className="num num-turn">내 차례 {turns.length}</span>}
+              {turns.length > 0 && (
+                <span className="num num-turn" title={`내 차례 ${turns.length}개`} aria-label={`내 차례 ${turns.length}개`}>
+                  ?{turns.length}
+                </span>
+              )}
             </button>
             <button type="button" role="tab" aria-selected={tab === 'projects'} onClick={() => setTab('projects')}>
               프로젝트 <span className="num">{snap.projects.length}</span>

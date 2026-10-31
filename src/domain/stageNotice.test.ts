@@ -30,7 +30,7 @@ describe('단계 알림(v0.3.9)', () => {
     const r = stageNotices([task], data({ specs: [spec(1)] }), seen);
     expect(r.notices).toHaveLength(1);
     expect(r.notices[0].actions).toEqual(['A', 'open']);
-    expect(r.notices[0].text).toContain('A 승인 대기');
+    expect(r.notices[0].text).toContain('기획 승인 대기');
     expect(r.notices[0].text).toContain('비밀번호 보기');
     // 같은 상태로 다시 보면 알리지 않는다
     expect(stageNotices([task], data({ specs: [spec(1)] }), r.seen).notices).toHaveLength(0);

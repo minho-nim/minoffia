@@ -46,7 +46,7 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
   const usage = [
     { id: 's-u1', agent: 'codex' as const, taskId: 's-1', kind: 'manual' as const, day: kstDay(now), createdAt: at(60) },
   ];
-  // 예시: GPT 기획서가 붙어 A 승인을 기다리는 업무 하나
+  // 예시: GPT 기획서가 붙어 기획 승인을 기다리는 업무 하나
   const specs: TaskSpec[] = [
     {
       id: 's-spec-1',
