@@ -48,6 +48,8 @@ export interface WorkflowView {
   pendingRevision: RevisionRequest | null;
   /** 최신 계획이 견본 먼저(Prototype First)인가 */
   prototypeFirst: boolean;
+  /** 실행 승인했지만 아직 끝나지 않은 작업(시작 전·시작 중·진행 중). 있으면 결과를 올리지 않는다(v0.4.20) */
+  waitingWork: AgentAssignment[];
   /** 최신 계획의 견본을 견본 승인했는가 */
   pApproved: boolean;
   /** 최신 계획에 올린 견본 수 */
@@ -81,6 +83,8 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
   const prototypeFirst = plan?.plan.development_mode === 'prototype_first';
   const pApproved = !!plan && prototypeFirst && approved(d.approvals, 'P', plan.planRevision);
   const prototypeCount = plan ? d.attachments.filter((a) => a.kind === 'prototype' && a.planRevision === plan.planRevision).length : 0;
+  // 여러 AI가 나눠 할 때 먼저 온 결과만 올라가지 않게, 같은 계획의 다른 작업이 끝날 때까지 기다린다.
+  const waitingWork = assignments.filter((a) => a.dispatchStatus === 'ready' || a.dispatchStatus === 'starting' || a.dispatchStatus === 'started');
 
   const stage = ((): Stage => {
     if (task.status === 'done' && !spec) return 'completed';
@@ -97,7 +101,7 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
       if (task.dispatch.state === 'failed') return 'integration_blocked';
       return sentAfter ? 'dispatching' : 'pm_queued';
     }
-    if (result && !resultRevised) return 'github_approval_pending';
+    if (result && !resultRevised) return waitingWork.length ? 'executing' : 'github_approval_pending';
     if (!planCurrent) {
       if (task.dispatch.state === 'failed') return 'integration_blocked';
       if (task.dispatch.state === 'dispatching' || task.dispatch.state === 'dispatched') return 'dispatching';
@@ -109,7 +113,7 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
     return 'agent_handoff_pending';
   })();
 
-  return { stage, spec, aApproved, aStale, plan, planCurrent, assignments, eApproved, result, bApproved, cApproved, plannerFeedback, pendingRevision, resultRevised, prototypeFirst, pApproved, prototypeCount };
+  return { stage, spec, aApproved, aStale, plan, planCurrent, assignments, eApproved, result, bApproved, cApproved, plannerFeedback, pendingRevision, resultRevised, prototypeFirst, pApproved, prototypeCount, waitingWork };
 }
 
 export type GateCheck = { ok: true } | { ok: false; reason: string };
@@ -140,6 +144,8 @@ export function canApprove(view: WorkflowView, gate: Gate, workItemId = ''): Gat
       if (!view.result) return { ok: false, reason: '검토할 결과 패키지가 없습니다.' };
       if (view.pendingRevision || view.resultRevised) return { ok: false, reason: 'PM에 수정을 요청한 결과입니다. 새 결과를 받은 뒤 승인하세요.' };
       if (view.bApproved) return { ok: false, reason: '이 결과는 이미 업로드 승인했습니다.' };
+      if (view.waitingWork.length)
+        return { ok: false, reason: `${view.waitingWork.map((a) => `${a.workItemId}(${a.assignee})`).join(', ')} 결과를 기다리는 중입니다. 끝나거나 "중단 기록"을 하면 올릴 수 있어요.` };
       return { ok: true };
     case 'C':
       if (!view.result || !view.bApproved) return { ok: false, reason: '같은 결과의 올리기 승인이 먼저 필요합니다.' };

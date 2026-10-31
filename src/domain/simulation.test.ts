@@ -28,7 +28,7 @@ import { decideDeploy } from '../../supabase/functions/deploy-release/decide';
 
 const T0 = Date.parse('2026-11-01T00:00:00Z');
 const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
-const LOG = process.env.SIM_LOG === '1';
+const LOG = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.SIM_LOG === '1';
 
 /** 한 업무의 기록을 쌓아 가며 매 단계 화면 상태를 기록하는 작은 무대 */
 class Sim {
@@ -184,7 +184,7 @@ describe('시뮬레이션 1: Claude 혼자 하는 업무(끝까지)', () => {
 });
 
 describe('시뮬레이션 2: Codex + Claude가 나눠 하는 업무', () => {
-  it('[문제①] Claude 결과가 먼저 오면 Codex가 아직 일하는 중인데도 올리기 승인 차례가 된다', () => {
+  it('[고침①] Claude 결과가 먼저 와도 Codex가 끝날 때까지 개발 중이고 올리기 승인은 막힌다', () => {
     const s = new Sim('t2', '기록 화면 + 버튼');
     s.spec(1);
     s.approve('A', 1);
@@ -197,11 +197,20 @@ describe('시뮬레이션 2: Codex + Claude가 나눠 하는 업무', () => {
     expect(s.snap('둘 다 시작').v.stage).toBe('executing');
     s.result(1, 1, 'W2');
     s.setAssignment('W2', 1, 'completed');
-    const r = s.snap('Claude(W2) 결과만 도착');
-    // 지금 동작: Codex(W1)는 아직 started인데 올리기 승인 대기가 된다 → W2만 PR로 나가고 W1이 빠질 수 있다.
+    let r = s.snap('Claude(W2) 결과만 도착');
+    expect(r.v.stage).toBe('executing');
+    expect(r.turns).toEqual([]);
+    expect(r.speech).toContain('codex:개발[…]');
+    const b = canApprove(r.v, 'B');
+    expect(b.ok).toBe(false);
+    expect(b.ok ? '' : b.reason).toContain('W1(codex)');
+    s.result(2, 1, 'W1', 'codex_cloud_manual');
+    s.setAssignment('W1', 1, 'completed');
+    r = s.snap('Codex(W1) 결과 도착');
     expect(r.v.stage).toBe('github_approval_pending');
-    expect(canApprove(r.v, 'B').ok).toBe(true);
-    expect(s.data.assignments.find((a) => a.workItemId === 'W1')?.dispatchStatus).toBe('started');
+    expect(r.turns).toEqual(['결과?(B)']);
+    // 남은 한계: 결과 패키지는 작업마다 따로라 올리기 승인은 마지막 결과(W1)만 대상이다 → 합치기 단계에서 하나로 묶는다.
+    expect(s.data.results.length).toBe(2);
     s.print('시뮬레이션 2');
   });
 });
@@ -269,9 +278,45 @@ describe('시뮬레이션 3: 되돌아가는 길', () => {
 });
 
 describe('시뮬레이션 4: 배포 범위', () => {
-  it('[문제②] main에 다른 변경이 더 있어도 release를 main 전체로 앞당긴다', () => {
-    // 이 PR의 병합 커밋 뒤에 다른 업무 병합이 하나 더 있음(mergeToMain = ahead)
-    expect(decideDeploy({ releaseToMain: 'ahead', mergeToMain: 'ahead' })).toEqual({ action: 'update' });
+  it('[고침②] main에 다른 변경이 더 있으면 확인을 받고, main 시험이 끝난 뒤에만 배포한다', () => {
+    expect(decideDeploy({ releaseToMain: 'ahead', mergeToMain: 'ahead', extraCommits: 1, mainCi: 'success' }).action).toBe('confirm');
+    expect(decideDeploy({ releaseToMain: 'ahead', mergeToMain: 'ahead', extraCommits: 1, mainCi: 'success', allowExtra: true }).action).toBe('update');
+    expect(decideDeploy({ releaseToMain: 'ahead', mergeToMain: 'identical', mainCi: 'pending' }).action).toBe('wait');
+    expect(decideDeploy({ releaseToMain: 'ahead', mergeToMain: 'identical', mainCi: 'failure' }).action).toBe('refuse');
     expect(decideDeploy({ releaseToMain: 'diverged', mergeToMain: 'identical' }).action).toBe('refuse');
+  });
+
+  it('[고침⑥] 배포 승인 뒤 배포가 확인 필요·실패로 남으면 끝난 업무라도 내 차례에 배포!', () => {
+    const s = new Sim('t7', '배포 확인');
+    s.spec(1);
+    s.approve('A', 1);
+    s.dispatchPm();
+    s.receivePlan(1, 1, [{ id: 'W1', who: 'claude' }]);
+    s.approve('E', 1, 'W1');
+    s.setAssignment('W1', 1, 'started');
+    s.result(1, 1, 'W1');
+    s.setAssignment('W1', 1, 'completed');
+    s.approve('B', 1);
+    s.prCheck('success');
+    s.approve('C', 1);
+    s.task = { ...s.task, status: 'done' };
+    s.data = { ...s.data, deployments: [{ id: 'd1', taskId: 't7', repo: 'minho-nim/MinLab-AI-Office', fromSha: 'a', toSha: 'b', ok: false, error: '확인 필요: 이 업무 말고 main에 들어간 변경 2개가 같이 배포됩니다.', createdAt: s.tick(1) }] };
+    expect(s.snap('같이 나갈 변경 있음').turns).toEqual(['배포!']);
+    s.data = { ...s.data, deployments: [...s.data.deployments, { id: 'd2', taskId: 't7', repo: 'minho-nim/MinLab-AI-Office', fromSha: 'a', toSha: 'c', ok: true, error: '', createdAt: s.tick(1) }] };
+    expect(s.snap('확인하고 배포됨').turns).toEqual([]);
+    s.print('시뮬레이션 4-2');
+  });
+});
+
+describe('시뮬레이션 5: 손이 안 가면 멈추는 곳', () => {
+  it('[고침③] PM에 못 보낸 채(저장소 없음 등) 멈추면 내 차례·말풍선에 계획?', () => {
+    const s = new Sim('t8', '저장소 없는 프로젝트');
+    s.spec(1);
+    s.approve('A', 1);
+    const r = s.snap('기획 승인, PM 전송 안 됨');
+    expect(r.v.stage).toBe('pm_queued');
+    expect(r.turns).toEqual(['계획?']);
+    expect(r.speech).toEqual(['claude:계획[?]']);
+    s.print('시뮬레이션 5');
   });
 });

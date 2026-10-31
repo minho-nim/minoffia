@@ -559,8 +559,23 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('dispatch-claude-dev', { assignmentId, acknowledgeRetry });
       return { sessionUrl: (data.sessionUrl as string | null) ?? null };
     },
-    async deployRelease(taskId) {
-      const data = await invoke('deploy-release', { taskId });
+    async deployRelease(taskId, allowExtra = false) {
+      const { data, error } = await client.functions.invoke('deploy-release', { body: { taskId, allowExtra } });
+      // 202 = main 시험이 끝나기를 기다리는 중(실패 아님)
+      if (!error && data?.wait) return { updated: false, to: '', wait: true, message: String(data.error ?? '') };
+      if (error || !data?.ok) {
+        let message = error?.message ?? String(data?.error ?? '배포하지 못했습니다.');
+        const ctx = (error as { context?: Response } | null)?.context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const b = await ctx.json();
+            if (b?.error) message = b.error;
+          } catch {
+            // 본문이 JSON이 아니면 기본 메시지
+          }
+        }
+        throw new Error(message);
+      }
       return { updated: Boolean(data.updated), to: String(data.to ?? '') };
     },
     async loadInbox() {

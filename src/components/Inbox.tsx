@@ -36,6 +36,8 @@ type Pending =
   /** Gemini가 답한 뒤: GPT에게 이어서 묻기 */
   | { kind: 'followup'; text: string; answer: string; projectName?: string }
   | { kind: 'unclear'; text: string }
+  /** 확인 질문 뒤에 질문처럼 보이는 말이 왔을 때: 그 답인지 새 질문인지 묻는다(v0.4.20) */
+  | { kind: 'clarifyOrAsk'; text: string; taskId: string }
   /** 새 프로젝트 이름을 기다림. text가 있으면 이름을 받은 뒤 그 요청을 업무로 만든다 */
   | { kind: 'naming'; text: string; createTask?: boolean; context?: PriorChat }
   | { kind: 'repo'; project: Project };
@@ -448,9 +450,15 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     } else askProject(text, context);
   };
 
-  const submit = (raw: string) => {
+  const submit = (raw: string, opts: { again?: boolean } = {}) => {
     const text = raw.trim();
     if (!text || busy) return;
+    if (opts.again) {
+      // "새 질문이에요"를 고른 경우: 이미 화면에 있는 말을 확인 질문 답으로 보지 않고 다시 분류한다.
+      setPending(null);
+      routeText(text, [], null);
+      return;
+    }
     setInput('');
     // 이 메시지에 사진이 있으면 미니엉의 다음 확인까지 들고 간다. 사진 없는 새 메시지는 이전 사진을 놓는다(확인 답만 할 때는 유지).
     const sent = photos;
@@ -466,6 +474,15 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     const yn = replyIntent(text);
     // Gemini 확인 질문 바로 뒤에 쓴 글은 그 답으로 기록하고, Gemini가 기획서를 다시 쓴다.
     const clarify = !pending && onClarify ? openClarify() : null;
+    // v0.4.20: 확인 질문 바로 뒤라도 질문처럼 보이면("…뭐야?", 앱 상태 질문) 답으로 넣기 전에 물어본다.
+    if (clarify) {
+      const k = triage(text, snap).kind;
+      if (k === 'question' || k === 'status' || /[?？]\s*$/.test(text)) {
+        setPending({ kind: 'clarifyOrAsk', text, taskId: clarify.task.id });
+        say('office', `'${short(clarify.task.title)}' 확인 질문의 답인가요, 새 질문인가요?`);
+        return;
+      }
+    }
     if (clarify) {
       archive({ role: 'me', text, projectId: clarify.task.projectId, taskId: clarify.task.id });
       void run(async () => {
@@ -523,6 +540,12 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     // Gemini 답 바로 뒤의 개발 요청("그럼 그거 만들어줘")은 앞 대화를 함께 업무에 넣는다.
     const prior: PriorChat | undefined = pending?.kind === 'followup' ? { question: pending.text, answer: pending.answer } : undefined;
     setPending(null);
+    routeText(text, sent, prior ?? null);
+  };
+
+  /** 글을 분류해 처리한다: 앱 상태 질문·새 프로젝트·업무 요청·일반 질문·애매(규칙, 토큰 0) */
+  const routeText = (text: string, sent: File[], priorChat: PriorChat | null) => {
+    const prior = priorChat ?? undefined;
     const t = triage(text, snap);
     if (t.kind === 'status') {
       say('office', t.answer);
@@ -559,6 +582,21 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       setPending({ kind: 'unclear', text });
       say('office', '질문인가요, 업무 요청인가요?');
     }
+  };
+
+  /** "확인 질문의 답이에요": 그 업무의 Gemini 확인 질문에 답으로 기록하고 기획서를 다시 쓰게 한다 */
+  const answerClarify = (taskId: string, text: string) => {
+    setPending(null);
+    const task = snap.tasks.find((t) => t.id === taskId);
+    const v = task ? deriveWorkflow(task, snap.workflow) : null;
+    if (!task || !v || v.stage !== 'needs_clarification' || !v.spec || !onClarify) {
+      say('office', '그 확인 질문은 이미 끝났어요. 업무 카드에서 확인하세요.');
+      return;
+    }
+    archive({ role: 'me', text, projectId: task.projectId, taskId: task.id });
+    void run(async () => {
+      if (!(await onClarify(task, v.spec!.answer, text))) say('office', '답을 기록하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드의 확인 질문 칸에서 하세요.');
+    });
   };
 
   /** 프로젝트를 만들고, 원래 요청이 있으면 업무로 접수한 뒤 저장소를 만들지 묻는다. */
@@ -789,6 +827,16 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
               </button>
               <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text)}>
                 업무 요청이에요
+              </button>
+            </>
+          )}
+          {pending.kind === 'clarifyOrAsk' && (
+            <>
+              <button type="button" className="btn btn-small btn-primary" onClick={() => answerClarify(pending.taskId, pending.text)}>
+                확인 질문의 답이에요
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => submit(pending.text, { again: true })}>
+                새 질문이에요
               </button>
             </>
           )}
