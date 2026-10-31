@@ -56,5 +56,6 @@ runm supabase/migrations/0019_gemini_spec_draft.sql
 runm supabase/migrations/0020_pm_plan_inbox.sql
 runm supabase/migrations/0021_dev_result_inbox.sql
 runm supabase/migrations/0022_auto_pr_merge.sql
+runm supabase/migrations/0023_prototype_ai_calls.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"

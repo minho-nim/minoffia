@@ -1,3 +1,4 @@
+import { AGENT_BY_ID } from '../domain/agents';
 import { useState } from 'react';
 import { attachmentBlocker, attachmentsOf, MAX_PROTOTYPE_FILES, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind, type ImageAnalysis } from '../domain/attachments';
 import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments';
@@ -34,6 +35,8 @@ export interface WorkflowActions {
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   /** Gemini 무료 기획서 초안(서버가 새 버전으로 저장) */
   draftSpec: (task: Task) => Promise<boolean>;
+  /** Gemini 무료 HTML 견본(견본 먼저 계획) */
+  makePrototype: (task: Task) => Promise<boolean>;
   decide: (task: Task, gate: Gate, revision: number, decision: 'approved' | 'rejected', workItemId?: string, scope?: Record<string, unknown>) => Promise<boolean>;
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
   /** Claude 보조 개발: E 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
@@ -644,9 +647,14 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         <section className="wf-section">
           <h4>4-1. 견본 검토 — {GATE_LABEL.P}</h4>
           <p className="muted small">
-            Claude PM이 <b>견본 먼저</b>를 골랐습니다. 위 견본 작업의 "AI Studio 견본 지시서"를 Google AI Studio Build에 붙여넣어 견본을 만들고, 결과(ZIP·HTML·스크린샷)를 여기에 올려 미리보기로 확인하세요.
-            견본을 승인(P)하면 Codex 지시서에 이 견본이 들어가고, Codex는 견본의 화면 구성과 흐름을 보존하며 실제 코드에 통합합니다.
+            Claude PM이 <b>견본 먼저</b>를 골랐습니다. 계획이 오면 Gemini(무료)가 HTML 견본 한 장을 자동으로 만들어 여기에 올립니다. 미리보기를 보고 견본 승인(P)하세요.
+            더 정교한 견본이 필요하면 위 견본 작업의 "AI Studio 견본 지시서"로 Google AI Studio Build에서 만들어 올려도 됩니다. 견본을 승인(P)하면 Codex 지시서에 이 견본이 들어갑니다.
           </p>
+          {!view.pApproved && prototypeFiles.length === 0 && canReadLinks && (
+            <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.makePrototype(task))}>
+              Gemini로 견본 만들기(무료)
+            </button>
+          )}
           <AttachmentGallery
             items={prototypeFiles}
             roles={ROLES_FOR.prototype}
@@ -689,6 +697,27 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
               <p className="small">
                 {view.result.source === 'claude_session_auto' ? '보낸 곳: Claude 세션이 직접 보냄(자동)' : '보낸 곳: 사람이 등록(붙여넣기)'}
               </p>
+              {(() => {
+                // 이 결과를 낸 실행(계획 버전 + 작업)을 함께 보여 준다. 실행 기록 없이 등록된 결과는 그렇다고 알린다.
+                const r = view.result!;
+                const run = allAssignments.find((a) => a.taskId === task.id && a.planRevision === r.planRevision && a.workItemId === r.workItemId);
+                if (!run) return <p className="small task-error">실행 기록: 연결된 작업이 없습니다(작업을 고르지 않고 등록한 결과). 내용을 특히 꼼꼼히 확인하세요.</p>;
+                return (
+                  <p className="small">
+                    실행 기록: {run.workItemId} · {AGENT_BY_ID[run.assignee === 'gemini' ? 'studioA' : run.assignee].name} · {DISPATCH_STATUS_LABEL[run.dispatchStatus]}
+                    {' · '}
+                    {run.statusSource === 'server_verified' ? '시작을 서버가 확인' : run.statusSource === 'user_reported' ? '시작을 사람이 기록' : '시작 기록 없음'}
+                    {run.providerTaskUrl && (
+                      <>
+                        {' · '}
+                        <a href={run.providerTaskUrl} target="_blank" rel="noreferrer">
+                          작업 열기
+                        </a>
+                      </>
+                    )}
+                  </p>
+                );
+              })()}
               <p className="muted small mono">sha256 {view.result.sha256.slice(0, 16)}… · diff {view.result.diff.length.toLocaleString()}자 · 스크린샷 {resultShots.length}장 · 라이브 미리보기 미제공</p>
               {view.result.diff && <pre className="diff-view">{view.result.diff}</pre>}
               {view.result.testLog && (

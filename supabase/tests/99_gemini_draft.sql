@@ -29,5 +29,6 @@ select pg_temp.expect_fail($q$insert into task_specs (task_id, revision, intent,
 reset role;
 insert into ai_calls (owner_id, provider, purpose, ok) values ('11111111-1111-4111-8111-111111111111', 'gemini', 'plan', true);
 select pg_temp.expect_fail($q$insert into ai_calls (owner_id, provider, purpose, ok) values ('11111111-1111-4111-8111-111111111111', 'gemini', 'code', true)$q$, 'ai_calls_purpose_check');
+insert into ai_calls (owner_id, provider, purpose, ok) values ('11111111-1111-4111-8111-111111111111', 'gemini', 'prototype', true);
 \o
 \echo 'Gemini 기획서 초안 테스트 완료'

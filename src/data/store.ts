@@ -84,6 +84,8 @@ export interface OfficeStore {
   loadResultInbox(): Promise<ResultInboxItem[]>;
   /** 받은 결과를 처리함으로 표시. 이미 다른 기기가 처리했으면 false */
   markResultInbox(id: string, status: 'imported' | 'invalid', note: string): Promise<boolean>;
+  /** Gemini 무료가 견본 지시서로 HTML 견본 한 장을 만든다(서버, 저장은 앱이 견본으로 올림, v0.4.7) */
+  draftPrototype(taskId: string, text: string): Promise<{ html: string; planRevision: number }>;
   /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
   askGemini(
