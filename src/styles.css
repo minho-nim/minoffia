@@ -1617,70 +1617,106 @@ a {
   background: var(--surface);
 }
 
-/* ---------- 입력창(묻기·요청) ---------- */
+/* ---------- 입력창(묻기·요청): Claude 대화창처럼 크고 간단하게(v0.4.13) ---------- */
 .inbox {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
+  gap: 12px;
+  padding: 14px;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 14px;
   background: var(--surface);
+}
+
+.inbox-empty {
+  padding: 10px 2px 4px;
+}
+
+.inbox-hello {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--ink);
 }
 
 .inbox-log {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 42vh;
+  gap: 18px;
+  max-height: 52vh;
   margin: 0;
-  padding: 0;
+  padding: 4px 2px;
   overflow-y: auto;
   list-style: none;
 }
 
+/* 받은 말(미니엉·Gemini)은 말풍선 없이 넓게, 내 말만 오른쪽 둥근 상자 */
 .inbox-msg {
-  max-width: 92%;
-  padding: 6px 9px;
-  border-radius: 8px;
-  background: var(--surface-2);
+  max-width: 100%;
 }
 
 .inbox-msg p {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--ink);
 }
 
 .inbox-msg.from-me {
   align-self: flex-end;
-  background: var(--st-progress);
-  color: var(--st-progress-ink);
-}
-
-.inbox-msg.from-gemini {
-  border-left: 3px solid var(--info);
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
 }
 
 .inbox-who {
-  display: block;
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--muted);
 }
 
+.inbox-who::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.inbox-msg.from-gemini .inbox-who::before {
+  background: var(--info);
+}
+
 .inbox-msg.from-me .inbox-who {
-  color: inherit;
-  opacity: 0.75;
+  display: none;
 }
 
 .inbox-actions,
 .inbox-choices {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
+}
+
+.inbox-choices {
+  margin-top: 10px;
+}
+
+.inbox-actions .btn,
+.inbox-choices .btn {
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 15px;
 }
 
 .inbox-note {
@@ -1692,29 +1728,73 @@ a {
   flex-basis: 100%;
 }
 
+/* 입력 상자: 둥근 큰 상자 안에 글칸, 아래 줄에 첨부(왼쪽)·보내기(오른쪽) */
 .inbox-form {
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--bg);
+  box-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.3);
+}
+
+.inbox-form:focus-within {
+  border-color: var(--accent);
 }
 
 .inbox-form textarea {
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--bg);
-  resize: vertical;
-  font-size: 15px;
-  line-height: 1.45;
+  min-height: 48px;
+  padding: 4px 2px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  resize: none;
+  font-size: 16px;
+  line-height: 1.55;
   /* 글을 쓰면 늘어난다(Inbox에서 높이 조절). 너무 길면 안에서 스크롤 */
   max-height: 40svh;
 }
 
-.inbox-form .btn {
+.inbox-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inbox-attach,
+.inbox-send {
   flex: none;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.inbox-attach {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+
+.inbox-send {
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.inbox-send:disabled,
+.inbox-attach:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .direct-entry > summary {
@@ -1839,14 +1919,6 @@ a {
   cursor: pointer;
 }
 
-.inbox-attach {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding-inline: 10px;
-  color: var(--ink);
-}
 
 .pixel-icon {
   display: block;
