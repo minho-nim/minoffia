@@ -1088,7 +1088,7 @@ export function App() {
       </div>
 
       <main className="layout">
-        <section className="stage" aria-label="오피스">
+        <section className={`stage${mini ? ' is-mini' : ''}`} aria-label="오피스">
           <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} workflow={snap.workflow} selected={selected} onSelect={selectAgent} onOpenTask={showTask} />
           <p className="stage-note">
             캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.
@@ -1159,11 +1159,12 @@ export function App() {
                 canAskGemini={store.mode === 'supabase'}
                 onCreateTask={(d, images) => addTask(d, images)}
                 onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
-                onAskGemini={async (q, history, images) => {
+                onAskGemini={async (q, history, images, onDelta) => {
                   try {
-                    return (await store.askGemini(q, history, images)).answer;
+                    return (await store.askGemini(q, history, images, onDelta)).answer;
                   } finally {
-                    setSnap(await store.load());
+                    // 오늘 Gemini 횟수만 새로 읽는다(답 표시를 기다리게 하지 않음).
+                    void store.load().then(setSnap, () => undefined);
                   }
                 }}
                 onCopy={workflowActions.copy}

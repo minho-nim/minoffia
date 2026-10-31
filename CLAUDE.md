@@ -54,7 +54,7 @@
 - 요청 자료에는 문서도 올린다(PDF·TXT·MD·CSV·JSON·HTML·DOCX·XLSX·PPTX·ZIP 20MB, 역할 `document`, SVG는 이미지 5MB, `0012`·`0013` 마이그레이션). 결과 스크린샷은 PNG·JPG·WEBP·GIF만.
   HTML·SVG는 저장소에 text/plain으로 올리고 앱 안에서만 본다(HTML은 권한 없는 sandbox iframe, SVG는 `<img>`). 미리보기는 브라우저 안에서만(`src/components/FilePreview.tsx`, DOCX·XLSX·PPTX 글 뽑기는 `supabase/functions/analyze-image/office.ts`, ZIP은 jszip을 열 때만 불러옴).
   "Gemini로 요약"은 10MB 이하 PDF·글·HTML·DOCX·XLSX·PPTX(Office는 서버가 글만 뽑아 보냄). SVG·ZIP은 미리보기만.
-- 입력창 일반 질문: 앱 상태는 규칙, 일반 질문은 보내면 Gemini 무료(`supabase/functions/ask-gemini`)가 답하고 "GPT에게 이어서 묻기"(복사)를 둔다. 프로젝트 이름이 든 질문은 GPT를 먼저 권한다(소유자 결정 2026-10-30). 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`, `docs/FLOW_v0.3_2026-10-30.md`.
+- 입력창 일반 질문: 앱 상태는 규칙, 일반 질문은 보내면 Gemini 무료(`supabase/functions/ask-gemini`)가 바로 답한다(답은 조각조각 스트리밍, 생각 단계 끔, v0.4.15). 답 아래 작은 링크로 "GPT에게 이어서 묻기"(복사)·"업무로 만들기". 프로젝트 이름이 든 질문도 바로 답하고 GPT 권유는 링크로만(소유자 2026-10-31 "물어보면 그냥 대답"). 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`, `docs/FLOW_v0.3_2026-10-30.md`.
 - 입력창 화면 대화는 계정에 저장해 기기 간 이어 본다(`inbox_state`). 개발일지용 대화 기록(`chat_messages`)은 프로젝트·업무에 연결된 메시지만 남기고 일반 대화·질문은 남기지 않으며, 소유자가 개발일지 화면에서 지울 수 있다. 개발일지 Markdown은 `src/domain/devlog.ts`.
 - 휴대폰 알림(v0.4.12): 기획서·확인 질문·계획·견본·결과·막힘이 생기면 DB 트리거 → `push_outbox` → pg_net → `push`가 웹 푸시로 알린다(`0024_push_notifications.sql`, `public/sw.js`). 입력창 미니엉 알림은 확인 질문·막힘만.
 - 입력창 접수 매니저 이름은 **미니엉**(코드 id는 `mina` 그대로).

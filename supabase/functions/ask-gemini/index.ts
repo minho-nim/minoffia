@@ -1,4 +1,4 @@
-// 입력창의 일반 질문을 Gemini 무료 API에 한 번 묻는다(소유자가 버튼을 눌렀을 때만).
+// 입력창의 일반 질문을 Gemini 무료 API에 한 번 묻는다(소유자가 보냈을 때만). stream이면 답을 조각조각 바로 넘긴다(v0.4.15).
 // 키는 secrets(GEMINI_API_KEY = A, GEMINI_API_KEY2 = B 예비)에만 있다. A가 한도·오류로 실패할 때만 B를 쓴다.
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
@@ -46,26 +46,40 @@ interface InlineImage {
   data: string;
 }
 
-async function callGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[]) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents: [
-        ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-        { role: 'user', parts: [...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
-      ],
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.4 },
-    }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+function requestBody(question: string, history: Turn[], images: InlineImage[], thinking: boolean) {
+  return JSON.stringify({
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    contents: [
+      ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+      { role: 'user', parts: [...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
+    ],
+    // 짧은 질문 답에는 '생각' 단계를 끈다(빠르게, v0.4.15). 모델이 이 설정을 모르면(400) 설정 없이 다시 묻는다.
+    generationConfig: { maxOutputTokens: 1024, temperature: 0.4, ...(thinking ? {} : { thinkingConfig: { thinkingBudget: 0 } }) },
   });
-  const data = await res.json().catch(() => ({}) as Record<string, unknown>);
-  const parts = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? [];
-  const text = parts.map((p) => p.text ?? '').join('').trim();
-  const message = (data as { error?: { message?: string } }).error?.message ?? '';
-  return { status: res.status, text, message };
 }
+
+/** Gemini에 묻는다. stream이면 SSE 응답(Response)을 그대로 돌려주고, 아니면 글을 모아 돌려준다. */
+async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
+  const call = (thinking: boolean) =>
+    fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: requestBody(question, history, images, thinking),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  const res = await call(false);
+  // 400이면(이 모델이 생각 끄기를 모르는 경우 등) 설정 없이 한 번만 다시 묻는다.
+  if (res.status !== 400) return res;
+  await res.body?.cancel();
+  return call(true);
+}
+
+const partsText = (data: unknown) =>
+  ((data as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] }).candidates?.[0]?.content?.parts ?? [])
+    .filter((p) => !p.thought)
+    .map((p) => p.text ?? '')
+    .join('');
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -84,7 +98,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { question?: string; history?: Turn[]; images?: InlineImage[] };
+  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -113,23 +127,67 @@ Deno.serve(async (req) => {
   if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
 
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
+  const stream = body.stream === true;
+  const started = Date.now();
   let last = { status: 0, message: '' };
   for (const [i, key] of keys.entries()) {
     if (!key) continue;
-    let r: { status: number; text: string; message: string };
-    try {
-      r = await callGemini(key, model, question, history, images);
-    } catch (e) {
-      r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
-    }
     const slot = i + 1;
-    if (r.status === 200 && r.text) {
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: r.text.length });
-      return reply(200, { ok: true, answer: r.text, keySlot: slot, model });
+    let res: Response;
+    try {
+      res = await openGemini(key, model, question, history, images, stream);
+    } catch (e) {
+      last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
+      continue;
     }
-    last = { status: r.status, message: r.message };
+    if (res.status === 200 && stream && res.body) {
+      // 받은 조각을 바로 앱에 넘긴다(한 줄에 JSON 하나: {"d":"글"} … {"done":true}). 다 보내면 횟수·길이만 기록한다.
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      const enc = new TextEncoder();
+      const out = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          let buf = '';
+          let total = 0;
+          let first = 0;
+          try {
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buf += value;
+              let nl: number;
+              while ((nl = buf.indexOf('\n')) >= 0) {
+                const line = buf.slice(0, nl).trim();
+                buf = buf.slice(nl + 1);
+                if (!line.startsWith('data:')) continue;
+                const text = partsText(JSON.parse(line.slice(5).trim() || '{}'));
+                if (!text) continue;
+                if (!first) first = Date.now() - started;
+                total += text.length;
+                controller.enqueue(enc.encode(JSON.stringify({ d: text }) + '\n'));
+              }
+            }
+            controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
+          } catch (e) {
+            controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
+          } finally {
+            controller.close();
+            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, first_ms: first, total_ms: Date.now() - started, chars: total }));
+            await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
+          }
+        },
+      });
+      return new Response(out, { status: 200, headers: { ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
+    }
+    const data = await res.json().catch(() => ({}));
+    const text = res.status === 200 ? partsText(data).trim() : '';
+    if (text) {
+      console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, total_ms: Date.now() - started, chars: text.length }));
+      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length });
+      return reply(200, { ok: true, answer: text, keySlot: slot, model });
+    }
+    last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
     // 요청 자체가 잘못된 경우(400·404)는 B로 넘겨도 같으므로 멈춘다. 한도(429)·인증·서버 오류만 B를 쓴다.
-    if (r.status === 400 || r.status === 404) break;
+    if (res.status === 400 || res.status === 404) break;
   }
   await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
   const hint =
