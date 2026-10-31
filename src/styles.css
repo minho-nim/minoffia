@@ -173,7 +173,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 10px 24px;
-  padding-block: 14px;
+  padding-block: calc(14px + env(safe-area-inset-top, 0px)) 14px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   background: var(--brown);
@@ -305,14 +305,61 @@ a {
   min-width: 0;
 }
 
-/* 휴대폰·좁은 화면: 오피스를 위에 고정하고 아래 패널만 스크롤한다(세로가 충분할 때만). */
+/* 휴대폰: 위 머리가 화면 밖으로 나가면 맨 위에 얇은 한 줄 머리(높이 36px + 노치)를 고정한다. */
+.topbar-mini {
+  display: none;
+}
+
+@media (max-width: 1039px) {
+  .topbar-mini {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: calc(36px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+    background: var(--brown);
+    color: var(--brown-ink);
+    box-shadow: 0 4px 8px -6px rgba(0, 0, 0, 0.5);
+    transform: translateY(-100%);
+    visibility: hidden;
+    transition: transform 0.18s ease, visibility 0.18s;
+  }
+  .topbar-mini.is-on {
+    transform: none;
+    visibility: visible;
+  }
+  .topbar-mini button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: var(--font-display);
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .topbar-mini .ver {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 1039px) and (prefers-reduced-motion: reduce) {
+  .topbar-mini {
+    transition: none;
+  }
+}
+
+/* 휴대폰·좁은 화면: 오피스를 위에 고정하고 아래 패널만 스크롤한다(세로가 충분할 때만). 얇은 머리 바로 아래에 붙는다. */
 @media (max-width: 1039px) and (min-height: 620px) {
   .stage {
     position: sticky;
-    top: 0;
+    top: calc(36px + env(safe-area-inset-top, 0px));
     z-index: 40;
     margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
-    padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 8px;
+    padding: 6px max(16px, env(safe-area-inset-right, 0px)) 8px;
     background: var(--bg);
     box-shadow: 0 6px 10px -8px rgba(0, 0, 0, 0.35);
   }
@@ -321,11 +368,11 @@ a {
   }
   /* 사무실이 위에 고정되므로, 대화 목록은 사무실 아래 남는 화면을 거의 다 쓴다(사무실 높이 ≈ 화면 너비 × 224/300). */
   .inbox-log {
-    max-height: max(300px, calc(100svh - (100vw - 32px) * 0.747 - 150px));
+    max-height: max(300px, calc(100svh - (100vw - 32px) * 0.747 - 190px));
   }
   /* 말풍선·알림에서 업무 카드로 갈 때 위에 고정된 사무실에 가리지 않게 */
   .task-card {
-    scroll-margin-top: calc((100vw - 32px) * 0.747 + 24px);
+    scroll-margin-top: calc((100vw - 32px) * 0.747 + 66px + env(safe-area-inset-top, 0px));
   }
 }
 
