@@ -219,6 +219,11 @@ export function App() {
   const planInboxRef = useRef<(() => void) | null>(null);
   /** 업무별 마지막 자동 PR·CI 확인 시각(너무 자주 묻지 않게) */
   const autoPrAt = useRef(new Map<string, number>());
+  /** 배포 승인 뒤 main 시험(CI)을 기다리는 업무(v0.4.20). 1분마다 다시 배포를 시도한다 */
+  const deployWait = useRef(new Set<string>());
+  const deployAt = useRef(new Map<string, number>());
+  /** 자동 저장 실패를 한 번만 알리기 위한 받은 계획·결과 id */
+  const inboxReported = useRef(new Set<string>());
   /** 이 기기에서 Gemini 견본을 이미 시도한 계획(업무:계획 버전) */
   const prototypeTried = useRef(new Set<string>());
   useEffect(() => {
@@ -532,15 +537,32 @@ export function App() {
             if (await store.markPlanInbox(item.id, 'invalid', parsedErrors.join(' / '))) say('error', `PM이 보낸 계획을 쓰지 못했습니다(${task.title}): ${parsedErrors.join(' / ')}`);
             continue;
           }
-          if (!(await store.markPlanInbox(item.id, 'imported', ''))) continue;
+          // v0.4.20: 먼저 저장하고, 저장에 성공했을 때만 "받음"으로 표시한다(실패하면 다음 확인 때 다시 시도).
           const failed = await importPlanText(task, item.planText, 'routine_session_auto', snap);
-          if (failed) say('error', `PM 계획 자동 저장 실패(${task.title}): ${failed.join(' / ')} — PM 세션의 JSON을 업무 카드에 붙여넣으세요.`);
+          if (failed) {
+            // 다른 기기가 먼저 저장했으면(같은 버전 계획이 이미 있음) 받음으로만 표시한다.
+            const fresh = await store.load();
+            const again = deriveWorkflow(task, fresh.workflow);
+            if (again.plan && again.plan.approvedSpecRevision === item.specRevision && !again.pendingRevision) await store.markPlanInbox(item.id, 'imported', '');
+            else if (!inboxReported.current.has(item.id)) {
+              inboxReported.current.add(item.id);
+              say('error', `PM 계획 자동 저장 실패(${task.title}): ${failed.join(' / ')} — 1분 뒤 다시 시도해요. 계속 안 되면 PM 세션의 JSON을 업무 카드에 붙여넣으세요.`);
+            }
+            continue;
+          }
+          await store.markPlanInbox(item.id, 'imported', '');
         }
         // Claude 보조 개발 세션이 보낸 결과(dev_result_inbox)를 결과 패키지로 옮긴다(v0.4.3). GitHub에는 올리지 않는다.
         for (const item of await store.loadResultInbox()) {
           const task = snap.tasks.find((t) => t.id === item.taskId);
           const a = snap.workflow.assignments.find((x) => x.id === item.assignmentId);
           if (!task || !a) continue;
+          // 다른 기기가 이미 같은 결과를 저장했으면 받음으로만 표시한다.
+          const itemSha = await sha256Hex(`${item.diff}\n---\n${item.testLog}`);
+          if (snap.workflow.results.some((r) => r.taskId === task.id && r.sha256 === itemSha)) {
+            await store.markResultInbox(item.id, 'imported', '');
+            continue;
+          }
           const view = deriveWorkflow(task, snap.workflow);
           const why =
             a.assignee !== 'claude'
@@ -556,7 +578,6 @@ export function App() {
             if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `Claude가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
             continue;
           }
-          if (!(await store.markResultInbox(item.id, 'imported', ''))) continue;
           const summary = [
             item.summary,
             item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
@@ -583,7 +604,12 @@ export function App() {
             },
             `Claude가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 올리기 승인(B)하거나 수정 요청하세요.`,
           );
-          if (!ok) say('error', `결과 자동 저장 실패(${task.title}) — Claude 세션의 마지막 메시지를 결과 패키지에 붙여넣으세요.`);
+          // v0.4.20: 저장에 성공했을 때만 "받음"으로 표시한다(실패하면 다음 확인 때 다시 시도).
+          if (ok) await store.markResultInbox(item.id, 'imported', '');
+          else if (!inboxReported.current.has(item.id)) {
+            inboxReported.current.add(item.id);
+            say('error', `결과 자동 저장 실패(${task.title}) — 1분 뒤 다시 시도해요. 계속 안 되면 Claude 세션의 마지막 메시지를 결과 패키지에 붙여넣으세요.`);
+          }
         }
         // 견본 먼저 계획이 들어왔는데 견본이 없으면 Gemini가 한 번 만든다(계획 버전마다 한 번, v0.4.7).
         for (const t of snap.tasks) {
@@ -612,6 +638,21 @@ export function App() {
           }
         }
         if (checked) setSnap(await store.load());
+        // 배포 승인 뒤 배포가 안 끝난 업무: main 시험을 기다리는 중이면 1분마다, 앱을 다시 열었는데 배포 기록이 없으면(승인 24시간 이내) 한 번 더 시도한다(v0.4.20).
+        for (const t of snap.tasks) {
+          const v = deriveWorkflow(t, snap.workflow);
+          if (!v.cApproved || !t.prUrl) continue;
+          const d = latestDeployment(t, snap.workflow);
+          if (d?.ok) continue;
+          const waiting = deployWait.current.has(t.id);
+          if (!waiting) {
+            const c = snap.workflow.approvals.find((a) => a.taskId === t.id && a.gate === 'C' && a.decision === 'approved' && a.approvedRevision === v.result?.revision);
+            if (d || !c || Date.now() - Date.parse(c.createdAt) > 24 * 3600_000) continue;
+          }
+          if (Date.now() - (deployAt.current.get(t.id) ?? 0) < 60_000) continue;
+          deployAt.current.set(t.id, Date.now());
+          await workflowActions.deploy?.(t, false, true);
+        }
       } finally {
         importingInbox.current = false;
       }
@@ -770,6 +811,8 @@ export function App() {
           }
         }
       }
+      // 소유자 결정(2026-10-30): 배포 승인 = 배포. 승인 뒤 바로 서버가 병합·release 앞당기기를 한다(v0.4.20).
+      if (ok && gate === 'C' && decision === 'approved' && store.mode === 'supabase') await workflowActions.deploy?.(task);
       // 소유자 결정(2026-10-30): 기획 승인 한 번이면 PM 전송까지, Gemini 초안에 수정 요청하면 Gemini가 다시 쓴다.
       if (ok && gate === 'A' && store.mode === 'supabase') {
         const spec = snap.workflow.specs.find((x) => x.taskId === task.id && x.revision === revision);
@@ -859,7 +902,11 @@ export function App() {
       // 결과를 받은 작업은 끝난 것으로 기록한다(동시 실행 1개 제한이 풀린다).
       // 작업을 고르지 않고 '전체'로 등록하면 이 업무의 시작된 작업을 모두 끝낸다.
       const done = snap.workflow.assignments.filter(
-        (a) => a.taskId === task.id && (f.workItemId === '' || a.workItemId === f.workItemId) && (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting'),
+        // 'ready'(실행 승인 뒤 손으로 넘긴 Codex 작업 등)도 결과를 받으면 끝난 것으로(v0.4.20: 안 끝난 작업이 있으면 올리기 승인이 막히므로)
+        (a) =>
+          a.taskId === task.id &&
+          (f.workItemId === '' || a.workItemId === f.workItemId) &&
+          (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting' || (a.dispatchStatus === 'ready' && f.workItemId !== '')),
       );
       if (ok && done.length) {
         try {
@@ -988,12 +1035,20 @@ export function App() {
         : undefined,
     deploy:
       store.mode === 'supabase'
-        ? async (task) => {
+        ? async (task, allowExtra = false, quiet = false) => {
             try {
-              const r = await store.deployRelease(task.id);
+              const r = await store.deployRelease(task.id, allowExtra);
+              if (r.wait) {
+                // 처음 한 번만 알리고, 그 뒤 자동 재시도는 조용히
+                if (!quiet && !deployWait.current.has(task.id)) say('ok', `배포 대기: ${r.message || 'main 시험(CI)이 끝나면 자동으로 배포해요.'}`);
+                deployWait.current.add(task.id);
+                return true;
+              }
+              deployWait.current.delete(task.id);
               say('ok', r.updated ? `운영 배포를 시작했습니다: release를 ${r.to.slice(0, 7)}로 앞당겼습니다. Cloudflare 빌드가 끝나면(1~2분) 사이트에 반영됩니다.` : `release가 이미 최신(${r.to.slice(0, 7)})입니다. 다시 배포할 것이 없습니다.`);
               return true;
             } catch (e) {
+              deployWait.current.delete(task.id);
               say('error', `운영 배포를 하지 못했습니다: ${(e as Error).message}`);
               return false;
             } finally {
@@ -1016,8 +1071,12 @@ export function App() {
             createdAt: new Date().toISOString(),
           });
         },
-        '수정 요청을 기록했습니다. 진행 단계 3번에서 Claude PM에 다시 보내세요.',
-      ),
+        '수정 요청을 기록했습니다. Claude PM에 다시 보내 새 계획을 받아요.',
+      ).then(async (ok) => {
+        // v0.4.20: 결과 수정 요청 → PM 재계획을 자동으로(최종 목표: 사용자는 수정 요청만)
+        if (ok && store.mode === 'supabase' && projectById.get(task.projectId)?.repo) await dispatch(task, false);
+        return ok;
+      }),
   };
 
   const dispatch = async (task: Task, ack: boolean) => {

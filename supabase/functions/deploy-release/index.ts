@@ -1,5 +1,6 @@
 // C(운영 배포) 승인 뒤 release 브랜치를 main으로 앞당긴다(fast-forward만). Cloudflare Pages는 release만 배포한다.
 // 소유자 결정(2026-10-30): PC 없이 모바일에서도 배포할 수 있게 C 승인 = 배포. release에 직접 커밋하지 않는다.
+// v0.4.20: 병합 뒤 main에 다른 변경이 더 있으면 확인(allowExtra)을 받고, main 시험(CI)이 끝나 통과한 뒤에만 앞당긴다.
 // 조건: C 승인 기록 + 최신 PR 확인이 'CI 성공'. 열린 PR이면 그 확인한 커밋 그대로 squash 병합(v0.4.5) → 병합 커밋이 main에 있음 + release가 main보다 뒤(갈라졌으면 거절).
 // 토큰(GITHUB_REPO_TOKEN)에 해당 저장소 Contents(Read and write) 권한이 필요하다. 허용 저장소만, minho-nim/MinLab은 제외.
 // 성공 = release 갱신(HTTP 200)이지 Cloudflare 빌드 완료가 아니다.
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { taskId?: string };
+  let body: { taskId?: string; allowExtra?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -119,8 +120,34 @@ Deno.serve(async (req) => {
     const mergeCmp = await json(`/compare/${mergeSha}...${mainSha}`);
     if (relCmp.status !== 200 || mergeCmp.status !== 200) return refuse(502, `커밋을 비교하지 못했습니다(HTTP ${relCmp.status}/${mergeCmp.status}).`, releaseSha, mainSha);
 
-    const decision = decideDeploy({ releaseToMain: String(relCmp.data.status), mergeToMain: String(mergeCmp.data.status) });
+    // 합친 뒤 main의 시험(CI) 결과(GitHub Actions check-runs)
+    const runs = await json(`/commits/${mainSha}/check-runs?per_page=100`);
+    const list = (runs.data.check_runs as { status?: string; conclusion?: string | null }[] | undefined) ?? [];
+    const mainCi: 'success' | 'failure' | 'pending' | 'none' =
+      runs.status !== 200 || !list.length
+        ? 'none'
+        : list.some((r) => r.status !== 'completed')
+          ? 'pending'
+          : list.some((r) => ['failure', 'cancelled', 'timed_out', 'action_required'].includes(String(r.conclusion)))
+            ? 'failure'
+            : 'success';
+    // 막 병합한 커밋은 GitHub가 시험을 등록하기 전이라 'none'으로 보일 수 있다. 3분 동안은 기다린다.
+    const mergedAt = Date.parse(String(prRes.data.merged_at ?? ''));
+    const ci = mainCi === 'none' && mainSha === mergeSha && Number.isFinite(mergedAt) && Date.now() - mergedAt < 3 * 60_000 ? 'pending' : mainCi;
+    const decision = decideDeploy({
+      releaseToMain: String(relCmp.data.status),
+      mergeToMain: String(mergeCmp.data.status),
+      extraCommits: Number(mergeCmp.data.ahead_by ?? 0),
+      mainCi: ci,
+      allowExtra: body.allowExtra === true,
+    });
     if (decision.action === 'refuse') return refuse(409, decision.reason, releaseSha, mainSha);
+    if (decision.action === 'confirm') {
+      await record(false, releaseSha, mainSha, decision.reason);
+      return reply(409, { ok: false, confirm: true, extra: decision.extra, error: decision.reason });
+    }
+    // 기다리는 중은 실패 기록을 남기지 않는다(앱이 1분마다 다시 부른다).
+    if (decision.action === 'wait') return reply(202, { ok: false, wait: true, error: decision.reason });
     if (decision.action === 'noop') {
       await record(true, releaseSha, mainSha, '');
       return reply(200, { ok: true, updated: false, from: releaseSha, to: mainSha });

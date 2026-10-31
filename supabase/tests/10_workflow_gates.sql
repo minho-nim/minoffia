@@ -94,6 +94,9 @@ select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, ap
 insert into result_packages (task_id, revision, source, summary, diff) values
   ('bbbbbbbb-0000-4000-8000-000000000001', 1, 'codex_cloud_manual', '버튼 크기 변경', 'diff --git a/x b/x');
 select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'C', 'approved', 1)$q$, 'C requires B');
+-- v0.4.20: 작업(W1)이 아직 started면 B 불가. 앱은 결과를 받으면 그 작업을 완료로 기록한다.
+select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'B', 'approved', 1)$q$, 'still running');
+update agent_assignments set dispatch_status = 'completed' where work_item_id = 'W1';
 insert into approvals (task_id, gate, decision, approved_revision) values ('bbbbbbbb-0000-4000-8000-000000000001', 'B', 'approved', 1);
 -- C는 서버가 확인한 'CI 성공 + 병합됨' 기록이 있어야 한다(0010)
 update tasks set pr_url = 'https://github.com/o/r/pull/1' where id = 'bbbbbbbb-0000-4000-8000-000000000001';
