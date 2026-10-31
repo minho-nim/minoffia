@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AGENT_BY_ID, AGENTS } from '../domain/agents';
 import type { AgentId, Task } from '../domain/types';
-import type { AgentAssignment } from '../domain/workflow-types';
+import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
 import { STATUS_LABEL } from '../domain/types';
 import { drawOffice } from './draw';
 import { H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
 import { ACTIVITY_LABEL, buildScene, type AgentScene } from './scene';
+import { speechFor } from './speech';
 import { spriteFor } from './sprites';
 import { BACKGROUND_URL } from './assets';
 
@@ -15,6 +16,10 @@ interface Props {
   assignments?: AgentAssignment[];
   selected: AgentId | null;
   onSelect: (id: AgentId) => void;
+  /** 승인·답을 기다리는 말풍선(업무 단계로만 정함). 없으면 말풍선 없이 표시만 */
+  workflow?: WorkflowData;
+  /** 말풍선이 있는 캐릭터를 누르면 그 업무 카드를 연다 */
+  onOpenTask?: (taskId: string) => void;
 }
 
 interface Mover {
@@ -35,11 +40,12 @@ const BADGE: Partial<Record<AgentScene['activity'], string>> = {
   review: '?',
 };
 
-export function OfficeView({ tasks, assignments = [], selected, onSelect }: Props) {
+export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRefs = useRef(new Map<AgentId, HTMLButtonElement>());
   const movers = useRef(new Map<AgentId, Mover>());
   const scene = useMemo(() => buildScene(tasks, assignments), [tasks, assignments]);
+  const speech = useMemo(() => (workflow ? speechFor(tasks, workflow) : new Map()), [tasks, workflow]);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
@@ -200,9 +206,11 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect }: Prop
       {AGENTS.map((a) => {
         const s = scene.find((x) => x.agent === a.id);
         if (!s) return null;
-        const badge = BADGE[s.activity];
+        const say = speech.get(a.id);
+        const talking = say && say.kind !== 'busy';
+        const badge = say?.kind === 'busy' ? '…' : talking ? undefined : BADGE[s.activity];
         const isSel = selected === a.id;
-        const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}`;
+        const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${talking ? `. ${say.text.replace('\n', ' ')}` : ''}`;
         const sprite = spriteFor(a, 'stand');
         return (
           <button
@@ -222,12 +230,20 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect }: Prop
               }
               agentRefs.current.set(a.id, el);
             }}
-            onClick={() => onSelect(a.id)}
+            onClick={() => {
+              onSelect(a.id);
+              if (talking) onOpenTask?.(say.taskId);
+            }}
             aria-label={label}
             aria-pressed={isSel}
           >
             <img src={sprite.src} alt="" draggable={false} />
             {badge && !isSel && <span className="agent-badge">{badge}</span>}
+            {talking && !isSel && (
+              <span className="agent-speech" data-kind={say.kind}>
+                {say.text}
+              </span>
+            )}
             {isSel && (
               <span className="bubble" role="status">
                 <b>[{ACTIVITY_LABEL[s.activity]}]</b> {a.name}
