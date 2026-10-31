@@ -33,12 +33,17 @@ interface Mover {
 const SPEED = 22; // 논리 픽셀/초. 천천히 걷는다.
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
 
-const BADGE: Partial<Record<AgentScene['activity'], string>> = {
-  working: '…',
-  helping: '+',
-  blocked: '!',
-  review: '?',
-};
+/** 말풍선 단계 이름(업무 종류). 단계[표시]로 보인다: 개발[…] · 개발[!] · 검토[?] */
+const WORK_WORD: Record<Task['type'], string> = { planning: '기획', dev: '개발', design: '디자인', prototype: '견본', research: '조사', qa: '검수' };
+const MARK: Partial<Record<AgentScene['activity'], string>> = { working: '…', helping: '…', blocked: '!', review: '?' };
+
+/** 업무 단계 말풍선이 없을 때의 작은 표시(업무 상태로만): 단계[표시] */
+function badgeFor(s: AgentScene): string | undefined {
+  const mark = MARK[s.activity];
+  if (!mark || !s.task) return undefined;
+  if (s.agent === 'mina') return `접수[${s.task.status === 'blocked' ? '!' : s.task.status === 'review' ? '?' : '…'}]`;
+  return `${s.activity === 'review' ? '검토' : WORK_WORD[s.task.type]}[${mark}]`;
+}
 
 export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -208,7 +213,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         if (!s) return null;
         const say = speech.get(a.id);
         const talking = say && say.kind !== 'busy';
-        const badge = say?.kind === 'busy' ? '…' : talking ? undefined : BADGE[s.activity];
+        const badge = say?.kind === 'busy' ? say.text : talking ? undefined : badgeFor(s);
         const isSel = selected === a.id;
         const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${say ? `. ${say.label}` : ''}`;
         const sprite = spriteFor(a, 'stand');
