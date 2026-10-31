@@ -526,6 +526,13 @@ export function App() {
     })();
   };
 
+  /** 업무 카드로 이동(입력창 알림·사무실 말풍선). 지금 필터에 없으면 '전체'로 바꾼다. */
+  const showTask = (id: string) => {
+    setTab('tasks');
+    if (!visibleTasks.some((t) => t.id === id)) setFilter('all');
+    window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  };
+
   const workflowActions: WorkflowActions = {
     draftSpec: (task) => draftSpec(task.id),
     // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.
@@ -924,7 +931,7 @@ export function App() {
 
       <main className="layout">
         <section className="stage" aria-label="오피스">
-          <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} selected={selected} onSelect={selectAgent} />
+          <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} workflow={snap.workflow} selected={selected} onSelect={selectAgent} onOpenTask={showTask} />
           <p className="stage-note">
             캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.
           </p>
@@ -994,10 +1001,7 @@ export function App() {
                 onArchive={(entries) => store.appendChat(entries)}
                 onAutoDraft={store.mode === 'supabase' ? (t) => void draftSpec(t.id) : undefined}
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
-                onShowTask={(id) => {
-                  if (!visibleTasks.some((t) => t.id === id)) setFilter('all');
-                  window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
-                }}
+                onShowTask={showTask}
                 onApprove={async (task, gate) => {
                   // 업무 카드의 A·B 버튼과 같은 규칙(canApprove)을 지나야 한다.
                   const view = deriveWorkflow(task, snap.workflow);
