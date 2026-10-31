@@ -45,6 +45,22 @@ function badgeFor(s: AgentScene): string | undefined {
   return `${s.activity === 'review' ? '검토' : WORK_WORD[s.task.type]}[${mark}]`;
 }
 
+/**
+ * 말풍선 글(소유자 2026-11-01): 내 차례 기획[?] · 막힘 조사[!]는 그대로, 일하는 중은 "개발중"처럼.
+ * 색: [?]는 단계마다 다른 색, [!] 빨강, 일하는 중 흰색, 쉬는 캐릭터를 누르면 회색 "… 휴식중". 전부 꼬리 있음.
+ */
+type MarkKind = 'ask' | 'busy' | 'alert';
+function splitMark(text: string): { word: string; kind: MarkKind } | null {
+  const m = /^(.*)\[(.)\]$/.exec(text);
+  if (!m) return null;
+  return { word: m[1], kind: m[2] === '?' ? 'ask' : m[2] === '!' ? 'alert' : 'busy' };
+}
+const BUSY_TEXT: Record<string, string> = { PR: 'PR 확인중' };
+function markText(m: { word: string; kind: MarkKind }): string {
+  if (m.kind === 'busy') return BUSY_TEXT[m.word] ?? `${m.word}중`;
+  return `${m.word}[${m.kind === 'ask' ? '?' : '!'}]`;
+}
+
 export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRefs = useRef(new Map<AgentId, HTMLButtonElement>());
@@ -206,6 +222,8 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         const talking = say && say.kind !== 'busy';
         const sayTask = say ? tasks.find((t) => t.id === say.taskId) : undefined;
         const badge = say?.kind === 'busy' ? say.text : talking ? undefined : badgeFor(s);
+        const mark = splitMark(talking ? say!.text : (badge ?? ''));
+        const shown = mark ? markText(mark) : '';
         const isSel = selected === a.id;
         const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${say ? `. ${say.label}` : ''}`;
         const sprite = spriteFor(a, 'stand');
@@ -213,7 +231,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
           <button
             key={a.id}
             type="button"
-            className={`agent${isSel ? ' is-selected' : ''}${sprite.art ? ' is-art' : ''}`}
+            className={`agent${isSel ? ' is-selected' : ''}${sprite.art ? ' is-art' : ''}${s.spot.x > W * 0.78 ? ' edge-right' : s.spot.x < W * 0.22 ? ' edge-left' : ''}`}
             data-activity={s.activity}
             ref={(el) => {
               if (!el) {
@@ -235,16 +253,15 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
             aria-pressed={isSel}
           >
             <img src={sprite.src} alt="" draggable={false} />
-            {badge && !isSel && <span className="agent-badge">{badge}</span>}
-            {talking && !isSel && (
-              <span className="agent-speech" data-kind={say.kind}>
-                {say.text}
+            {mark && !isSel && (
+              <span className="agent-speech" data-kind={mark.kind} data-stage={mark.word}>
+                {shown}
               </span>
             )}
             {isSel && (
               // 누르면: 표시(단계[표시] 또는 [상태]) 이름 / 무슨 뜻인지 / 어느 업무인지
-              <span className="bubble" role="status">
-                <b>{say ? say.text : badge ?? `[${ACTIVITY_LABEL[s.activity]}]`}</b> {a.name}
+              <span className={`bubble${mark ? '' : ' bubble-rest'}`} role="status">
+                <b>{shown || (s.activity === 'resting' ? '… 휴식중' : ACTIVITY_LABEL[s.activity])}</b> {a.name}
                 {say ? (
                   <>
                     <br />
