@@ -10,7 +10,7 @@ import type { Project, Task } from '../domain/types';
 import { startBlocker } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
 import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
-import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL, STAGE_LABEL } from '../domain/workflow-types';
+import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
 
 export interface SpecFields {
   intent: Intent;
@@ -99,13 +99,14 @@ interface Props {
 
 const CI_LABEL: Record<PrCheck['ciState'], string> = { success: '성공', failure: '실패', pending: '진행 중', none: '없음' };
 
+/** 진행 단계(우리말만, v0.4.22). 누르면 아래 그 칸으로 간다 */
 const STEPS = [
-  { key: 'plan', label: '기획' },
-  { key: 'A', label: 'A' },
-  { key: 'pm', label: 'PM 계획' },
-  { key: 'E', label: 'E·실행' },
-  { key: 'B', label: '결과·B' },
-  { key: 'C', label: 'C' },
+  { key: 'plan', label: '기획서' },
+  { key: 'A', label: '기획 승인' },
+  { key: 'pm', label: '업무 계획' },
+  { key: 'E', label: '실행·개발' },
+  { key: 'B', label: '결과·올리기' },
+  { key: 'C', label: '배포' },
 ] as const;
 
 function stepIndex(view: WorkflowView): number {
@@ -197,18 +198,22 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
   return (
     <div className="wf">
       <div className="wf-head">
-        <span className="pill">{STAGE_LABEL[view.stage]}</span>
-        <ol className="wf-steps" aria-label="진행 단계">
+        <ol className="wf-steps" aria-label="진행 단계(누르면 그 칸으로)">
           {STEPS.map((s, i) => (
             <li key={s.key} className={i < current ? 'is-done' : i === current ? 'is-current' : ''}>
-              {s.label}
+              <button
+                type="button"
+                onClick={() => document.getElementById(`wf-${task.id}-${s.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >
+                {s.label}
+              </button>
             </li>
           ))}
         </ol>
       </div>
 
       {/* 1. 기획: 기본은 Gemini 무료 초안(자동), 어렵거나 중요한 업무만 ChatGPT(수동 인계) */}
-      <section className="wf-section">
+      <section className="wf-section" id={`wf-${task.id}-plan`}>
         <h4>1. 기획 — Gemini 초안 · ChatGPT</h4>
         {view.plannerFeedback && (
           <p className="task-error">
@@ -345,7 +350,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 2. 기획 승인 */}
       {view.spec && view.spec.intent !== 'question' && (
-        <section className="wf-section">
+        <section className="wf-section" id={`wf-${task.id}-A`}>
           <h4>2. {GATE_LABEL.A}</h4>
           {view.spec.intent === 'ambiguous' ? (
             <p className="muted small">
@@ -404,7 +409,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 3. Claude PM */}
       {view.aApproved && (
-        <section className="wf-section">
+        <section className="wf-section" id={`wf-${task.id}-pm`}>
           <h4>3. Claude PM — 작업 분해·배정</h4>
           <p className="muted small">Claude는 계획만 만들고 저장소에 쓰지 않습니다. 세션이 시작돼도 계획이 오기 전까지는 완료가 아닙니다.</p>
           {!view.planCurrent && (
@@ -498,7 +503,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 4. 배정 + 실행 승인 */}
       {view.planCurrent && view.assignments.length > 0 && (
-        <section className="wf-section">
+        <section className="wf-section" id={`wf-${task.id}-E`}>
           <h4>4. 배정된 작업 — {GATE_LABEL.E}</h4>
           <ul className="wf-items">
             {view.assignments.map((a) => {
@@ -684,7 +689,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 5. 결과 패키지 + B */}
       {view.aApproved && (view.planCurrent || view.result) && (
-        <section className="wf-section">
+        <section className="wf-section" id={`wf-${task.id}-B`}>
           <h4>5. 결과 검토 — {GATE_LABEL.B}</h4>
           <p className="muted small">
             GitHub에 올리기 전에 여기서 diff와 테스트 결과를 봅니다. Codex 웹의 diff(또는 `codex cloud diff` 출력)를 붙여넣으세요. PR·푸시는 올리기 승인 뒤에만 합니다.
@@ -905,7 +910,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 6. C 운영 배포 */}
       {view.bApproved && (
-        <section className="wf-section">
+        <section className="wf-section" id={`wf-${task.id}-C`}>
           <h4>6. {GATE_LABEL.C}</h4>
           {view.cApproved ? (
             actions.deploy ? (
