@@ -15,6 +15,10 @@ interface Props {
   onAssign: (task: Task, to: AgentId) => void;
   onDelete: (task: Task) => void;
   onCopy: (task: Task) => Promise<boolean>;
+  /** 대화 탭에서 이 업무에 대해 묻기(v0.4.19) */
+  onAsk?: (task: Task) => void;
+  /** 담당 AI를 사무실에서 보기 */
+  onShowAgent?: (task: Task) => void;
 }
 
 const STATUS_VERB: Record<TaskStatus, string> = {
@@ -25,7 +29,7 @@ const STATUS_VERB: Record<TaskStatus, string> = {
   done: '완료 승인',
 };
 
-export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssign, onDelete, onCopy }: Props) {
+export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent }: Props) {
   const agent = AGENT_BY_ID[task.assignee];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
@@ -44,7 +48,14 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
         <div>
           <dt>담당</dt>
           <dd>
-            {agent.name} <span className="muted">· {MODE_LABEL[agent.mode]}</span>
+            {onShowAgent ? (
+              <button type="button" className="link-btn" title="사무실에서 보기" onClick={() => onShowAgent(task)}>
+                {agent.name}
+              </button>
+            ) : (
+              agent.name
+            )}{' '}
+            <span className="muted">· {MODE_LABEL[agent.mode]}</span>
           </dd>
         </div>
         <div>
@@ -77,6 +88,11 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
       {task.dispatch.state === 'dispatching' && <p className="task-session">Claude Cloud에 전송 중…</p>}
 
       <div className="task-actions">
+        {onAsk && (
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => onAsk(task)}>
+            대화로 묻기
+          </button>
+        )}
         {nextStatuses(task).map((to) => (
           <button key={to} type="button" className={`btn btn-small btn-${to}`} onClick={() => onStatus(task, to)}>
             {STATUS_VERB[to]}
