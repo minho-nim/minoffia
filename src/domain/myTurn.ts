@@ -6,6 +6,7 @@
 import type { Task } from './types';
 import { canApprove, deriveWorkflow, latestPrCheck, prCheckPasses } from './workflow';
 import type { WorkflowData } from './workflow-types';
+import { stalls } from './stall';
 
 export interface MyTurn {
   taskId: string;
@@ -16,11 +17,13 @@ export interface MyTurn {
   label: string;
   /** 목록에서 바로 누를 수 있는 승인. 없으면 업무 카드에서 */
   quick?: 'A' | 'B';
+  /** 막힘·멈춤([!]): 맨 위에 빨갛게 */
+  alert?: boolean;
   /** 정렬용(오래 기다린 것부터) */
   at: string;
 }
 
-export function myTurns(tasks: Task[], all: WorkflowData): MyTurn[] {
+export function myTurns(tasks: Task[], all: WorkflowData, now: number = Date.now()): MyTurn[] {
   const out: MyTurn[] = [];
   for (const t of tasks) {
     if (t.status === 'done') continue;
@@ -53,11 +56,14 @@ export function myTurns(tasks: Task[], all: WorkflowData): MyTurn[] {
       case 'failed':
       case 'integration_blocked':
       case 'rate_limited':
-        add('막힘', '막힌 이유를 확인해 주세요');
+        out.push({ taskId: t.id, title: t.title, word: '막힘', label: '막힌 이유를 확인해 주세요', alert: true, at: t.updatedAt });
         break;
       default:
         break;
     }
   }
-  return out.sort((a, b) => a.at.localeCompare(b.at));
+  // 자동으로 넘어가야 할 단계가 너무 오래 그대로면(멈춤) [!]로 알린다(v0.4.10).
+  const title = new Map(tasks.map((t) => [t.id, t.title]));
+  for (const s of stalls(tasks, all, now)) out.push({ taskId: s.taskId, title: title.get(s.taskId) ?? '', word: s.word, label: s.label, alert: true, at: s.since });
+  return out.sort((a, b) => Number(!!b.alert) - Number(!!a.alert) || a.at.localeCompare(b.at));
 }
