@@ -1077,7 +1077,7 @@ export function App() {
               업무 <span className="num">{openCount}</span>
               {turns.length > 0 && (
                 <span className="num num-turn" title={`내 차례 ${turns.length}개`} aria-label={`내 차례 ${turns.length}개`}>
-                  ?{turns.length}
+                  {turns.length}
                 </span>
               )}
             </button>
