@@ -22,7 +22,7 @@ import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/type
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
 import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
-import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, sha256Hex } from './domain/workflow';
+import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
 import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
@@ -196,9 +196,16 @@ export function App() {
   // PM 세션이 보낸 계획 옮기기(아래 planInboxRef.current). 업무 기록이 바뀔 때마다 확인한다.
   const importingInbox = useRef(false);
   const planInboxRef = useRef<(() => void) | null>(null);
+  /** 업무별 마지막 자동 PR·CI 확인 시각(너무 자주 묻지 않게) */
+  const autoPrAt = useRef(new Map<string, number>());
   useEffect(() => {
     planInboxRef.current?.();
   }, [snap]);
+  // 기록이 바뀌지 않아도 PR·CI 진행은 1분마다 다시 본다(화면이 보일 때만).
+  useEffect(() => {
+    const id = window.setInterval(() => document.visibilityState === 'visible' && planInboxRef.current?.(), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session) return <Login client={client} />;
@@ -520,6 +527,24 @@ export function App() {
           );
           if (!ok) say('error', `결과 자동 저장 실패(${task.title}) — Claude 세션의 마지막 메시지를 결과 패키지에 붙여넣으세요.`);
         }
+        // 올리기 승인(B) 뒤 PR·CI를 자동으로 확인한다(v0.4.5). 결과가 정해지면(성공·실패·닫힘) 멈춘다. 손으로 다시 확인하는 버튼은 그대로.
+        let checked = false;
+        for (const t of snap.tasks) {
+          const v = deriveWorkflow(t, snap.workflow);
+          if (!v.bApproved || v.cApproved) continue;
+          if (!t.prUrl && !(v.result?.source === 'claude_session_auto' || v.result?.source === 'claude_manual')) continue;
+          const c = latestPrCheck(t, snap.workflow);
+          if (c && (c.ciState === 'success' || c.ciState === 'failure' || c.prState === 'closed')) continue;
+          if (Date.now() - (autoPrAt.current.get(t.id) ?? 0) < 60_000) continue;
+          autoPrAt.current.set(t.id, Date.now());
+          try {
+            await store.checkPr(t.id);
+            checked = true;
+          } catch {
+            // 아직 PR이 열리지 않음 등: 다음 확인 때 다시 본다.
+          }
+        }
+        if (checked) setSnap(await store.load());
       } finally {
         importingInbox.current = false;
       }
@@ -597,6 +622,26 @@ export function App() {
             ? 'C 승인을 기록했습니다. 끝난 업무는 열린 업무 목록에서 빠지고 "완료" 필터에 남습니다.'
             : `${gate} 승인을 기록했습니다.`,
       );
+      // 소유자 승인(2026-10-31): 실행 승인(E) → Claude 작업 자동 시작, 올리기 승인(B) → Claude 결과면 Claude가 PR을 연다.
+      if (ok && decision === 'approved' && store.mode === 'supabase') {
+        if (gate === 'E') {
+          const a = snap.workflow.assignments.find((x) => x.taskId === task.id && x.planRevision === revision && x.workItemId === workItemId);
+          if (a?.assignee === 'claude') await workflowActions.startClaudeDev?.(a, false);
+        }
+        if (gate === 'B') {
+          const r = snap.workflow.results.find((x) => x.taskId === task.id && x.revision === revision);
+          if (r && (r.source === 'claude_session_auto' || r.source === 'claude_manual')) {
+            try {
+              const sent = await store.dispatchClaudePr(task.id, false);
+              say('ok', `Claude가 ${sent.branch} 브랜치로 PR을 여는 중입니다(병합 안 함). PR이 열리면 CI를 자동으로 확인합니다.`);
+            } catch (e) {
+              say('error', `Claude PR 자동 요청 실패: ${(e as Error).message}`);
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        }
+      }
       // 소유자 결정(2026-10-30): A 승인 한 번이면 PM 전송까지, Gemini 초안에 수정 요청하면 Gemini가 다시 쓴다.
       if (ok && gate === 'A' && store.mode === 'supabase') {
         const spec = snap.workflow.specs.find((x) => x.taskId === task.id && x.revision === revision);
@@ -789,8 +834,8 @@ export function App() {
             try {
               const c = await store.checkPr(task.id);
               setSnap(await store.load());
-              const ok = c.ciState === 'success' && c.merged;
-              say(ok ? 'ok' : 'error', ok ? 'CI 성공, main에 병합됨을 확인했습니다. C 승인을 할 수 있습니다.' : `아직 C 승인을 할 수 없습니다: CI ${c.ciState === 'pending' ? '진행 중' : c.ciState === 'failure' ? '실패' : c.ciState === 'none' ? '없음' : '성공'}, ${c.merged ? '병합됨' : '병합 전'}`);
+              const ok = prCheckPasses(c);
+              say(ok ? 'ok' : 'error', ok ? `CI 성공을 확인했습니다(${c.merged ? '병합됨' : '병합 전 — 배포 승인 때 서버가 병합'}). 배포 승인을 할 수 있습니다.` : `아직 배포 승인을 할 수 없습니다: CI ${c.ciState === 'pending' ? '진행 중' : c.ciState === 'failure' ? '실패' : c.ciState === 'none' ? '없음' : '성공'}${c.prState === 'closed' && !c.merged ? ', PR이 병합 없이 닫힘' : ''}`);
               return true;
             } catch (e) {
               say('error', `PR을 확인하지 못했습니다: ${(e as Error).message}`);

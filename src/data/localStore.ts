@@ -244,6 +244,9 @@ export function createLocalStore(): OfficeStore {
     async analyzeImage() {
       throw new Error('로컬 데모에서는 Gemini 이미지 분석을 쓸 수 없습니다.');
     },
+    async dispatchClaudePr() {
+      throw new Error('로컬 데모에서는 Claude가 PR을 열 수 없습니다.');
+    },
     async startClaudeDev() {
       throw new Error('로컬 데모에서는 Claude 보조 개발을 시작할 수 없습니다.');
     },
