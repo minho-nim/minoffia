@@ -34,7 +34,7 @@ type Pending =
   | { kind: 'pick'; text: string; context?: PriorChat }
   | { kind: 'question'; text: string; projectName?: string }
   /** Gemini가 답한 뒤: GPT에게 이어서 묻기 */
-  | { kind: 'followup'; text: string; answer: string }
+  | { kind: 'followup'; text: string; answer: string; projectName?: string }
   | { kind: 'unclear'; text: string }
   /** 새 프로젝트 이름을 기다림. text가 있으면 이름을 받은 뒤 그 요청을 업무로 만든다 */
   | { kind: 'naming'; text: string; createTask?: boolean; context?: PriorChat }
@@ -46,7 +46,12 @@ interface Props {
   /** 업무 접수(사진이 있으면 요청 자료로 함께 올린다) */
   onCreateTask: (draft: TaskDraft, images: PendingImage[]) => Promise<Task | null>;
   onCreateProject: (name: string) => Promise<Project | null>;
-  onAskGemini: (question: string, history: { role: 'user' | 'model'; text: string }[], images: { mime: string; data: string }[]) => Promise<string>;
+  onAskGemini: (
+    question: string,
+    history: { role: 'user' | 'model'; text: string }[],
+    images: { mime: string; data: string }[],
+    onDelta?: (soFar: string) => void,
+  ) => Promise<string>;
   onCopy: (text: string) => Promise<boolean>;
   /** 저장소 만들기를 쓸 수 있으면 함수(Supabase 모드) */
   onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
@@ -522,11 +527,9 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     else if (t.kind === 'question') {
       // 소유자 결정(2026-10-30): 일반 질문은 보내기 한 번에 Gemini 무료가 답하고, GPT로 이어서 물을 수 있다.
       // 프로젝트 판단이 필요한 질문(프로젝트 이름이 들어 있음)은 GPT를 먼저 권한다.
+      // v0.4.15(소유자: "물어보면 그냥 대답"): 프로젝트 이름이 든 질문도 바로 답하고, GPT 권유는 답 아래 작은 링크로.
       const project = questionProject(text, snap.projects);
-      if (project) {
-        setPending({ kind: 'question', text, projectName: project.name });
-        say('office', `'${project.name}' 프로젝트 판단이 필요한 질문 같아요. GPT에게 묻는 걸 권해요.`);
-      } else if (canAskGemini) askGemini(text);
+      if (canAskGemini) askGemini(text, project?.name);
       else {
         setPending({ kind: 'question', text });
         say('office', '업무 기록으로는 답할 수 없는 질문이에요. 어디에 물어볼까요?');
@@ -598,7 +601,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     void run(() => create(text, project, context));
   };
 
-  const askGemini = (text: string) => {
+  const askGemini = (text: string, projectName?: string) => {
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
@@ -613,12 +616,21 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       if (held.length < photoStore.held.length) say('office', '문서는 질문에 보내지 않아요. 업무로 접수하면 요청 자료에서 Gemini로 요약할 수 있어요.');
       try {
         const encoded = await Promise.all(images.map(async (f) => ({ mime: f.type, data: await toBase64(f) })));
-        const answer = await onAskGemini(text, history.slice(-6), encoded);
-        say('gemini', answer);
-        photoStore.held = [];
-        setPending({ kind: 'followup', text, answer });
+        // 보내자마자 빈 Gemini 말(입력 중 …)을 두고, 답 조각이 오면 그 자리에 글을 채운다.
+        const id = mid();
+        setLog((l) => [...l, { id, from: 'gemini' as From, text: '' }].slice(-KEEP));
+        const put = (t: string) => setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
+        try {
+          const answer = await onAskGemini(text, history.slice(-6), encoded, put);
+          put(answer);
+          photoStore.held = [];
+          setPending({ kind: 'followup', text, answer, projectName });
+        } catch (e) {
+          setLog((l) => l.filter((m) => m.id !== id || m.text));
+          throw e;
+        }
       } catch (e) {
-        setPending({ kind: 'question', text });
+        setPending({ kind: 'question', text, projectName });
         say('office', `${(e as Error).message}`);
       }
     });
@@ -646,7 +658,15 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           {log.map((m) => (
             <li key={m.id} className={`inbox-msg from-${m.from}`}>
               <span className="inbox-who">{FROM_LABEL[m.from]}</span>
-              <p>{m.text}</p>
+              {m.text ? (
+                <p>{m.text}</p>
+              ) : (
+                <p className="inbox-typing" aria-label="답을 쓰는 중">
+                  <span />
+                  <span />
+                  <span />
+                </p>
+              )}
               {m.actions && !busy && (() => {
                 // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
                 const task = snap.tasks.find((t) => t.id === m.taskId);
@@ -709,15 +729,15 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
             </>
           )}
           {pending.kind === 'followup' && (
-            <>
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => void copyGpt(pending.text, pending.answer)}>
-                GPT에게 이어서 묻기
+            <span className="inbox-links">
+              <button type="button" className="link-btn" title="질문과 Gemini 답을 함께 복사합니다. ChatGPT 앱에 붙여넣으세요." onClick={() => void copyGpt(pending.text, pending.answer)}>
+                {pending.projectName ? `'${pending.projectName}' 판단은 GPT에게 묻기` : 'GPT에게 이어서 묻기'}
               </button>
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text, { question: pending.text, answer: pending.answer })}>
+              <span aria-hidden="true">·</span>
+              <button type="button" className="link-btn" onClick={() => askProject(pending.text, { question: pending.text, answer: pending.answer })}>
                 업무로 만들기
               </button>
-              <p className="muted small inbox-note">GPT에게 이어서 묻기: 질문과 Gemini 답을 함께 복사합니다. ChatGPT 앱에 붙여넣으세요(Plus 구독 안, 추가 비용 없음).</p>
-            </>
+            </span>
           )}
           {pending.kind === 'question' && (
             <>
@@ -769,7 +789,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           )}
         </div>
       )}
-      {busy && <p className="muted small inbox-note">처리 중…</p>}
+      {busy && !log.some((m) => m.from === 'gemini' && !m.text) && <p className="muted small inbox-note">처리 중…</p>}
       <div ref={endRef} />
 
       {photos.length > 0 && (

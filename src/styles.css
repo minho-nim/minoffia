@@ -368,11 +368,40 @@ a {
   }
   /* 사무실이 위에 고정되므로, 대화 목록은 사무실 아래 남는 화면을 거의 다 쓴다(사무실 높이 ≈ 화면 너비 × 224/300). */
   .inbox-log {
-    max-height: max(300px, calc(100svh - (100vw - 32px) * 0.747 - 190px));
+    max-height: max(300px, calc(100svh - (100vw - 32px) * 0.747 * 0.5 - 190px));
   }
   /* 말풍선·알림에서 업무 카드로 갈 때 위에 고정된 사무실에 가리지 않게 */
   .task-card {
-    scroll-margin-top: calc((100vw - 32px) * 0.747 + 66px + env(safe-area-inset-top, 0px));
+    scroll-margin-top: calc((100vw - 32px) * 0.747 * 0.5 + 66px + env(safe-area-inset-top, 0px));
+  }
+  /* 아래로 내리면(얇은 머리가 보일 때) 사무실도 절반 크기로 줄여 위에 둔다. 크기는 transform으로만 바꿔서
+     자리(레이아웃)가 그대로라 화면이 튀지 않는다. 줄어든 사무실 옆·아래는 비워 두어 아래 글이 보이고 눌린다. */
+  .stage .office {
+    transform-origin: top center;
+    transition: transform 0.18s ease;
+  }
+  .stage.is-mini {
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+  }
+  .stage.is-mini::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: calc((100vw - 32px) * 0.747 * 0.5 + 16px);
+    background: var(--bg);
+    box-shadow: 0 6px 10px -8px rgba(0, 0, 0, 0.35);
+  }
+  .stage.is-mini .office {
+    transform: scale(0.5);
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 1039px) and (min-height: 620px) and (prefers-reduced-motion: reduce) {
+  .stage .office {
+    transition: none;
   }
 }
 
@@ -1744,6 +1773,52 @@ a {
 
 .inbox-msg.from-me .inbox-who {
   display: none;
+}
+
+.inbox-typing {
+  display: flex;
+  gap: 5px;
+  padding: 8px 0;
+}
+
+.inbox-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: inbox-dot 1s infinite ease-in-out;
+}
+
+.inbox-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.inbox-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes inbox-dot {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inbox-typing span {
+    animation: none;
+  }
+}
+
+.inbox-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.inbox-links .link-btn {
+  color: var(--muted);
 }
 
 .inbox-actions,
