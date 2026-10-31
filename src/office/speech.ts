@@ -10,7 +10,7 @@ import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
 export type SpeechKind = 'ask' | 'busy' | 'alert';
 
 export interface Speech {
-  /** 말풍선에 보이는 짧은 글(? = 내 승인·답 필요, ! = 알림) */
+  /** 말풍선 표시: ? = 내 손이 가는 일(승인·답), ! = 막힘, … = 진행 중 */
   text: string;
   /** 화면 읽기용 전체 문장 */
   label: string;
@@ -35,18 +35,18 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
     const mine = v.plan ? all.assignments.filter((a) => a.taskId === t.id && a.planRevision === v.plan!.planRevision) : [];
     switch (v.stage) {
       case 'needs_clarification':
-        say(planner, 'ask', '질문?', t, '확인할 게 있어요');
+        say(planner, 'ask', '?', t, '확인할 게 있어요');
         break;
       case 'spec_ready':
       case 'development_approval_pending':
-        say(planner, 'ask', '기획?', t, '기획 승인해 주세요');
+        say(planner, 'ask', '?', t, '기획 승인해 주세요');
         break;
       case 'dispatching':
         say('claude', 'busy', '…', t, 'PM 계획을 쓰는 중');
         break;
       case 'agent_handoff_pending':
-        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) say('studioA', 'ask', '견본?', t, '견본 승인해 주세요');
-        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) say('claude', 'ask', '실행?', t, '실행 승인해 주세요');
+        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) say('studioA', 'ask', '?', t, '견본 승인해 주세요');
+        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) say('claude', 'ask', '?', t, '실행 승인해 주세요');
         break;
       case 'executing':
         for (const a of mine) if (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting') say(agentOf(a.assignee), 'busy', '…', t, '개발하는 중');
@@ -54,7 +54,7 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
       case 'result_review':
       case 'github_approval_pending': {
         const by = mine.find((a) => a.workItemId === v.result?.workItemId) ?? mine[0];
-        say(by ? agentOf(by.assignee) : t.assignee, 'ask', '결과?', t, '결과 보고, 올리기 승인해 주세요');
+        say(by ? agentOf(by.assignee) : t.assignee, 'ask', '?', t, '결과 보고, 올리기 승인해 주세요');
         break;
       }
       case 'github_uploading':
@@ -63,12 +63,12 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
         say('ci', 'busy', '…', t, 'PR·배포를 확인하는 중');
         break;
       case 'deployment_approval_pending':
-        say('ci', 'ask', '배포?', t, '배포 승인해 주세요');
+        say('ci', 'ask', '?', t, '배포 승인해 주세요');
         break;
       case 'failed':
       case 'integration_blocked':
       case 'rate_limited':
-        say('mina', 'alert', '막힘!', t, '막혔어요, 업무 카드를 확인해 주세요');
+        say('mina', 'alert', '!', t, '막혔어요, 업무 카드를 확인해 주세요');
         break;
       default:
         break;
