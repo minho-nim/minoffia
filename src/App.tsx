@@ -228,6 +228,8 @@ export function App() {
   // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
   // 휴대폰: 위 머리(이름·사용량)가 화면 밖으로 나가면 맨 위에 얇은 한 줄 머리를 고정한다(v0.4.14).
   const [mini, setMini] = useState(false);
+  /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
+  const [draft, setDraft] = useState<{ text: string; n: number } | null>(null);
   const topIo = useRef<IntersectionObserver | null>(null);
   const topRef = useCallback((el: HTMLElement | null) => {
     topIo.current?.disconnect();
@@ -628,6 +630,9 @@ export function App() {
   /** 업무 카드로 이동(입력창 알림·사무실 말풍선). 지금 필터에 없으면 '전체'로 바꾼다. */
   const showTask = (id: string) => {
     setTab('tasks');
+    // 사무실에서 그 업무 담당 AI를 같이 표시한다(사무실 ↔ 목록 연결).
+    const owner = snap.tasks.find((x) => x.id === id)?.assignee;
+    if (owner) setSelected(owner);
     if (!visibleTasks.some((t) => t.id === id)) {
       setFilter('all');
       const t = snap.tasks.find((x) => x.id === id);
@@ -1110,6 +1115,7 @@ export function App() {
         <button type="button" tabIndex={mini ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
           MINLAB AI OFFICE <span className="ver">v{version}</span>
         </button>
+        {pf !== 'all' && <span className="topbar-project">{snap.projects.find((p) => p.id === pf)?.name}</span>}
         {turns.length > 0 && (
           <span className="num num-turn" aria-label={`내 차례 ${turns.length}개`}>
             {turns.length}
@@ -1153,6 +1159,21 @@ export function App() {
               에이전트
             </button>
           </nav>
+
+          {/* 프로젝트 칩: 대화·업무 탭 공통(v0.4.19). 고르면 내 차례·업무·새 요청이 그 프로젝트 기준 */}
+          {(tab === 'chat' || tab === 'tasks') && snap.projects.length > 1 && (
+            <div className="filters project-chips" role="group" aria-label="프로젝트">
+              {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects].map((p) => {
+                const n = p.id === 'all' ? turns.length : (turnsByProject.get(p.id) ?? 0);
+                return (
+                  <button key={p.id} type="button" className="chip chip-project" aria-pressed={pf === p.id} onClick={() => setProjectFilter(p.id)}>
+                    {p.name}
+                    {n > 0 && <span className="num num-turn">{n}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {notice && (
             <p className={`notice notice-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
@@ -1200,13 +1221,15 @@ export function App() {
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={showTask}
                 onApprove={quickApprove}
+                currentProject={pf === 'all' ? null : (snap.projects.find((p) => p.id === pf) ?? null)}
+                draft={draft}
               />
           </div>
 
           {tab === 'tasks' && (
             <div className="stack">
               <MyTurnList
-                items={turns}
+                items={pf === 'all' ? turns : turns.filter((it) => snap.tasks.find((t) => t.id === it.taskId)?.projectId === pf)}
                 onOpen={showTask}
                 onApprove={async (id, gate) => {
                   const t = snap.tasks.find((x) => x.id === id);
@@ -1217,19 +1240,6 @@ export function App() {
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
                 <TaskForm projects={snap.projects} usage={snap.usage} onSubmit={addTask} />
               </details>
-              {snap.projects.length > 1 && (
-                <div className="filters project-chips" role="group" aria-label="프로젝트">
-                  {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects].map((p) => {
-                    const n = p.id === 'all' ? turns.length : (turnsByProject.get(p.id) ?? 0);
-                    return (
-                      <button key={p.id} type="button" className="chip chip-project" aria-pressed={pf === p.id} onClick={() => setProjectFilter(p.id)}>
-                        {p.name}
-                        {n > 0 && <span className="num num-turn">{n}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
               <div className="filters" role="group" aria-label="업무 필터">
                 {(
                   [
@@ -1252,6 +1262,14 @@ export function App() {
                   <TaskCard
                     key={t.id}
                     task={t}
+                    onAsk={(task) => {
+                      setTab('chat');
+                      setDraft((d) => ({ text: `'${task.title}' 업무: `, n: (d?.n ?? 0) + 1 }));
+                    }}
+                    onShowAgent={(task) => {
+                      setSelected(task.assignee);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     project={projectById.get(t.projectId)}
                     stageLabel={STAGE_LABEL[deriveWorkflow(t, snap.workflow).stage]}
                     workflow={
@@ -1292,6 +1310,11 @@ export function App() {
               projects={snap.projects}
               tasks={snap.tasks}
               turnsByProject={turnsByProject}
+              onAsk={(id) => {
+                setProjectFilter(id);
+                setTab('chat');
+                setDraft((d) => ({ text: '', n: (d?.n ?? 0) + 1 }));
+              }}
               onOpen={(id) => {
                 setProjectFilter(id);
                 setFilter('open');

@@ -10,6 +10,8 @@ interface Props {
   turnsByProject: Map<string, number>;
   /** 카드를 누르면 업무 탭에서 이 프로젝트 업무만 본다 */
   onOpen: (projectId: string) => void;
+  /** 이 프로젝트로 대화 탭에서 요청하기 */
+  onAsk?: (projectId: string) => void;
   /** id가 있으면 기존 프로젝트 수정, 없으면 새로 등록 */
   onSave: (p: { id?: string; name: string; repo: string | null; description: string }) => Promise<unknown>;
   onDelete: (p: Project) => void;
@@ -21,7 +23,7 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onSave, onDelete, onCreateRepo }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo }: Props) {
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
@@ -162,6 +164,14 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onSave, 
                 </span>
               </button>
               <span className="project-tools">
+                <button type="button" className="btn btn-small btn-ghost" onClick={() => onOpen(p.id)}>
+                  업무 보기
+                </button>
+                {onAsk && (
+                  <button type="button" className="btn btn-small btn-primary" onClick={() => onAsk(p.id)}>
+                    요청하기
+                  </button>
+                )}
                 {onCreateRepo && !p.repo && !p.sample && repoFor !== p.id && (
                   <button type="button" className="btn btn-small btn-ghost" onClick={() => setRepoFor(p.id)}>
                     저장소 만들기
