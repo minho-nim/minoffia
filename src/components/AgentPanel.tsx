@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import type { LinearProbe } from '../data/store';
 import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
 import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
 import { quotaFor, QUOTA_STATE_LABEL, type QuotaInfo } from '../domain/quota';
@@ -24,6 +26,8 @@ interface Props {
   quota?: QuotaInfo;
   /** 동시 작업 상한(이 에이전트가 개발 작업을 맡는 AI일 때) */
   limit?: { kind: AgentKind; value: number; running: number; onSet: (n: number) => void };
+  /** Codex: Linear 연결 확인(읽기만) */
+  onLinearProbe?: () => Promise<LinearProbe>;
 }
 
 /** 오피스 캐릭터 → 개발 작업을 맡는 AI(동시 작업 상한 대상) */
@@ -32,7 +36,49 @@ const KIND_OF: Partial<Record<AgentId, AgentKind>> = { codex: 'codex', claude: '
 /** 오피스 캐릭터 → 실행 경로(어댑터) */
 const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision', mina: 'gpt' };
 
-export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false, quota, limit }: Props) {
+/** Codex for Linear 연결 확인(읽기만). 결정 문서 docs/CODEX_LINEAR_DECISION_2026-10-30.md 4-1단계 */
+function LinearCheck({ onProbe }: { onProbe: () => Promise<LinearProbe> }) {
+  const [busy, setBusy] = useState(false);
+  const [r, setR] = useState<LinearProbe | null>(null);
+  const [err, setErr] = useState('');
+  return (
+    <div className="wf-manual">
+      <p className="small">
+        <b>Codex for Linear 연결 확인</b> — Linear에서 Codex를 찾을 수 있는지, 이슈를 맡길 수 있는지만 읽어 봅니다(아무것도 만들지 않음).
+      </p>
+      <button
+        type="button"
+        className="btn btn-small"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setErr('');
+          try {
+            setR(await onProbe());
+          } catch (e) {
+            setErr((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? '확인 중…' : 'Linear 연결 확인'}
+      </button>
+      {err && <p className="task-error small">{err}</p>}
+      {r && !r.connected && <p className="small task-error">연결 안 됨: {r.reason}</p>}
+      {r?.connected && (
+        <ul className="small mini-list">
+          <li>Linear 접속: 됨({r.viewer})</li>
+          <li>팀: {r.teams?.length ? r.teams.map((t) => `${t.name}(${t.key})`).join(', ') : '없음'}</li>
+          <li>Codex: {r.codexUser ? `찾음(${r.codexUser})` : '못 찾음 — Codex 설정에서 Codex for Linear를 설치하고 이슈에 @Codex로 계정을 연결하세요'}</li>
+          <li>이슈 맡기기(위임): {r.canDelegate ? '가능' : '공식 칸 없음 — 다른 방법 검토 필요'}</li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe }: Props) {
   const a = AGENT_BY_ID[agentId];
   const scene = buildScene(tasks, assignments).find((s) => s.agent === agentId);
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
@@ -67,6 +113,7 @@ export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiC
           </p>
         </div>
       )}
+      {agentId === 'codex' && serverMode && onLinearProbe && <LinearCheck onProbe={onLinearProbe} />}
       {quota && (
         <p className="small">
           오늘 한도 <span className={`pill pill-quota-${quota.state}`}>{QUOTA_STATE_LABEL[quota.state]}</span> {quota.label !== QUOTA_STATE_LABEL[quota.state] && quota.label}
@@ -129,7 +176,9 @@ export function AgentRoster({
   onOpenTask,
   serverMode,
   onSetLimit,
+  onLinearProbe,
 }: {
+  onLinearProbe?: () => Promise<LinearProbe>;
   snap: Snapshot;
   onSetLimit: (kind: AgentKind, n: number) => void;
   selected: AgentId | null;
@@ -164,6 +213,7 @@ export function AgentRoster({
                     : undefined
                 }
                 onOpenTask={onOpenTask}
+                onLinearProbe={onLinearProbe}
               />
             </section>
           );

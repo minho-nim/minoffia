@@ -1226,6 +1226,7 @@ export function App() {
           {tab === 'agent' && (
             <AgentRoster
               snap={snap}
+              onLinearProbe={store.mode === 'supabase' ? () => store.linearProbe() : undefined}
               onSetLimit={(kind, n) => void mutate(() => store.setAgentLimit(kind, n), `동시 작업 상한을 ${n}개로 바꿨습니다.`)}
               selected={selected}
               onSelect={(id) => setSelected(id)}

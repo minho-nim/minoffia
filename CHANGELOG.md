@@ -1,5 +1,10 @@
 # 변경 기록
 
+## 0.4.11 — 2026-10-31
+
+### 추가
+- **Linear 연결 확인(읽기만)**: 에이전트 탭 → Codex에 "Linear 연결 확인" 버튼. Linear 공식 GraphQL로 접속·팀·Codex 사용자·이슈 위임 칸(delegateId)만 읽고 아무것도 만들지 않는다(서버 `linear-probe`, 키는 secrets `LINEAR_API_KEY`). 키가 없으면 "아직 연결 안 됨"만 보인다. Codex for Linear 결정 문서의 4-1단계.
+
 ## 0.4.10 — 2026-10-31
 
 ### 바뀜

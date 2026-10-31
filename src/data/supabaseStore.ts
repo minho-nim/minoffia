@@ -535,6 +535,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const { data, error } = await client.from('dev_result_inbox').update({ status, note: note.slice(0, 2000) }).eq('id', id).eq('status', 'new').select('id');
       return !error && Boolean(data?.length);
     },
+    async linearProbe() {
+      const data = await invoke('linear-probe', {});
+      return data as unknown as import('./store').LinearProbe;
+    },
     async draftPrototype(taskId, text) {
       const data = await invoke('draft-prototype', { taskId, text });
       return { html: String(data.html ?? ''), planRevision: Number(data.planRevision) };
