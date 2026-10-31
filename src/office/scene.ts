@@ -43,7 +43,7 @@ function pick(tasks: Task[]): Task | null {
  */
 /**
  * PM이 배정한 작업을 담당 AI의 업무처럼 보이게 바꾼다.
- * 실제 기록만 쓴다: E 승인 전 = 대기, 사용자가 시작을 기록 = 진행 중. 완료·실패한 배정은 보이지 않는다.
+ * 실제 기록만 쓴다: 실행 승인 전 = 대기, 사용자가 시작을 기록 = 진행 중. 완료·실패한 배정은 보이지 않는다.
  */
 export function assignmentTasks(tasks: Task[], assignments: AgentAssignment[]): Task[] {
   const parent = new Map(tasks.map((t) => [t.id, t]));

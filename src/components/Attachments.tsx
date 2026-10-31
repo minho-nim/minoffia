@@ -255,7 +255,7 @@ export function AttachmentGallery({
   analyses?: Map<string, ImageAnalysis>;
   /** 분석 요청(쓸 수 없으면 없음) */
   onAnalyze?: (a: Attachment) => Promise<boolean>;
-  /** 분석할 수 없는 이유(예: A 승인 뒤 잠김) */
+  /** 분석할 수 없는 이유(예: 기획 승인 뒤 잠김) */
   analyzeBlocker?: string | null;
   /** 요청 자료면 문서도 받는다 */
   allowDocs?: boolean;

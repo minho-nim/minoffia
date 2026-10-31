@@ -66,7 +66,7 @@ export function buildCodexHandoff(
   baseRevision: string,
   attachments: Attachment[] = [],
   links: LinkRef[] = [],
-  /** 견본 먼저 계획에서 P 승인한 견본(있으면 보존하며 통합하라고 쓴다) */
+  /** 견본 먼저 계획에서 견본 승인한 견본(있으면 보존하며 통합하라고 쓴다) */
   prototypes: Attachment[] = [],
 ): string {
   const images = describeAttachments(attachments);
@@ -82,7 +82,7 @@ export function buildCodexHandoff(
     '## 목표',
     item.goal || item.title,
     '',
-    '## 승인된 기획서 (A 승인, 수정 금지)',
+    '## 승인된 기획서 (기획 승인, 수정 금지)',
     spec.finalPrompt,
     spec.changeScope ? `\n변경 범위: ${spec.changeScope}` : '',
     '',
@@ -91,7 +91,7 @@ export function buildCodexHandoff(
     ...(protoText
       ? [
           '',
-          '## 승인된 견본 (P 승인 · AI Studio Build 결과, 사용자가 이 작업에 직접 첨부)',
+          '## 승인된 견본 (견본 승인 · AI Studio Build 결과, 사용자가 이 작업에 직접 첨부)',
           protoText,
           '- 견본의 화면 구성·흐름·주요 인터랙션을 보존하면서 실제 저장소 코드에 통합한다. 견본 코드를 그대로 복사해 넣지 말고 기존 구조·스타일에 맞춘다.',
           '- 견본과 다르게 해야 하는 부분이 있으면 이유를 결과 보고에 적는다.',
@@ -109,7 +109,7 @@ export function buildCodexHandoff(
     '- 저장소가 정한 시험(README·AGENTS.md 기준, 없으면 package.json의 typecheck·test·build)을 돌리고 결과를 줄이지 말고 그대로 보고한다.',
     '- 결과는 diff와 테스트 로그로만 보고한다.',
     '- 화면이 바뀌는 작업이면 바뀐 화면의 데스크톱(약 1400px)·모바일(약 400px) 스크린샷을 만들어 결과에 보여 준다(GitHub 업로드 전 검토용, 저장소에 커밋하지 않음).',
-    '- **PR 생성·브랜치 푸시를 하지 않는다.** GitHub 업로드는 사용자의 B 승인 뒤에만 한다.',
+    '- **PR 생성·브랜치 푸시를 하지 않는다.** GitHub 업로드는 사용자의 올리기 승인 뒤에만 한다.',
     '- 비밀키·토큰·.env 내용을 출력하거나 커밋하지 않는다.',
   ]
     .filter((line, i, all) => !(line === '' && all[i - 1] === ''))
@@ -125,10 +125,10 @@ export function codexBranch(task: Task, workItemId: string, tool: 'codex' | 'cla
   return `ai/${tool}/${shortId(task.id)}${item ? `-${item}` : ''}`;
 }
 
-/** B 승인 뒤, 결과를 만든 같은 작업 창(Codex 작업 또는 Claude 세션)에 붙여넣을 PR 요청. 승인된 결과 버전만 올리고 병합은 하지 않는다. */
+/** 올리기 승인 뒤, 결과를 만든 같은 작업 창(Codex 작업 또는 Claude 세션)에 붙여넣을 PR 요청. 승인된 결과 버전만 올리고 병합은 하지 않는다. */
 export function buildCodexPrRequest(task: Task, resultRevision: number, workItemId: string, project: Project | undefined, tool: 'codex' | 'claude' = 'codex'): string {
   return [
-    `# B 승인됨 — 결과 v${resultRevision}을 PR로 올려 주세요`,
+    `# 올리기 승인됨 — 결과 v${resultRevision}을 PR로 올려 주세요`,
     '',
     `- 업무 ID: ${task.id}`,
     `- 저장소: ${project?.repo ?? '(미연결)'}`,
@@ -146,7 +146,7 @@ export function buildCodexPrRequest(task: Task, resultRevision: number, workItem
 
 /**
  * 견본 먼저(07단계): Google AI Studio Build에 붙여넣을 견본 요청. 사용자가 직접 실행하고 결과를 AI Office에 올린다.
- * 실제 저장소는 건드리지 않는다(통합은 P 승인 뒤 Codex).
+ * 실제 저장소는 건드리지 않는다(통합은 견본 승인 뒤 Codex).
  */
 export function buildPrototypeHandoff(
   task: Task,
@@ -169,7 +169,7 @@ export function buildPrototypeHandoff(
     '## 만들 것',
     item.goal || item.title,
     '',
-    '## 승인된 기획서 (A 승인)',
+    '## 승인된 기획서 (기획 승인)',
     spec.finalPrompt,
     spec.changeScope ? `\n변경 범위: ${spec.changeScope}` : '',
     ...(images ? ['', '## 참고 이미지·문서 (사용자가 이 대화에 직접 첨부)', images] : []),

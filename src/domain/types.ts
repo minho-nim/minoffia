@@ -42,7 +42,7 @@ export interface Task {
   stage?: Stage;
   /** 사용자가 처음 적은 요청 원문 */
   userOriginalText?: string;
-  /** B 승인 뒤 기록한 PR 주소 */
+  /** 올리기 승인 뒤 기록한 PR 주소 */
   prUrl?: string | null;
   /** PM에 보낸 기획서 버전 */
   dispatchSpecRevision?: number | null;

@@ -39,7 +39,7 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
     // 실행 승인된 작업: 시작 전이면 내가 넘겨야 함(Codex 지시서 등), 진행 중이면 …, 실패면 !
     const work = () => {
       for (const a of mine) {
-        if (a.dispatchStatus === 'ready') tag(agentOf(a.assignee), 'ask', '개발', `${a.workItemId} 개발 시작이 필요해요`);
+        if (a.dispatchStatus === 'ready') tag(agentOf(a.assignee), 'ask', '시작', `${a.workItemId} 개발을 시작해 주세요(Codex 지시서 넘기기 등)`);
         else if (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting') tag(agentOf(a.assignee), 'busy', '개발', `${a.workItemId} 개발하는 중`);
         else if (a.dispatchStatus === 'failed' || a.dispatchStatus.startsWith('blocked')) tag(agentOf(a.assignee), 'alert', '개발', `${a.workItemId} 개발이 막혔어요`);
       }
@@ -57,7 +57,7 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
         break;
       case 'agent_handoff_pending':
         if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) tag('studioA', 'ask', '견본', '견본 승인해 주세요');
-        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) tag('claude', 'ask', '실행', '실행 승인해 주세요');
+        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) tag('claude', 'ask', '계획', 'PM 계획을 보고 실행 승인해 주세요');
         work();
         break;
       case 'executing':

@@ -35,11 +35,11 @@ describe('사무실 말풍선(v0.4.4)', () => {
 
   it('계획이 오면 Claude가 실행 승인을, 개발 중이면 맡은 AI가 "…"', () => {
     const base = { specs: [spec()], approvals: [ok('A', 1)], plans: [plan] };
-    expect(speechFor([task], data({ ...base, assignments: [assignment('awaiting_user_execution_approval')] })).get('claude')?.label).toBe('실행 승인해 주세요');
+    expect(speechFor([task], data({ ...base, assignments: [assignment('awaiting_user_execution_approval')] })).get('claude')?.label).toBe('PM 계획을 보고 실행 승인해 주세요');
     const running = speechFor([task], data({ ...base, approvals: [ok('A', 1), ok('E', 1, 'W1')], assignments: [assignment('started')] }));
     expect(running.get('codex')).toMatchObject({ text: '개발[…]', kind: 'busy' });
     const ready = speechFor([task], data({ ...base, approvals: [ok('A', 1), ok('E', 1, 'W1')], assignments: [assignment('ready')] }));
-    expect(ready.get('codex')).toMatchObject({ text: '개발[?]', kind: 'ask' });
+    expect(ready.get('codex')).toMatchObject({ text: '시작[?]', kind: 'ask' });
     expect(running.has('claude')).toBe(false);
   });
 

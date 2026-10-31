@@ -31,12 +31,12 @@ export const ADAPTERS: AdapterInfo[] = [
   {
     agent: 'claude_dev',
     label: 'Claude Code Cloud (보조 개발)',
-    role: 'PM이 Claude에 배정한 작은 작업 구현(B 승인 전 푸시·PR 없음)',
+    role: 'PM이 Claude에 배정한 작은 작업 구현(올리기 승인 전 푸시·PR 없음)',
     state: 'not_verified',
     autoStart: true,
     worksWithPcOff: true,
     reason:
-      'E 승인 뒤 서버가 두 번째 루틴(보조 개발)으로 세션을 시작한다. 세션 시작(HTTP 200)은 서버가 확인하지만 개발 완료는 아니다. 결과는 세션의 마지막 보고를 결과 패키지로 옮긴다. 운영 첫 실행 전이라 미검증.',
+      '실행 승인 뒤 서버가 두 번째 루틴(보조 개발)으로 세션을 시작한다. 세션 시작(HTTP 200)은 서버가 확인하지만 개발 완료는 아니다. 결과는 세션의 마지막 보고를 결과 패키지로 옮긴다. 운영 첫 실행 전이라 미검증.',
     checkedAt: '2026-10-30',
   },
   {

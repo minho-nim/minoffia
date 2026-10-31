@@ -7,7 +7,7 @@ import { PRIORITY_LABEL, STATUS_LABEL, WORK_TYPE_LABEL } from '../domain/types';
 interface Props {
   task: Task;
   project: Project | undefined;
-  /** 진행 단계 패널(A/E/B/C 승인 흐름) */
+  /** 진행 단계 패널(A/E/B/배포 승인 흐름) */
   workflow: ReactNode;
   stageLabel: string;
   onStatus: (task: Task, to: TaskStatus) => void;

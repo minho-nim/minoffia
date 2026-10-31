@@ -33,7 +33,7 @@ export function RepoCreate({ project, onCreate, onCancel }: Props) {
           나중에
         </button>
       )}
-      <span className={error ? 'task-error small' : 'muted small'}>{error ?? 'README만 있는 빈 비공개 저장소를 만들고 이 프로젝트에 연결합니다. 코드는 B 승인 뒤에만 올라갑니다.'}</span>
+      <span className={error ? 'task-error small' : 'muted small'}>{error ?? 'README만 있는 빈 비공개 저장소를 만들고 이 프로젝트에 연결합니다. 코드는 올리기 승인 뒤에만 올라갑니다.'}</span>
     </form>
   );
 }

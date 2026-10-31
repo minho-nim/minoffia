@@ -1,4 +1,4 @@
-# MinLab AI Office v0.4.8
+# MinLab AI Office v0.4.9
 
 > **목표** — MinLab AI Office는 여러 AI(ChatGPT·Claude·Codex·Gemini·Grok)에게 내 요청에 맞는 일을 효율적으로 나눠 맡기고, 각 AI의 토큰·사용량은 최소로 쓰도록 관리하는 개인 AI 개발팀 사무실이다.
 >
