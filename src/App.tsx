@@ -1074,7 +1074,7 @@ export function App() {
         <aside className="panel">
           <nav className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'tasks'} onClick={() => setTab('tasks')}>
-              업무 <span className="num">{openCount}</span>
+              업무
               {turns.length > 0 && (
                 <span className="num num-turn" title={`내 차례 ${turns.length}개`} aria-label={`내 차례 ${turns.length}개`}>
                   {turns.length}
