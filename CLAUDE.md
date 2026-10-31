@@ -64,6 +64,7 @@
 - C(운영 배포) 승인은 서버(`supabase/functions/pr-status`)가 확인한 최신 'CI 성공'(열린 PR 또는 병합됨) 기록이 있어야 한다(`0010`, v0.4.5 `0022_auto_pr_merge.sql`).
   C 승인 뒤 `deploy-release`가 CI를 확인한 그 커밋일 때만 PR을 squash 병합하고, fast-forward로만 release를 앞당기며 `deployments`에 기록한다(갈라진 release는 덮어쓰지 않음, 성공 기록은 C 승인 필수 `0011_inbox_deployments.sql`).
 - 실행 승인(E) → Claude 작업 자동 시작, 올리기 승인(B) → Claude 결과면 `dispatch-claude-pr`이 승인된 diff 그대로 PR(병합 없음), 이후 앱이 PR·CI를 자동 확인(v0.4.5, 소유자 승인 2026-10-31).
+- 업무 탭 맨 위 "내 차례"(`src/domain/myTurn.ts`·`src/components/MyTurn.tsx`)는 사무실 말풍선 ?와 같은 기준으로 내가 손댈 일만 모은다. 목록의 바로 승인(A·B)도 `canApprove`를 지난다.
 - 캐릭터 위치·말풍선·모니터·경고등은 **업무 데이터로만** 움직인다. 꾸며낸 활동을 넣지 않는다. 승인·답을 기다리는 말풍선은 `src/office/speech.ts`(업무 단계 → 말하는 캐릭터·문구).
 - 원격 실행이 성공해도 상태는 `in_progress`까지. 완료는 사람이 검토 대기 → 완료로 승인한다.
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
