@@ -576,19 +576,30 @@ a {
 
 .agent-badge {
   position: absolute;
-  /* 얼굴을 가리지 않게 머리 위에 띄운다(말풍선과 같은 자리) */
-  bottom: calc(100% + 1px);
+  /* 얼굴을 가리지 않게 머리 위에 띄운다(말풍선과 같은 자리·같은 모양, v0.4.21) */
+  bottom: calc(100% + 2px);
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-display);
-  font-size: max(9px, 1.5cqw);
-  line-height: 1;
-  padding: 0.2em 0.35em;
-  border-radius: 3px;
+  font-size: max(10px, 1.55cqw);
+  line-height: 1.25;
+  padding: 0.3em 0.5em;
+  border-radius: 4px;
   background: #fffaf0;
-  color: #3b2416;
+  color: #2a1a10;
   border: 1px solid #3b2416;
   white-space: nowrap;
+  pointer-events: none;
+}
+
+.agent-badge::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top-color: #3b2416;
 }
 
 .bubble-task {
@@ -608,7 +619,7 @@ a {
   background: #fbe7b5;
   color: #2a1a10;
   font-family: var(--font-display);
-  font-size: max(9px, 1.4cqw);
+  font-size: max(10px, 1.55cqw);
   line-height: 1.25;
   white-space: pre-line;
   text-align: center;
@@ -643,16 +654,13 @@ a {
   }
 }
 
+/* 색은 표시 뜻으로만(v0.4.21): [?] 내 차례 = 노랑 · [!] 막힘 = 빨강 · […] 일하는 중 = 흰색 */
 .agent[data-activity='blocked'] .agent-badge {
   background: #f6ad91;
 }
 
 .agent[data-activity='review'] .agent-badge {
-  background: #b9dcf4;
-}
-
-.agent[data-activity='helping'] .agent-badge {
-  background: #c8e8b8;
+  background: #fbe7b5;
 }
 
 .bubble {

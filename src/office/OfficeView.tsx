@@ -197,16 +197,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         }}
       >
         <div className="memo-head">대기열 {memos.length}</div>
-        <ul className="memo-list">
-          {memos.slice(0, 3).map((t) => (
-            <li key={t.id} className={`memo memo-${t.status}`}>
-              <span className="memo-mark">{t.status === 'blocked' ? '!' : t.status === 'review' ? '?' : '□'}</span>
-              <span className="memo-text">{t.title}</span>
-            </li>
-          ))}
-          {memos.length > 3 && <li className="memo memo-more">+{memos.length - 3}건 더</li>}
-          {memos.length === 0 && <li className="memo memo-more">비어 있음</li>}
-        </ul>
+        {/* 대기열은 숫자만(제목 목록은 업무 탭에): 미니엉 말풍선과 겹치지 않게(v0.4.21) */}
       </div>
       {AGENTS.map((a) => {
         const s = scene.find((x) => x.agent === a.id);
