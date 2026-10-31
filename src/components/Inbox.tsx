@@ -634,9 +634,12 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
   return (
     <section className="inbox" aria-label="묻기·요청 입력창">
       {log.length === 0 && (
-        <p className="muted small inbox-note">
-          예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.
-        </p>
+        <div className="inbox-empty">
+          <p className="inbox-hello">무엇을 도와드릴까요?</p>
+          <p className="muted small inbox-note">
+            예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.
+          </p>
+        </div>
       )}
       {log.length > 0 && (
         <ol ref={listRef} className="inbox-log" aria-live="polite">
@@ -806,13 +809,6 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           if (e.dataTransfer.files.length) addPhotos(e.dataTransfer.files);
         }}
       >
-        <button type="button" className="btn btn-ghost inbox-attach" aria-label="사진·문서 첨부" title="사진·문서 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
-          {/* 이모지는 기기 글꼴마다 다르게 깨져 보여서 도트 그림 아이콘을 쓴다 */}
-          <svg className="pixel-icon" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
-            <path fill="currentColor" d="M1 3h14v1H1zM1 12h14v1H1zM1 4h1v8H1zM14 4h1v8h-1z" />
-            <path fill="currentColor" d="M10 5h2v2h-2zM3 11h1v-1h1V9h1V8h1v1h1v1h1V9h1V8h1v1h1v1h1v1h1v1H3z" opacity=".75" />
-          </svg>
-        </button>
         <input
           ref={fileInput}
           type="file"
@@ -834,10 +830,10 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           }}
           id="inbox-input"
           ref={inputRef}
-          rows={2}
+          rows={1}
           value={input}
           maxLength={4000}
-          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : touchInput() ? '묻거나 시킬 일을 적으세요' : '묻거나 시킬 일을 적으세요 (Enter로 보내기)'}
+          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : canAskGemini ? '묻거나 시킬 일을 적으세요 · 질문은 Gemini가 바로 답해요' : '묻거나 시킬 일을 적으세요'}
           aria-label="묻기·요청"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -848,11 +844,21 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
             }
           }}
         />
-        <button type="submit" className="btn btn-primary" disabled={busy || !input.trim()}>
-          보내기
+        <div className="inbox-tools">
+        <button type="button" className="inbox-attach" aria-label="사진·문서 첨부" title="사진·문서 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
+          {/* 이모지는 기기 글꼴마다 다르게 깨져 보여서 도트 그림 아이콘을 쓴다 */}
+          <svg className="pixel-icon" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
+            <path fill="currentColor" d="M1 3h14v1H1zM1 12h14v1H1zM1 4h1v8H1zM14 4h1v8h-1z" />
+            <path fill="currentColor" d="M10 5h2v2h-2zM3 11h1v-1h1V9h1V8h1v1h1v1h1V9h1V8h1v1h1v1h1v1h1v1H3z" opacity=".75" />
+          </svg>
         </button>
+          <button type="submit" className="inbox-send" aria-label="보내기" title="보내기" disabled={busy || !input.trim()}>
+            <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
+              <path fill="currentColor" d="M7 3h2v11H7zM5 5h2v2H5zM9 5h2v2H9zM3 7h2v2H3zM11 7h2v2h-2z" />
+            </svg>
+          </button>
+        </div>
       </form>
-      {canAskGemini && <p className="muted small inbox-note">일반 질문은 보내면 Gemini(Google 무료)가 바로 답합니다. 비밀번호·개인정보는 적지 마세요.</p>}
       {log.length > 0 && (
         <button
           type="button"
