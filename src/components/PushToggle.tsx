@@ -37,15 +37,11 @@ export function PushToggle({ store }: { store: OfficeStore }) {
           휴대폰 알림 켜기
         </button>
       )}
+      {/* 켜져 있으면 빨간 '알림 끄기'만(소유자 2026-10-31) */}
       {state === 'on' && (
-        <>
-          <button type="button" className="link-btn" disabled={busy} onClick={() => void run(async () => void (await store.push('test')), '시험 알림을 보냈어요')}>
-            알림 시험
-          </button>
-          <button type="button" className="link-btn" disabled={busy} onClick={() => void run(() => disablePush(store), '알림을 껐어요')}>
-            알림 끄기
-          </button>
-        </>
+        <button type="button" className="link-btn push-off" disabled={busy} onClick={() => void run(() => disablePush(store), '알림을 껐어요')}>
+          알림 끄기
+        </button>
       )}
       {note && <span className="push-note" role="status">{note}</span>}
     </span>
