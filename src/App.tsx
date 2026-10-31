@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentRoster } from './components/AgentPanel';
 import { DevlogPanel } from './components/DevlogPanel';
 import { Inbox } from './components/Inbox';
+import { MyTurnList } from './components/MyTurn';
 import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
 import { TaskCard } from './components/TaskCard';
@@ -15,6 +16,7 @@ import { AGENT_BY_ID, AGENTS } from './domain/agents';
 import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
 import { buildGptPackage, buildPrototypeHandoff } from './domain/handoffV2';
+import { myTurns } from './domain/myTurn';
 import { clarificationsOf, linksOf } from './domain/requestContext';
 import { routeTask } from './domain/router';
 import { canTransition } from './domain/status';
@@ -578,6 +580,15 @@ export function App() {
     })();
   };
 
+  /** 입력창 알림·내 차례 목록에서 바로 하는 기획·올리기 승인. 업무 카드의 버튼과 같은 규칙(canApprove)을 지난다. */
+  const quickApprove = async (task: Task, gate: 'A' | 'B'): Promise<boolean> => {
+    const view = deriveWorkflow(task, snap.workflow);
+    if (!canApprove(view, gate).ok) return false;
+    if (gate === 'A') return view.spec ? workflowActions.decide(task, 'A', view.spec.revision, 'approved') : false;
+    return view.result ? workflowActions.decide(task, 'B', view.result.revision, 'approved', '', { result_sha256: view.result.sha256 }) : false;
+  };
+  const turns = myTurns(snap.tasks, snap.workflow);
+
   /** 업무 카드로 이동(입력창 알림·사무실 말풍선). 지금 필터에 없으면 '전체'로 바꾼다. */
   const showTask = (id: string) => {
     setTab('tasks');
@@ -1058,6 +1069,7 @@ export function App() {
           <nav className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'tasks'} onClick={() => setTab('tasks')}>
               업무 <span className="num">{openCount}</span>
+              {turns.length > 0 && <span className="num num-turn">내 차례 {turns.length}</span>}
             </button>
             <button type="button" role="tab" aria-selected={tab === 'projects'} onClick={() => setTab('projects')}>
               프로젝트 <span className="num">{snap.projects.length}</span>
@@ -1100,6 +1112,14 @@ export function App() {
 
           {tab === 'tasks' && (
             <div className="stack">
+              <MyTurnList
+                items={turns}
+                onOpen={showTask}
+                onApprove={async (id, gate) => {
+                  const t = snap.tasks.find((x) => x.id === id);
+                  return t ? quickApprove(t, gate) : false;
+                }}
+              />
               <Inbox
                 snap={snap}
                 canAskGemini={store.mode === 'supabase'}
@@ -1119,13 +1139,7 @@ export function App() {
                 onAutoDraft={store.mode === 'supabase' ? (t) => void draftSpec(t.id) : undefined}
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={showTask}
-                onApprove={async (task, gate) => {
-                  // 업무 카드의 A·B 버튼과 같은 규칙(canApprove)을 지나야 한다.
-                  const view = deriveWorkflow(task, snap.workflow);
-                  if (!canApprove(view, gate).ok) return false;
-                  if (gate === 'A') return view.spec ? workflowActions.decide(task, 'A', view.spec.revision, 'approved') : false;
-                  return view.result ? workflowActions.decide(task, 'B', view.result.revision, 'approved', '', { result_sha256: view.result.sha256 }) : false;
-                }}
+                onApprove={quickApprove}
               />
               <details className="direct-entry">
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
