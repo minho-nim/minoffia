@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_KEY, SUPABASE_URL } from '../lib/supabase';
 import { MIME_EXT, storageContentType, type Attachment, type ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Task, UsageRun } from '../domain/types';
@@ -631,7 +632,48 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       if (!data?.ok || !data.repo) throw new Error(data?.error ?? '저장소를 만들지 못했습니다.');
       return { repo: data.repo as string, url: (data.url as string) ?? '', warning: data.warning as string | undefined };
     },
-    async askGemini(question, history, images = []) {
+    async askGemini(question, history, images = [], onDelta) {
+      if (onDelta && SUPABASE_URL && SUPABASE_KEY) {
+        // 답을 조각조각 바로 보여 준다(한 줄에 JSON 하나: {"d":"글"} … {"done":true} 또는 {"error":"…"}).
+        const { data: sess } = await client.auth.getSession();
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/ask-gemini`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${sess.session?.access_token ?? SUPABASE_KEY}` },
+          body: JSON.stringify({ question, history, images, stream: true }),
+        });
+        if (!res.ok || !res.body || !(res.headers.get('content-type') ?? '').includes('ndjson')) {
+          const b = await res.json().catch(() => ({}));
+          if (res.ok && b?.ok && b.answer) {
+            onDelta(b.answer);
+            return { answer: b.answer as string, keySlot: b.keySlot as number };
+          }
+          throw new Error(b?.error ?? `Gemini가 답하지 못했습니다(HTTP ${res.status}).`);
+        }
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buf = '';
+        let answer = '';
+        let keySlot = 0;
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += value;
+          let nl: number;
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!line) continue;
+            const m = JSON.parse(line) as { d?: string; done?: boolean; keySlot?: number; error?: string };
+            if (m.error) throw new Error(answer ? `${m.error} (받은 데까지 보여 드렸어요)` : m.error);
+            if (m.d) {
+              answer += m.d;
+              onDelta(answer);
+            }
+            if (m.done) keySlot = m.keySlot ?? 0;
+          }
+        }
+        if (!answer.trim()) throw new Error('Gemini가 답하지 못했습니다.');
+        return { answer: answer.trim(), keySlot };
+      }
       const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history, images } });
       if (error) {
         let message = error.message;

@@ -96,6 +96,8 @@ export interface OfficeStore {
     question: string,
     history: { role: 'user' | 'model'; text: string }[],
     images?: { mime: string; data: string }[],
+    /** 답 조각이 올 때마다 지금까지의 글 전체로 부른다(있으면 스트리밍, v0.4.15) */
+    onDelta?: (soFar: string) => void,
   ): Promise<{ answer: string; keySlot: number }>;
 }
 
