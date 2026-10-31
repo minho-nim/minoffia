@@ -2,6 +2,9 @@
 
 ## 0.4.5 — 2026-10-31
 
+### 추가(배포)
+- **휴대폰 배포 버튼**: GitHub Actions "운영 배포(release)"(수동 실행). main 최신 커밋의 verify가 성공일 때만, fast-forward로만 release를 main으로 앞당긴다(PC 명령과 같음). 휴대폰 GitHub 앱·브라우저의 Actions에서 Run workflow.
+
 ### 바뀜 (소유자 승인: 내 손이 가는 일 줄이기)
 - **(가) 실행 승인 = Claude 시작**: Claude에 맡긴 작업은 실행 승인(E)을 누르면 바로 보조 개발 세션이 시작된다(따로 시작 버튼을 누르지 않음). 실패하면 막힘(!)과 다시 시작 버튼.
 - **(나) 올리기 승인 = Claude가 PR**: Claude 결과를 올리기 승인(B)하면 서버(`dispatch-claude-pr`)가 보조 개발 루틴으로 **승인된 diff만 그대로** 적용해 작업 브랜치를 push하고 PR을 연다(병합 안 함). 같은 결과로 두 번 열지 않는다(`claim_claude_pr`, 하루 상한은 Claude 실행과 함께). diff가 5만 자를 넘으면 "Claude PR 요청 복사"로 넘긴다. PR 주소는 `pr-status`가 작업 브랜치로 GitHub에서 찾아 기록한다.
