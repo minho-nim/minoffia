@@ -24,9 +24,9 @@ export function MyTurnList({ items, onOpen, onApprove }: Props) {
       ) : (
         <ul>
           {items.map((m) => (
-            <li key={`${m.taskId}:${m.word}`} className={m.word === '막힘' ? 'is-alert' : undefined}>
+            <li key={`${m.taskId}:${m.word}:${m.alert ? '!' : '?'}`} className={m.alert ? 'is-alert' : undefined}>
               <span className="my-turn-mark">
-                {m.word}[{m.word === '막힘' ? '!' : '?'}]
+                {m.word}[{m.alert ? '!' : '?'}]
               </span>
               <span className="my-turn-text">
                 <b>{m.title}</b>
