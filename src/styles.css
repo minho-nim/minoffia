@@ -585,9 +585,10 @@ a {
   line-height: 1.25;
   padding: 0.3em 0.5em;
   border-radius: 4px;
-  background: #fffaf0;
-  color: #2a1a10;
-  border: 1px solid #3b2416;
+  /* 기본 = […] 일하는 중: 흰 바탕 회색 글씨 */
+  background: #ffffff;
+  color: #6e5a48;
+  border: 1px solid #a8957f;
   white-space: nowrap;
   pointer-events: none;
 }
@@ -599,7 +600,7 @@ a {
   left: 50%;
   margin-left: -4px;
   border: 4px solid transparent;
-  border-top-color: #3b2416;
+  border-top-color: #a8957f;
 }
 
 .bubble-task {
@@ -616,7 +617,7 @@ a {
   padding: 0.3em 0.5em;
   border-radius: 4px;
   border: 1px solid #3b2416;
-  background: #fbe7b5;
+  background: #ffc53d;
   color: #2a1a10;
   font-family: var(--font-display);
   font-size: max(10px, 1.55cqw);
@@ -638,7 +639,9 @@ a {
 }
 
 .agent-speech[data-kind='alert'] {
-  background: #f6ad91;
+  background: #e0483b;
+  color: #fffaf0;
+  border-color: #7a1f16;
 }
 
 @keyframes speech-pop {
@@ -654,13 +657,29 @@ a {
   }
 }
 
-/* 색은 표시 뜻으로만(v0.4.21): [?] 내 차례 = 노랑 · [!] 막힘 = 빨강 · […] 일하는 중 = 흰색 */
+/* 색은 표시 뜻으로만, 한눈에 구분되게(v0.4.21): [?] 내 차례 = 진한 노랑 · [!] 막힘 = 진한 빨강(흰 글씨) · […] 일하는 중 = 흰 바탕 회색 글씨 */
 .agent[data-activity='blocked'] .agent-badge {
-  background: #f6ad91;
+  background: #e0483b;
+  color: #fffaf0;
+  border-color: #7a1f16;
 }
 
 .agent[data-activity='review'] .agent-badge {
-  background: #fbe7b5;
+  background: #ffc53d;
+  color: #2a1a10;
+  border-color: #3b2416;
+}
+
+.agent[data-activity='blocked'] .agent-badge::after {
+  border-top-color: #7a1f16;
+}
+
+.agent[data-activity='review'] .agent-badge::after {
+  border-top-color: #3b2416;
+}
+
+.agent-speech[data-kind='alert']::after {
+  border-top-color: #7a1f16;
 }
 
 .bubble {
