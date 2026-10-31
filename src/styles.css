@@ -468,8 +468,10 @@ a {
 
 .agent-badge {
   position: absolute;
-  top: -0.2em;
-  right: -0.4em;
+  /* 얼굴을 가리지 않게 머리 위에 띄운다(말풍선과 같은 자리) */
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
   font-family: var(--font-display);
   font-size: max(9px, 1.5cqw);
   line-height: 1;
