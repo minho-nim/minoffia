@@ -686,6 +686,9 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                 <b>결과 v{view.result.revision}</b>
                 {view.result.workItemId && ` · ${view.result.workItemId}`} · {view.result.summary || '(요약 없음)'}
               </p>
+              <p className="small">
+                {view.result.source === 'claude_session_auto' ? '보낸 곳: Claude 세션이 직접 보냄(자동)' : '보낸 곳: 사람이 등록(붙여넣기)'}
+              </p>
               <p className="muted small mono">sha256 {view.result.sha256.slice(0, 16)}… · diff {view.result.diff.length.toLocaleString()}자 · 스크린샷 {resultShots.length}장 · 라이브 미리보기 미제공</p>
               {view.result.diff && <pre className="diff-view">{view.result.diff}</pre>}
               {view.result.testLog && (

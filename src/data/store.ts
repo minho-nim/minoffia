@@ -78,6 +78,10 @@ export interface OfficeStore {
   loadPlanInbox(): Promise<PlanInboxItem[]>;
   /** 받은 계획을 처리함으로 표시. 이미 다른 기기가 처리했으면 false */
   markPlanInbox(id: string, status: 'imported' | 'invalid', note: string): Promise<boolean>;
+  /** Claude 보조 개발 세션이 보내 온 결과 중 아직 처리하지 않은 것(v0.4.3) */
+  loadResultInbox(): Promise<ResultInboxItem[]>;
+  /** 받은 결과를 처리함으로 표시. 이미 다른 기기가 처리했으면 false */
+  markResultInbox(id: string, status: 'imported' | 'invalid', note: string): Promise<boolean>;
   /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
   askGemini(
@@ -92,6 +96,18 @@ export interface PlanInboxItem {
   taskId: string;
   specRevision: number;
   planText: string;
+}
+
+export interface ResultInboxItem {
+  id: string;
+  taskId: string;
+  assignmentId: string;
+  summary: string;
+  changedFiles: string;
+  diff: string;
+  testLog: string;
+  remainingIssues: string;
+  branch: string;
 }
 
 export function newId(): string {
