@@ -1,6 +1,8 @@
 /**
  * 업무 단계가 바뀌면 미니엉이 입력창에 알려 주는 말(규칙만, LLM 호출 없음).
  * 기획서·계획·결과 버전이 바뀌어도 알린다. 처음 보는 업무는 기억만 하고 알리지 않는다(접수 때 이미 말함).
+ * v0.4.12(소유자 2026-10-31): 승인 차례는 "내 차례"와 사무실 말풍선이 보여 주므로, 입력창에는
+ * 확인 질문과 막힘만 알린다(기억은 모든 업무에 대해 계속 한다).
  */
 import type { Task } from './types';
 import { canApprove, deriveWorkflow } from './workflow';
@@ -42,6 +44,9 @@ const NEXT: Partial<Record<Stage, string>> = {
   integration_blocked: '연동이 막혔어요. 업무 카드에서 이유를 확인하세요.',
   failed: '실패했어요. 업무 카드에서 이유를 확인하세요.',
 };
+
+/** 입력창에 알리는 단계: 확인 질문(답을 입력창에 씀)과 막힘 */
+export const NOTICE_STAGES: ReadonlySet<Stage> = new Set<Stage>(['needs_clarification', 'failed', 'integration_blocked', 'rate_limited']);
 
 /** 단계와 버전을 묶은 표식. 이것이 바뀌면 알린다. */
 export function stageSignature(task: Task, all: WorkflowData): string {
@@ -90,7 +95,9 @@ export function stageNotices(tasks: Task[], all: WorkflowData, seen: Record<stri
   for (const t of tasks) {
     const sig = stageSignature(t, all);
     next[t.id] = sig;
-    if (seen[t.id] !== undefined && seen[t.id] !== sig) notices.push(noticeFor(t, all));
+    if (seen[t.id] === undefined || seen[t.id] === sig) continue;
+    const n = noticeFor(t, all);
+    if (NOTICE_STAGES.has(n.stage)) notices.push(n);
   }
   return { notices, seen: next };
 }

@@ -319,7 +319,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     if (!now || (pending.kind === 'repo' && now.repo)) setPending(null);
   }, [snap.projects, pending]);
 
-  // 단계 알림: 업무 단계·버전이 바뀌면 미니엉이 알리고, 아래에 버튼을 둔다(규칙만, 토큰 0).
+  // 단계 알림: 확인 질문·막힘이 생기면 미니엉이 알리고, 아래에 버튼을 둔다(규칙만, 토큰 0, v0.4.12부터 승인 차례는 내 차례가 보여 줌).
   // 다른 기기가 이미 넣은 알림(같은 id)은 다시 넣지 않는다. 처음 쓰는 기기는 지금 상태를 기억만 한다.
   useEffect(() => {
     if (!syncReady) return;

@@ -29,6 +29,7 @@ import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types'
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
 import { getSupabase } from './lib/supabase';
+import { PushToggle } from './components/PushToggle';
 import { OfficeView } from './office/OfficeView';
 import { version } from '../package.json';
 
@@ -1035,6 +1036,7 @@ export function App() {
               <button type="button" className="link-btn" onClick={() => void client?.auth.signOut()}>
                 로그아웃
               </button>
+              <PushToggle store={store} />
             </span>
           )}
         </div>

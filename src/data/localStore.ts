@@ -296,6 +296,9 @@ export function createLocalStore(): OfficeStore {
     async markResultInbox() {
       return false;
     },
+    async push() {
+      throw new Error('로컬 데모에서는 휴대폰 알림을 쓸 수 없습니다.');
+    },
     async linearProbe() {
       return { connected: false, reason: '로컬 데모에서는 Linear를 확인할 수 없습니다.' };
     },
