@@ -2103,3 +2103,74 @@ a {
   background: var(--st-review, var(--surface-2));
   color: var(--st-review-ink, var(--ink));
 }
+
+/* 내 차례: 내가 손대야 하는 일만(업무 탭 맨 위) */
+.my-turn {
+  padding: 10px;
+  border: 2px solid #d9822b;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.my-turn h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+
+.my-turn ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.my-turn li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fbe7b5;
+  color: #2a1a10;
+}
+
+.my-turn li.is-alert {
+  background: #f6ad91;
+}
+
+.my-turn-mark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.my-turn-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.my-turn-text b {
+  overflow-wrap: anywhere;
+}
+
+.my-turn-text .muted {
+  color: #5a4632;
+}
+
+.my-turn-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.num-turn {
+  margin-left: 4px;
+  background: #d9822b;
+  color: #fffaf0;
+}
