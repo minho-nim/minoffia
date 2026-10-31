@@ -1662,8 +1662,12 @@ a {
 }
 
 .inbox-note {
-  flex-basis: 100%;
   margin: 0;
+}
+
+/* 버튼 줄(가로로 감싸는 줄) 안에서만 한 줄을 다 쓴다. 세로 상자(.inbox)에 걸면 iOS 사파리가 높이 100%로 계산해 큰 빈칸이 생긴다. */
+.inbox-actions .inbox-note {
+  flex-basis: 100%;
 }
 
 .inbox-form {
