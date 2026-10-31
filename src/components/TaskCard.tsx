@@ -19,6 +19,11 @@ interface Props {
   onAsk?: (task: Task) => void;
   /** 담당 AI를 사무실에서 보기 */
   onShowAgent?: (task: Task) => void;
+  /** 접힌 카드(v0.4.21): 한 줄 요약만 보이고 누르면 펼친다 */
+  expanded?: boolean;
+  onToggle?: (task: Task) => void;
+  /** 이 업무의 내 차례 표시(기획? · 배포! 등) */
+  turn?: { word: string; alert?: boolean };
 }
 
 const STATUS_VERB: Record<TaskStatus, string> = {
@@ -29,7 +34,7 @@ const STATUS_VERB: Record<TaskStatus, string> = {
   done: '완료 승인',
 };
 
-export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent }: Props) {
+export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn }: Props) {
   const agent = AGENT_BY_ID[task.assignee];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
@@ -38,12 +43,29 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
   const canReassign = (task.status === 'queued' || task.status === 'blocked') && task.dispatch.state !== 'dispatching';
 
   return (
-    <article id={`task-${task.id}`} className={`task-card status-${task.status}`}>
-      <header className="task-head">
-        <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>
-        <h3>{task.title}</h3>
-        {task.sample && <span className="sample-tag">예시</span>}
-      </header>
+    <article id={`task-${task.id}`} className={`task-card status-${task.status}${expanded ? '' : ' is-folded'}`}>
+      {onToggle ? (
+        <button type="button" className="task-toggle" aria-expanded={expanded} onClick={() => onToggle(task)}>
+          <span className="task-head">
+            <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>
+            <span className="task-title">{task.title}</span>
+            {turn && <span className={`task-turn${turn.alert ? ' is-alert' : ''}`}>{turn.word}{turn.alert ? '!' : '?'}</span>}
+            <span className="task-chevron" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+          </span>
+          <span className="task-sub">
+            {project?.name ?? '삭제됨'} · {agent.name} · {stageLabel}
+            {task.sample && <span className="sample-tag">예시</span>}
+          </span>
+        </button>
+      ) : (
+        <header className="task-head">
+          <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>
+          <h3>{task.title}</h3>
+          {task.sample && <span className="sample-tag">예시</span>}
+        </header>
+      )}
+      {expanded && (
+      <>
       <dl className="task-meta">
         <div>
           <dt>담당</dt>
@@ -159,6 +181,8 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
         </summary>
         {workflow}
       </details>
+      </>
+      )}
     </article>
   );
 }
