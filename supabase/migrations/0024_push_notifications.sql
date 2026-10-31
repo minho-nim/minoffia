@@ -47,7 +47,8 @@ alter table public.push_outbox enable row level security;
 do $$
 begin
   if exists (select 1 from pg_available_extensions where name = 'pg_net') then
-    create extension if not exists pg_net;
+    create schema if not exists extensions;
+    create extension if not exists pg_net schema extensions;
   end if;
 end $$;
 
