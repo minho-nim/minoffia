@@ -1,37 +1,43 @@
-# 구조
+# 구조 (v0.4)
 
 ```
-브라우저 (Cloudflare Pages 또는 로컬)
- ├─ src/domain      규칙: 배정(router), 사용량(usage), 상태 전이(status), 지시서(handoff)
- ├─ src/office      도트 오피스: 좌표(layout), 장면(scene: 업무 상태 → 위치·말풍선), 그리기(draw), 스프라이트
- ├─ src/data        저장소: localStore(데모) / supabaseStore(동기화, 15초 폴링)
- └─ src/lib         Supabase 클라이언트, dispatch-claude 호출
-        │  (로그인 JWT)
+휴대폰·PC 브라우저 (Cloudflare Pages: release 브랜치)
+ ├─ src/domain   규칙: 배정 router · 단계 workflow · 알림 stageNotice · 내 차례 myTurn · 멈춤 stall · 지시서 handoffV2 · 계획 검증 pmPlan
+ ├─ src/office   도트 사무실: 업무 → 위치(scene) · 말풍선 종류[상태](speech) · 그리기
+ ├─ src/data     localStore(데모) / supabaseStore(Supabase + Realtime)
+ └─ src/components  입력창 Inbox · 내 차례 · 업무 카드 WorkflowPanel · 첨부 · 개발일지
+        │ 로그인 JWT (소유자만)
         ▼
-Supabase
- ├─ Postgres + RLS  projects / tasks / usage_runs, 소유자만 접근
- ├─ tasks_guard     클라이언트의 dispatch_* 변경 무시, 전송 중 상태 변경 금지
- └─ Edge Function dispatch-claude
-       1. JWT 사용자 = OFFICE_OWNER_EMAIL
-       2. 업무 담당 = claude, 프로젝트 repo = CLAUDE_ALLOWED_REPOSITORY
-       3. claim_claude_dispatch: advisory lock + 오늘(KST) 실행 수 < min(2, CAP) + none/failed(확인됨) → dispatching + 실행 기록
-       4. Fire URL POST (20초 제한)
-       5. 성공 → dispatched + in_progress + 세션 URL / 실패 → failed + blocked + 오류
+Supabase (서울)
+ ├─ Postgres + RLS + 트리거   승인 게이트(approvals_guard) · 배정 상한(agent_assignments_guard) · 첨부 규칙 · 추가만 가능한 기록
+ ├─ Storage attachments       비공개 버킷(이미지·문서·견본)
+ └─ Edge Functions
+     ├─ ask-gemini · draft-spec · draft-prototype · analyze-image   Gemini 무료(키 A, B 예비, 하루 상한, 글은 저장 안 함)
+     ├─ dispatch-claude      기획 승인 → PM 루틴 시작(+계획 제출표)
+     ├─ submit-plan          PM 세션 → 계획 원문(1회용 제출표, verify_jwt off)
+     ├─ dispatch-claude-dev  실행 승인 → 보조 개발 루틴 시작(+결과 제출표)
+     ├─ submit-result        보조 개발 세션 → 결과 원문(1회용 제출표, verify_jwt off)
+     ├─ dispatch-claude-pr   올리기 승인 → 승인된 diff로 PR 세션(병합 없음)
+     ├─ pr-status            PR·CI 확인(PR 주소가 없으면 작업 브랜치로 찾음)
+     ├─ deploy-release       배포 승인 → 확인한 커밋 squash 병합 → release fast-forward
+     └─ fetch-link · create-repo
         │
         ▼
-Claude Code Cloud Routine (Claude Pro 사용량) → GitHub 브랜치·PR → GitHub Actions(verify)
+Claude Code 루틴(Pro 구독): PM("업무 실행") · 보조 개발("보조 개발": 개발 / 올리기 두 종류)
+Codex Cloud(Plus 구독): 지금은 수동 인계, Linear 연동 예정
+GitHub: PR → Actions(verify) → 서버 병합 → release → Cloudflare 배포
 ```
 
 ## 원칙
 
-- **완료 표시는 사람만** 한다. 원격 실행이 성공해도 상태는 *진행 중*까지다.
-- **실패는 차단**으로 남는다. 재실행은 사람이 Routines History를 확인했다고 체크해야 한다.
-- **화면은 사실만** 보여준다. 캐릭터 위치, 모니터 불빛, 경고등, 대기열 메모는 모두 업무 데이터에서 나온다.
-- **비밀은 서버에만.** 브라우저에는 Supabase publishable key만 있다.
+- **사람은 정하고 확인만**: 기획·실행·(견본)·올리기·배포 승인. 나머지는 규칙과 구독 안 AI가 자동으로 한다.
+- **확인한 것만 보여 준다**: 세션 시작 ≠ 완료. 결과는 세션이 직접 보내거나 사람이 등록한 것만, 출처를 표시한다.
+- **멈추면 알린다**: 자동으로 넘어가야 할 단계가 오래 그대로면 내 차례에 [!].
+- **같은 일을 두 번 하지 않는다**: 기획서 버전·계획 버전·결과 버전마다 한 번(원자적 예약 함수와 유일 제약).
+- **비밀은 서버에만**: 브라우저에는 publishable key만. 루틴 토큰·GitHub 토큰·Gemini 키는 secrets, 제출표는 해시만 저장.
 
-## 배정 규칙
+## 배정 규칙(접수 시 처음 배정)
 
-1. 요청 유형이 있으면 그대로, `자동`이면 제목+설명의 키워드 수로 유형을 정한다(동점이면 개발 > 기획 > QA > 디자인 > 프로토타입 > 리서치). 없으면 기획.
-2. 유형별 후보 순서에서 오늘 한도가 남은 첫 에이전트를 고른다.
-   - 기획 Claude → Codex / 개발 Codex → Claude / 디자인 Studio A → B / 프로토타입 Studio B → A / 리서치 Grok → Claude / QA CI 봇
-3. 모두 한도면 1순위에 두고 "내일 실행"으로 표시한다.
+1. 요청 유형이 있으면 그대로, `자동`이면 제목+설명의 키워드 수로 유형을 정한다. 없으면 기획.
+2. 유형별 후보 순서에서 오늘 한도가 남은 첫 에이전트를 고른다(기획 Claude → Codex / 개발 Codex → Claude / 디자인 Studio A → B / 프로토타입 Studio B → A / 리서치 Grok → Claude / QA CI 봇).
+3. 실제 개발 담당은 Claude PM 계획이 정한다(처음 배정과 무관하게 PM 전송 가능).
