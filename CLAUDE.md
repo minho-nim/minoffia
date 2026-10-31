@@ -75,7 +75,7 @@
 - `src/domain` 규칙(배정 router, 사용량 usage, 상태 전이 status, 지시서 handoff) — 단위 테스트 있음
 - `src/domain/workflow*.ts`·`pmPlan.ts`·`adapters.ts`·`handoffV2.ts` v0.2.1 승인 단계, PM 계획 검증, 실행 경로 상태
 - `src/components/WorkflowPanel.tsx` 업무 카드의 진행 단계 패널
-- `src/domain/triage.ts`·`src/components/Inbox.tsx` 업무 탭 입력창(규칙 분류, 프로젝트 확인, Gemini·ChatGPT 선택)
+- `src/domain/triage.ts`·`src/components/Inbox.tsx` 대화 탭 입력창(v0.4.16부터 대화·업무·프로젝트·에이전트 탭, 처음은 대화)(규칙 분류, 프로젝트 확인, Gemini·ChatGPT 선택)
 - `src/domain/requestContext.ts`·`src/components/RequestContext.tsx` 링크 읽기 결과·GPT 확인 질문(규칙은 `0005_links_clarifications.sql`), 서버 `supabase/functions/fetch-link`(내부망 차단은 `safety.ts`, 시험 있음)
 - `src/domain/attachments.ts`·`src/components/Attachments.tsx` 이미지·문서 첨부(비공개 버킷 `attachments`, 규칙은 `0004_attachments.sql`·`0012_document_attachments.sql`과 같아야 함)
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`

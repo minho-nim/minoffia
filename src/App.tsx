@@ -33,7 +33,7 @@ import { PushToggle } from './components/PushToggle';
 import { OfficeView } from './office/OfficeView';
 import { version } from '../package.json';
 
-type Tab = 'tasks' | 'projects' | 'agent';
+type Tab = 'chat' | 'tasks' | 'projects' | 'agent';
 type Filter = 'open' | 'all' | TaskStatus;
 
 const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
@@ -90,7 +90,8 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [store, setStore] = useState<OfficeStore | null>(null);
   const [snap, setSnap] = useState<Snapshot>(EMPTY);
-  const [tab, setTab] = useState<Tab>('tasks');
+  // v0.4.16(소유자): 대화(입력창)와 업무 목록을 탭으로 나눈다. 처음은 대화.
+  const [tab, setTab] = useState<Tab>('chat');
   const [filter, setFilter] = useState<Filter>('open');
   const [selected, setSelected] = useState<AgentId | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -1097,6 +1098,9 @@ export function App() {
 
         <aside className="panel">
           <nav className="tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'chat'} onClick={() => setTab('chat')}>
+              대화
+            </button>
             <button type="button" role="tab" aria-selected={tab === 'tasks'} onClick={() => setTab('tasks')}>
               업무
               {turns.length > 0 && (
@@ -1144,16 +1148,8 @@ export function App() {
             </div>
           )}
 
-          {tab === 'tasks' && (
-            <div className="stack">
-              <MyTurnList
-                items={turns}
-                onOpen={showTask}
-                onApprove={async (id, gate) => {
-                  const t = snap.tasks.find((x) => x.id === id);
-                  return t ? quickApprove(t, gate) : false;
-                }}
-              />
+          {/* 대화 탭: 탭을 바꿔도 대화·답 받기가 이어지게 늘 붙여 두고 숨기기만 한다 */}
+          <div className="stack chat-tab" hidden={tab !== 'chat'}>
               <Inbox
                 snap={snap}
                 canAskGemini={store.mode === 'supabase'}
@@ -1175,6 +1171,18 @@ export function App() {
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={showTask}
                 onApprove={quickApprove}
+              />
+          </div>
+
+          {tab === 'tasks' && (
+            <div className="stack">
+              <MyTurnList
+                items={turns}
+                onOpen={showTask}
+                onApprove={async (id, gate) => {
+                  const t = snap.tasks.find((x) => x.id === id);
+                  return t ? quickApprove(t, gate) : false;
+                }}
               />
               <details className="direct-entry">
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
