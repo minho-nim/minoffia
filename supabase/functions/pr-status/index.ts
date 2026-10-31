@@ -1,6 +1,6 @@
-// 업무에 기록된 PR의 상태와 CI(GitHub Actions 실행 결과)를 GitHub에서 읽어 기록한다(v0.2 §8, 소유자가 버튼을 눌렀을 때만).
+// 업무에 기록된 PR의 상태와 CI(GitHub Actions 실행 결과)를 GitHub에서 읽어 기록한다(v0.2 §8). 앱이 올리기 승인 뒤 자동으로 부른다(v0.4.5).
 // 토큰 권한: Pull requests(Read), Actions(Read). Fine-grained 토큰에는 Checks 권한이 없다.
-// C(운영 배포) 승인은 최신 확인이 'CI 성공 + 병합됨'일 때만 된다(DB 0010_pr_checks.sql).
+// C(운영 배포) 승인은 최신 확인이 'CI 성공'(열린 PR 또는 병합됨)일 때만 된다(DB 0022). 병합은 C 뒤 deploy-release가 한다.
 // 토큰(GITHUB_REPO_TOKEN)은 읽기에만 쓴다. 허용 저장소(CLAUDE_ALLOWED_REPOSITORY·AI Office가 만든 저장소)만, minho-nim/MinLab은 제외.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { parsePrUrl, summarizeChecks, type CheckRun } from './summary.ts';
@@ -39,8 +39,25 @@ Deno.serve(async (req) => {
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
   }
-  const { data: task } = await userClient.from('tasks').select('id, pr_url').eq('id', body.taskId ?? '').maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('id, pr_url, projects(repo)').eq('id', body.taskId ?? '').maybeSingle();
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
+  const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
+
+  // v0.4.5: 올리기 승인 뒤 Claude가 연 PR은 주소를 사람이 적지 않는다. 작업 브랜치로 GitHub에서 찾아 기록한다.
+  if (!task.pr_url) {
+    const { data: sent } = await userClient.from('pr_dispatches').select('branch').eq('task_id', task.id).neq('branch', '').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const projectRepo = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
+    if (!sent?.branch || !projectRepo.includes('/')) return reply(400, { ok: false, error: 'PR 주소(https://github.com/…/pull/번호)를 먼저 기록하세요.' });
+    const [owner] = projectRepo.split('/');
+    const found = await fetch(`https://api.github.com/repos/${projectRepo}/pulls?state=all&per_page=1&head=${encodeURIComponent(`${owner}:${sent.branch}`)}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'MinLabAIOffice' },
+      signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
+    const list = found && found.ok ? ((await found.json()) as { html_url?: string }[]) : [];
+    if (!list[0]?.html_url) return reply(409, { ok: false, waiting: true, error: `PR이 아직 열리지 않았습니다(Claude가 ${sent.branch} 브랜치로 여는 중).` });
+    await admin.from('tasks').update({ pr_url: list[0].html_url }).eq('id', task.id);
+    task.pr_url = list[0].html_url;
+  }
   const pr = parsePrUrl(String(task.pr_url ?? ''));
   if (!pr) return reply(400, { ok: false, error: 'PR 주소(https://github.com/…/pull/번호)를 먼저 기록하세요.' });
 
@@ -87,7 +104,6 @@ Deno.serve(async (req) => {
     if (runs.length >= 50) break;
   }
 
-  const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: row, error } = await admin
     .from('pr_checks')
     .insert({

@@ -189,7 +189,7 @@ export async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** 이 업무 PR 주소에 대한 최신 서버 확인. C 승인은 이것이 'CI 성공 + 병합됨'일 때만 된다(DB와 같은 규칙). */
+/** 이 업무 PR 주소에 대한 최신 서버 확인. C 승인은 이것이 'CI 성공'(열린 PR 또는 병합됨)일 때만 된다(DB 0022와 같은 규칙). */
 export function latestPrCheck(task: Task, data: WorkflowData): import('./workflow-types').PrCheck | null {
   const url = (task.prUrl ?? '').trim().replace(/\/$/, '');
   const mine = data.prChecks.filter((c) => c.taskId === task.id).sort((a, b) => b.checkedAt.localeCompare(a.checkedAt));
@@ -198,7 +198,8 @@ export function latestPrCheck(task: Task, data: WorkflowData): import('./workflo
 }
 
 export function prCheckPasses(check: import('./workflow-types').PrCheck | null): boolean {
-  return !!check && check.ciState === 'success' && check.merged;
+  // v0.4.5: 병합은 배포 승인 뒤 서버가 한다. 병합 없이 닫힌 PR은 안 된다.
+  return !!check && check.ciState === 'success' && (check.merged || check.prState === 'open');
 }
 
 /** 이 업무의 최신 운영 배포 기록 */

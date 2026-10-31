@@ -45,7 +45,7 @@ update tasks set pr_url = 'https://github.com/o/r/pull/7' where id = 'a1a1a1a1-0
 -- 사용자는 확인 기록을 만들 수 없다
 select pg_temp.expect_fail($q$insert into pr_checks (owner_id, task_id, pr_url, pr_state, merged, ci_state) values ('11111111-1111-4111-8111-111111111111', 'a1a1a1a1-0000-4000-8000-000000000001', 'https://github.com/o/r/pull/7', 'closed', true, 'success')$q$, 'row-level security');
 
--- CI 실패 · 진행 중 · 병합 전이면 C 불가
+-- CI 실패, 병합 없이 닫힌 PR이면 C 불가(v0.4.5부터 열린 PR + CI 성공은 C 가능: 병합은 C 뒤 서버가 함)
 select pg_temp.as_service();
 insert into pr_checks (owner_id, task_id, pr_url, pr_state, merged, ci_state, checked_at) values
   ('11111111-1111-4111-8111-111111111111', 'a1a1a1a1-0000-4000-8000-000000000001', 'https://github.com/o/r/pull/7', 'open', false, 'failure', now() - interval '3 minutes');
@@ -53,7 +53,7 @@ select pg_temp.as_user();
 select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('a1a1a1a1-0000-4000-8000-000000000001', 'C', 'approved', 1)$q$, 'passing CI');
 select pg_temp.as_service();
 insert into pr_checks (owner_id, task_id, pr_url, pr_state, merged, ci_state, checked_at) values
-  ('11111111-1111-4111-8111-111111111111', 'a1a1a1a1-0000-4000-8000-000000000001', 'https://github.com/o/r/pull/7', 'open', false, 'success', now() - interval '2 minutes');
+  ('11111111-1111-4111-8111-111111111111', 'a1a1a1a1-0000-4000-8000-000000000001', 'https://github.com/o/r/pull/7', 'closed', false, 'success', now() - interval '2 minutes');
 select pg_temp.as_user();
 select pg_temp.expect_fail($q$insert into approvals (task_id, gate, decision, approved_revision) values ('a1a1a1a1-0000-4000-8000-000000000001', 'C', 'approved', 1)$q$, 'passing CI');
 

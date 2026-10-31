@@ -60,8 +60,9 @@
 - Gemini 답 바로 뒤의 개발 요청은 앞 질문·답을 업무에 함께 넣고, 애매한 말만 "질문인가요, 업무 요청인가요?"로 묻는다. 개발 전(E 승인 없음)에 지운 업무의 대화 기록은 함께 지운다(`0017_predev_task_chat.sql`).
 - 업무로 만들기 전에는 반드시 프로젝트를 사용자에게 확인받는다("이 프로젝트 맞아요?").
 - 새 프로젝트의 GitHub 저장소는 사용자가 버튼을 누를 때만 서버(`supabase/functions/create-repo`)가 비공개 빈 저장소로 만든다(소유자 결정 2026-10-29). Claude PM은 `CLAUDE_ALLOWED_REPOSITORY`와 `managed_repos`의 저장소에서만 일한다.
-- C(운영 배포) 승인은 서버(`supabase/functions/pr-status`)가 확인한 최신 'CI 성공 + 병합됨' 기록이 있어야 한다(`0010_pr_checks.sql`).
-  C 승인 뒤 배포는 `deploy-release`가 fast-forward로만 release를 앞당기고 `deployments`에 기록한다(갈라진 release는 덮어쓰지 않음, 성공 기록은 C 승인 필수 `0011_inbox_deployments.sql`).
+- C(운영 배포) 승인은 서버(`supabase/functions/pr-status`)가 확인한 최신 'CI 성공'(열린 PR 또는 병합됨) 기록이 있어야 한다(`0010`, v0.4.5 `0022_auto_pr_merge.sql`).
+  C 승인 뒤 `deploy-release`가 CI를 확인한 그 커밋일 때만 PR을 squash 병합하고, fast-forward로만 release를 앞당기며 `deployments`에 기록한다(갈라진 release는 덮어쓰지 않음, 성공 기록은 C 승인 필수 `0011_inbox_deployments.sql`).
+- 실행 승인(E) → Claude 작업 자동 시작, 올리기 승인(B) → Claude 결과면 `dispatch-claude-pr`이 승인된 diff 그대로 PR(병합 없음), 이후 앱이 PR·CI를 자동 확인(v0.4.5, 소유자 승인 2026-10-31).
 - 캐릭터 위치·말풍선·모니터·경고등은 **업무 데이터로만** 움직인다. 꾸며낸 활동을 넣지 않는다. 승인·답을 기다리는 말풍선은 `src/office/speech.ts`(업무 단계 → 말하는 캐릭터·문구).
 - 원격 실행이 성공해도 상태는 `in_progress`까지. 완료는 사람이 검토 대기 → 완료로 승인한다.
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.

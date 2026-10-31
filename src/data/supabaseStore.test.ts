@@ -30,7 +30,7 @@ describe('실시간 구독(v0.3.7)', () => {
     expect([...handlers.keys()]).toEqual(expect.arrayContaining(['tasks', 'approvals', 'attachments', 'inbox_state', 'deployments']));
     // 대화 기록·AI 호출 기록은 실시간으로 퍼뜨리지 않는다
     expect(handlers.has('chat_messages')).toBe(false);
-    expect(handlers.size).toBe(19);
+    expect(handlers.size).toBe(20);
     handlers.get('approvals')!();
     expect(seen).toEqual(['approvals']);
     off();
