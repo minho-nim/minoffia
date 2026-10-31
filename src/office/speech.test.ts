@@ -29,13 +29,13 @@ const data = (d: Partial<WorkflowData>): WorkflowData => ({ ...EMPTY_WORKFLOW, .
 describe('사무실 말풍선(v0.4.4)', () => {
   it('Gemini 초안이 오면 Gemini(스튜디오 A)가 기획 승인을 부탁한다', () => {
     const s = speechFor([task], data({ specs: [spec()] }));
-    expect(s.get('studioA')).toEqual({ text: '기획 승인해 주세요', kind: 'ask', taskId: 't1' });
-    expect(speechFor([task], data({ specs: [spec('chatgpt_manual')] })).get('mina')?.text).toBe('기획 승인해 주세요');
+    expect(s.get('studioA')).toEqual({ text: '기획?', label: '기획 승인해 주세요', kind: 'ask', taskId: 't1' });
+    expect(speechFor([task], data({ specs: [spec('chatgpt_manual')] })).get('mina')?.text).toBe('기획?');
   });
 
   it('계획이 오면 Claude가 실행 승인을, 개발 중이면 맡은 AI가 "…"', () => {
     const base = { specs: [spec()], approvals: [ok('A', 1)], plans: [plan] };
-    expect(speechFor([task], data({ ...base, assignments: [assignment('awaiting_user_execution_approval')] })).get('claude')?.text).toBe('실행 승인해 주세요');
+    expect(speechFor([task], data({ ...base, assignments: [assignment('awaiting_user_execution_approval')] })).get('claude')?.text).toBe('실행?');
     const running = speechFor([task], data({ ...base, approvals: [ok('A', 1), ok('E', 1, 'W1')], assignments: [assignment('started')] }));
     expect(running.get('codex')).toMatchObject({ text: '…', kind: 'busy' });
     expect(running.has('claude')).toBe(false);

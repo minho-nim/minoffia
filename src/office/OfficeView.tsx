@@ -210,7 +210,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         const talking = say && say.kind !== 'busy';
         const badge = say?.kind === 'busy' ? '…' : talking ? undefined : BADGE[s.activity];
         const isSel = selected === a.id;
-        const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${talking ? `. ${say.text.replace('\n', ' ')}` : ''}`;
+        const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${say ? `. ${say.label}` : ''}`;
         const sprite = spriteFor(a, 'stand');
         return (
           <button
