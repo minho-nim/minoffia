@@ -234,6 +234,10 @@ a {
   gap: 8px;
 }
 
+.mode .link-btn.push-off {
+  color: #ff8a73;
+}
+
 .push-note {
   font-size: 11.5px;
   opacity: 0.85;
