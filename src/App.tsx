@@ -233,6 +233,8 @@ export function App() {
   // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
   // 휴대폰: 위 머리(이름·사용량)가 화면 밖으로 나가면 맨 위에 얇은 한 줄 머리를 고정한다(v0.4.14).
   const [mini, setMini] = useState(false);
+  /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
+  const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
   const [draft, setDraft] = useState<{ text: string; n: number } | null>(null);
   const topIo = useRef<IntersectionObserver | null>(null);
@@ -671,6 +673,7 @@ export function App() {
   /** 업무 카드로 이동(입력창 알림·사무실 말풍선). 지금 필터에 없으면 '전체'로 바꾼다. */
   const showTask = (id: string) => {
     setTab('tasks');
+    setOpenCards((cur) => new Set(cur).add(id));
     // 사무실에서 그 업무 담당 AI를 같이 표시한다(사무실 ↔ 목록 연결).
     const owner = snap.tasks.find((x) => x.id === id)?.assignee;
     if (owner) setSelected(owner);
@@ -1321,6 +1324,18 @@ export function App() {
                   <TaskCard
                     key={t.id}
                     task={t}
+                    expanded={openCards.has(t.id)}
+                    onToggle={(task) =>
+                      setOpenCards((cur) => {
+                        const next = new Set(cur);
+                        if (!next.delete(task.id)) next.add(task.id);
+                        return next;
+                      })
+                    }
+                    turn={(() => {
+                      const it = turns.find((x) => x.taskId === t.id);
+                      return it ? { word: it.word, alert: it.alert } : undefined;
+                    })()}
                     onAsk={(task) => {
                       setTab('chat');
                       setDraft((d) => ({ text: `'${task.title}' 업무: `, n: (d?.n ?? 0) + 1 }));

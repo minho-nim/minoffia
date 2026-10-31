@@ -1087,6 +1087,74 @@ a {
   flex-wrap: wrap;
 }
 
+/* 접힌 업무 카드(v0.4.21): 한 줄 요약을 눌러 펼친다 */
+.task-card.is-folded {
+  padding: 8px 12px;
+}
+
+.task-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-toggle .task-head {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.task-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.task-card:not(.is-folded) .task-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.task-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.task-turn {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: #d9822b;
+  color: #fffaf0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-turn.is-alert {
+  background: var(--danger);
+}
+
+.task-chevron {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .task-head h3 {
   font-size: 15.5px;
   font-weight: 700;
