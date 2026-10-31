@@ -84,6 +84,8 @@ export interface OfficeStore {
   loadResultInbox(): Promise<ResultInboxItem[]>;
   /** 받은 결과를 처리함으로 표시. 이미 다른 기기가 처리했으면 false */
   markResultInbox(id: string, status: 'imported' | 'invalid', note: string): Promise<boolean>;
+  /** Linear 연결 확인(읽기만, 아무것도 만들지 않음) */
+  linearProbe(): Promise<LinearProbe>;
   /** Gemini 무료가 견본 지시서로 HTML 견본 한 장을 만든다(서버, 저장은 앱이 견본으로 올림, v0.4.7) */
   draftPrototype(taskId: string, text: string): Promise<{ html: string; planRevision: number }>;
   /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
@@ -93,6 +95,16 @@ export interface OfficeStore {
     history: { role: 'user' | 'model'; text: string }[],
     images?: { mime: string; data: string }[],
   ): Promise<{ answer: string; keySlot: number }>;
+}
+
+/** Linear 연결 확인 결과(읽기만, v0.4.11) */
+export interface LinearProbe {
+  connected: boolean;
+  reason?: string;
+  viewer?: string;
+  teams?: { key: string; name: string }[];
+  codexUser?: string | null;
+  canDelegate?: boolean;
 }
 
 export interface PlanInboxItem {
