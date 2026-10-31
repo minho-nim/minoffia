@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from './types';
-import { canApprove, deriveWorkflow, officeStatus } from './workflow';
+import { canApprove, deriveWorkflow, officeStatus, prCheckPasses } from './workflow';
 import type { Approval, PmPlan, WorkflowData } from './workflow-types';
 import { EMPTY_WORKFLOW } from './workflow-types';
 
@@ -176,5 +176,18 @@ describe('견본 먼저(P 게이트)', () => {
     expect(v.prototypeFirst).toBe(false);
     expect(canApprove(v, 'P').ok).toBe(false);
     expect(canApprove(v, 'E', 'W2').ok).toBe(true);
+  });
+});
+
+describe('배포 승인 조건(v0.4.5): 병합은 배포 승인 뒤 서버가 한다', () => {
+  const check = (ciState: 'success' | 'failure' | 'pending' | 'none', prState: 'open' | 'closed', merged: boolean) => ({
+    id: 'c', taskId: 't1', prUrl: 'https://github.com/o/r/pull/1', prState, merged, headSha: 'abc', ciState, checks: [], checkedAt: '',
+  });
+  it('CI 성공인 열린 PR이나 병합된 PR이면 통과, 병합 없이 닫혔거나 CI가 안 끝났으면 안 됨', () => {
+    expect(prCheckPasses(check('success', 'open', false))).toBe(true);
+    expect(prCheckPasses(check('success', 'closed', true))).toBe(true);
+    expect(prCheckPasses(check('success', 'closed', false))).toBe(false);
+    expect(prCheckPasses(check('pending', 'open', false))).toBe(false);
+    expect(prCheckPasses(null)).toBe(false);
   });
 });

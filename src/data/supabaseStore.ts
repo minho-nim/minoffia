@@ -174,7 +174,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches',
 ];
 
 const toDeployment = (r: Row): Deployment => ({
@@ -538,6 +538,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async draftSpec(taskId, text) {
       const data = await invoke('draft-spec', { taskId, text });
       return { revision: Number(data.revision), intent: String(data.intent ?? '') };
+    },
+    async dispatchClaudePr(taskId, acknowledgeRetry) {
+      const data = await invoke('dispatch-claude-pr', { taskId, acknowledgeRetry });
+      return { sessionUrl: (data.sessionUrl as string | null) ?? null, branch: String(data.branch ?? '') };
     },
     async startClaudeDev(assignmentId, acknowledgeRetry) {
       const data = await invoke('dispatch-claude-dev', { assignmentId, acknowledgeRetry });

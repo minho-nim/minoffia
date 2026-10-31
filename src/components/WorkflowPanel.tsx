@@ -907,7 +907,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
               {actions.checkPr ? (
                 <div className="wf-manual">
                   <p className="small">
-                    <b>PR·CI 확인</b> — 서버가 GitHub에서 이 PR의 CI 결과와 병합 여부를 읽습니다. CI 성공 + main 병합이어야 C 승인을 할 수 있습니다.
+                    <b>PR·CI 확인</b> — 올리기 승인 뒤에는 앱이 1분마다 자동으로 확인합니다. CI가 성공하면 배포 승인을 할 수 있고, 병합은 배포 승인 때 서버가 합니다.
                   </p>
                   {prCheck && (
                     <>
@@ -951,7 +951,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
               >
                 {actions.deploy ? 'C: 운영 배포 승인 + 배포' : 'C: 운영 배포 승인'}
               </button>
-              {!task.prUrl && <p className="muted small">PR 주소를 먼저 기록하세요.</p>}
+              {!task.prUrl && <p className="muted small">PR이 열리면 주소가 자동으로 기록됩니다(Claude 결과). 다른 경우 PR 주소를 기록하세요.</p>}
             </>
           )}
         </section>

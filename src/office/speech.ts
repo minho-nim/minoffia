@@ -4,7 +4,7 @@
  * 한 캐릭터에 여러 업무가 걸리면 alert > ask > busy, 같으면 최근 업무를 보인다.
  */
 import type { AgentId, Task } from '../domain/types';
-import { deriveWorkflow } from '../domain/workflow';
+import { deriveWorkflow, latestPrCheck, prCheckPasses } from '../domain/workflow';
 import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
 
 export type SpeechKind = 'ask' | 'busy' | 'alert';
@@ -63,7 +63,9 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
         say('ci', 'busy', '…', t, 'PR·배포를 확인하는 중');
         break;
       case 'deployment_approval_pending':
-        say('ci', 'ask', '?', t, '배포 승인해 주세요');
+        // 올리기 승인 뒤 PR·CI가 끝나야 내 차례다. 그 전에는 CI 봇이 일하는 중.
+        if (prCheckPasses(latestPrCheck(t, all))) say('ci', 'ask', '?', t, '배포 승인해 주세요');
+        else say('ci', 'busy', '…', t, 'PR·CI를 확인하는 중');
         break;
       case 'failed':
       case 'integration_blocked':

@@ -1,6 +1,6 @@
 // C(운영 배포) 승인 뒤 release 브랜치를 main으로 앞당긴다(fast-forward만). Cloudflare Pages는 release만 배포한다.
 // 소유자 결정(2026-10-30): PC 없이 모바일에서도 배포할 수 있게 C 승인 = 배포. release에 직접 커밋하지 않는다.
-// 조건: C 승인 기록 + 최신 PR 확인이 'CI 성공 + 병합됨' + 병합 커밋이 main에 있음 + release가 main보다 뒤(갈라졌으면 거절).
+// 조건: C 승인 기록 + 최신 PR 확인이 'CI 성공'. 열린 PR이면 그 확인한 커밋 그대로 squash 병합(v0.4.5) → 병합 커밋이 main에 있음 + release가 main보다 뒤(갈라졌으면 거절).
 // 토큰(GITHUB_REPO_TOKEN)에 해당 저장소 Contents(Read and write) 권한이 필요하다. 허용 저장소만, minho-nim/MinLab은 제외.
 // 성공 = release 갱신(HTTP 200)이지 Cloudflare 빌드 완료가 아니다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
@@ -68,13 +68,13 @@ Deno.serve(async (req) => {
 
   const { data: last } = await userClient
     .from('pr_checks')
-    .select('pr_url, ci_state, merged')
+    .select('pr_url, ci_state, merged, head_sha')
     .eq('task_id', task.id)
     .order('checked_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!last || last.pr_url !== String(task.pr_url).trim().replace(/\/$/, '') || last.ci_state !== 'success' || !last.merged) {
-    return refuse(409, '최신 PR 확인이 "CI 성공 + 병합됨"이 아닙니다. PR·CI 확인을 다시 누르세요.');
+  if (!last || last.pr_url !== String(task.pr_url).trim().replace(/\/$/, '') || last.ci_state !== 'success') {
+    return refuse(409, '최신 PR 확인이 "CI 성공"이 아닙니다. PR·CI 확인을 다시 누르세요.');
   }
 
   const gh = (path: string, init: RequestInit = {}) =>
@@ -89,8 +89,22 @@ Deno.serve(async (req) => {
   };
 
   try {
-    const prRes = await json(`/pulls/${pr.number}`);
-    if (prRes.status !== 200 || !prRes.data.merged) return refuse(409, `PR이 병합되지 않았습니다(HTTP ${prRes.status}).`);
+    let prRes = await json(`/pulls/${pr.number}`);
+    if (prRes.status !== 200) return refuse(502, `PR을 읽지 못했습니다(HTTP ${prRes.status}).`);
+    // v0.4.5: 배포 승인에 병합 포함. 서버가 CI 성공을 확인한 바로 그 커밋일 때만 병합한다(그 뒤 새 커밋이 올라왔으면 거절).
+    if (!prRes.data.merged) {
+      const headSha = String((prRes.data.head as { sha?: string })?.sha ?? '');
+      if (prRes.data.state !== 'open') return refuse(409, 'PR이 병합되지 않은 채 닫혀 있습니다.');
+      if (!headSha || headSha !== last.head_sha) return refuse(409, 'CI를 확인한 뒤 PR에 새 커밋이 올라왔습니다. PR·CI를 다시 확인한 뒤 배포하세요.');
+      const merge = await gh(`/pulls/${pr.number}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: 'squash', sha: headSha }) });
+      if (merge.status !== 200) {
+        const detail = ((await merge.json().catch(() => ({}))) as { message?: string }).message ?? '';
+        const hint = merge.status === 403 || merge.status === 404 ? ' 토큰에 Contents·Pull requests(Read and write) 권한이 있는지 확인하세요.' : merge.status === 405 ? ' 병합할 수 없는 상태입니다(충돌·보호 규칙).' : '';
+        return refuse(502, `PR을 병합하지 못했습니다(HTTP ${merge.status}). ${detail}${hint}`.trim());
+      }
+      prRes = await json(`/pulls/${pr.number}`);
+      if (!prRes.data.merged) return refuse(502, '병합 요청은 받았지만 PR이 아직 병합으로 보이지 않습니다. 잠시 뒤 다시 시도하세요.');
+    }
     const mergeSha = String(prRes.data.merge_commit_sha ?? '');
 
     const main = await json('/git/ref/heads/main');
