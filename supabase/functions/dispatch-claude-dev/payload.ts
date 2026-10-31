@@ -16,6 +16,8 @@ export interface DevPayloadInput {
   attachments: string[];
   /** 승인된 견본(P) 목록 */
   prototypes: string[];
+  /** 결과 자동 저장(v0.4.3): 이 작업 전용 1회용 제출표와 받는 주소. 없으면 결과는 마지막 메시지로만 */
+  submit?: { url: string; token: string };
 }
 
 /** ai/claude/<업무 앞 8자>-<작업> (Codex 브랜치와 같은 규칙) */
@@ -63,6 +65,17 @@ export function buildDevPayload(p: DevPayloadInput): string {
     '',
     '## 마지막 메시지(결과 보고, AI Office 결과 패키지로 옮긴다)',
     '1. 요약(한두 줄) 2. 바뀐 파일 목록 3. `git diff main...HEAD` 전체 4. 시험 명령과 결과 그대로 5. 남은 문제',
+    ...(p.submit
+      ? [
+          '',
+          '## 결과 보내기(자동 저장, 필수)',
+          `시험까지 끝나면 저장소 밖 /tmp/result-submit.json 에 {"task_id":"${p.taskId}","token":"${p.submit.token}","result":{"summary":"<요약>","changed_files":["<경로>"],"diff":"<git diff main...HEAD 전체>","test_log":"<시험 명령과 결과 그대로>","remaining_issues":"<남은 문제, 없으면 빈 문자열>","branch":"${claudeBranch(p.taskId, p.item.id)}"}} 를 JSON으로 저장하고(문자열은 JSON 이스케이프) 아래를 한 번 실행한다.`,
+          `curl -sS -X POST '${p.submit.url}' -H 'content-type: application/json' --data-binary @/tmp/result-submit.json`,
+          '- 이 token은 이 작업의 결과 제출 전용(24시간, 3번까지)이다. 다른 곳에 쓰거나 파일·커밋에 남기지 않는다.',
+          '- 응답이 {"ok":true,...}가 아니거나 접속이 막히면 응답(또는 오류)을 한 줄로 보고한다. 결과를 고쳐 다시 보낼 때만 재시도한다.',
+          '- 보낸 뒤에도 위 형식의 마지막 메시지는 그대로 남긴다(사용자가 직접 옮길 수 있게).',
+        ]
+      : []),
   ]
     .filter((l, i, all) => !(l === '' && (i === 0 || all[i - 1] === '')))
     .join('\n')

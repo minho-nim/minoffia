@@ -125,7 +125,8 @@ export interface ResultPackage {
   revision: number;
   planRevision: number | null;
   workItemId: string;
-  source: 'codex_cloud_manual' | 'claude_manual' | 'manual';
+  /** claude_session_auto = Claude 보조 개발 세션이 submit-result로 보낸 결과(v0.4.3) */
+  source: 'codex_cloud_manual' | 'claude_manual' | 'claude_session_auto' | 'manual';
   summary: string;
   diff: string;
   testLog: string;

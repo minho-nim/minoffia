@@ -65,6 +65,14 @@ interface Props {
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
+/** 휴대폰·태블릿(손가락 입력)에서는 Claude 앱처럼 Enter가 줄바꿈이고 보내기 버튼으로만 보낸다. */
+const touchInput = () => {
+  try {
+    return window.matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+};
 /** 이 기기가 마지막으로 본 업무 단계(업무 id → 단계·버전). 바뀌면 미니엉이 알린다. */
 const SEEN_KEY = 'minlab-ai-office:stage-seen:v1';
 /** Gemini 답 바로 뒤에 이어 묻는 말로 보는 길이(이보다 길고 애매하면 질문인지 업무인지 묻는다) */
@@ -829,12 +837,12 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           rows={2}
           value={input}
           maxLength={4000}
-          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : '묻거나 시킬 일을 적으세요 (Enter로 보내기)'}
+          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : touchInput() ? '묻거나 시킬 일을 적으세요' : '묻거나 시킬 일을 적으세요 (Enter로 보내기)'}
           aria-label="묻기·요청"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            // Enter로 보내고, Shift+Enter는 줄바꿈. 한글 조합 중 Enter는 무시한다.
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            // PC: Enter로 보내고 Shift+Enter는 줄바꿈. 휴대폰: Enter는 줄바꿈(보내기 버튼으로만). 한글 조합 중 Enter는 무시한다.
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !touchInput()) {
               e.preventDefault();
               submit(input);
             }

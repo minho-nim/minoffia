@@ -471,6 +471,55 @@ export function App() {
           const failed = await importPlanText(task, item.planText, 'routine_session_auto', snap);
           if (failed) say('error', `PM 계획 자동 저장 실패(${task.title}): ${failed.join(' / ')} — PM 세션의 JSON을 업무 카드에 붙여넣으세요.`);
         }
+        // Claude 보조 개발 세션이 보낸 결과(dev_result_inbox)를 결과 패키지로 옮긴다(v0.4.3). GitHub에는 올리지 않는다.
+        for (const item of await store.loadResultInbox()) {
+          const task = snap.tasks.find((t) => t.id === item.taskId);
+          const a = snap.workflow.assignments.find((x) => x.id === item.assignmentId);
+          if (!task || !a) continue;
+          const view = deriveWorkflow(task, snap.workflow);
+          const why =
+            a.assignee !== 'claude'
+              ? 'Claude 작업이 아닙니다.'
+              : !view.plan || a.planRevision !== view.plan.planRevision
+                ? '지금 계획의 작업이 아닙니다(계획이 바뀌었음).'
+                : a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting'
+                  ? '시작된 작업이 아닙니다(중단·완료됨).'
+                  : view.bApproved
+                    ? '이미 올리기 승인(B)한 결과가 있습니다.'
+                    : null;
+          if (why) {
+            if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `Claude가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
+            continue;
+          }
+          if (!(await store.markResultInbox(item.id, 'imported', ''))) continue;
+          const summary = [
+            item.summary,
+            item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
+            item.branch ? `\n작업 브랜치: ${item.branch} (아직 GitHub에 올리지 않음)` : '',
+          ].join('\n');
+          const ok = await step(
+            task.id,
+            async () => {
+              await store.addResult({
+                id: newId(),
+                taskId: task.id,
+                revision: nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision),
+                planRevision: a.planRevision,
+                workItemId: a.workItemId,
+                source: 'claude_session_auto',
+                summary: summary.slice(0, 4000),
+                diff: item.diff,
+                testLog: item.testLog,
+                remainingIssues: item.remainingIssues,
+                sha256: await sha256Hex(`${item.diff}\n---\n${item.testLog}`),
+                createdAt: new Date().toISOString(),
+              });
+              await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result', lastVerifiedAt: new Date().toISOString() });
+            },
+            `Claude가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 올리기 승인(B)하거나 수정 요청하세요.`,
+          );
+          if (!ok) say('error', `결과 자동 저장 실패(${task.title}) — Claude 세션의 마지막 메시지를 결과 패키지에 붙여넣으세요.`);
+        }
       } finally {
         importingInbox.current = false;
       }

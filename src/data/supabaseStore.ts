@@ -174,7 +174,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox',
 ];
 
 const toDeployment = (r: Row): Deployment => ({
@@ -510,6 +510,29 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async markPlanInbox(id, status, note) {
       const { data, error } = await client.from('pm_plan_inbox').update({ status, note: note.slice(0, 2000) }).eq('id', id).eq('status', 'new').select('id');
+      return !error && Boolean(data?.length);
+    },
+    async loadResultInbox() {
+      const { data, error } = await client
+        .from('dev_result_inbox')
+        .select('id, task_id, assignment_id, summary, changed_files, diff, test_log, remaining_issues, branch')
+        .eq('status', 'new')
+        .order('created_at');
+      if (error) return [];
+      return (data ?? []).map((r) => ({
+        id: r.id as string,
+        taskId: r.task_id as string,
+        assignmentId: r.assignment_id as string,
+        summary: r.summary as string,
+        changedFiles: r.changed_files as string,
+        diff: r.diff as string,
+        testLog: r.test_log as string,
+        remainingIssues: r.remaining_issues as string,
+        branch: r.branch as string,
+      }));
+    },
+    async markResultInbox(id, status, note) {
+      const { data, error } = await client.from('dev_result_inbox').update({ status, note: note.slice(0, 2000) }).eq('id', id).eq('status', 'new').select('id');
       return !error && Boolean(data?.length);
     },
     async draftSpec(taskId, text) {
