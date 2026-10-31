@@ -6,7 +6,7 @@
 - AI는 사용자의 행동(접수 확인·승인·수정 요청·버튼)이 있을 때만 쓴다. 같은 일을 두 번 시키지 않는다(같은 이미지·같은 기획서 버전은 다시 보내지 않음).
   접수 확인 → Gemini 기획서 초안 자동, A 승인 → Claude PM 전송 자동, Gemini 초안에 수정 요청 → Gemini 재작성 자동(v0.4.0).
   PM 계획은 PM 세션이 1회용 제출표로 `submit-plan`에 보내고 앱이 `parsePmPlan` 검증 뒤 저장(v0.4.2, `0020_pm_plan_inbox.sql`).
-  Claude 보조 개발 결과도 세션이 `submit-result`로 보내고 앱이 결과 패키지로 저장(v0.4.3, `0021_dev_result_inbox.sql`). verify_jwt false는 `submit-plan`·`submit-result`만(제출표로 확인).
+  Claude 보조 개발 결과도 세션이 `submit-result`로 보내고 앱이 결과 패키지로 저장(v0.4.3, `0021_dev_result_inbox.sql`). verify_jwt false는 `submit-plan`·`submit-result`(제출표로 확인)와 `push`(flush는 입력 없이 DB 알림 줄만 보냄, 나머지 동작은 함수 안에서 소유자 확인)뿐.
 - 싼 길부터: 규칙 → 무료(Gemini, 기획서 초안 포함) → 구독 안 수동 인계(ChatGPT는 어렵거나 중요한 기획만·Codex) → 구독 자동(Claude PM·보조 개발). 유료 API는 쓰지 않는다.
 - 하루 상한과 실제 사용 기록을 화면에 보여 준다. 공급자의 남은 토큰은 알 수 없으므로 횟수로 관리한다.
 
@@ -56,6 +56,7 @@
   "Gemini로 요약"은 10MB 이하 PDF·글·HTML·DOCX·XLSX·PPTX(Office는 서버가 글만 뽑아 보냄). SVG·ZIP은 미리보기만.
 - 입력창 일반 질문: 앱 상태는 규칙, 일반 질문은 보내면 Gemini 무료(`supabase/functions/ask-gemini`)가 답하고 "GPT에게 이어서 묻기"(복사)를 둔다. 프로젝트 이름이 든 질문은 GPT를 먼저 권한다(소유자 결정 2026-10-30). 충돌 점검은 `docs/SPEC_CONFLICTS_2026-10-29.md`, `docs/FLOW_v0.3_2026-10-30.md`.
 - 입력창 화면 대화는 계정에 저장해 기기 간 이어 본다(`inbox_state`). 개발일지용 대화 기록(`chat_messages`)은 프로젝트·업무에 연결된 메시지만 남기고 일반 대화·질문은 남기지 않으며, 소유자가 개발일지 화면에서 지울 수 있다. 개발일지 Markdown은 `src/domain/devlog.ts`.
+- 휴대폰 알림(v0.4.12): 기획서·확인 질문·계획·견본·결과·막힘이 생기면 DB 트리거 → `push_outbox` → pg_net → `push`가 웹 푸시로 알린다(`0024_push_notifications.sql`, `public/sw.js`). 입력창 미니엉 알림은 확인 질문·막힘만.
 - 입력창 접수 매니저 이름은 **미니엉**(코드 id는 `mina` 그대로).
 - 미니엉은 업무 단계·버전이 바뀌면 입력창에 알리고 버튼(A·B 승인, 업무 카드 보기)을 둔다(`src/domain/stageNotice.ts`, 규칙만). 승인은 업무 카드와 같은 `canApprove`를 지난다.
 - Gemini 답 바로 뒤의 개발 요청은 앞 질문·답을 업무에 함께 넣고, 애매한 말만 "질문인가요, 업무 요청인가요?"로 묻는다. 개발 전(E 승인 없음)에 지운 업무의 대화 기록은 함께 지운다(`0017_predev_task_chat.sql`).
@@ -80,7 +81,7 @@
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase(여러 기기 실시간 반영은 Supabase Realtime, 표 목록은 `0015_realtime.sql`·`0020`과 `supabaseStore.ts`의 `REALTIME_TABLES`가 같아야 함)
-- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release (전체 그림은 `docs/ARCHITECTURE.md`)
+- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release · push (전체 그림은 `docs/ARCHITECTURE.md`)
 - `src/domain/myTurn.ts`·`stall.ts`·`src/components/MyTurn.tsx` 내 차례·멈춤 감지, `src/office/speech.ts` 사무실 말풍선
 - `src/domain/devlog.ts`·`src/components/DevlogPanel.tsx` 개발일지(대화 + 업무 기록 → 프로젝트별·날짜별 Markdown)
 
