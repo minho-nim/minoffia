@@ -30,7 +30,7 @@
 5. 운영 배포는 소유자가 요청할 때만 한다. Cloudflare Pages는 `release` 브랜치만 배포한다.
    앱 업무는 C 승인 시 서버(`supabase/functions/deploy-release`)가 release를 main으로 앞당긴다(v0.3.0, 소유자 결정 2026-10-30).
    이 저장소 자체 배포를 소유자가 요청하면 명령은 `git fetch origin && git push origin origin/main:refs/heads/release`이고,
-   현재 권한 설정은 `main`이 들어간 push를 막으므로 소유자가 직접 실행한다. `main` 병합만으로는 배포되지 않는다. `release`에 직접 커밋하지 않는다.
+   현재 권한 설정은 `main`이 들어간 push를 막으므로 소유자가 직접 실행한다. 휴대폰에서는 GitHub Actions의 "운영 배포(release)" 버튼(`.github/workflows/deploy-release.yml`, 수동 실행·fast-forward만·main verify 통과 필요)으로 같은 일을 한다. `main` 병합만으로는 배포되지 않는다. `release`에 직접 커밋하지 않는다.
 6. 운영 Supabase에 마이그레이션 적용·Edge Function 배포도 운영 변경이다. 병합과 별개로 소유자 승인 후에만 한다.
 
 ## 앱이 다루는 업무 플로우 (v0.3, 소유자 수정 2026-10-30)
