@@ -28,6 +28,7 @@ run supabase/tests/99_gemini_draft.sql
 run supabase/tests/99_pm_plan_inbox.sql
 run supabase/tests/99_dev_result_inbox.sql
 run supabase/tests/99_auto_pr_merge.sql
+run supabase/tests/99_push.sql
 
 # 기존 v0.1 데이터가 0003 적용 후에도 남는지
 psql -q -c "drop database if exists ${DB}_mig" -c "create database ${DB}_mig"
@@ -57,5 +58,6 @@ runm supabase/migrations/0020_pm_plan_inbox.sql
 runm supabase/migrations/0021_dev_result_inbox.sql
 runm supabase/migrations/0022_auto_pr_merge.sql
 runm supabase/migrations/0023_prototype_ai_calls.sql
+runm supabase/migrations/0024_push_notifications.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"

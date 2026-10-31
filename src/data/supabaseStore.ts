@@ -535,6 +535,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const { data, error } = await client.from('dev_result_inbox').update({ status, note: note.slice(0, 2000) }).eq('id', id).eq('status', 'new').select('id');
       return !error && Boolean(data?.length);
     },
+    async push(action, body) {
+      return invoke('push', { ...(body ?? {}), action });
+    },
     async linearProbe() {
       const data = await invoke('linear-probe', {});
       return data as unknown as import('./store').LinearProbe;

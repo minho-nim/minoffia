@@ -17,6 +17,7 @@ Supabase (서울)
      ├─ submit-plan          PM 세션 → 계획 원문(1회용 제출표, verify_jwt off)
      ├─ dispatch-claude-dev  실행 승인 → 보조 개발 루틴 시작(+결과 제출표)
      ├─ submit-result        보조 개발 세션 → 결과 원문(1회용 제출표, verify_jwt off)
+     ├─ push                 휴대폰 알림(웹 푸시). DB 트리거 → push_outbox → pg_net이 flush로 깨움(verify_jwt off, flush는 입력 없음)
      ├─ dispatch-claude-pr   올리기 승인 → 승인된 diff로 PR 세션(병합 없음)
      ├─ pr-status            PR·CI 확인(PR 주소가 없으면 작업 브랜치로 찾음)
      ├─ deploy-release       배포 승인 → 확인한 커밋 squash 병합 → release fast-forward
