@@ -62,7 +62,7 @@ export function clarificationsOf(list: Clarification[], taskId: string): Clarifi
 
 /** 링크를 더하거나 지울 수 없는 이유(첨부와 같은 잠금 규칙) */
 export function linkBlocker(view: WorkflowView, count: number, op: 'add' | 'delete'): string | null {
-  if (view.aApproved) return 'A 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.';
+  if (view.aApproved) return '기획 승인 뒤에는 요청 자료(링크)를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.';
   if (op === 'add' && count >= MAX_LINKS) return `링크는 업무당 ${MAX_LINKS}개까지입니다.`;
   return null;
 }

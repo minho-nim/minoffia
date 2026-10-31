@@ -39,9 +39,9 @@ export interface WorkflowActions {
   makePrototype: (task: Task) => Promise<boolean>;
   decide: (task: Task, gate: Gate, revision: number, decision: 'approved' | 'rejected', workItemId?: string, scope?: Record<string, unknown>) => Promise<boolean>;
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
-  /** Claude 보조 개발: E 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
+  /** Claude 보조 개발: 실행 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
   startClaudeDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
-  /** 견본 먼저: P(견본 승인) + 견본 작업 끝냄 */
+  /** 견본 먼저: 견본 승인 + 견본 작업 끝냄 */
   approvePrototype: (task: Task) => Promise<boolean>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
   recordStart: (assignment: AgentAssignment, url: string) => Promise<boolean>;
@@ -52,7 +52,7 @@ export interface WorkflowActions {
   setPrUrl: (task: Task, url: string) => Promise<boolean>;
   /** 서버가 GitHub에서 PR·CI를 확인(Supabase 모드만) */
   checkPr?: (task: Task) => Promise<boolean>;
-  /** C 승인 뒤 서버가 release를 앞당긴다(Supabase 모드만) */
+  /** 배포 승인 뒤 서버가 release를 앞당긴다(Supabase 모드만) */
   deploy?: (task: Task) => Promise<boolean>;
   /** 결과 검토 → Claude PM 수정 요청 */
   requestRevision: (task: Task, feedback: string) => Promise<boolean>;
@@ -180,7 +180,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
   const aCheck = canApprove(view, 'A');
   const bCheck = canApprove(view, 'B');
   const cCheck = canApprove(view, 'C');
-  // 결과를 만든 Codex 작업(B 승인 뒤 같은 창에 PR 요청을 붙여넣는다)
+  // 결과를 만든 Codex 작업(올리기 승인 뒤 같은 창에 PR 요청을 붙여넣는다)
   const codexItem = view.assignments.find((a) => a.assignee === 'codex');
   // Claude 보조 개발 세션(서버가 시작함). Codex 작업이 없으면 이 세션에 PR 요청을 붙여넣는다.
   const claudeItem = view.assignments.find((a) => a.assignee === 'claude' && a.providerTaskUrl);
@@ -216,7 +216,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
           </p>
         )}
         <p className="muted small">
-          기본은 Gemini(무료)가 기획서 초안을 씁니다. 초안을 보고 A 승인하거나 수정 요청만 하세요. 어렵거나 중요한 업무는 "ChatGPT용 자료 복사"로 ChatGPT에서 기획해 저장할 수 있습니다(수동). 링크·확인 질문·이미지 분석은 두 쪽 모두에 들어갑니다.
+          기본은 Gemini(무료)가 기획서 초안을 씁니다. 초안을 보고 기획 승인하거나 수정 요청만 하세요. 어렵거나 중요한 업무는 "ChatGPT용 자료 복사"로 ChatGPT에서 기획해 저장할 수 있습니다(수동). 링크·확인 질문·이미지 분석은 두 쪽 모두에 들어갑니다.
         </p>
         <div className="wf-sub">
           <p className="small">
@@ -235,7 +235,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             emptyText="첨부한 이미지·문서가 없습니다."
             analyses={analysisById}
             onAnalyze={actions.analyzeImage}
-            analyzeBlocker={view.aApproved ? 'A 승인 뒤에는 분석을 붙이지 않습니다.' : null}
+            analyzeBlocker={view.aApproved ? '기획 승인 뒤에는 분석을 붙이지 않습니다.' : null}
             allowDocs
           />
         </div>
@@ -285,7 +285,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
               });
             }}
           >
-            {view.aApproved && <p className="task-error">저장하면 새 버전이 되고, 이전 A 승인은 효력이 없어집니다.</p>}
+            {view.aApproved && <p className="task-error">저장하면 새 버전이 되고, 이전 기획 승인은 효력이 없어집니다.</p>}
             <label className="field">
               <span>GPT가 판단한 의도</span>
               <select id={`intent-${task.id}`} value={spec.intent} onChange={(e) => setSpec({ ...spec, intent: e.target.value as Intent })}>
@@ -342,7 +342,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         )}
       </section>
 
-      {/* 2. A 승인 */}
+      {/* 2. 기획 승인 */}
       {view.spec && view.spec.intent !== 'question' && (
         <section className="wf-section">
           <h4>2. {GATE_LABEL.A}</h4>
@@ -364,7 +364,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   disabled={busy || !aCheck.ok}
                   onClick={() => void run(() => actions.decide(task, 'A', view.spec!.revision, 'approved'))}
                 >
-                  A 승인 (v{view.spec.revision})
+                  기획 승인 (v{view.spec.revision})
                 </button>
                 <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => setShowAFeedback((v) => !v)}>
                   {view.spec.planner === 'gemini_draft' ? '수정 요청(Gemini가 다시 씀)' : '수정 요청(ChatGPT로)'}
@@ -495,7 +495,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         </section>
       )}
 
-      {/* 4. 배정 + E 승인 */}
+      {/* 4. 배정 + 실행 승인 */}
       {view.planCurrent && view.assignments.length > 0 && (
         <section className="wf-section">
           <h4>4. 배정된 작업 — {GATE_LABEL.E}</h4>
@@ -539,7 +539,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                           </button>
                         </span>
                       ) : (
-                        !eOk && <p className="muted small">E 승인 뒤 Claude가 클라우드에서 바로 개발을 시작합니다(PM과 함께 하루 상한).</p>
+                        !eOk && <p className="muted small">실행 승인하면 Claude가 클라우드에서 바로 개발을 시작합니다(PM과 함께 하루 상한).</p>
                       )}
                       {a.dispatchStatus === 'failed' && a.actualProviderStatus && a.actualProviderStatus !== 'unknown' && <p className="task-error small">{a.actualProviderStatus}</p>}
                       <p className="muted small">{adapter.reason}</p>
@@ -556,7 +556,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   {/* 임시 폴백: 수동 인계. 자동 실행 버튼처럼 보이지 않게 따로 둔다 */}
                   <div className="wf-manual">
                     <p className="small">
-                      <b>수동 인계(임시)</b> — E 승인 후 지시서를 복사해 {a.assignee === 'codex' ? 'Codex Cloud 웹' : '해당 도구'}에서 직접 시작합니다.
+                      <b>수동 인계(임시)</b> — 실행 승인 후 지시서를 복사해 {a.assignee === 'codex' ? 'Codex Cloud 웹' : '해당 도구'}에서 직접 시작합니다.
                     </p>
                     {!eOk ? (
                       <button
@@ -574,7 +574,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                           )
                         }
                       >
-                        E 승인: 수동 인계로 진행
+                        실행 승인: 수동 인계로 진행
                       </button>
                     ) : (
                       <>
@@ -642,7 +642,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         </section>
       )}
 
-      {/* 4-1. 견본 먼저: AI Studio 견본 → 미리보기 검토 → P 승인 */}
+      {/* 4-1. 견본 먼저: AI Studio 견본 → 미리보기 검토 → 견본 승인 */}
       {view.planCurrent && view.prototypeFirst && (
         <section className="wf-section">
           <h4>4-1. 견본 검토 — {GATE_LABEL.P}</h4>
@@ -673,7 +673,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
           ) : (
             <>
               <button type="button" className="btn btn-small btn-primary" disabled={busy || !canApprove(view, 'P').ok} onClick={() => void run(() => actions.approvePrototype(task))}>
-                P: 견본 승인
+                견본 승인
               </button>
               {!canApprove(view, 'P').ok && <p className="muted small">{(canApprove(view, 'P') as { reason: string }).reason}</p>}
             </>
@@ -686,7 +686,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         <section className="wf-section">
           <h4>5. 결과 검토 — {GATE_LABEL.B}</h4>
           <p className="muted small">
-            GitHub에 올리기 전에 여기서 diff와 테스트 결과를 봅니다. Codex 웹의 diff(또는 `codex cloud diff` 출력)를 붙여넣으세요. PR·푸시는 B 승인 뒤에만 합니다.
+            GitHub에 올리기 전에 여기서 diff와 테스트 결과를 봅니다. Codex 웹의 diff(또는 `codex cloud diff` 출력)를 붙여넣으세요. PR·푸시는 올리기 승인 뒤에만 합니다.
           </p>
           {view.result && (
             <div className="wf-result">
@@ -750,7 +750,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   disabled={busy || !bCheck.ok}
                   onClick={() => void run(() => actions.decide(task, 'B', view.result!.revision, 'approved', '', { result_sha256: view.result!.sha256 }))}
                 >
-                  B: GitHub 업로드 승인 (결과 v{view.result.revision})
+                  올리기 승인(GitHub) (결과 v{view.result.revision})
                 </button>
               )}
             </div>
@@ -758,7 +758,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
           {view.result && !view.bApproved && (
             <div className="wf-manual">
               <p className="small">
-                <b>수정 요청(Claude PM으로)</b> — 결과를 보고 고칠 점을 적으면, 같은 기획서 v{view.spec?.revision}로 PM에 다시 보내 새 계획을 받습니다. 새 계획의 작업은 E 승인을 다시 받습니다.
+                <b>수정 요청(Claude PM으로)</b> — 결과를 보고 고칠 점을 적으면, 같은 기획서 v{view.spec?.revision}로 PM에 다시 보내 새 계획을 받습니다. 새 계획의 작업은 실행 승인을 다시 받습니다.
               </p>
               {view.pendingRevision ? (
                 <p className="muted small">보낸 수정 요청: {view.pendingRevision.feedback}</p>
@@ -973,12 +973,12 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                 onClick={() =>
                   void run(async () => {
                     const ok = await actions.decide(task, 'C', view.result!.revision, 'approved', '', { pr_url: task.prUrl, ci: prCheck ? { state: prCheck.ciState, merged: prCheck.merged, sha: prCheck.headSha } : 'manual' });
-                    // 소유자 결정(2026-10-30): C 승인 = 운영 배포. 승인이 기록되면 바로 서버가 release를 앞당긴다.
+                    // 소유자 결정(2026-10-30): 배포 승인 = 운영 배포. 승인이 기록되면 바로 서버가 release를 앞당긴다.
                     if (ok && actions.deploy) await actions.deploy(task);
                   })
                 }
               >
-                {actions.deploy ? 'C: 운영 배포 승인 + 배포' : 'C: 운영 배포 승인'}
+                {actions.deploy ? '배포 승인 + 배포' : '배포 승인'}
               </button>
               {!task.prUrl && <p className="muted small">PR이 열리면 주소가 자동으로 기록됩니다(Claude 결과). 다른 경우 PR 주소를 기록하세요.</p>}
             </>

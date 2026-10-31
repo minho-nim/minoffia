@@ -123,7 +123,7 @@ export function createLocalStore(): OfficeStore {
       });
     },
     async deleteTask(id) {
-      // 개발 전(E 승인 없음)에 지운 업무는 대화 기록도 지운다(0017과 같은 규칙).
+      // 개발 전(실행 승인 없음)에 지운 업무는 대화 기록도 지운다(0017과 같은 규칙).
       if (!state.workflow.approvals.some((a) => a.taskId === id && a.gate === 'E' && a.decision === 'approved')) {
         try {
           localStorage.setItem(CHAT_KEY, JSON.stringify(readChat().filter((m) => m.taskId !== id)));

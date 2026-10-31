@@ -1,5 +1,6 @@
 /**
  * "내 차례" 목록: 사용자가 손대야 하는 일(승인·답·시작)만 업무 단계로 모은다(규칙만).
+ * 이름은 "그때 내가 보는 것": 기획(기획서)·계획(PM 계획 → 실행 승인)·견본·시작(실행 승인된 작업 시작)·결과·배포·질문.
  * 사무실 말풍선의 ?와 같은 기준이다. 바로 끝낼 수 있는 승인(A·B)은 quick으로 표시한다.
  */
 import type { Task } from './types';
@@ -36,11 +37,11 @@ export function myTurns(tasks: Task[], all: WorkflowData): MyTurn[] {
         break;
       case 'agent_handoff_pending':
         if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) add('견본', '견본 미리보기를 보고 승인');
-        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) add('실행', 'PM 계획을 보고 작업별 실행 승인');
-        if (mine.some((a) => a.dispatchStatus === 'ready')) add('개발', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)');
+        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) add('계획', 'PM 계획을 보고 작업별 실행 승인');
+        if (mine.some((a) => a.dispatchStatus === 'ready')) add('시작', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)');
         break;
       case 'executing':
-        if (mine.some((a) => a.dispatchStatus === 'ready')) add('개발', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)');
+        if (mine.some((a) => a.dispatchStatus === 'ready')) add('시작', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)');
         break;
       case 'result_review':
       case 'github_approval_pending':

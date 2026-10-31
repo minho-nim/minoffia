@@ -28,12 +28,12 @@ const approved = (approvals: Approval[], gate: Gate, revision: number, workItemI
 export interface WorkflowView {
   stage: Stage;
   spec: TaskSpec | null;
-  /** 최신 기획서가 A 승인됐는가. 기획서가 바뀌면 자동으로 false가 된다. */
+  /** 최신 기획서가 기획 승인됐는가. 기획서가 바뀌면 자동으로 false가 된다. */
   aApproved: boolean;
   /** 이전 버전은 승인됐지만 최신 버전은 아직인 경우 */
   aStale: boolean;
   plan: PmPlan | null;
-  /** 계획이 최신 A 승인 기획서를 기준으로 했는가 */
+  /** 계획이 최신 기획 승인 기획서를 기준으로 했는가 */
   planCurrent: boolean;
   assignments: AgentAssignment[];
   eApproved: (workItemId: string) => boolean;
@@ -48,7 +48,7 @@ export interface WorkflowView {
   pendingRevision: RevisionRequest | null;
   /** 최신 계획이 견본 먼저(Prototype First)인가 */
   prototypeFirst: boolean;
-  /** 최신 계획의 견본을 P 승인했는가 */
+  /** 최신 계획의 견본을 견본 승인했는가 */
   pApproved: boolean;
   /** 최신 계획에 올린 견본 수 */
   prototypeCount: number;
@@ -124,11 +124,11 @@ export function canApprove(view: WorkflowView, gate: Gate, workItemId = ''): Gat
       if (view.aApproved) return { ok: false, reason: '이 버전은 이미 승인했습니다.' };
       return { ok: true };
     case 'E': {
-      if (!view.planCurrent) return { ok: false, reason: 'A 승인된 최신 기획서 기준의 PM 계획이 필요합니다.' };
+      if (!view.planCurrent) return { ok: false, reason: '기획 승인된 최신 기획서 기준의 PM 계획이 필요합니다.' };
       if (!view.assignments.some((a) => a.workItemId === workItemId)) return { ok: false, reason: '계획에 없는 작업입니다.' };
       if (view.eApproved(workItemId)) return { ok: false, reason: '이미 실행 승인한 작업입니다.' };
       if (view.prototypeFirst && !view.pApproved && view.assignments.find((a) => a.workItemId === workItemId)?.assignee === 'codex')
-        return { ok: false, reason: '견본 먼저 계획입니다. 견본을 올리고 P(견본 승인)를 한 뒤 Codex를 실행 승인하세요.' };
+        return { ok: false, reason: '견본 먼저 계획입니다. 견본을 올리고 견본 승인을 한 뒤 Codex를 실행 승인하세요.' };
       return { ok: true };
     }
     case 'P':
@@ -142,7 +142,7 @@ export function canApprove(view: WorkflowView, gate: Gate, workItemId = ''): Gat
       if (view.bApproved) return { ok: false, reason: '이 결과는 이미 업로드 승인했습니다.' };
       return { ok: true };
     case 'C':
-      if (!view.result || !view.bApproved) return { ok: false, reason: '같은 결과의 B 승인이 먼저 필요합니다.' };
+      if (!view.result || !view.bApproved) return { ok: false, reason: '같은 결과의 올리기 승인이 먼저 필요합니다.' };
       if (view.cApproved) return { ok: false, reason: '이미 배포 승인했습니다.' };
       return { ok: true };
   }
@@ -150,7 +150,7 @@ export function canApprove(view: WorkflowView, gate: Gate, workItemId = ''): Gat
 
 /** DB 트리거(revision_requests_guard)와 같은 규칙 */
 export function canRequestRevision(view: WorkflowView): GateCheck {
-  if (!view.aApproved) return { ok: false, reason: 'A 승인된 기획서가 필요합니다.' };
+  if (!view.aApproved) return { ok: false, reason: '기획 승인된 기획서가 필요합니다.' };
   if (!view.result) return { ok: false, reason: '검토할 결과 패키지가 없습니다.' };
   if (view.bApproved) return { ok: false, reason: '이미 GitHub 업로드를 승인한 결과입니다.' };
   if (view.pendingRevision || view.resultRevised) return { ok: false, reason: '이 결과에는 이미 수정 요청을 보냈습니다. 새 결과를 기다리세요.' };
@@ -189,7 +189,7 @@ export async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** 이 업무 PR 주소에 대한 최신 서버 확인. C 승인은 이것이 'CI 성공'(열린 PR 또는 병합됨)일 때만 된다(DB 0022와 같은 규칙). */
+/** 이 업무 PR 주소에 대한 최신 서버 확인. 배포 승인은 이것이 'CI 성공'(열린 PR 또는 병합됨)일 때만 된다(DB 0022와 같은 규칙). */
 export function latestPrCheck(task: Task, data: WorkflowData): import('./workflow-types').PrCheck | null {
   const url = (task.prUrl ?? '').trim().replace(/\/$/, '');
   const mine = data.prChecks.filter((c) => c.taskId === task.id).sort((a, b) => b.checkedAt.localeCompare(a.checkedAt));

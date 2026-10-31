@@ -60,7 +60,7 @@ interface Props {
   onClarify?: (task: Task, question: string, answer: string) => Promise<boolean>;
   /** 단계 알림의 "업무 카드 보기" */
   onShowTask?: (taskId: string) => void;
-  /** 단계 알림에서 바로 A·B 승인(업무 카드의 같은 버튼과 같은 규칙). 성공하면 true */
+  /** 단계 알림에서 바로 A·올리기 승인(업무 카드의 같은 버튼과 같은 규칙). 성공하면 true */
   onApprove?: (task: Task, gate: 'A' | 'B') => Promise<boolean>;
 }
 
@@ -169,7 +169,7 @@ function readSeen(): Record<string, string> | null {
   }
 }
 
-const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: 'A 승인', B: 'B 승인(GitHub 업로드)' };
+const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
 export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);

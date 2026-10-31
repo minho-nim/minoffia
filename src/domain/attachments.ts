@@ -246,9 +246,9 @@ export async function sha256OfBytes(data: ArrayBuffer): Promise<string> {
 
 /**
  * 첨부를 추가·변경할 수 없는 이유(DB 트리거와 같은 규칙). 가능하면 null.
- * - 견본: 최신 계획이 견본 먼저일 때만, P(견본 승인) 전까지 올리고 바꾸고 지운다. resultRevision 자리에 계획 버전을 준다.
- * - 요청 자료: 최신 기획서가 A 승인되면 잠긴다(기획서를 새 버전으로 저장하면 다시 열린다).
- * - 결과 스크린샷: 최신 결과 패키지에만, B 승인 전까지, 추가만.
+ * - 견본: 최신 계획이 견본 먼저일 때만, 견본 승인 전까지 올리고 바꾸고 지운다. resultRevision 자리에 계획 버전을 준다.
+ * - 요청 자료: 최신 기획서가 기획 승인되면 잠긴다(기획서를 새 버전으로 저장하면 다시 열린다).
+ * - 결과 스크린샷: 최신 결과 패키지에만, 올리기 승인 전까지, 추가만.
  */
 export function attachmentBlocker(
   view: WorkflowView,
@@ -258,20 +258,20 @@ export function attachmentBlocker(
   resultRevision: number | null = null,
 ): string | null {
   if (kind === 'request') {
-    if (view.aApproved) return 'A 승인 뒤에는 요청 자료를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.';
+    if (view.aApproved) return '기획 승인 뒤에는 요청 자료를 바꿀 수 없습니다. 바꾸려면 기획서를 새 버전으로 저장하세요.';
     if (op === 'add' && count >= MAX_REQUEST_FILES) return `요청 자료는 ${MAX_REQUEST_FILES}장까지 올릴 수 있습니다.`;
     return null;
   }
   if (kind === 'prototype') {
     if (!view.plan || !view.prototypeFirst) return '견본 먼저 계획에서만 견본을 올립니다.';
     if (resultRevision !== view.plan.planRevision) return '최신 계획에만 견본을 올릴 수 있습니다.';
-    if (view.pApproved) return 'P(견본 승인) 뒤에는 견본을 바꿀 수 없습니다. 바꾸려면 PM에 다시 계획을 받으세요.';
+    if (view.pApproved) return '견본 승인 뒤에는 견본을 바꿀 수 없습니다. 바꾸려면 PM에 다시 계획을 받으세요.';
     if (op === 'add' && count >= MAX_PROTOTYPE_FILES) return `견본은 ${MAX_PROTOTYPE_FILES}개까지 올릴 수 있습니다.`;
     return null;
   }
   if (op === 'change') return '결과 스크린샷은 추가만 할 수 있습니다(검토 기록).';
   if (!view.result || resultRevision !== view.result.revision) return '최신 결과 패키지에만 스크린샷을 붙일 수 있습니다.';
-  if (view.bApproved) return 'B 승인 뒤에는 결과를 바꿀 수 없습니다.';
+  if (view.bApproved) return '올리기 승인 뒤에는 결과를 바꿀 수 없습니다.';
   if (count >= MAX_RESULT_FILES) return `결과 스크린샷은 ${MAX_RESULT_FILES}장까지입니다.`;
   return null;
 }

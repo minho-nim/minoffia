@@ -158,7 +158,7 @@ export interface PrCheck {
   checkedAt: string;
 }
 
-/** 서버가 C 승인 뒤 release를 main으로 앞당긴 기록(0011_inbox_deployments.sql). 성공 = release 갱신이지 Cloudflare 빌드 완료가 아니다. */
+/** 서버가 배포 승인 뒤 release를 main으로 앞당긴 기록(0011_inbox_deployments.sql). 성공 = release 갱신이지 Cloudflare 빌드 완료가 아니다. */
 export interface Deployment {
   id: string;
   taskId: string;
@@ -200,17 +200,17 @@ export const STAGE_LABEL: Record<Stage, string> = {
   planning: '기획 중',
   needs_clarification: '확인 필요',
   spec_ready: '기획서 준비',
-  development_approval_pending: 'A 승인 대기',
+  development_approval_pending: '기획 승인 대기',
   pm_queued: 'PM 전달 대기',
   dispatching: 'PM 세션 시작',
   agent_handoff_pending: '실행 승인 대기',
   executing: '개발 중',
   validation: '검증 중',
   result_review: '결과 검토',
-  github_approval_pending: 'B 승인 대기',
+  github_approval_pending: '올리기 승인 대기',
   github_uploading: 'GitHub 업로드',
   pr_review: 'PR 검토',
-  deployment_approval_pending: 'C 승인 대기',
+  deployment_approval_pending: '배포 승인 대기',
   deploying: '배포 중',
   completed: '완료',
   paused: '보류',
@@ -221,11 +221,11 @@ export const STAGE_LABEL: Record<Stage, string> = {
 };
 
 export const GATE_LABEL: Record<Gate, string> = {
-  A: 'A 개발 방향 승인',
-  E: 'E AI 실행 승인',
-  P: 'P 견본 승인',
-  B: 'B GitHub 업로드 승인',
-  C: 'C 운영 배포 승인',
+  A: '기획 승인',
+  E: '실행 승인',
+  P: '견본 승인',
+  B: '올리기 승인(GitHub)',
+  C: '배포 승인',
 };
 
 export const INTENT_LABEL: Record<Intent, string> = {
