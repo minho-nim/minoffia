@@ -306,6 +306,10 @@ a {
   .inbox-log {
     max-height: max(300px, calc(100svh - (100vw - 32px) * 0.747 - 150px));
   }
+  /* 말풍선·알림에서 업무 카드로 갈 때 위에 고정된 사무실에 가리지 않게 */
+  .task-card {
+    scroll-margin-top: calc((100vw - 32px) * 0.747 + 24px);
+  }
 }
 
 .stage-note {
@@ -474,6 +478,54 @@ a {
   background: #fffaf0;
   color: #3b2416;
   border: 1px solid #3b2416;
+}
+
+.agent-speech {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: max(96px, 18cqw);
+  padding: 0.3em 0.5em;
+  border-radius: 4px;
+  border: 1px solid #3b2416;
+  background: #fbe7b5;
+  color: #2a1a10;
+  font-family: var(--font-display);
+  font-size: max(9px, 1.4cqw);
+  line-height: 1.25;
+  white-space: pre-line;
+  text-align: center;
+  pointer-events: none;
+  animation: speech-pop 0.25s ease-out;
+}
+
+.agent-speech::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top-color: #3b2416;
+}
+
+.agent-speech[data-kind='alert'] {
+  background: #f6ad91;
+}
+
+@keyframes speech-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-speech {
+    animation: none;
+  }
 }
 
 .agent[data-activity='blocked'] .agent-badge {
