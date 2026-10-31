@@ -46,6 +46,10 @@ interface Props {
   /** 업무 접수(사진이 있으면 요청 자료로 함께 올린다) */
   onCreateTask: (draft: TaskDraft, images: PendingImage[]) => Promise<Task | null>;
   onCreateProject: (name: string) => Promise<Project | null>;
+  /** 지금 고른 프로젝트(위 프로젝트 칩). 요청에 프로젝트 이름이 없으면 이 프로젝트로 묻는다(v0.4.19) */
+  currentProject?: Project | null;
+  /** 다른 탭에서 넘겨준 입력 초안(업무 카드 "대화로 묻기", 프로젝트 "요청하기"). n이 바뀔 때마다 채운다 */
+  draft?: { text: string; n: number } | null;
   onAskGemini: (
     question: string,
     history: { role: 'user' | 'model'; text: string }[],
@@ -176,7 +180,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
-export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify }: Props) {
+export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const logRef = useRef(log);
   logRef.current = log;
@@ -343,6 +347,18 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
     setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
   }, [snap.tasks, snap.workflow, syncReady]);
 
+  // 다른 탭에서 넘어온 초안을 입력칸에 채우고 바로 쓸 수 있게 한다.
+  useEffect(() => {
+    if (!draft) return;
+    setInput(draft.text);
+    window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }, 60);
+  }, [draft?.n]);
+
   /** 마지막 메시지가 지금도 답을 기다리는 Gemini 확인 질문 알림이면 그 업무와 질문 */
   const openClarify = (): { task: Task; question: string } | null => {
     const last = log[log.length - 1];
@@ -400,7 +416,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
   }, []);
   // 소유자 결정(2026-10-30): 일반 대화·질문은 기록하지 않고, 프로젝트·업무가 정해진 메시지만 개발일지용으로 남긴다.
   const say = (from: From, text: string, link: { projectId?: string; taskId?: string } = {}) => {
-    setLog((l) => [...l, { id: mid(), from, text }].slice(-KEEP));
+    setLog((l) => [...l, { id: mid(), from, text, ...(link.taskId ? { taskId: link.taskId } : {}) }].slice(-KEEP));
     if (link.projectId || link.taskId) archive({ role: from, text, projectId: link.projectId ?? null, taskId: link.taskId ?? null });
   };
   const run = async (fn: () => Promise<void>) => {
@@ -521,7 +537,9 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
       }
     }
     else if (t.kind === 'request') {
-      const candidates = t.candidates.length || !prior ? t.candidates : matchProjects(prior.question, snap.projects);
+      let candidates = t.candidates.length || !prior ? t.candidates : matchProjects(prior.question, snap.projects);
+      // 이름이 없으면 위에서 고른 프로젝트로 묻는다(그래도 "맞아요?" 확인은 받는다).
+      if (!candidates.length && currentProject) candidates = [currentProject];
       handleRequest(text, candidates, prior);
     }
     else if (t.kind === 'question') {
@@ -666,6 +684,11 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
                   <span />
                   <span />
                 </p>
+              )}
+              {!m.actions && m.taskId && onShowTask && snap.tasks.some((t) => t.id === m.taskId) && (
+                <button type="button" className="link-btn inbox-tasklink" onClick={() => onShowTask(m.taskId!)}>
+                  업무 보기 →
+                </button>
               )}
               {m.actions && !busy && (() => {
                 // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
@@ -853,7 +876,7 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           rows={1}
           value={input}
           maxLength={4000}
-          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : canAskGemini ? '묻거나 시킬 일을 적으세요 · 질문은 Gemini가 바로 답해요' : '묻거나 시킬 일을 적으세요'}
+          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일을 적으세요` : canAskGemini ? '묻거나 시킬 일을 적으세요 · 질문은 Gemini가 바로 답해요' : '묻거나 시킬 일을 적으세요'}
           aria-label="묻기·요청"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
