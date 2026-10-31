@@ -55,6 +55,9 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
       case 'dispatching':
         tag('claude', 'busy', '계획', 'PM 계획을 쓰는 중');
         break;
+      case 'pm_queued':
+        tag('claude', 'ask', '계획', 'PM에 보내 주세요');
+        break;
       case 'agent_handoff_pending':
         if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) tag('studioA', 'ask', '견본', '견본 승인해 주세요');
         else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) tag('claude', 'ask', '계획', 'PM 계획을 보고 실행 승인해 주세요');

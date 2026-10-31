@@ -4,7 +4,7 @@
  * 사무실 말풍선의 ?와 같은 기준이다. 바로 끝낼 수 있는 승인(A·B)은 quick으로 표시한다.
  */
 import type { Task } from './types';
-import { canApprove, deriveWorkflow, latestPrCheck, prCheckPasses } from './workflow';
+import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, prCheckPasses } from './workflow';
 import type { WorkflowData } from './workflow-types';
 import { stalls } from './stall';
 
@@ -26,13 +26,23 @@ export interface MyTurn {
 export function myTurns(tasks: Task[], all: WorkflowData, now: number = Date.now()): MyTurn[] {
   const out: MyTurn[] = [];
   for (const t of tasks) {
-    if (t.status === 'done') continue;
     const v = deriveWorkflow(t, all);
+    // 배포 승인 뒤 배포가 안 됐으면(확인 필요·실패) 끝난 업무여도 내 차례에 남긴다(v0.4.20).
+    if (v.cApproved) {
+      const d = latestDeployment(t, all);
+      if (d && !d.ok) out.push({ taskId: t.id, title: t.title, word: '배포', label: d.error.startsWith('확인 필요') ? '같이 나갈 변경이 있어요. 확인하고 배포해 주세요' : '배포가 안 됐어요. 이유를 확인해 주세요', alert: true, at: d.createdAt });
+      continue;
+    }
+    if (t.status === 'done') continue;
     const add = (word: string, label: string, quick?: 'A' | 'B') => out.push({ taskId: t.id, title: t.title, word, label, quick, at: t.updatedAt });
     const mine = v.plan ? all.assignments.filter((a) => a.taskId === t.id && a.planRevision === v.plan!.planRevision) : [];
     switch (v.stage) {
       case 'needs_clarification':
         add('질문', '확인 질문에 답해 주세요(입력창이나 업무 카드)');
+        break;
+      case 'pm_queued':
+        // 기획 승인·수정 요청 뒤 PM에 자동으로 못 보낸 경우(저장소 없음 등)
+        add('계획', 'PM에 보내 주세요(저장소가 없으면 프로젝트에 저장소부터 연결)');
         break;
       case 'spec_ready':
       case 'development_approval_pending':

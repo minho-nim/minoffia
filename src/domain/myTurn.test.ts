@@ -21,7 +21,10 @@ describe('내 차례(v0.4.8)', () => {
   });
 
   it('A 승인 뒤 PM이 계획 중이면 내 차례가 아니다, 끝난 업무도 아니다', () => {
-    expect(myTurns([task], data({ specs: [spec], approvals: [ok('A', 1)] }))).toEqual([]);
+    const sent = { ...task, dispatch: { state: 'dispatched' as const, at: '2026-10-31T00:00:00Z' } };
+    expect(myTurns([sent], data({ specs: [spec], approvals: [ok('A', 1)] }), Date.parse('2026-10-31T00:05:00Z'))).toEqual([]);
+    // PM에 아직 못 보냈으면(저장소 없음 등) 계획[?]로 내 차례(v0.4.20)
+    expect(myTurns([task], data({ specs: [spec], approvals: [ok('A', 1)] }))[0]).toMatchObject({ word: '계획' });
     expect(myTurns([{ ...task, status: 'done' }], data({ specs: [spec] }))).toEqual([]);
   });
 

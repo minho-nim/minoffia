@@ -57,7 +57,8 @@ export interface OfficeStore {
   /** 올리기 승인(B)된 Claude 결과로 Claude가 PR을 연다(서버, v0.4.5) */
   dispatchClaudePr(taskId: string, acknowledgeRetry: boolean): Promise<{ sessionUrl: string | null; branch: string }>;
   /** 배포 승인 뒤 서버가 release를 main으로 앞당긴다(운영 배포). 로컬 데모는 지원하지 않음. */
-  deployRelease(taskId: string): Promise<{ updated: boolean; to: string }>;
+  /** wait = main 시험(CI)이 끝나기를 기다리는 중(앱이 다시 부른다). allowExtra = 같이 나갈 다른 변경을 확인함(v0.4.20) */
+  deployRelease(taskId: string, allowExtra?: boolean): Promise<{ updated: boolean; to: string; wait?: boolean; message?: string }>;
   /**
    * 다른 기기에서 바뀐 기록을 바로 알려 준다(Supabase Realtime, 바뀐 표 이름). 끊을 함수를 돌려준다.
    * 로컬 데모는 없음(이 브라우저에만 저장).

@@ -53,7 +53,8 @@ export interface WorkflowActions {
   /** 서버가 GitHub에서 PR·CI를 확인(Supabase 모드만) */
   checkPr?: (task: Task) => Promise<boolean>;
   /** 배포 승인 뒤 서버가 release를 앞당긴다(Supabase 모드만) */
-  deploy?: (task: Task) => Promise<boolean>;
+  /** allowExtra = 같이 나갈 다른 변경을 확인하고 배포, quiet = 자동 재시도(알림 없음) */
+  deploy?: (task: Task, allowExtra?: boolean, quiet?: boolean) => Promise<boolean>;
   /** 결과 검토 → Claude PM 수정 요청 */
   requestRevision: (task: Task, feedback: string) => Promise<boolean>;
   attachmentUrl: (attachment: Attachment) => Promise<string>;
@@ -918,9 +919,15 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                     <p className="small">
                       배포 승인됨. {deployment ? <span className="task-error">마지막 배포 실패: {deployment.error}</span> : '아직 배포하지 않았습니다.'}
                     </p>
-                    <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.deploy!(task))}>
-                      {deployment ? '운영 배포 다시 시도' : '운영 배포'}
-                    </button>
+                    {deployment?.error.startsWith('확인 필요') ? (
+                      <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.deploy!(task, true))}>
+                        같이 나갈 변경까지 배포
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.deploy!(task))}>
+                        {deployment ? '운영 배포 다시 시도' : '운영 배포'}
+                      </button>
+                    )}
                   </>
                 )}
                 <p className="muted small">서버가 release 브랜치를 main으로 앞당깁니다(직접 커밋 없음). 이 버튼은 배포 시작이고, 사이트 반영은 Cloudflare 빌드 뒤입니다.</p>
