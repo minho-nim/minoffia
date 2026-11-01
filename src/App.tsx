@@ -1,3 +1,4 @@
+import { TurnMenu } from './components/TurnMenu';
 import { ThemeToggle } from './components/ThemeToggle';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1147,9 +1148,12 @@ export function App() {
     <div className="app">
       <header className="topbar" ref={topRef}>
         <div className="brand-block">
-          <h1 className="brand">
-            MINLAB AI OFFICE <span className="ver">v{version}</span>
-          </h1>
+          <span className="brand-line">
+            <h1 className="brand">
+              MINLAB AI OFFICE <span className="ver">v{version}</span>
+            </h1>
+            <TurnMenu items={turns} onOpen={showTask} />
+          </span>
           {store.mode === 'local' ? (
             <span className="mode mode-local" title="데이터는 이 브라우저의 localStorage에만 저장됩니다">
               로컬 데모 · 이 기기에만 저장
@@ -1194,16 +1198,12 @@ export function App() {
         <button type="button" tabIndex={mini ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
           MINLAB AI OFFICE <span className="ver">v{version}</span>
         </button>
+        <TurnMenu items={turns} onOpen={showTask} tabbable={mini} />
         {/* 머리의 프로젝트 이름: 대화 탭은 대화에서 고른 프로젝트, 다른 탭은 업무 필터 */}
         {(() => {
           const id = tab === 'chat' ? chatProjectId : pf === 'all' ? null : pf;
           return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
         })()}
-        {turns.length > 0 && (
-          <span className="num num-turn" aria-label={`내 차례 ${turns.length}개`}>
-            {turns.length}
-          </span>
-        )}
       </div>
 
       <main className="layout">
@@ -1303,6 +1303,7 @@ export function App() {
                 snap={snap}
                 canAskGemini={store.mode === 'supabase'}
                 onWarmGemini={() => store.warmGemini?.()}
+                onLinkProject={(id) => setChatProject(id)}
                 onCreateTask={(d, images) => addTask(d, images)}
                 onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
                 onAskGemini={async (q, history, images, onDelta, opts) => {

@@ -51,6 +51,8 @@ interface Props {
   /** 업무 접수(사진이 있으면 요청 자료로 함께 올린다) */
   onCreateTask: (draft: TaskDraft, images: PendingImage[]) => Promise<Task | null>;
   onCreateProject: (name: string) => Promise<Project | null>;
+  /** 업무를 접수하면 그 프로젝트를 대화에 연결만 한다(대화 칩을 켬, 대화는 그대로 이어감, v0.4.30) */
+  onLinkProject?: (projectId: string) => void;
   /** 지금 고른 프로젝트(위 프로젝트 칩). 요청에 프로젝트 이름이 없으면 이 프로젝트로 묻는다(v0.4.19) */
   currentProject?: Project | null;
   /** 다른 탭에서 넘겨준 입력 초안(업무 카드 "대화로 묻기", 프로젝트 "요청하기"). n이 바뀔 때마다 채운다 */
@@ -186,7 +188,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
-export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
+export function Inbox({ snap, canAskGemini, onWarmGemini, onLinkProject, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const logRef = useRef(log);
   logRef.current = log;
@@ -653,6 +655,8 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreate
       originalText: text,
     }, images);
     if (!task) return say('office', '업무를 저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
+    // 대화는 그대로 두고 프로젝트만 연결한다(다음 말부터 이 프로젝트 기준).
+    onLinkProject?.(project.id);
     // 접수된 요청 원문은 화면에 이미 있으므로 기록에만 남긴다. 이어 온 앞 대화도 이 업무 기록이 된다(개발 전 삭제 시 함께 지워짐).
     if (context) {
       archive({ role: 'me', text: context.question, projectId: project.id, taskId: task.id });
@@ -663,7 +667,7 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreate
       'office',
       `'${project.name}'에 접수했어요: ${task.title}\n${
         onAutoDraft ? 'Gemini(무료)가 기획서 초안을 써요. 다 되면 여기서 알려 드릴게요.' : '아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.'
-      }`,
+      }\n대화는 여기서 그대로 이어서 하세요('${project.name}' 프로젝트로 연결했어요).`,
       { projectId: project.id, taskId: task.id },
     );
     onAutoDraft?.(task);
