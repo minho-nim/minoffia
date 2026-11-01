@@ -234,7 +234,10 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         const say = leave.includes(a.id) ? undefined : speech.get(a.id);
         const talking = say && say.kind !== 'busy';
         const sayTask = say ? tasks.find((t) => t.id === say.taskId) : undefined;
-        const badge = say?.kind === 'busy' ? say.text : talking ? undefined : badgeFor(s);
+        // 휴가(v0.4.53): 문으로 걸어 나가는 동안 '휴가'를 띄운다. 들고 있던 업무가 있으면 그대로 둔다는 것도 함께.
+        const onLeave = leave.includes(a.id);
+        const held = onLeave ? tasks.filter((t) => t.assignee === a.id && t.status !== 'done').length : 0;
+        const badge = onLeave ? (held ? `휴가 · 업무 ${held}건 그대로` : '휴가') : say?.kind === 'busy' ? say.text : talking ? undefined : badgeFor(s);
         const isSel = selected === a.id;
         const label = `${a.name}, ${ACTIVITY_LABEL[s.activity]}${s.task ? `: ${s.task.title}` : ''}${say ? `. ${say.label}` : ''}`;
         const sprite = spriteFor(a, 'stand');
@@ -242,7 +245,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
           <button
             key={a.id}
             type="button"
-            className={`agent${isSel ? ' is-selected' : ''}${sprite.art ? ' is-art' : ''}`}
+            className={`agent${isSel ? ' is-selected' : ''}${sprite.art ? ' is-art' : ''}${onLeave ? ' is-leaving' : ''}`}
             data-activity={s.activity}
             ref={(el) => {
               if (!el) {
@@ -280,7 +283,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
                   </>
                 ) : (
                   <>
-                    <b>{a.name}</b> · {s.activity === 'resting' ? '휴식' : ACTIVITY_LABEL[s.activity]}
+                    <b>{a.name}</b> · {onLeave ? '휴가' : s.activity === 'resting' ? '휴식' : ACTIVITY_LABEL[s.activity]}
                   </>
                 )}
                 {say ? (
