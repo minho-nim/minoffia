@@ -1727,6 +1727,8 @@ a {
   border-top: 1px solid var(--line);
   padding-top: 6px;
   margin-top: -6px;
+  margin-bottom: -6px;
+  line-height: 1.2;
 }
 
 /* 대화 지우기 줄: 입력창 바로 아래에 붙이고 아래 여백을 줄인다(v0.4.36) */
