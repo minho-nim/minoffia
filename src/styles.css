@@ -356,17 +356,8 @@ a {
   }
 }
 
-/* 넓은 창(태블릿·좁힌 PC 창): 사무실은 고정·축소하지 않고 너무 커지지 않게만 둔다(v0.4.24).
-   절반 축소는 transform이라 원래 자리가 남아, 넓은 창에서는 사무실과 탭 사이에 큰 빈칸이 생겼다. */
-@media (min-width: 700px) and (max-width: 1039px) {
-  .stage .office {
-    max-width: 720px;
-    margin-inline: auto;
-  }
-}
-
-/* 휴대폰(700px 미만): 오피스를 위에 고정하고 아래 패널만 스크롤한다(세로가 충분할 때만). 얇은 머리 바로 아래에 붙는다. */
-@media (max-width: 699px) and (min-height: 620px) {
+/* 휴대폰·좁은 화면(작은 PC 창 포함): 오피스를 위에 고정하고 아래 패널만 스크롤한다(세로가 충분할 때만). 얇은 머리 바로 아래에 붙는다. */
+@media (max-width: 1039px) and (min-height: 620px) {
   .stage {
     position: sticky;
     top: calc(36px + env(safe-area-inset-top, 0px));
@@ -411,6 +402,23 @@ a {
     transform: scale(0.5);
     pointer-events: auto;
   }
+  /* 줄어든 만큼 아래 내용을 끌어올려 사무실과 탭 사이 빈칸을 없앤다(v0.4.26). 페이지가 짧아져도
+     작은 사무실은 맨 위에 닿을 때만 풀리므로(App.tsx) 켜졌다 꺼졌다 반복하지 않는다. */
+  html {
+    overflow-anchor: none;
+  }
+  .stage {
+    transition: margin-bottom 0.18s ease;
+  }
+  .stage.is-mini {
+    margin-bottom: calc(-1 * (100vw - 32px) * 0.747 * 0.5);
+  }
+  /* 내용이 짧아도 화면 높이만큼은 늘 내려갈 수 있게 해, 작은 사무실이 되자마자 맨 위로 튕겨 풀리지 않게 한다 */
+  .layout {
+    min-height: 100vh;
+    min-height: 100svh;
+    align-content: start;
+  }
   /* 탭은 줄어든 사무실 바로 아래에 고정(v0.4.16). 내리기 전에는 제자리에 있다. */
   .tabs {
     position: sticky;
@@ -424,7 +432,8 @@ a {
 }
 
 
-@media (max-width: 699px) and (min-height: 620px) and (prefers-reduced-motion: reduce) {
+@media (max-width: 1039px) and (min-height: 620px) and (prefers-reduced-motion: reduce) {
+  .stage,
   .stage .office {
     transition: none;
   }
