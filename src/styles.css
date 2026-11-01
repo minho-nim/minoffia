@@ -356,8 +356,17 @@ a {
   }
 }
 
-/* 휴대폰·좁은 화면: 오피스를 위에 고정하고 아래 패널만 스크롤한다(세로가 충분할 때만). 얇은 머리 바로 아래에 붙는다. */
-@media (max-width: 1039px) and (min-height: 620px) {
+/* 넓은 창(태블릿·좁힌 PC 창): 사무실은 고정·축소하지 않고 너무 커지지 않게만 둔다(v0.4.24).
+   절반 축소는 transform이라 원래 자리가 남아, 넓은 창에서는 사무실과 탭 사이에 큰 빈칸이 생겼다. */
+@media (min-width: 700px) and (max-width: 1039px) {
+  .stage .office {
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}
+
+/* 휴대폰(700px 미만): 오피스를 위에 고정하고 아래 패널만 스크롤한다(세로가 충분할 때만). 얇은 머리 바로 아래에 붙는다. */
+@media (max-width: 699px) and (min-height: 620px) {
   .stage {
     position: sticky;
     top: calc(36px + env(safe-area-inset-top, 0px));
@@ -415,7 +424,7 @@ a {
 }
 
 
-@media (max-width: 1039px) and (min-height: 620px) and (prefers-reduced-motion: reduce) {
+@media (max-width: 699px) and (min-height: 620px) and (prefers-reduced-motion: reduce) {
   .stage .office {
     transition: none;
   }

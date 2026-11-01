@@ -101,6 +101,9 @@ export function App() {
       return 'all';
     }
   });
+  // 대화 탭 프로젝트(v0.4.24, 소유자 결정): 기본은 없음 = 일반 AI 질문 창(Claude·ChatGPT처럼).
+  // 프로젝트 칩을 누르면 그 프로젝트 기준으로 묻고, 다시 누르면 일반 대화로 돌아간다. 업무 탭 필터와 따로 둔다.
+  const [chatProject, setChatProject] = useState<string | null>(null);
   const setProjectFilter = (id: string) => {
     setProjectFilterState(id);
     try {
@@ -1118,6 +1121,7 @@ export function App() {
 
   // 프로젝트 칩을 고르면 상태 칩 숫자도 그 프로젝트 것만 센다. 지운 프로젝트를 고른 채면 전체로 본다.
   const pf = projectFilter !== 'all' && snap.projects.some((p) => p.id === projectFilter) ? projectFilter : 'all';
+  const chatProjectId = chatProject && snap.projects.some((p) => p.id === chatProject) ? chatProject : null;
   const inProject = pf === 'all' ? snap.tasks : snap.tasks.filter((t) => t.projectId === pf);
   const openCount = inProject.filter((t) => t.status !== 'done').length;
   const counts = (s: TaskStatus) => inProject.filter((t) => t.status === s).length;
@@ -1177,7 +1181,11 @@ export function App() {
         <button type="button" tabIndex={mini ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
           MINLAB AI OFFICE <span className="ver">v{version}</span>
         </button>
-        {pf !== 'all' && <span className="topbar-project">{snap.projects.find((p) => p.id === pf)?.name}</span>}
+        {/* 머리의 프로젝트 이름: 대화 탭은 대화에서 고른 프로젝트, 다른 탭은 업무 필터 */}
+        {(() => {
+          const id = tab === 'chat' ? chatProjectId : pf === 'all' ? null : pf;
+          return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
+        })()}
         {turns.length > 0 && (
           <span className="num num-turn" aria-label={`내 차례 ${turns.length}개`}>
             {turns.length}
@@ -1222,8 +1230,24 @@ export function App() {
             </button>
           </nav>
 
-          {/* 프로젝트 칩: 대화·업무 탭 공통(v0.4.19). 고르면 내 차례·업무·새 요청이 그 프로젝트 기준 */}
-          {(tab === 'chat' || tab === 'tasks') && snap.projects.length > 1 && (
+          {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
+          {tab === 'chat' && snap.projects.length > 0 && (
+            <div className="filters project-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)">
+              {snap.projects.map((p) => {
+                const n = turnsByProject.get(p.id) ?? 0;
+                const on = chatProjectId === p.id;
+                return (
+                  <button key={p.id} type="button" className="chip chip-project" aria-pressed={on} onClick={() => setChatProject(on ? null : p.id)}>
+                    {p.name}
+                    {n > 0 && <span className="num num-turn">{n}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 업무 탭 프로젝트 칩(v0.4.18~). 고르면 내 차례·업무가 그 프로젝트 기준 */}
+          {tab === 'tasks' && snap.projects.length > 1 && (
             <div className="filters project-chips" role="group" aria-label="프로젝트">
               {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects].map((p) => {
                 const n = p.id === 'all' ? turns.length : (turnsByProject.get(p.id) ?? 0);
@@ -1284,7 +1308,7 @@ export function App() {
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={showTask}
                 onApprove={quickApprove}
-                currentProject={pf === 'all' ? null : (snap.projects.find((p) => p.id === pf) ?? null)}
+                currentProject={chatProjectId ? (snap.projects.find((p) => p.id === chatProjectId) ?? null) : null}
                 draft={draft}
               />
           </div>
@@ -1386,7 +1410,7 @@ export function App() {
               tasks={snap.tasks}
               turnsByProject={turnsByProject}
               onAsk={(id) => {
-                setProjectFilter(id);
+                setChatProject(id);
                 setTab('chat');
                 setDraft((d) => ({ text: '', n: (d?.n ?? 0) + 1 }));
               }}
