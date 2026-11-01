@@ -1,7 +1,8 @@
 // 새 프로젝트의 GitHub 저장소를 만든다(소유자가 "만들기"를 눌렀을 때만).
-// 비공개 + README만 있는 빈 저장소. 코드는 지금처럼 B 승인 뒤에만 올라간다.
-// 토큰(GITHUB_REPO_TOKEN)은 secrets에만 있고, 이 함수는 저장소 만들기 외에는 쓰지 않는다.
+// 비공개 + README·CLAUDE.md(AI 작업 규칙, v0.4.55)만 있는 빈 저장소. 코드는 지금처럼 B 승인 뒤에만 올라간다.
+// 토큰(GITHUB_REPO_TOKEN)은 secrets에만 있고, 이 함수는 저장소 만들기와 첫 규칙 파일(CLAUDE.md) 넣기 외에는 쓰지 않는다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { projectClaudeMd } from './rules.ts';
 import { repoNameError } from './naming.ts';
 
 /** 하루(KST)에 만들 수 있는 저장소 수 */
@@ -92,10 +93,30 @@ Deno.serve(async (req) => {
   }
 
   await admin.from('managed_repos').insert({ owner_id: user.id, project_id: project.id, full_name: data.full_name, html_url: data.html_url ?? '' });
+  // AI 작업 규칙 파일(CLAUDE.md)을 함께 넣는다(v0.4.55). 실패해도 저장소는 그대로 쓰고 알림만 남긴다.
+  let rulesWarning = '';
+  try {
+    const content = btoa(String.fromCharCode(...new TextEncoder().encode(projectClaudeMd(String(project.name)))));
+    const put = await fetch(`https://api.github.com/repos/${data.full_name}/contents/CLAUDE.md`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'MinLabAIOffice',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: 'docs: AI 작업 규칙(CLAUDE.md) 추가', content }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (put.status !== 201) rulesWarning = `작업 규칙 파일(CLAUDE.md)을 넣지 못했습니다(HTTP ${put.status}). 토큰에 Contents 쓰기 권한이 있는지 확인하세요.`;
+  } catch (e) {
+    rulesWarning = `작업 규칙 파일(CLAUDE.md)을 넣지 못했습니다(${(e as Error).name}).`;
+  }
   // 연결은 사용자 권한(RLS)으로 한다.
   const { error: linkError } = await userClient.from('projects').update({ repo: data.full_name }).eq('id', project.id);
   if (linkError) {
-    return reply(200, { ok: true, repo: data.full_name, url: data.html_url, warning: `저장소는 만들었지만 프로젝트에 연결하지 못했습니다: ${linkError.message}` });
+    return reply(200, { ok: true, repo: data.full_name, url: data.html_url, warning: `저장소는 만들었지만 프로젝트에 연결하지 못했습니다: ${linkError.message}${rulesWarning ? ` ${rulesWarning}` : ''}` });
   }
-  return reply(200, { ok: true, repo: data.full_name, url: data.html_url });
+  return reply(200, { ok: true, repo: data.full_name, url: data.html_url, ...(rulesWarning ? { warning: rulesWarning } : {}) });
 });
