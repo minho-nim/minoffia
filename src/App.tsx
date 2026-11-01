@@ -1,3 +1,4 @@
+import { TeamPanel } from './components/TeamPanel';
 import { TurnMenu } from './components/TurnMenu';
 import { ThemeToggle } from './components/ThemeToggle';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
@@ -35,7 +36,7 @@ import { PushToggle } from './components/PushToggle';
 import { OfficeView } from './office/OfficeView';
 import { version } from '../package.json';
 
-type Tab = 'chat' | 'tasks' | 'projects' | 'agent';
+type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
 type Filter = 'open' | 'all' | TaskStatus;
 
 const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
@@ -1254,6 +1255,9 @@ export function App() {
             >
               에이전트
             </button>
+            <button type="button" role="tab" aria-selected={tab === 'team'} onClick={() => setTab('team')}>
+              팀 관리
+            </button>
           </nav>
 
           {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
@@ -1459,9 +1463,6 @@ export function App() {
               snap={snap}
               onLinearProbe={store.mode === 'supabase' ? () => store.linearProbe() : undefined}
               onSetLimit={(kind, n) => void mutate(() => store.setAgentLimit(kind, n), `동시 작업 상한을 ${n}개로 바꿨습니다.`)}
-              onSetLeave={(agent, onLeave) =>
-                void mutate(() => store.setLeave(agent, onLeave), `${AGENT_BY_ID[agent].name}: ${onLeave ? '휴가 — 새 업무는 다른 AI에게 맡겨요.' : '근무로 돌아왔어요.'}`)
-              }
               selected={selected}
               onSelect={(id) => setSelected(id)}
               serverMode={store.mode === 'supabase'}
@@ -1469,6 +1470,15 @@ export function App() {
                 setFilter('all');
                 setTab('tasks');
               }}
+            />
+          )}
+
+          {tab === 'team' && (
+            <TeamPanel
+              snap={snap}
+              onSetLeave={(agent, onLeave) =>
+                void mutate(() => store.setLeave(agent, onLeave), `${AGENT_BY_ID[agent].name}: ${onLeave ? '휴가 — 새 업무는 다른 AI에게 맡겨요.' : '근무로 돌아왔어요.'}`)
+              }
             />
           )}
 

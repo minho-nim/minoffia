@@ -378,63 +378,114 @@ a {
   pointer-events: none;
 }
 
-.leave-board {
-  padding: 10px 12px;
+.team-panel {
+  container-type: inline-size;
+}
+.team-panel > p {
+  margin: 0 0 10px;
+}
+/* 근무 · 옮기기 버튼 · 휴가: 넓으면 좌우, 좁으면 위아래 */
+.team-board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.team-col {
+  min-width: 0;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
-.leave-board h3 {
-  margin: 0 0 2px;
+.team-col-leave {
+  border-style: dashed;
+  background: var(--surface-2);
+}
+.team-col.is-over {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.team-col h3 {
+  margin: 0 0 8px;
   font-family: var(--font-display);
   font-size: 15px;
 }
-.leave-board p {
-  margin: 0 0 8px;
+.team-empty {
+  margin: 0;
+  padding: 12px 0;
+  text-align: center;
 }
-.leave-chips {
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
-.leave-chip {
-  display: inline-flex;
+.team-card {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 6px;
+  gap: 10px;
+  padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
-  cursor: pointer;
-  font-size: 13px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: grab;
   user-select: none;
 }
-.leave-chip input {
+.team-card.is-picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.team-card input {
+  width: 18px;
+  height: 18px;
   margin: 0;
   accent-color: var(--accent);
 }
-.leave-chip img {
-  width: 18px;
-  height: 24px;
+.team-card img {
+  width: 26px;
+  height: 36px;
   object-fit: contain;
   image-rendering: pixelated;
 }
-.leave-chip img.is-art {
+.team-card img.is-art {
   image-rendering: auto;
 }
-.leave-chip .leave-state {
-  font-size: 11.5px;
-  color: var(--ok);
-}
-.leave-chip.is-away {
-  border-style: dashed;
-  opacity: 0.75;
-}
-.leave-chip.is-away img {
+.team-card.is-away img {
   filter: grayscale(1);
+  opacity: 0.7;
 }
-.leave-chip.is-away .leave-state {
-  color: var(--muted);
+.team-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.team-moves {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.team-moves .arrow-x {
+  display: none;
+}
+@container (min-width: 560px) {
+  .team-board {
+    grid-template-columns: 1fr auto 1fr;
+    align-items: start;
+  }
+  .team-moves {
+    flex-direction: column;
+    align-self: center;
+  }
+  .team-moves .arrow-x {
+    display: inline;
+  }
+  .team-moves .arrow-y {
+    display: none;
+  }
 }
 
 /* 얇은 머리에서는 오른쪽 끝에 작게(.topbar-mini button 기본 글꼴·여백을 덮는다) */
