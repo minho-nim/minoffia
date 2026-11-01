@@ -50,7 +50,7 @@
 ## 지켜야 할 것
 
 - 비밀값(Claude Routine 토큰, service_role 키, 비밀번호)을 코드·커밋·채팅에 남기지 않는다. `.env.local`은 커밋 금지.
-- 유료 API·크레딧이 드는 방법을 쓰지 않는다. 배정·입력창 분류는 규칙 기반(LLM 호출 없음).
+- 유료 API·크레딧이 드는 방법을 쓰지 않는다. 배정은 규칙 기반(LLM 호출 없음). 입력창은 앱 상태 질문·새 프로젝트만 규칙이고, 그 밖의 말은 Gemini 무료가 먼저 판단한다(질문·업무·애매 + 프로젝트, 질문이면 같은 호출로 답, 업무여도 프로젝트 확인은 사용자에게 받음. 소유자 2026-11-01, `src/domain/aiRoute.ts`·`ask-gemini`의 route).
 - 요청 자료 이미지는 "Gemini로 분석"을 누르거나, 기획서 초안을 쓰기 직전(아직 분석 안 한 사진 3장까지, v0.4.7 소유자 승인)에 서버(`supabase/functions/analyze-image`)가 Gemini 무료 API로 분석한다(관찰·추정 구분, 원본 대체 아님, 규칙은 `0008_image_analyses.sql`).
 - 견본 먼저 계획이 오면 Gemini가 HTML 견본 한 장을 만들어 견본으로 올린다(`supabase/functions/draft-prototype`, 계획 버전마다 한 번, HTML·CSS만). AI Studio Build 수동 견본도 그대로 쓸 수 있다.
 - 요청 자료에는 문서도 올린다(PDF·TXT·MD·CSV·JSON·HTML·DOCX·XLSX·PPTX·ZIP 20MB, 역할 `document`, SVG는 이미지 5MB, `0012`·`0013` 마이그레이션). 결과 스크린샷은 PNG·JPG·WEBP·GIF만.

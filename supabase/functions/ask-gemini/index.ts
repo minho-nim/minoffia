@@ -25,6 +25,40 @@ const SYSTEM = [
   '개발·수정 작업이 필요해 보이면, AI Office에 업무로 접수하라고 한 줄로 안내한다.',
 ].join('\n');
 
+/** 대화창 AI 먼저 판단(v0.4.29). 앱 src/domain/aiRoute.ts의 parseRouted와 형식이 같아야 한다. */
+function routeRules(projects: string[]) {
+  return [
+    '',
+    '## 먼저 판단',
+    '답의 첫 줄에는 반드시 아래 셋 중 하나만 쓴다(다른 글 없이).',
+    '- `@@질문` : 알고 싶은 것을 묻는 말. 둘째 줄부터 바로 답한다.',
+    '- `@@업무 <프로젝트 이름>` : 무엇을 만들거나·고치거나·추가·삭제·조사해 달라는 작업 요청. 프로젝트를 모르면 `@@업무 없음`. 둘째 줄부터 요청을 한두 줄로 정리만 한다(답하거나 실행했다고 하지 않는다).',
+    '- `@@애매` : 질문인지 작업 요청인지 정말 모를 때만. 둘째 줄에 확인 질문 한 줄.',
+    `프로젝트 목록: ${projects.length ? projects.map((p) => `'${p}'`).join(', ') : '(없음)'}`,
+    '프로젝트 이름은 목록에 있는 그대로 쓴다. 대화 앞부분에서 이어지는 요청이면 앞 내용을 보고 판단한다.',
+  ].join('\n');
+}
+
+interface ProjectInfo {
+  name: string;
+  description?: string;
+  repo?: string | null;
+  openTasks?: string[];
+}
+
+/** 대화에서 프로젝트를 골랐으면 그 프로젝트에 대한 질문으로 답한다(v0.4.29) */
+function projectRules(p: ProjectInfo) {
+  const tasks = (p.openTasks ?? []).slice(0, 10).map((t) => `- ${String(t).slice(0, 80)}`);
+  return [
+    '',
+    `## 이 대화는 '${String(p.name).slice(0, 60)}' 프로젝트에 대한 것이다`,
+    '사용자의 질문은 이 프로젝트에 대한 것으로 보고 답한다. 아래 정보에 없는 사실은 모른다고 한다.',
+    p.description ? `설명: ${String(p.description).slice(0, 500)}` : '',
+    p.repo ? `저장소: ${String(p.repo).slice(0, 100)}` : '저장소: 연결 안 됨',
+    tasks.length ? `열린 업무:\n${tasks.join('\n')}` : '열린 업무: 없음',
+  ].filter(Boolean).join('\n');
+}
+
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 
 const cors = {
@@ -54,10 +88,10 @@ const THINKING: Record<ThinkingMode, Record<string, unknown> | null> = {
   none: null,
 };
 
-function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode) {
+function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode, system: string) {
   const thinking = THINKING[mode];
   return JSON.stringify({
-    systemInstruction: { parts: [{ text: SYSTEM }] },
+    systemInstruction: { parts: [{ text: system }] },
     contents: [
       ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
       { role: 'user', parts: [...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
@@ -73,13 +107,13 @@ export function thinkingOrder(model: string): ThinkingMode[] {
 }
 
 /** Gemini에 묻는다. stream이면 SSE 응답(Response)을 그대로 돌려주고, 아니면 글을 모아 돌려준다. */
-async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean) {
+async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
   const call = (mode: ThinkingMode) =>
     fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(question, history, images, mode),
+      body: requestBody(question, history, images, mode, system),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   const order = thinkingOrder(model);
@@ -120,7 +154,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean };
+  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo };
   try {
     body = await req.json();
   } catch {
@@ -150,6 +184,14 @@ Deno.serve(async (req) => {
 
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   const stream = body.stream === true;
+  const routeProjects = Array.isArray(body.route?.projects) ? body.route!.projects!.filter((p) => typeof p === 'string').slice(0, 50).map((p) => p.slice(0, 60)) : null;
+  const project = body.project && typeof body.project.name === 'string' ? body.project : null;
+  // 판단을 맡기면 '업무로 접수하라' 안내 대신 판단 머리를 쓰게 한다.
+  const system = [
+    routeProjects ? SYSTEM.replace('\n개발·수정 작업이 필요해 보이면, AI Office에 업무로 접수하라고 한 줄로 안내한다.', '') : SYSTEM,
+    project ? projectRules(project) : '',
+    routeProjects ? routeRules(routeProjects) : '',
+  ].join('');
   const started = Date.now();
   let last = { status: 0, message: '' };
   for (const [i, key] of keys.entries()) {
@@ -159,7 +201,7 @@ Deno.serve(async (req) => {
     let mode: ThinkingMode;
     let headMs = 0;
     try {
-      ({ res, mode } = await openGemini(key, model, question, history, images, stream));
+      ({ res, mode } = await openGemini(key, model, question, history, images, stream, system));
       headMs = Date.now() - started;
     } catch (e) {
       last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
@@ -196,7 +238,7 @@ Deno.serve(async (req) => {
             controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
           } finally {
             controller.close();
-            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
+            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
             await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
           }
         },

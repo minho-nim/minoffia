@@ -3,6 +3,7 @@ import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
+import { matchRoutedProject, parseRouted, projectContext, type AskOptions } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction } from '../domain/stageNotice';
 import { deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
@@ -59,6 +60,7 @@ interface Props {
     history: { role: 'user' | 'model'; text: string }[],
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
+    opts?: AskOptions,
   ) => Promise<string>;
   onCopy: (text: string) => Promise<boolean>;
   /** 저장소 만들기를 쓸 수 있으면 함수(Supabase 모드) */
@@ -545,7 +547,7 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreate
     routeText(text, sent, prior ?? null);
   };
 
-  /** 글을 분류해 처리한다: 앱 상태 질문·새 프로젝트·업무 요청·일반 질문·애매(규칙, 토큰 0) */
+  /** 글을 나눈다: 앱 상태 질문·새 프로젝트는 규칙(토큰 0), 그 밖은 AI가 먼저 판단(v0.4.29, 데모는 규칙) */
   const routeText = (text: string, sent: File[], priorChat: PriorChat | null) => {
     const prior = priorChat ?? undefined;
     const t = triage(text, snap);
@@ -554,6 +556,24 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreate
       if (sent.length) say('office', '첨부는 업무 요청이나 질문에만 써요. 다음 메시지에 다시 붙여 주세요.');
       photoStore.held = [];
     }
+    else if (t.kind === 'new_project') {
+      if (t.name) void run(() => makeProject(t.name!, null));
+      else {
+        setPending({ kind: 'naming', text: '', createTask: false });
+        say('office', '새 프로젝트 이름을 알려주세요.');
+      }
+    }
+    else if (canAskGemini) {
+      // v0.4.29(소유자 2026-11-01): 그 밖의 말은 AI가 먼저 판단한다(질문·업무·애매 + 프로젝트). 질문이면 같은 한 번에 답한다.
+      askGemini(text, questionProject(text, snap.projects)?.name, { prior });
+    }
+    else ruleRoute(text, prior);
+  };
+
+  /** 규칙만으로 나누기(데모 모드, 또는 AI 판단이 실패했을 때) */
+  const ruleRoute = (text: string, prior: PriorChat | undefined) => {
+    const t = triage(text, snap);
+    if (t.kind === 'status') say('office', t.answer);
     else if (t.kind === 'new_project') {
       if (t.name) void run(() => makeProject(t.name!, null));
       else {
@@ -659,7 +679,18 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreate
     void run(() => create(text, project, context));
   };
 
-  const askGemini = (text: string, projectName?: string) => {
+  /** AI가 '업무'로 판단했을 때: AI가 고른 프로젝트(없으면 고른 칩·이름 맞추기)로 "이 프로젝트 맞아요?"를 묻는다 */
+  const routedTask = (text: string, aiProject: string | null, summary: string, prior: PriorChat | undefined) => {
+    say('office', `업무 요청으로 봤어요.${summary ? `\n${summary}` : ''}`);
+    let candidates: Project[] = currentProject ? [currentProject] : [];
+    const ai = candidates.length ? null : matchRoutedProject(aiProject, snap.projects);
+    if (ai) candidates = [ai];
+    if (!candidates.length) candidates = matchProjects(text, snap.projects);
+    if (!candidates.length && prior) candidates = matchProjects(prior.question, snap.projects);
+    handleRequest(text, candidates, prior);
+  };
+
+  const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }) => {
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
@@ -677,10 +708,32 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreate
         // 보내자마자 빈 Gemini 말(입력 중 …)을 두고, 답 조각이 오면 그 자리에 글을 채운다.
         const id = mid();
         setLog((l) => [...l, { id, from: 'gemini' as From, text: '' }].slice(-KEEP));
-        const put = (t: string) => setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
+        const set = (t: string) => setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
+        // 판단을 맡겼으면 첫 줄(판단 머리)은 숨기고, 질문 답일 때만 본문을 바로 보여 준다.
+        const put = (t: string) => {
+          if (!route) return set(t);
+          const r = parseRouted(t);
+          if (r.ready && r.kind === 'question') set(r.body);
+        };
+        const opts: AskOptions = {
+          ...(currentProject ? { project: projectContext(currentProject, snap.tasks) } : {}),
+          ...(route ? { route: { projects: snap.projects.map((p) => p.name) } } : {}),
+        };
         try {
-          const answer = await onAskGemini(text, history.slice(-6), encoded, put);
-          put(answer);
+          const raw = await onAskGemini(text, history.slice(-6), encoded, put, opts);
+          const r = route ? parseRouted(raw) : null;
+          if (r && r.kind !== 'question') {
+            // 업무·애매: 답 말풍선은 지우고 미니엉이 이어서 묻는다. 첨부는 업무 접수까지 들고 간다.
+            setLog((l) => l.filter((m) => m.id !== id));
+            if (r.kind === 'task') routedTask(text, r.project, r.body, route?.prior);
+            else {
+              setPending({ kind: 'unclear', text });
+              say('office', r.body || '질문인가요, 업무 요청인가요?');
+            }
+            return;
+          }
+          const answer = r ? r.body : raw;
+          set(answer);
           photoStore.held = [];
           setPending({ kind: 'followup', text, answer, projectName });
         } catch (e) {
@@ -688,6 +741,11 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreate
           throw e;
         }
       } catch (e) {
+        // 판단을 맡겼는데 실패하면(한도 등) 규칙으로 나눈다.
+        if (route) {
+          say('office', `AI 판단이 안 돼서 규칙으로 나눌게요(${(e as Error).message})`);
+          return ruleRoute(text, route.prior);
+        }
         setPending({ kind: 'question', text, projectName });
         say('office', `${(e as Error).message}`);
       }
