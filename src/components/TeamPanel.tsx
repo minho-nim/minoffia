@@ -14,9 +14,7 @@ export function uncovered(leave: AgentId[]): string[] {
     if (able.length && able.every((a) => leave.includes(a.id))) out.push(`${WORK_TYPE_LABEL[type]}: ${able.map((a) => a.name).join('·')} 모두 휴가라 새 업무는 복귀 뒤에 시작해요.`);
   }
   if (leave.includes('studioA') && leave.includes('studioB')) out.push('대화 답·기획서 초안·견본·사진 분석: Studio A·B(Gemini)가 모두 휴가라 미니엉이 앱 상태 질문만 답해요.');
-  const geminiAway = leave.includes('studioA') && leave.includes('studioB');
-  if (leave.includes('codex'))
-    out.push(geminiAway ? '기획서: Codex(ChatGPT)와 Studio A·B(Gemini)가 모두 휴가라 새 기획서는 복귀 뒤에 써요.' : '중요 기획(ChatGPT): Codex(OpenAI 계정) 휴가라 Gemini 기획서 초안으로 진행해요.');
+
   return out;
 }
 import { spriteFor } from '../office/sprites';
