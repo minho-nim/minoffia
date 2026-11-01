@@ -3242,3 +3242,9 @@ a {
     padding-block: calc(10px + env(safe-area-inset-top, 0px)) 10px;
   }
 }
+
+/* 접수 카드(v0.4.58): 정한 뒤에는 버튼 대신 작은 표시만 */
+.inbox-offer-done {
+  display: block;
+  margin-top: 4px;
+}
