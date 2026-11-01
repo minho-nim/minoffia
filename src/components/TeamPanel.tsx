@@ -38,22 +38,24 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
     const on = picked.has(id);
     return (
       <li key={id}>
-        <label
+        {/* 카드 어디를 눌러도(캐릭터·이름 포함) 체크된다. 아이폰 사파리는 라벨 속 그림을 눌러도 체크가 안 될 때가 있어 직접 처리한다(v0.4.43). */}
+        <div
           className={`team-card${isAway ? ' is-away' : ''}${on ? ' is-picked' : ''}`}
           draggable
           onDragStart={(e) => {
             e.dataTransfer.setData('text/plain', id);
             e.dataTransfer.effectAllowed = 'move';
           }}
+          onClick={() => toggle(id)}
         >
-          <input type="checkbox" checked={on} onChange={() => toggle(id)} aria-label={`${a.name} 고르기`} />
+          <input type="checkbox" checked={on} onChange={() => toggle(id)} onClick={(e) => e.stopPropagation()} aria-label={`${a.name} 고르기`} />
           <img className={sprite.art ? 'is-art' : undefined} src={sprite.src} alt="" draggable={false} />
           <span className="team-name">
             <b>{a.name}</b>
             <span className="muted small">{a.role}</span>
             {isAway && open > 0 && <span className="muted small">진행 중 {open}건은 그대로</span>}
           </span>
-        </label>
+        </div>
       </li>
     );
   };

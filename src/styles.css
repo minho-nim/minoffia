@@ -445,6 +445,10 @@ a {
   margin: 0;
   accent-color: var(--accent);
 }
+.team-card img,
+.team-card .team-name {
+  pointer-events: none;
+}
 .team-card img {
   width: 26px;
   height: 36px;
