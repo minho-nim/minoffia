@@ -50,16 +50,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #18191c;
-    --surface: #222327;
-    --surface-2: #2b2c31;
-    --ink: #ecebe8;
-    --muted: #a8a6a1;
-    --line: #3b3d42;
+    --bg: #211b16;
+    --surface: #2c241e;
+    --surface-2: #362d25;
+    --ink: #f1e7d6;
+    --muted: #b9ab95;
+    --line: #4a3e33;
     --accent: #f0975a;
     --accent-ink: #1a1410;
-    --brown: #101113;
-    --brown-ink: #ecebe8;
+    --brown: #17110d;
+    --brown-ink: #f3e6cc;
     --ok: #6fc07a;
     --warn: #e3b04f;
     --danger: #f07a66;
@@ -76,8 +76,8 @@
     --st-blocked-ink: #ffc3b5;
     --st-done: #1f3d24;
     --st-done-ink: #b6e3b9;
-  --turn-bg: #3a3120;
-  --turn-alert-bg: #4a2822;
+  --turn-bg: #45381f;
+  --turn-alert-bg: #552b20;
   --turn-ink: #f1e6cf;
   --turn-muted: #d2bb98;
     color-scheme: dark;
@@ -85,16 +85,16 @@
 }
 
 :root[data-theme='dark'] {
-  --bg: #18191c;
-  --surface: #222327;
-  --surface-2: #2b2c31;
-  --ink: #ecebe8;
-  --muted: #a8a6a1;
-  --line: #3b3d42;
+  --bg: #211b16;
+  --surface: #2c241e;
+  --surface-2: #362d25;
+  --ink: #f1e7d6;
+  --muted: #b9ab95;
+  --line: #4a3e33;
   --accent: #f0975a;
   --accent-ink: #1a1410;
-  --brown: #101113;
-  --brown-ink: #ecebe8;
+  --brown: #17110d;
+  --brown-ink: #f3e6cc;
   --ok: #6fc07a;
   --warn: #e3b04f;
   --danger: #f07a66;
@@ -111,8 +111,8 @@
   --st-blocked-ink: #ffc3b5;
   --st-done: #1f3d24;
   --st-done-ink: #b6e3b9;
-  --turn-bg: #3a3120;
-  --turn-alert-bg: #4a2822;
+  --turn-bg: #45381f;
+  --turn-alert-bg: #552b20;
   --turn-ink: #f1e6cf;
   --turn-muted: #d2bb98;
   color-scheme: dark;
@@ -203,7 +203,7 @@ a {
 
 .brand-line {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   min-width: 0;
 }
@@ -620,6 +620,44 @@ a {
   pointer-events: none;
 }
 
+/* 펼치면 캐릭터 위로 올라와 전체 목록을 보여 준다(v0.4.33) */
+.memo-board.is-open {
+  z-index: 400;
+  min-width: max(150px, 30cqw);
+}
+
+.memo-board.is-open .memo-list {
+  display: flex;
+}
+
+.memo-head,
+.memo-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+}
+
+.memo-head:disabled {
+  cursor: default;
+}
+
+.memo-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  min-width: 0;
+}
+
+.memo-more .memo-btn {
+  justify-content: center;
+}
+
 .memo-head {
   align-self: center;
   padding: 0.25em 0.8em;
@@ -676,7 +714,7 @@ a {
 }
 
 @container (max-width: 560px) {
-  .memo-list {
+  .memo-board:not(.is-open) .memo-list {
     display: none;
   }
 }

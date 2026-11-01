@@ -4,7 +4,6 @@ import { loadTheme, nextTheme, saveTheme, THEME_LABEL, type ThemeChoice } from '
 /** 머리에 두는 화면 밝기 버튼. 누를 때마다 자동 → 밝게 → 어둡게 */
 export function ThemeToggle() {
   const [choice, setChoice] = useState<ThemeChoice>(loadTheme);
-  const icon = choice === 'dark' ? '🌙' : choice === 'light' ? '☀️' : '🌗';
   return (
     <button
       type="button"
@@ -17,7 +16,7 @@ export function ThemeToggle() {
       title="누를 때마다 자동 → 밝게 → 어둡게"
       aria-label={`${THEME_LABEL[choice]} (누르면 바꿈)`}
     >
-      <span aria-hidden="true">{icon}</span> {THEME_LABEL[choice].replace('화면: ', '')}
+      {THEME_LABEL[choice].replace('화면: ', '')}
     </button>
   );
 }

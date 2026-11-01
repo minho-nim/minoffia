@@ -63,6 +63,8 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
   );
 
   const [bg, setBg] = useState<HTMLImageElement | null>(null);
+  /** 대기열 메모 펼침(v0.4.33): '대기열 N'이나 '+N건 더'를 누르면 전체 목록, 업무를 누르면 업무 카드로 */
+  const [memoOpen, setMemoOpen] = useState(false);
   useEffect(() => {
     if (!BACKGROUND_URL) return;
     const img = new Image();
@@ -188,23 +190,40 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         </span>
       ))}
       <div
-        className="memo-board"
+        className={`memo-board${memoOpen ? ' is-open' : ''}`}
         style={{
           left: pct(MEMO_BOARD.x, W),
           top: pct(MEMO_BOARD.y, H),
           width: pct(MEMO_BOARD.w, W),
-          height: pct(MEMO_BOARD.h, H),
+          height: memoOpen ? undefined : pct(MEMO_BOARD.h, H),
         }}
       >
-        <div className="memo-head">대기열 {memos.length}</div>
+        <button type="button" className="memo-head" aria-expanded={memoOpen} onClick={() => setMemoOpen((o) => !o)} disabled={!memos.length}>
+          대기열 {memos.length}
+        </button>
         <ul className="memo-list">
-          {memos.slice(0, 3).map((t) => (
+          {(memoOpen ? memos : memos.slice(0, 3)).map((t) => (
             <li key={t.id} className={`memo memo-${t.status}`}>
-              <span className="memo-mark">{t.status === 'blocked' ? '!' : t.status === 'review' ? '?' : '□'}</span>
-              <span className="memo-text">{t.title}</span>
+              <button type="button" className="memo-btn" onClick={() => onOpenTask?.(t.id)} title="업무 카드 보기">
+                <span className="memo-mark">{t.status === 'blocked' ? '!' : t.status === 'review' ? '?' : '□'}</span>
+                <span className="memo-text">{t.title}</span>
+              </button>
             </li>
           ))}
-          {memos.length > 3 && <li className="memo memo-more">+{memos.length - 3}건 더</li>}
+          {!memoOpen && memos.length > 3 && (
+            <li className="memo memo-more">
+              <button type="button" className="memo-btn" onClick={() => setMemoOpen(true)}>
+                +{memos.length - 3}건 더
+              </button>
+            </li>
+          )}
+          {memoOpen && (
+            <li className="memo memo-more">
+              <button type="button" className="memo-btn" onClick={() => setMemoOpen(false)}>
+                접기
+              </button>
+            </li>
+          )}
           {memos.length === 0 && <li className="memo memo-more">비어 있음</li>}
         </ul>
       </div>
