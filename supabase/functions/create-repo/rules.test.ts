@@ -9,6 +9,9 @@ describe('새 저장소 CLAUDE.md', () => {
     expect(md).toContain('## 이 프로젝트에서 지켜야 할 것');
     expect(md).toContain('병합·배포는 어떤 경우에도 하지 않는다');
   });
+  it('이미 쌓인 지켜야 할 것을 절에 넣는다(v0.4.60)', () => {
+    expect(projectClaudeMd('X', ['결제 없음'])).toContain('-->\n- 결제 없음\n');
+  });
   it('이름의 줄바꿈은 지운다', () => {
     expect(projectClaudeMd('a\nb').split('\n')[0]).toBe('# a b — AI 작업 규칙');
   });

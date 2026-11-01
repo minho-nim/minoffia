@@ -675,6 +675,24 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       if (!data?.ok || !data.repo) throw new Error(data?.error ?? '저장소를 만들지 못했습니다.');
       return { repo: data.repo as string, url: (data.url as string) ?? '', warning: data.warning as string | undefined };
     },
+    async addRepoRules(projectId) {
+      const { data, error } = await client.functions.invoke('create-repo', { body: { projectId, rulesOnly: true } });
+      if (error) {
+        let message = error.message;
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const body = await ctx.json();
+            if (body?.error) message = body.error;
+          } catch {
+            // 본문이 JSON이 아니면 기본 메시지
+          }
+        }
+        throw new Error(message);
+      }
+      if (!data?.ok || !data.repo) throw new Error(data?.error ?? '규칙 파일을 넣지 못했습니다.');
+      return { repo: data.repo as string, created: Boolean(data.created) };
+    },
     warmGemini() {
       // 서버가 잠들어 있으면 깨어나는 데 약 2초 걸린다. 입력창을 누를 때 미리 깨우고, 1분 안에는 다시 보내지 않는다.
       const key = SUPABASE_KEY;

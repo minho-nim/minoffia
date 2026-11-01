@@ -299,6 +299,9 @@ export function createLocalStore(): OfficeStore {
     async createRepo() {
       throw new Error('로컬 데모에서는 GitHub 저장소를 만들 수 없습니다.');
     },
+    async addRepoRules() {
+      throw new Error('로컬 데모에서는 GitHub 저장소에 파일을 넣을 수 없습니다.');
+    },
     async loadPlanInbox() {
       return [];
     },
