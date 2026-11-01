@@ -45,6 +45,8 @@ type Pending =
 interface Props {
   snap: Snapshot;
   canAskGemini: boolean;
+  /** 입력창을 누르면 Gemini 질문 서버를 미리 깨운다(있을 때만) */
+  onWarmGemini?: () => void;
   /** 업무 접수(사진이 있으면 요청 자료로 함께 올린다) */
   onCreateTask: (draft: TaskDraft, images: PendingImage[]) => Promise<Task | null>;
   onCreateProject: (name: string) => Promise<Project | null>;
@@ -182,7 +184,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
-export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
+export function Inbox({ snap, canAskGemini, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const logRef = useRef(log);
   logRef.current = log;
@@ -926,6 +928,9 @@ export function Inbox({ snap, canAskGemini, onCreateTask, onCreateProject, onAsk
           maxLength={4000}
           placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일을 적으세요` : canAskGemini ? '묻거나 시킬 일을 적으세요 · 질문은 Gemini가 바로 답해요' : '묻거나 시킬 일을 적으세요'}
           aria-label="묻기·요청"
+          onFocus={() => {
+            if (canAskGemini) onWarmGemini?.();
+          }}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             // PC: Enter로 보내고 Shift+Enter는 줄바꿈. 휴대폰: Enter는 줄바꿈(보내기 버튼으로만). 한글 조합 중 Enter는 무시한다.

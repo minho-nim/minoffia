@@ -93,6 +93,8 @@ export interface OfficeStore {
   draftPrototype(taskId: string, text: string): Promise<{ html: string; planRevision: number }>;
   /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
+  /** 질문 전에 Gemini 질문 서버를 미리 깨운다(입력창을 누를 때, Gemini는 부르지 않음, v0.4.23) */
+  warmGemini?(): void;
   askGemini(
     question: string,
     history: { role: 'user' | 'model'; text: string }[],
