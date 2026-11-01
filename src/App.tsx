@@ -1146,6 +1146,8 @@ export function App() {
 
   // 프로젝트 칩을 고르면 상태 칩 숫자도 그 프로젝트 것만 센다. 지운 프로젝트를 고른 채면 전체로 본다.
   const pf = projectFilter !== 'all' && snap.projects.some((p) => p.id === projectFilter) ? projectFilter : 'all';
+  // 키 A = Studio A, 키 B = Studio B(v0.4.44). 둘 다 휴가면 Gemini를 부르지 않는다.
+  const geminiAway = (snap.leave ?? []).includes('studioA') && (snap.leave ?? []).includes('studioB');
   const chatProjectId = chatProject && snap.projects.some((p) => p.id === chatProject) ? chatProject : null;
   const inProject = pf === 'all' ? snap.tasks : snap.tasks.filter((t) => t.projectId === pf);
   const openCount = inProject.filter((t) => t.status !== 'done').length;
@@ -1318,14 +1320,16 @@ export function App() {
           <div className="stack chat-tab" hidden={tab !== 'chat'}>
               <Inbox
                 snap={snap}
-                canAskGemini={store.mode === 'supabase'}
+                canAskGemini={store.mode === 'supabase' && !geminiAway}
+                geminiAway={geminiAway}
+                gptAway={(snap.leave ?? []).includes('codex')}
                 onWarmGemini={() => store.warmGemini?.()}
                 onLinkProject={(id) => setChatProject(id)}
                 onCreateTask={(d, images) => addTask(d, images)}
                 onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
                 onAskGemini={async (q, history, images, onDelta, opts) => {
                   try {
-                    return (await store.askGemini(q, history, images, onDelta, opts)).answer;
+                    return await store.askGemini(q, history, images, onDelta, opts);
                   } finally {
                     // 오늘 Gemini 횟수만 새로 읽는다(답 표시를 기다리게 하지 않음).
                     void store.load().then(setSnap, () => undefined);

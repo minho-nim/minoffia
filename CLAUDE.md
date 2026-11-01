@@ -72,6 +72,7 @@
 - 캐릭터 위치·말풍선·모니터·경고등은 **업무 데이터로만** 움직인다. 꾸며낸 활동을 넣지 않는다. 승인·답을 기다리는 말풍선은 `src/office/speech.ts`(업무 단계 → 말하는 캐릭터·문구).
 - 원격 실행이 성공해도 상태는 `in_progress`까지. 완료는 사람이 검토 대기 → 완료로 승인한다.
 - AI 휴가(v0.4.39, 소유자 2026-11-01): '팀 관리' 탭(v0.4.40)에서 근무·휴가 칸 사이로 옮기면(체크 후 가운데 버튼, 또는 끌어다 놓기) 휴가(`agent_leave`, 0026). 휴가인 AI는 사무실 아래 출입문으로 나가 사라지고, 새 배정(`routeTask`의 leave)과 PM 계획(`dispatch-claude` 프롬프트)에서 빠져 규칙대로 다른 AI가 맡는다. 진행 중인 업무는 건드리지 않는다. 미니엉·CI 봇은 휴가 대상이 아니다.
+- 캐릭터 하나 = 계정 하나(v0.4.44, 소유자 2026-11-01): 미니엉 = 대화창의 얼굴(규칙, 모델 호출 없음; 질문·판단은 근무 중인 Studio의 Gemini 답을 받아 전하고 말풍선 아래 'Gemini · Studio A가 답함'). Studio A = Gemini 키 A, Studio B = Gemini 키 B(휴가인 쪽 키는 서버 4곳 ask-gemini·analyze-image·draft-spec·draft-prototype에서 쓰지 않음, 둘 다 휴가면 Gemini 멈춤). Codex = OpenAI(ChatGPT 계정): Codex 개발 + ChatGPT 중요 기획(휴가면 GPT 링크 숨김). 팀 관리에 칸별 전체 선택과 '대신 맡을 AI가 없는 일' 안내(위험 경고 아님).
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
 
 ## 구조

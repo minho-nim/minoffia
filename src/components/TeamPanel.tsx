@@ -1,6 +1,24 @@
 import { useState } from 'react';
-import { AGENT_BY_ID } from '../domain/agents';
-import { LEAVE_AGENTS, type AgentId, type Snapshot } from '../domain/types';
+import { AGENT_BY_ID, AGENTS } from '../domain/agents';
+import { LEAVE_AGENTS, WORK_TYPE_LABEL, type AgentId, type Snapshot, type WorkType } from '../domain/types';
+
+/**
+ * 대신 맡을 AI가 없는 일(v0.4.44): 그 일을 할 줄 아는 AI가 모두 휴가인 업무 종류와, 계정 단위로 멈추는 일.
+ * 위험 경고가 아니라 '이 일은 복귀 뒤에 해요' 안내다.
+ */
+export function uncovered(leave: AgentId[]): string[] {
+  const out: string[] = [];
+  const types: WorkType[] = ['dev', 'planning', 'research', 'design', 'prototype'];
+  for (const type of types) {
+    const able = AGENTS.filter((a) => a.skills.includes(type) && LEAVE_AGENTS.includes(a.id));
+    if (able.length && able.every((a) => leave.includes(a.id))) out.push(`${WORK_TYPE_LABEL[type]}: ${able.map((a) => a.name).join('·')} 모두 휴가라 새 업무는 복귀 뒤에 시작해요.`);
+  }
+  if (leave.includes('studioA') && leave.includes('studioB')) out.push('대화 답·기획서 초안·견본·사진 분석: Studio A·B(Gemini)가 모두 휴가라 미니엉이 앱 상태 질문만 답해요.');
+  const geminiAway = leave.includes('studioA') && leave.includes('studioB');
+  if (leave.includes('codex'))
+    out.push(geminiAway ? '기획서: Codex(ChatGPT)와 Studio A·B(Gemini)가 모두 휴가라 새 기획서는 복귀 뒤에 써요.' : '중요 기획(ChatGPT): Codex(OpenAI 계정) 휴가라 Gemini 기획서 초안으로 진행해요.');
+  return out;
+}
 import { spriteFor } from '../office/sprites';
 
 /**
@@ -18,6 +36,13 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
   const pickedWork = working.filter((id) => picked.has(id));
   const pickedAway = away.filter((id) => picked.has(id));
 
+  const notes = uncovered(leave);
+  const pickAll = (ids: AgentId[], on: boolean) =>
+    setPicked((cur) => {
+      const next = new Set(cur);
+      ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
+      return next;
+    });
   const toggle = (id: AgentId) =>
     setPicked((cur) => {
       const next = new Set(cur);
@@ -78,9 +103,22 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
         if (leave.includes(id) !== toLeave) move([id], toLeave);
       }}
     >
-      <h3>
-        {kind === 'work' ? '근무' : '휴가'} <span className="num num-count">{ids.length}</span>
-      </h3>
+      <div className="team-col-head">
+        <h3>
+          {kind === 'work' ? '근무' : '휴가'} <span className="num num-count">{ids.length}</span>
+        </h3>
+        {ids.length > 0 && (
+          <label className="team-all">
+            <input
+              type="checkbox"
+              checked={ids.every((id) => picked.has(id))}
+              onChange={(e) => pickAll(ids, e.target.checked)}
+              aria-label={`${kind === 'work' ? '근무' : '휴가'} 전체 선택`}
+            />
+            전체
+          </label>
+        )}
+      </div>
       {ids.length ? (
         <ul className="team-list">{ids.map(card)}</ul>
       ) : (
@@ -107,6 +145,16 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
         </div>
         {column('leave', away)}
       </div>
+      {notes.length > 0 && (
+        <div className="team-notes" role="status">
+          <b>대신 맡을 AI가 없는 일</b>
+          <ul>
+            {notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

@@ -48,7 +48,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
   );
   const leaveRef = useRef(leave);
   leaveRef.current = leave;
-  const speech = useMemo(() => (workflow ? speechFor(tasks, workflow) : new Map()), [tasks, workflow]);
+  const speech = useMemo(() => (workflow ? speechFor(tasks, workflow, leaveKey ? (leaveKey.split(',') as AgentId[]) : []) : new Map()), [tasks, workflow, leaveKey]);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
