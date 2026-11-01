@@ -1,4 +1,3 @@
-import { LEAVE_AGENTS } from '../domain/types';
 import { speechFor } from '../office/speech';
 import { markFor, type AgentMark } from '../office/marks';
 import { buildScene } from '../office/scene';
@@ -194,11 +193,8 @@ export function AgentRoster({
   serverMode,
   onSetLimit,
   onLinearProbe,
-  onSetLeave,
 }: {
   onLinearProbe?: () => Promise<LinearProbe>;
-  /** 근무·휴가 바꾸기(v0.4.39) */
-  onSetLeave: (agent: AgentId, onLeave: boolean) => void;
   snap: Snapshot;
   onSetLimit: (kind: AgentKind, n: number) => void;
   selected: AgentId | null;
@@ -213,24 +209,6 @@ export function AgentRoster({
   const leave = snap.leave ?? [];
   return (
     <div className="stack">
-      {/* 근무·휴가(v0.4.39): 체크를 풀면 휴가. 휴가인 AI는 사무실 아래 문으로 나가고, 새 배정·PM 계획에서 빠진다 */}
-      <section className="leave-board" aria-label="근무·휴가">
-        <h3>근무 · 휴가</h3>
-        <p className="muted small">체크를 풀면 휴가예요. 새 업무와 PM 계획은 일할 수 있는 다른 AI에게 맡겨요(진행 중인 업무는 그대로).</p>
-        <div className="leave-chips">
-          {LEAVE_AGENTS.map((id) => {
-            const away = leave.includes(id);
-            return (
-              <label key={id} className={`leave-chip${away ? ' is-away' : ''}`}>
-                <input type="checkbox" checked={!away} onChange={(e) => onSetLeave(id, !e.target.checked)} />
-                <img className={spriteFor(AGENT_BY_ID[id], 'stand').art ? 'is-art' : undefined} src={spriteFor(AGENT_BY_ID[id], 'stand').src} alt="" />
-                <span>{AGENT_BY_ID[id].name}</span>
-                <span className="leave-state">{away ? '휴가' : '근무'}</span>
-              </label>
-            );
-          })}
-        </div>
-      </section>
       {ordered.map((a) => {
         if (a.id === selected) {
           return (
