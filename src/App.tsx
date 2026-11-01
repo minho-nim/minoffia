@@ -304,6 +304,26 @@ export function App() {
     }
   };
 
+  /**
+   * 근무·휴가 바꾸기(v0.4.49): 화면을 바로 바꾸고 저장은 뒤에서 한다(전체를 다시 읽지 않음).
+   * 저장이 실패하면 화면을 되돌리고 알린다. 다른 기기에는 실시간 반영으로 간다.
+   */
+  const setLeaveNow = (agent: AgentId, onLeave: boolean) => {
+    const apply = (on: boolean) =>
+      setSnap((cur) => {
+        const rest = (cur.leave ?? []).filter((a) => a !== agent);
+        return { ...cur, leave: on ? [...rest, agent] : rest };
+      });
+    apply(onLeave);
+    store.setLeave(agent, onLeave).then(
+      () => say('ok', `${AGENT_BY_ID[agent].name}: ${onLeave ? '휴가 — 새 업무는 다른 AI에게 맡겨요.' : '근무로 돌아왔어요.'}`),
+      (e: Error) => {
+        apply(!onLeave);
+        say('error', `저장하지 못했습니다: ${e.message}`);
+      },
+    );
+  };
+
   /** 파일을 순서대로 올린다. 실패한 파일은 이유를 모아 돌려주고 나머지는 계속 올린다. revision: 결과 버전(결과 스크린샷) 또는 계획 버전(견본) */
   const uploadImages = async (
     taskId: string,
@@ -1485,7 +1505,7 @@ export function App() {
             <TeamPanel
               snap={snap}
               onSetLeave={(agent, onLeave) =>
-                void mutate(() => store.setLeave(agent, onLeave), `${AGENT_BY_ID[agent].name}: ${onLeave ? '휴가 — 새 업무는 다른 AI에게 맡겨요.' : '근무로 돌아왔어요.'}`)
+                setLeaveNow(agent, onLeave)
               }
             />
           )}

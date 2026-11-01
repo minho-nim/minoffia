@@ -1123,6 +1123,8 @@ a {
   display: flex;
   /* 탭 5개(v0.4.40~): 칸이 좁으면 두 줄로 내려간다(v0.4.46). 탭 글자 자체는 한 줄 그대로 */
   flex-wrap: wrap;
+  /* 한 줄일 때는 좌우 끝까지 고르게 펼친다(v0.4.49). 두 줄로 내려간 탭은 왼쪽부터 */
+  justify-content: space-between;
   gap: 2px;
   border-bottom: 2px solid var(--line);
 }
