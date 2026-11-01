@@ -224,6 +224,7 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
 }
 
 export function createSupabaseStore(client: SupabaseClient): OfficeStore {
+  let lastGeminiWarm = 0;
   const userId = async () => {
     const { data } = await client.auth.getSession();
     const id = data.session?.user.id;
@@ -646,6 +647,18 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       }
       if (!data?.ok || !data.repo) throw new Error(data?.error ?? '저장소를 만들지 못했습니다.');
       return { repo: data.repo as string, url: (data.url as string) ?? '', warning: data.warning as string | undefined };
+    },
+    warmGemini() {
+      // 서버가 잠들어 있으면 깨어나는 데 약 2초 걸린다. 입력창을 누를 때 미리 깨우고, 1분 안에는 다시 보내지 않는다.
+      const key = SUPABASE_KEY;
+      if (!SUPABASE_URL || !key || Date.now() - lastGeminiWarm < 60_000) return;
+      lastGeminiWarm = Date.now();
+      void client.auth.getSession().then(({ data: sess }) =>
+        fetch(`${SUPABASE_URL}/functions/v1/ask-gemini`, {
+          method: 'POST',
+          headers: { 'x-warm': '1', apikey: key, Authorization: `Bearer ${sess.session?.access_token ?? key}` },
+        }).catch(() => undefined),
+      );
     },
     async askGemini(question, history, images = [], onDelta) {
       if (onDelta && SUPABASE_URL && SUPABASE_KEY) {

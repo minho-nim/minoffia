@@ -1265,6 +1265,7 @@ export function App() {
               <Inbox
                 snap={snap}
                 canAskGemini={store.mode === 'supabase'}
+                onWarmGemini={() => store.warmGemini?.()}
                 onCreateTask={(d, images) => addTask(d, images)}
                 onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
                 onAskGemini={async (q, history, images, onDelta) => {

@@ -29,7 +29,7 @@ const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 
 const cors = {
   'Access-Control-Allow-Origin': env('OFFICE_ALLOWED_ORIGIN') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-warm',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -46,33 +46,53 @@ interface InlineImage {
   data: string;
 }
 
-function requestBody(question: string, history: Turn[], images: InlineImage[], thinking: boolean) {
+/** 생각 단계 설정. Gemini 3 계열은 thinkingLevel, 2.5 계열은 thinkingBudget을 쓴다. 'none'은 설정 없이(모델 기본). */
+type ThinkingMode = 'level' | 'budget' | 'none';
+const THINKING: Record<ThinkingMode, Record<string, unknown> | null> = {
+  level: { thinkingLevel: 'minimal' },
+  budget: { thinkingBudget: 0 },
+  none: null,
+};
+
+function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode) {
+  const thinking = THINKING[mode];
   return JSON.stringify({
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [
       ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
       { role: 'user', parts: [...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
     ],
-    // 짧은 질문 답에는 '생각' 단계를 끈다(빠르게, v0.4.15). 모델이 이 설정을 모르면(400) 설정 없이 다시 묻는다.
-    generationConfig: { maxOutputTokens: 1024, temperature: 0.4, ...(thinking ? {} : { thinkingConfig: { thinkingBudget: 0 } }) },
+    // 짧은 질문 답에는 '생각' 단계를 가장 적게 한다(빠르게, v0.4.15·v0.4.23). 모델이 설정을 모르면(400) 다음 설정으로 다시 묻는다.
+    generationConfig: { maxOutputTokens: 1024, temperature: 0.4, ...(thinking ? { thinkingConfig: thinking } : {}) },
   });
+}
+
+/** 모델 이름으로 먼저 쓸 생각 설정 순서를 정한다(400 재시도로 시간을 버리지 않게). */
+export function thinkingOrder(model: string): ThinkingMode[] {
+  return /^gemini-(2\.|1\.)/.test(model) ? ['budget', 'level', 'none'] : ['level', 'budget', 'none'];
 }
 
 /** Gemini에 묻는다. stream이면 SSE 응답(Response)을 그대로 돌려주고, 아니면 글을 모아 돌려준다. */
 async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
-  const call = (thinking: boolean) =>
+  const call = (mode: ThinkingMode) =>
     fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(question, history, images, thinking),
+      body: requestBody(question, history, images, mode),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  const res = await call(false);
-  // 400이면(이 모델이 생각 끄기를 모르는 경우 등) 설정 없이 한 번만 다시 묻는다.
-  if (res.status !== 400) return res;
-  await res.body?.cancel();
-  return call(true);
+  const order = thinkingOrder(model);
+  let res: Response | null = null;
+  let mode: ThinkingMode = order[0];
+  for (const m of order) {
+    mode = m;
+    res = await call(m);
+    // 400이면(이 모델이 이 생각 설정을 모르는 경우 등) 다음 설정으로 다시 묻는다.
+    if (res.status !== 400 || m === order[order.length - 1]) break;
+    await res.body?.cancel();
+  }
+  return { res: res!, mode };
 }
 
 const partsText = (data: unknown) =>
@@ -84,6 +104,8 @@ const partsText = (data: unknown) =>
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'POST만 받습니다.' });
+  // 입력창을 누르면 앱이 미리 깨운다(서버 깨어나기 약 2초를 질문 전에 끝냄). Gemini는 부르지 않는다.
+  if (req.headers.get('x-warm') === '1') return new Response(null, { status: 204, headers: cors });
 
   const ownerEmail = env('OFFICE_OWNER_EMAIL').toLowerCase();
   const keys = [env('GEMINI_API_KEY'), env('GEMINI_API_KEY2')];
@@ -134,8 +156,11 @@ Deno.serve(async (req) => {
     if (!key) continue;
     const slot = i + 1;
     let res: Response;
+    let mode: ThinkingMode;
+    let headMs = 0;
     try {
-      res = await openGemini(key, model, question, history, images, stream);
+      ({ res, mode } = await openGemini(key, model, question, history, images, stream));
+      headMs = Date.now() - started;
     } catch (e) {
       last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
       continue;
@@ -171,7 +196,7 @@ Deno.serve(async (req) => {
             controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
           } finally {
             controller.close();
-            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, first_ms: first, total_ms: Date.now() - started, chars: total }));
+            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
             await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
           }
         },
@@ -181,7 +206,7 @@ Deno.serve(async (req) => {
     const data = await res.json().catch(() => ({}));
     const text = res.status === 200 ? partsText(data).trim() : '';
     if (text) {
-      console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, total_ms: Date.now() - started, chars: text.length }));
+      console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
       await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length });
       return reply(200, { ok: true, answer: text, keySlot: slot, model });
     }
