@@ -17,7 +17,7 @@ export function MyTurnList({ items, onOpen, onApprove }: Props) {
   return (
     <section className="my-turn" aria-label="내 차례">
       <h3>
-        내 차례 <span className="num">{items.length}</span>
+        내 차례 <span className="num num-turn">{items.length}</span>
       </h3>
       {items.length === 0 ? (
         <p className="muted small">지금 내 차례인 일이 없어요. AI가 일하는 중이거나 쉬는 중이에요.</p>
