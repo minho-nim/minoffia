@@ -467,8 +467,13 @@ a {
 .team-moves {
   display: flex;
   flex-direction: column;
-  align-self: center;
+  justify-content: center;
+  align-self: stretch;
   gap: 8px;
+}
+/* 두 칸 높이가 달라도 버튼은 늘 판 가운데: 칸을 같은 높이로 늘린다 */
+.team-board > .team-col {
+  align-self: stretch;
 }
 .team-moves .btn {
   padding-inline: 8px;
