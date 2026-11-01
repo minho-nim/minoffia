@@ -443,6 +443,8 @@ a {
   width: 100%;
   max-width: 100%;
   aspect-ratio: 300 / 224;
+  /* 캐릭터·말풍선(z-index 10+y)이 사무실 밖 고정 머리(z 60) 위로 올라오지 않게 사무실 안에 가둔다(v0.4.25). */
+  isolation: isolate;
   container-type: inline-size;
   border-radius: var(--radius);
   overflow: hidden;
