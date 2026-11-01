@@ -242,26 +242,27 @@ export function App() {
   const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
   const [draft, setDraft] = useState<{ text: string; n: number } | null>(null);
-  const topIo = useRef<IntersectionObserver | null>(null);
+  // 얇은 머리·작은 사무실(v0.4.14~, v0.4.35): 켜기 = 위 머리가 화면 밖으로 나갔고, 사무실이 줄어든 뒤에도
+  // 페이지가 머리 높이 넘게 내려갈 수 있을 때(짧은 페이지에서 아래 빈 공간이 생기거나 깜빡이지 않게).
+  // 끄기 = 맨 위에 닿았을 때만.
+  const topEl = useRef<HTMLElement | null>(null);
+  const checkMini = useCallback(() => {
+    const top = topEl.current;
+    if (!top) return;
+    if (window.scrollY <= 2) return setMini(false);
+    if (top.getBoundingClientRect().bottom >= 36) return;
+    const office = document.querySelector<HTMLElement>('.stage .office');
+    const shrink = office ? office.offsetHeight / 2 : 0;
+    const room = document.documentElement.scrollHeight - window.innerHeight - shrink;
+    if (room > top.offsetHeight) setMini(true);
+  }, []);
   const topRef = useCallback((el: HTMLElement | null) => {
-    topIo.current?.disconnect();
-    topIo.current = null;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    // 켜기: 위 머리가 화면 밖으로 나가면. 끄기: 맨 위에 닿았을 때만(아래 scroll). 작은 사무실이 되며 아래 내용이
-    // 끌어올려져 페이지가 짧아져도 켜졌다 꺼졌다 반복하지 않게 한다(v0.4.26).
-    const io = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) setMini(true);
-    }, { rootMargin: '-36px 0px 0px 0px' });
-    io.observe(el);
-    topIo.current = io;
+    topEl.current = el;
   }, []);
   useEffect(() => {
-    const onScroll = () => {
-      if (window.scrollY <= 2) setMini(false);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    window.addEventListener('scroll', checkMini, { passive: true });
+    return () => window.removeEventListener('scroll', checkMini);
+  }, [checkMini]);
   const [, setMinuteTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -1208,7 +1209,7 @@ export function App() {
         <ThemeToggle tabbable={mini} />
       </div>
 
-      <main className="layout">
+      <main className={`layout${mini ? ' is-mini' : ''}`}>
         <section className={`stage${mini ? ' is-mini' : ''}`} aria-label="오피스">
           <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} workflow={snap.workflow} selected={selected} onSelect={selectAgent} onOpenTask={showTask} />
           <p className="stage-note">
