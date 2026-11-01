@@ -22,6 +22,8 @@ interface Msg {
   id: string;
   from: From;
   text: string;
+  /** 미니엉이 넘겨준 답을 실제로 쓴 AI(v0.4.44): 'Gemini · Studio A' 등 */
+  via?: string;
   /** 단계 알림: 그 업무가 아직 이 단계일 때만 버튼을 보인다 */
   taskId?: string;
   stage?: string;
@@ -63,7 +65,11 @@ interface Props {
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
     opts?: AskOptions,
-  ) => Promise<string>;
+  ) => Promise<{ answer: string; keySlot: number }>;
+  /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
+  geminiAway?: boolean;
+  /** Codex(OpenAI·ChatGPT 계정)가 휴가면 GPT로 넘기는 링크를 숨긴다(v0.4.44) */
+  gptAway?: boolean;
   onCopy: (text: string) => Promise<boolean>;
   /** 저장소 만들기를 쓸 수 있으면 함수(Supabase 모드) */
   onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
@@ -158,7 +164,9 @@ function readPending(): Pending | null {
   }
 }
 
-const FROM_LABEL: Record<From, string> = { me: '나', office: '미니엉', gemini: 'Gemini' };
+// 대화창의 얼굴은 늘 미니엉(v0.4.44, 소유자). Gemini가 쓴 답도 미니엉이 넘겨주고, 아래에 작게 누가 답했는지 붙인다.
+const FROM_LABEL: Record<From, string> = { me: '나', office: '미니엉', gemini: '미니엉' };
+const VIA_OF_SLOT: Record<number, string> = { 1: 'Gemini · Studio A가 답함', 2: 'Gemini · Studio B가 답함' };
 
 /** Gemini 질문에 함께 보낼 수 있는 사진 수(무료 한도·요청 크기 때문) */
 const MAX_GEMINI_IMAGES = 3;
@@ -188,7 +196,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
-export function Inbox({ snap, canAskGemini, onWarmGemini, onLinkProject, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onLinkProject, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   const logRef = useRef(log);
   logRef.current = log;
@@ -597,7 +605,12 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onLinkProject, onCreat
       if (canAskGemini) askGemini(text, project?.name);
       else {
         setPending({ kind: 'question', text });
-        say('office', '업무 기록으로는 답할 수 없는 질문이에요. 어디에 물어볼까요?');
+        say(
+          'office',
+          geminiAway
+            ? `Studio A·B(Gemini)가 모두 휴가라 지금은 앱 상태 질문만 답할 수 있어요. 팀 관리에서 한 명을 근무로 돌려 주세요.${gptAway ? '' : ' ChatGPT로 복사해 물어볼 수는 있어요.'}`
+            : '업무 기록으로는 답할 수 없는 질문이에요. 어디에 물어볼까요?',
+        );
       }
     } else if (prior && canAskGemini && text.length <= FOLLOWUP_MAX) {
       // Gemini 답 바로 뒤의 짧은 말("더 자세히", "예시도")은 이어지는 질문으로 본다. 개발하라는 말이 있으면 위에서 확인한다.
@@ -724,7 +737,10 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onLinkProject, onCreat
           ...(route ? { route: { projects: snap.projects.map((p) => p.name) } } : {}),
         };
         try {
-          const raw = await onAskGemini(text, history.slice(-6), encoded, put, opts);
+          const got = await onAskGemini(text, history.slice(-6), encoded, put, opts);
+          const raw = got.answer;
+          const via = VIA_OF_SLOT[got.keySlot];
+          if (via) setLog((l) => l.map((m) => (m.id === id ? { ...m, via } : m)));
           const r = route ? parseRouted(raw) : null;
           if (r && r.kind !== 'question') {
             // 업무·애매: 답 말풍선은 지우고 미니엉이 이어서 묻는다. 첨부는 업무 접수까지 들고 간다.
@@ -777,7 +793,10 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onLinkProject, onCreat
         <ol ref={listRef} className="inbox-log" aria-live="polite">
           {log.map((m) => (
             <li key={m.id} className={`inbox-msg from-${m.from}`}>
-              <span className="inbox-who">{FROM_LABEL[m.from]}</span>
+              <span className="inbox-who">
+                {FROM_LABEL[m.from]}
+                {m.via && <span className="inbox-via">{m.via}</span>}
+              </span>
               {m.text ? (
                 <p>{m.text}</p>
               ) : (
@@ -855,10 +874,14 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onLinkProject, onCreat
           )}
           {pending.kind === 'followup' && (
             <span className="inbox-links">
-              <button type="button" className="link-btn" title="질문과 Gemini 답을 함께 복사합니다. ChatGPT 앱에 붙여넣으세요." onClick={() => void copyGpt(pending.text, pending.answer)}>
-                {pending.projectName ? `'${pending.projectName}' 판단은 GPT에게 묻기` : 'GPT에게 이어서 묻기'}
-              </button>
-              <span aria-hidden="true">·</span>
+              {!gptAway && (
+                <>
+                  <button type="button" className="link-btn" title="질문과 Gemini 답을 함께 복사합니다. ChatGPT 앱에 붙여넣으세요." onClick={() => void copyGpt(pending.text, pending.answer)}>
+                    {pending.projectName ? `'${pending.projectName}' 판단은 GPT에게 묻기` : 'GPT에게 이어서 묻기'}
+                  </button>
+                  <span aria-hidden="true">·</span>
+                </>
+              )}
               <button type="button" className="link-btn" onClick={() => askProject(pending.text, { question: pending.text, answer: pending.answer })}>
                 업무로 만들기
               </button>
@@ -866,9 +889,11 @@ export function Inbox({ snap, canAskGemini, onWarmGemini, onLinkProject, onCreat
           )}
           {pending.kind === 'question' && (
             <>
-              <button type="button" className={`btn btn-small ${pending.projectName ? 'btn-primary' : 'btn-ghost'}`} onClick={() => void copyGpt(pending.text)}>
-                ChatGPT로 복사
-              </button>
+              {!gptAway && (
+                <button type="button" className={`btn btn-small ${pending.projectName ? 'btn-primary' : 'btn-ghost'}`} onClick={() => void copyGpt(pending.text)}>
+                  ChatGPT로 복사
+                </button>
+              )}
               {canAskGemini && (
                 <button type="button" className={`btn btn-small ${pending.projectName ? 'btn-ghost' : 'btn-primary'}`} onClick={() => askGemini(pending.text)}>
                   Gemini에게 묻기

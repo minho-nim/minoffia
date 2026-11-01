@@ -40,7 +40,7 @@ interface Props {
 const KIND_OF: Partial<Record<AgentId, AgentKind>> = { codex: 'codex', claude: 'claude', grok: 'grok', studioA: 'gemini', studioB: 'gemini' };
 
 /** 오피스 캐릭터 → 실행 경로(어댑터) */
-const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision', mina: 'gpt' };
+const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision' };
 
 /** Codex for Linear 연결 확인(읽기만). 결정 문서 docs/CODEX_LINEAR_DECISION_2026-10-30.md 4-1단계 */
 function LinearCheck({ onProbe }: { onProbe: () => Promise<LinearProbe> }) {
@@ -202,7 +202,7 @@ export function AgentRoster({
   onOpenTask: (task: Task) => void;
   serverMode: boolean;
 }) {
-  const speechMap = speechFor(snap.tasks, snap.workflow);
+  const speechMap = speechFor(snap.tasks, snap.workflow, snap.leave ?? []);
   const scene = buildScene(snap.tasks, snap.workflow.assignments);
   const markOf = (id: AgentId) => markFor(id, scene, speechMap);
   const ordered = selected ? [AGENT_BY_ID[selected], ...AGENTS.filter((a) => a.id !== selected)] : AGENTS;

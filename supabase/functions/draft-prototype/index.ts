@@ -1,6 +1,6 @@
 // Gemini 견본(무료, v0.4.7): "견본 먼저" 계획이면 견본 지시서로 HTML 견본 한 장을 만든다(소유자 승인 2026-10-31).
 // 만든 HTML은 앱이 견본(kind prototype)으로 올리고, 사용자는 미리보기를 보고 견본 승인(P)만 한다. AI Studio Build 수동 견본도 그대로 쓸 수 있다.
-// 이 계획 버전에 견본이 이미 있으면 만들지 않는다. 키는 secrets(GEMINI_API_KEY = A, GEMINI_API_KEY2 = B 예비)에만, 글은 저장하지 않고 횟수만 ai_calls(purpose prototype).
+// 이 계획 버전에 견본이 이미 있으면 만들지 않는다. 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만, 글은 저장하지 않고 횟수만 ai_calls(purpose prototype).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { extractHtml, PROTOTYPE_SYSTEM, stripActive } from './prototype.ts';
 
@@ -79,6 +79,12 @@ Deno.serve(async (req) => {
 
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   let last = { status: 0, message: '' };
+  // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
+  const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
+  const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
+  if (away.has('studioA')) keys[0] = '';
+  if (away.has('studioB')) keys[1] = '';
+  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
   for (const [i, key] of keys.entries()) {
     if (!key) continue;
     let r: { status: number; text: string; message: string };
