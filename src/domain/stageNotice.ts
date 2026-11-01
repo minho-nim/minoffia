@@ -22,8 +22,8 @@ export interface StageNotice {
 }
 
 const NEXT: Partial<Record<Stage, string>> = {
-  received: '업무 카드에서 "ChatGPT용 자료 복사"로 기획을 시작하세요.',
-  planner_handoff: 'ChatGPT 답(기획서)을 업무 카드에 붙여넣으세요.',
+  received: '업무 카드에서 "Gemini 기획서 초안"을 눌러 기획을 시작하세요.',
+  planner_handoff: 'Gemini가 기획서 초안을 쓰고 있어요.',
   needs_clarification: 'GPT의 확인 질문에 답해 주세요.',
   spec_ready: '기획서를 보고 기획 승인하거나 수정 요청하세요.',
   development_approval_pending: '기획서를 보고 기획 승인하거나 수정 요청하세요.',
@@ -73,7 +73,7 @@ export function noticeFor(task: Task, all: WorkflowData): StageNotice {
   if (v.stage === 'needs_clarification' && v.spec?.answer) {
     const q = v.spec.answer.trim();
     lines.push(`확인 질문:\n${q.length > 600 ? `${q.slice(0, 599)}…` : q}`);
-    lines.push(v.spec.planner === 'gemini_draft' ? '아래 입력창에 답을 쓰면 Gemini가 기획서를 다시 써요.' : 'ChatGPT에 답하고 새 기획서를 저장하세요.');
+    lines.push('아래 입력창에 답을 쓰면 Gemini가 기획서를 다시 써요.');
   } else lines.push(NEXT[v.stage] ?? '');
   return {
     id: `stage-${task.id}-${stageSignature(task, all)}`,

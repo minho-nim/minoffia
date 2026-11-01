@@ -5,7 +5,7 @@ import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments
 import { RequestContext } from './RequestContext';
 import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../domain/requestContext';
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
-import { buildCodexHandoff, buildCodexPrRequest, buildGptPackage, buildPrototypeHandoff } from '../domain/handoffV2';
+import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { startBlocker } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
@@ -212,17 +212,17 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
         </ol>
       </div>
 
-      {/* 1. 기획: 기본은 Gemini 무료 초안(자동), 어렵거나 중요한 업무만 ChatGPT(수동 인계) */}
+      {/* 1. 기획: Gemini 무료 초안(자동). v0.4.56 소유자: 기획에서 ChatGPT를 뺐다(기획서는 Gemini, 업무 계획은 Claude PM) */}
       <section className="wf-section" id={`wf-${task.id}-plan`}>
-        <h4>1. 기획 — Gemini 초안 · ChatGPT</h4>
+        <h4>1. 기획 — Gemini 초안</h4>
         {view.plannerFeedback && (
           <p className="task-error">
             v{view.spec?.revision}에 수정 요청: {view.plannerFeedback} —{' '}
-            {view.spec?.planner === 'gemini_draft' ? 'Gemini가 이 내용을 반영해 다시 씁니다(안 되면 아래 버튼).' : '자료를 다시 복사하면 이 내용이 함께 들어갑니다. ChatGPT 결과로 새 버전을 저장하세요.'}
+            {'Gemini가 이 내용을 반영해 다시 씁니다(안 되면 아래 "Gemini로 초안 다시 쓰기").'}
           </p>
         )}
         <p className="muted small">
-          기본은 Gemini(무료)가 기획서 초안을 씁니다. 초안을 보고 기획 승인하거나 수정 요청만 하세요. 어렵거나 중요한 업무는 "ChatGPT용 자료 복사"로 ChatGPT에서 기획해 저장할 수 있습니다(수동). 링크·확인 질문·이미지 분석은 두 쪽 모두에 들어갑니다.
+          Gemini(무료)가 기획서 초안을 씁니다. 초안을 보고 기획 승인하거나 수정 요청만 하세요. 링크·확인 질문·이미지 분석도 함께 들어갑니다.
         </p>
         <div className="wf-sub">
           <p className="small">
@@ -252,12 +252,9 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
               {view.spec ? 'Gemini로 초안 다시 쓰기' : 'Gemini 기획서 초안(무료)'}
             </button>
           )}
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => void copy('gpt', buildGptPackage(task, project, view.spec && view.plannerFeedback ? { spec: view.spec, feedback: view.plannerFeedback } : null, requestImages, taskLinks, taskQa, analyses))}>
-            {copied === 'gpt' ? '복사됨' : 'ChatGPT용 자료 복사'}
-          </button>
-          {!editing && (
+          {!editing && view.spec && (
             <button type="button" className="btn btn-small" onClick={startEdit}>
-              {view.spec ? `기획서 고치기 (지금 v${view.spec.revision})` : 'GPT 기획 결과 저장'}
+              {`기획서 직접 고치기 (지금 v${view.spec.revision})`}
             </button>
           )}
         </div>

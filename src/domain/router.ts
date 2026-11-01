@@ -102,10 +102,5 @@ export function coverFor(leave: AgentId[]): Partial<Record<AgentId, string[]>> {
     if (!next) continue;
     (out[next] ??= []).push(`${WORK_TYPE_LABEL[type]}(${AGENT_BY_ID[first].name} 대신)`);
   }
-  // Codex(ChatGPT 계정) 휴가면 중요 기획은 Gemini(근무 중인 Studio) 기획서 초안으로
-  if (leave.includes('codex')) {
-    const g = !leave.includes('studioA') ? 'studioA' : !leave.includes('studioB') ? 'studioB' : null;
-    if (g) (out[g] ??= []).push('중요 기획(ChatGPT 대신)');
-  }
   return out;
 }
