@@ -340,6 +340,28 @@ a {
   background: rgba(246, 231, 200, 0.12);
 }
 
+/* 에이전트 상태 표시(v0.4.35): 사무실 말풍선과 같은 색 */
+.pill.pill-mark {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.pill.pill-mark-alert {
+  background: var(--st-blocked);
+  color: var(--st-blocked-ink);
+}
+.pill.pill-mark-ask {
+  background: #d9822b;
+  color: #fffaf0;
+}
+.pill.pill-mark-busy {
+  background: var(--st-progress);
+  color: var(--st-progress-ink);
+}
+.pill.pill-mark-rest {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
 /* 얇은 머리에서는 오른쪽 끝에 작게(.topbar-mini button 기본 글꼴·여백을 덮는다) */
 .topbar-mini .theme-toggle {
   margin-left: auto;
@@ -534,8 +556,8 @@ a {
     transform: scale(0.5);
     pointer-events: auto;
   }
-  /* 줄어든 만큼 아래 내용을 끌어올려 사무실과 탭 사이 빈칸을 없앤다(v0.4.26). 페이지가 짧아져도
-     작은 사무실은 맨 위에 닿을 때만 풀리므로(App.tsx) 켜졌다 꺼졌다 반복하지 않는다. */
+  /* 줄어든 만큼 아래 내용을 끌어올려 사무실과 탭 사이 빈칸을 없앤다(v0.4.26). 페이지가 너무 짧으면
+     작은 사무실로 바꾸지 않고(App.tsx checkMini), 맨 위에 닿을 때만 풀려서 깜빡이지 않는다. */
   html {
     overflow-anchor: none;
   }
@@ -545,11 +567,11 @@ a {
   .stage.is-mini {
     margin-bottom: calc(-1 * (100vw - 32px) * 0.747 * 0.5);
   }
-  /* 내용이 짧아도 화면 높이만큼은 늘 내려갈 수 있게 해, 작은 사무실이 되자마자 맨 위로 튕겨 풀리지 않게 한다 */
-  .layout {
-    min-height: 100vh;
-    min-height: 100svh;
-    align-content: start;
+  /* 작은 사무실이 아닐 때(맨 위·짧은 페이지)는 사무실·탭을 고정하지 않는다. 큰 사무실이 위에 붙어 탭이 겹치지 않게(v0.4.35) */
+  .layout:not(.is-mini) .stage,
+  .layout:not(.is-mini) .tabs {
+    position: relative;
+    top: auto;
   }
   /* 탭은 줄어든 사무실 바로 아래에 고정(v0.4.16). 내리기 전에는 제자리에 있다. */
   .tabs {

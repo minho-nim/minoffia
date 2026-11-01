@@ -1,3 +1,6 @@
+import { speechFor } from '../office/speech';
+import { markFor, type AgentMark } from '../office/marks';
+import { buildScene } from '../office/scene';
 import { useState } from 'react';
 import type { LinearProbe } from '../data/store';
 import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
@@ -9,11 +12,12 @@ import type { AgentAssignment } from '../domain/workflow-types';
 import { remainingToday, runsToday } from '../domain/usage';
 import type { AgentId, AiCall, Snapshot, Task, UsageRun } from '../domain/types';
 import { STATUS_LABEL } from '../domain/types';
-import { ACTIVITY_LABEL, buildScene } from '../office/scene';
 import { spriteFor } from '../office/sprites';
 
 interface Props {
   agentId: AgentId;
+  /** 사무실 말풍선과 같은 표시(없으면 휴식) */
+  speech?: AgentMark;
   tasks: Task[];
   usage: UsageRun[];
   assignments: AgentAssignment[];
@@ -78,9 +82,18 @@ function LinearCheck({ onProbe }: { onProbe: () => Promise<LinearProbe> }) {
   );
 }
 
-export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe }: Props) {
+/** 에이전트 상태는 사무실 말풍선과 같은 표시 하나만(v0.4.35): ! 막힘 > ? 내 차례 > … 일하는 중 > 휴식 */
+function SpeechMark({ speech }: { speech?: AgentMark }) {
+  if (!speech) return <span className="pill pill-mark pill-mark-rest">휴식</span>;
+  return (
+    <span className={`pill pill-mark pill-mark-${speech.kind}`} title={speech.label}>
+      {speech.text}
+    </span>
+  );
+}
+
+export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech }: Props) {
   const a = AGENT_BY_ID[agentId];
-  const scene = buildScene(tasks, assignments).find((s) => s.agent === agentId);
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
   const mine = tasks.filter((t) => t.assignee === agentId);
   const used = runsToday(usage, agentId);
@@ -97,7 +110,7 @@ export function AgentPanel({ agentId, tasks, usage, assignments, onOpenTask, aiC
           </p>
           <p>
             <span className="pill">{MODE_LABEL[a.mode]}</span>{' '}
-            {scene && <span className={`pill pill-act-${scene.activity}`}>{ACTIVITY_LABEL[scene.activity]}</span>}
+            <SpeechMark speech={speech} />
           </p>
         </div>
       </div>
@@ -186,7 +199,9 @@ export function AgentRoster({
   onOpenTask: (task: Task) => void;
   serverMode: boolean;
 }) {
+  const speechMap = speechFor(snap.tasks, snap.workflow);
   const scene = buildScene(snap.tasks, snap.workflow.assignments);
+  const markOf = (id: AgentId) => markFor(id, scene, speechMap);
   const ordered = selected ? [AGENT_BY_ID[selected], ...AGENTS.filter((a) => a.id !== selected)] : AGENTS;
   return (
     <div className="stack">
@@ -196,6 +211,7 @@ export function AgentRoster({
             <section key={a.id} className="agent-expanded" aria-label={`${a.name} 자세히`}>
               <AgentPanel
                 agentId={a.id}
+                speech={markOf(a.id)}
                 tasks={snap.tasks}
                 usage={snap.usage}
                 assignments={snap.workflow.assignments}
@@ -218,20 +234,17 @@ export function AgentRoster({
             </section>
           );
         }
-        const s = scene.find((x) => x.agent === a.id);
         const q = quotaFor(a.id, snap);
-        const open = snap.tasks.filter((t) => t.assignee === a.id && t.status !== 'done').length;
         return (
           <button key={a.id} type="button" className="agent-row" onClick={() => onSelect(a.id)} aria-label={`${a.name} 펼치기`}>
             <img className={`agent-row-portrait${spriteFor(a, 'stand').art ? ' is-art' : ''}`} src={spriteFor(a, 'stand').src} alt="" />
             <span className="agent-row-main">
               <b>{a.name}</b> <span className="muted small">{a.role}</span>
               <span className="agent-row-pills">
-                {s && <span className={`pill pill-act-${s.activity}`}>{ACTIVITY_LABEL[s.activity]}</span>}
+                <SpeechMark speech={markOf(a.id)} />
                 <span className={`pill pill-quota-${q.state}`} title={q.detail}>
                   {q.label}
                 </span>
-                <span className="muted small">업무 {open}</span>
               </span>
             </span>
           </button>
