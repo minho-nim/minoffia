@@ -5,7 +5,8 @@ import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
 import { STATUS_LABEL } from '../domain/types';
 import { drawOffice } from './draw';
 import { H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
-import { ACTIVITY_LABEL, buildScene, type AgentScene } from './scene';
+import { ACTIVITY_LABEL, buildScene } from './scene';
+import { badgeFor } from './marks';
 import { speechFor } from './speech';
 import { spriteFor } from './sprites';
 import { BACKGROUND_URL } from './assets';
@@ -32,18 +33,6 @@ interface Mover {
 
 const SPEED = 22; // 논리 픽셀/초. 천천히 걷는다.
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
-
-/** 말풍선 단계 이름(업무 종류). 단계[표시]로 보인다: 개발[…] · 개발[!] · 검토[?] */
-const WORK_WORD: Record<Task['type'], string> = { planning: '기획', dev: '개발', design: '디자인', prototype: '견본', research: '조사', qa: '검수' };
-const MARK: Partial<Record<AgentScene['activity'], string>> = { working: '…', helping: '…', blocked: '!', review: '?' };
-
-/** 업무 단계 말풍선이 없을 때의 작은 표시(업무 상태로만): 단계[표시] */
-function badgeFor(s: AgentScene): string | undefined {
-  const mark = MARK[s.activity];
-  if (!mark || !s.task) return undefined;
-  if (s.agent === 'mina') return `접수[${s.task.status === 'blocked' ? '!' : s.task.status === 'review' ? '?' : '…'}]`;
-  return `${s.activity === 'review' ? '검토' : WORK_WORD[s.task.type]}[${mark}]`;
-}
 
 export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
