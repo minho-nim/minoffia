@@ -1,3 +1,4 @@
+import { coverFor } from '../domain/router';
 import { speechFor } from '../office/speech';
 import { markFor, type AgentMark } from '../office/marks';
 import { buildScene } from '../office/scene';
@@ -20,6 +21,8 @@ interface Props {
   speech?: AgentMark;
   /** 휴가 중이면 표시를 '휴가'로 */
   leave?: boolean;
+  /** 휴가인 AI 대신 맡은 일(v0.4.51) */
+  cover?: string[];
   tasks: Task[];
   usage: UsageRun[];
   assignments: AgentAssignment[];
@@ -95,7 +98,7 @@ function SpeechMark({ speech, leave }: { speech?: AgentMark; leave?: boolean }) 
   );
 }
 
-export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech, leave }: Props) {
+export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech, leave, cover }: Props) {
   const a = AGENT_BY_ID[agentId];
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
   const mine = tasks.filter((t) => t.assignee === agentId);
@@ -109,7 +112,8 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
         <div>
           <h3>{a.name}</h3>
           <p className="muted">
-            {a.role} · {a.provider}
+            {leave ? '휴가 중' : a.role}
+            {!leave && cover?.length ? <span className="cover-roles"> + {cover.join(', ')}</span> : null} · {a.provider}
           </p>
           <p>
             <span className="pill">{MODE_LABEL[a.mode]}</span>{' '}
@@ -205,8 +209,11 @@ export function AgentRoster({
   const speechMap = speechFor(snap.tasks, snap.workflow, snap.leave ?? []);
   const scene = buildScene(snap.tasks, snap.workflow.assignments);
   const markOf = (id: AgentId) => markFor(id, scene, speechMap);
-  const ordered = selected ? [AGENT_BY_ID[selected], ...AGENTS.filter((a) => a.id !== selected)] : AGENTS;
   const leave = snap.leave ?? [];
+  // 휴가인 AI는 맨 아래로(v0.4.51). 펼친 AI는 맨 위 그대로.
+  const byDuty = [...AGENTS.filter((a) => !leave.includes(a.id)), ...AGENTS.filter((a) => leave.includes(a.id))];
+  const ordered = selected ? [AGENT_BY_ID[selected], ...byDuty.filter((a) => a.id !== selected)] : byDuty;
+  const covers = coverFor(leave);
   return (
     <div className="stack">
       {ordered.map((a) => {
@@ -217,6 +224,7 @@ export function AgentRoster({
                 agentId={a.id}
                 speech={markOf(a.id)}
                 leave={leave.includes(a.id)}
+                cover={covers[a.id]}
                 tasks={snap.tasks}
                 usage={snap.usage}
                 assignments={snap.workflow.assignments}
@@ -244,7 +252,11 @@ export function AgentRoster({
           <button key={a.id} type="button" className="agent-row" onClick={() => onSelect(a.id)} aria-label={`${a.name} 펼치기`}>
             <img className={`agent-row-portrait${spriteFor(a, 'stand').art ? ' is-art' : ''}`} src={spriteFor(a, 'stand').src} alt="" />
             <span className="agent-row-main">
-              <b>{a.name}</b> <span className="muted small">{a.role}</span>
+              <b>{a.name}</b>{' '}
+              <span className="muted small">
+                {leave.includes(a.id) ? '휴가 중' : a.role}
+                {!leave.includes(a.id) && covers[a.id]?.length ? <span className="cover-roles"> + {covers[a.id]!.join(', ')}</span> : null}
+              </span>
               <span className="agent-row-pills">
                 <SpeechMark speech={markOf(a.id)} leave={leave.includes(a.id)} />
                 <span className={`pill pill-quota-${q.state}`} title={q.detail}>

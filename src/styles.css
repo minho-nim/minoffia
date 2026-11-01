@@ -380,6 +380,20 @@ a {
   opacity: 1;
 }
 
+/* 휴가 대신 맡은 일(v0.4.51) */
+.cover-roles {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 어둡게: 말풍선·방 이름표·대기열 메모도 사무실 조명과 함께 살짝 어둡게(v0.4.51) */
+:root[data-theme='dark'] .office .room-tag,
+:root[data-theme='dark'] .office .agent-speech,
+:root[data-theme='dark'] .office .agent-badge,
+:root[data-theme='dark'] .office .memo-board {
+  filter: brightness(0.78) saturate(0.9);
+}
+
 /* AI 휴가(v0.4.39) */
 .pill.pill-mark-leave {
   background: var(--surface-2);

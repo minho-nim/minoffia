@@ -87,3 +87,25 @@ export function routeTask(input: RouteInput, usage: UsageRun[], now: Date = new 
     reason: `${why}${leaveNote} → ${AGENT_BY_ID[primary].name} (후보 모두 오늘 한도 소진, 내일 실행)`,
   };
 }
+
+
+/**
+ * 휴가 때문에 대신 맡은 일(v0.4.51): 업무 종류마다 1순위가 휴가면 근무 중인 다음 후보가 맡는다(routeTask와 같은 순서).
+ * 에이전트 탭에 '+ 개발(Codex 대신)'처럼 보여 준다.
+ */
+export function coverFor(leave: AgentId[]): Partial<Record<AgentId, string[]>> {
+  const out: Partial<Record<AgentId, string[]>> = {};
+  for (const type of Object.keys(CANDIDATES) as WorkType[]) {
+    const first = CANDIDATES[type][0];
+    if (!leave.includes(first)) continue;
+    const next = CANDIDATES[type].find((id) => !leave.includes(id)) ?? AGENTS.find((a) => a.skills.includes(type) && !leave.includes(a.id) && a.id !== 'mina')?.id;
+    if (!next) continue;
+    (out[next] ??= []).push(`${WORK_TYPE_LABEL[type]}(${AGENT_BY_ID[first].name} 대신)`);
+  }
+  // Codex(ChatGPT 계정) 휴가면 중요 기획은 Gemini(근무 중인 Studio) 기획서 초안으로
+  if (leave.includes('codex')) {
+    const g = !leave.includes('studioA') ? 'studioA' : !leave.includes('studioB') ? 'studioB' : null;
+    if (g) (out[g] ??= []).push('중요 기획(ChatGPT 대신)');
+  }
+  return out;
+}
