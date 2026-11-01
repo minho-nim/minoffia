@@ -19,8 +19,12 @@ export function applyTheme(choice: ThemeChoice) {
   else root.dataset.theme = choice;
 }
 
+/** 큰 머리·얇은 머리의 버튼이 같은 값을 보이도록 바꿀 때 알린다 */
+export const THEME_EVENT = 'minlab-theme';
+
 export function saveTheme(choice: ThemeChoice) {
   applyTheme(choice);
+  window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: choice }));
   try {
     if (choice === 'auto') localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, choice);

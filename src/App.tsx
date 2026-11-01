@@ -1204,6 +1204,8 @@ export function App() {
           const id = tab === 'chat' ? chatProjectId : pf === 'all' ? null : pf;
           return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
         })()}
+        {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
+        <ThemeToggle tabbable={mini} />
       </div>
 
       <main className="layout">
