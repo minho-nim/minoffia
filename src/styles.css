@@ -340,6 +340,16 @@ a {
   background: rgba(246, 231, 200, 0.12);
 }
 
+/* 얇은 머리에서는 오른쪽 끝에 작게(.topbar-mini button 기본 글꼴·여백을 덮는다) */
+.topbar-mini .theme-toggle {
+  margin-left: auto;
+  padding: 2px 9px;
+  border: 1px solid rgba(246, 231, 200, 0.45);
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
 .mode .link-btn {
   color: inherit;
 }
