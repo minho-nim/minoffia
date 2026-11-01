@@ -1725,7 +1725,15 @@ a {
 
 .panel-foot {
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 6px;
+  margin-top: -6px;
+}
+
+/* 대화 지우기 줄: 입력창 바로 아래에 붙이고 아래 여백을 줄인다(v0.4.36) */
+.inbox > .link-btn:last-child {
+  align-self: flex-start;
+  margin-top: -6px;
+  margin-bottom: -6px;
 }
 
 /* ---------- 로그인/부팅 ---------- */
