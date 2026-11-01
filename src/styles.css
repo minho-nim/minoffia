@@ -1099,14 +1099,10 @@ a {
 
 .tabs {
   display: flex;
+  /* 탭 5개(v0.4.40~): 칸이 좁으면 두 줄로 내려간다(v0.4.46). 탭 글자 자체는 한 줄 그대로 */
+  flex-wrap: wrap;
   gap: 2px;
   border-bottom: 2px solid var(--line);
-  /* 탭 5개(v0.4.40~)도 한 줄로: 글자는 줄바꿈하지 않고, 정말 좁으면 옆으로 밀어 본다 */
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.tabs::-webkit-scrollbar {
-  display: none;
 }
 
 .tabs button {
@@ -3099,8 +3095,7 @@ a {
     gap: 8px;
   }
   .tabs button {
-    padding: 8px 7px;
-    font-size: 13.5px;
+    padding: 8px 10px;
   }
   .inbox {
     padding: 10px;
