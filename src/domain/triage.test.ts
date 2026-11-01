@@ -52,7 +52,7 @@ describe('replyIntent', () => {
   it('확인 질문에 글로 한 답', () => {
     for (const y of ['응', '네', 'ㅇㅇ', '만들어', '만들어줘', '비공개 저장소 만들기', '좋아!', 'ok', '맞아요']) expect(replyIntent(y), y).toBe('yes');
     for (const n of ['아니', '아니요', '나중에', 'ㄴㄴ', '취소', '괜찮아']) expect(replyIntent(n), n).toBe('no');
-    for (const x of ['MuscleMap에 다크 모드 추가해줘', 'useEffect가 뭐야?', '음']) expect(replyIntent(x), x).toBeNull();
+    for (const x of ['MuscleMap에 다크 모드 추가해줘', 'useEffect가 뭐야?', '음', '어떻게 하면 빨라져?']) expect(replyIntent(x), x).toBeNull();
   });
 });
 
