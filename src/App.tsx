@@ -239,6 +239,8 @@ export function App() {
   // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
   // 휴대폰: 위 머리(이름·사용량)가 화면 밖으로 나가면 맨 위에 얇은 한 줄 머리를 고정한다(v0.4.14).
   const [mini, setMini] = useState(false);
+  /** 얇은 머리 보이기(큰 머리가 화면 밖일 때) */
+  const [barOn, setBarOn] = useState(false);
   /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
   const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
@@ -250,6 +252,8 @@ export function App() {
   const checkMini = useCallback(() => {
     const top = topEl.current;
     if (!top) return;
+    // 얇은 머리는 큰 머리가 화면 밖으로 나가면 늘 따라온다(작은 사무실과 따로, v0.4.45).
+    setBarOn(top.getBoundingClientRect().bottom < 36);
     if (window.scrollY <= 2) return setMini(false);
     if (top.getBoundingClientRect().bottom >= 36) return;
     const office = document.querySelector<HTMLElement>('.stage .office');
@@ -1208,18 +1212,18 @@ export function App() {
         </ul>
       </header>
 
-      <div className={`topbar-mini${mini ? ' is-on' : ''}`} aria-hidden={!mini}>
-        <button type="button" tabIndex={mini ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
+      <div className={`topbar-mini${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
+        <button type="button" tabIndex={barOn ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
           MINLAB AI OFFICE <span className="ver">v{version}</span>
         </button>
-        <TurnMenu items={turns} onOpen={showTask} tabbable={mini} />
+        <TurnMenu items={turns} onOpen={showTask} tabbable={barOn} />
         {/* 머리의 프로젝트 이름: 대화 탭은 대화에서 고른 프로젝트, 다른 탭은 업무 필터 */}
         {(() => {
           const id = tab === 'chat' ? chatProjectId : pf === 'all' ? null : pf;
           return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
         })()}
         {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
-        <ThemeToggle tabbable={mini} />
+        <ThemeToggle tabbable={barOn} />
       </div>
 
       <main className={`layout${mini ? ' is-mini' : ''}`}>
