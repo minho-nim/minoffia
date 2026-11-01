@@ -18,4 +18,9 @@ describe('Gemini 기획서 초안 해석(v0.4.0)', () => {
   it('불분명하면 확인 질문을 answer에', () => {
     expect(parseDraft('{"intent":"ambiguous","answer":"1. 어느 화면인가요?"}')?.answer).toContain('어느 화면');
   });
+
+  it('앞으로 지킬 것(project_rules)은 다듬어 받고, 없으면 빈 목록', () => {
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x","project_rules":["- 항상 다크 모드 지원"]}')?.projectRules).toEqual(['항상 다크 모드 지원']);
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x"}')?.projectRules).toEqual([]);
+  });
 });

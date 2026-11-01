@@ -64,5 +64,10 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
     },
   ];
   // Grok은 수동 없이 쓸 길이 없어 휴가로 시작한다(v0.4.56, 소유자).
-  return { projects, tasks, usage, leave: ['grok'], workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] } };
+  // 프로젝트에서 지켜야 할 것(v0.4.57): AI가 적어 둔 예시
+  const projectRules = [
+    { id: 'r-mm-1', projectId: 'p-musclemap', rule: '운동 기록은 기기 안에만 저장하고 서버로 보내지 않는다', source: 'spec' as const, taskId: null, createdAt: at(2500) },
+    { id: 'r-mm-2', projectId: 'p-musclemap', rule: '모바일 400px에서 가로 넘침 없이 한 손으로 쓸 수 있게', source: 'plan' as const, taskId: null, createdAt: at(2400) },
+  ];
+  return { projects, tasks, usage, leave: ['grok'], projectRules, workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] } };
 }

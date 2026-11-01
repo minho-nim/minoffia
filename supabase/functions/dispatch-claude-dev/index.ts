@@ -2,7 +2,8 @@
 // 세션 시작(HTTP 200)은 '시작됨'까지만 기록한다(완료 아님). Claude는 B 승인 전에는 세션 안에서만 작업하고 푸시·PR을 하지 않는다.
 // 비밀값(CLAUDE_SUPPORT_FIRE_URL, CLAUDE_SUPPORT_TOKEN)은 이 함수의 secrets에만 둔다. 하루 상한은 PM 전송과 함께 센다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { buildDevPayload } from './payload.ts';
+import { buildDevPayload, claudeBranch } from './payload.ts';
+import { loadRules, previewUrl } from './projectRules.ts';
 
 const HARD_DAILY_CAP = 20;
 const FIRE_TIMEOUT_MS = 20_000;
@@ -53,8 +54,8 @@ Deno.serve(async (req) => {
   const { data: a } = await userClient.from('agent_assignments').select('*').eq('id', body.assignmentId ?? '').maybeSingle();
   if (!a) return reply(404, { ok: false, error: '배정된 작업을 찾을 수 없습니다.' });
   if (a.assignee !== 'claude') return reply(400, { ok: false, error: 'Claude에 배정된 작업만 시작합니다.' });
-  const { data: task } = await userClient.from('tasks').select('id, projects(name, repo)').eq('id', a.task_id).maybeSingle();
-  const project = task?.projects as unknown as { name: string; repo: string | null } | null;
+  const { data: task } = await userClient.from('tasks').select('id, project_id, projects(name, repo, preview_host)').eq('id', a.task_id).maybeSingle();
+  const project = task?.projects as unknown as { name: string; repo: string | null; preview_host: string | null } | null;
   const { data: spec } = await userClient
     .from('task_specs')
     .select('revision, final_prompt, change_scope, preserve_constraints, test_criteria')
@@ -155,6 +156,9 @@ Deno.serve(async (req) => {
     attachments: (files ?? []).filter((f) => f.kind === 'request').map(line),
     prototypes: pApproval?.length ? (files ?? []).filter((f) => f.kind === 'prototype' && f.plan_revision === a.plan_revision).map(line) : [],
     submit: ticketError ? undefined : { url: `${env('SUPABASE_URL')}/functions/v1/submit-result`, token: ticket },
+    // v0.4.57: 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것, 브랜치 미리보기 주소
+    projectRules: await loadRules(userClient, task.project_id),
+    previewUrl: previewUrl(project.preview_host, claudeBranch(a.task_id, String(item.id))),
   });
 
   const fail = async (message: string, status: number) => {

@@ -132,6 +132,8 @@ export interface ResultPackage {
   testLog: string;
   remainingIssues: string;
   sha256: string;
+  /** 작업 브랜치 미리보기 링크(Claude가 미리보기용으로 push했고 프로젝트에 미리보기 주소가 있을 때, v0.4.57) */
+  previewUrl?: string;
   createdAt: string;
 }
 

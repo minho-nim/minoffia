@@ -3,6 +3,7 @@
 // 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만 있다. 글은 저장하지 않고 횟수·길이만 ai_calls(purpose plan)에 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { DRAFT_SYSTEM, parseDraft } from './draft.ts';
+import { loadRules, rulesSection, saveRules } from './projectRules.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -64,7 +65,7 @@ Deno.serve(async (req) => {
   if (!text || text.length > MAX_TEXT) return reply(400, { ok: false, error: `기획 요청은 1~${MAX_TEXT}자여야 합니다.` });
 
   // RLS를 거쳐 내 업무만. 원문은 DB의 것을 쓴다.
-  const { data: task } = await userClient.from('tasks').select('id, title, description, user_original_text').eq('id', body.taskId ?? '').maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('id, project_id, title, description, user_original_text').eq('id', body.taskId ?? '').maybeSingle();
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
@@ -73,6 +74,9 @@ Deno.serve(async (req) => {
   const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'plan').eq('ok', true).gte('created_at', kstMidnight);
   if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Gemini 기획서 초안 ${cap}회를 모두 썼습니다. ChatGPT로 기획하세요.` });
 
+  // v0.4.57: 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것을 기획 요청 끝에 붙인다.
+  const rules = rulesSection(await loadRules(userClient, task.project_id), '## 이 프로젝트에서 지켜야 할 것 (어기지 않는다)');
+  const prompt = rules.length ? `${text}\n\n${rules.join('\n')}` : text;
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   let last = { status: 0, message: '' };
   // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
@@ -85,7 +89,7 @@ Deno.serve(async (req) => {
     if (!key) continue;
     let r: { status: number; text: string; message: string };
     try {
-      r = await callGemini(key, model, text);
+      r = await callGemini(key, model, prompt);
     } catch (e) {
       r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
     }
@@ -112,6 +116,7 @@ Deno.serve(async (req) => {
         answer: draft.answer,
       });
       if (error) return reply(409, { ok: false, error: `초안을 저장하지 못했습니다: ${error.message}` });
+      if (draft.intent === 'change_request' || draft.intent === 'asset_request') await saveRules(admin, user.id, task.id, 'spec', draft.projectRules);
       return reply(200, { ok: true, revision, intent: draft.intent, model });
     }
     last = { status: r.status, message: r.message };

@@ -655,7 +655,7 @@ export function App() {
           const summary = [
             item.summary,
             item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
-            item.branch ? `\n작업 브랜치: ${item.branch} (아직 GitHub에 올리지 않음)` : '',
+            item.branch ? `\n작업 브랜치: ${item.branch} (${item.previewUrl ? '미리보기용으로 올림, PR은 올리기 승인 뒤' : 'PR은 올리기 승인 뒤'})` : '',
           ].join('\n');
           const ok = await step(
             task.id,
@@ -672,6 +672,7 @@ export function App() {
                 testLog: item.testLog,
                 remainingIssues: item.remainingIssues,
                 sha256: await sha256Hex(`${item.diff}\n---\n${item.testLog}`),
+                previewUrl: item.previewUrl,
                 createdAt: new Date().toISOString(),
               });
               await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result', lastVerifiedAt: new Date().toISOString() });
@@ -1162,7 +1163,7 @@ export function App() {
     else say('error', `실행하지 못했습니다: ${res.error ?? '알 수 없는 오류'}`);
   };
 
-  const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string }): Promise<Project | null> => {
+  const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string; previewHost?: string | null }): Promise<Project | null> => {
     const existing = id ? projectById.get(id) : undefined;
     // 수정해도 id가 같으므로 연결된 업무는 그대로 따라온다.
     const project: Project = existing
@@ -1463,6 +1464,7 @@ export function App() {
                         agentLimits={snap.agentLimits}
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}
+                        projectRules={(snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule)}
                         canReadLinks={store.mode === 'supabase'}
                         dispatchBlocker={dispatchBlocker(t)}
                         actions={workflowActions}
@@ -1501,6 +1503,9 @@ export function App() {
               }}
               onSave={saveProject}
               onDelete={(p) => void mutate(() => store.deleteProject(p.id), `${p.name} 프로젝트를 삭제했습니다.`)}
+              rules={snap.projectRules ?? []}
+              onAddRule={(projectId, rule) => void mutate(() => store.addProjectRule(projectId, rule), '지켜야 할 것에 적었어요. 다음 지시서부터 함께 들어가요.')}
+              onRemoveRule={(r) => void mutate(() => store.removeProjectRule(r.id), '지켜야 할 것에서 지웠어요.')}
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
             />
           )}

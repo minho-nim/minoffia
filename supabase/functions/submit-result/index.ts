@@ -3,6 +3,7 @@
 // 받은 결과는 dev_result_inbox에 넣고, 앱이 작업·계획 버전을 확인해 결과 패키지로 옮긴다. GitHub에는 아무것도 올리지 않는다.
 // verify_jwt = false(세션에 Supabase 로그인이 없다). 대신 제출표가 맞아야만 한 줄을 넣을 수 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { previewUrl, saveRules } from './projectRules.ts';
 
 const MAX_USES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,6 +53,16 @@ Deno.serve(async (req) => {
   const { data: bumped } = await admin.from('plan_submit_tokens').update({ uses: ticket.uses + 1 }).eq('id', ticket.id).eq('uses', ticket.uses).select('id');
   if (!bumped?.length) return reply(409, { ok: false, error: 'retry' });
 
+  // v0.4.57: 세션이 작업 브랜치를 미리보기용으로 push했으면, 프로젝트의 미리보기 주소로 링크를 계산해 붙인다.
+  const branch = text(r.branch, LIMITS.branch);
+  let preview = '';
+  if (r.preview_pushed === true && branch.startsWith('ai/claude/')) {
+    const { data: t } = await admin.from('tasks').select('projects(preview_host)').eq('id', ticket.task_id).maybeSingle();
+    preview = previewUrl((t?.projects as unknown as { preview_host: string | null } | null)?.preview_host, branch);
+  }
+  // 앞으로도 지켜야 할 것(AI가 적어 보냄)은 프로젝트에 쌓는다. 실패해도 결과 저장은 막지 않는다.
+  await saveRules(admin, ticket.owner_id, ticket.task_id, 'result', r.project_rules);
+
   const { error } = await admin.from('dev_result_inbox').insert({
     owner_id: ticket.owner_id,
     task_id: ticket.task_id,
@@ -61,7 +72,8 @@ Deno.serve(async (req) => {
     diff: text(r.diff, LIMITS.diff),
     test_log: text(r.test_log, LIMITS.test_log),
     remaining_issues: text(r.remaining_issues, LIMITS.remaining_issues),
-    branch: text(r.branch, LIMITS.branch),
+    branch,
+    preview_url: preview,
   });
   if (error) return reply(500, { ok: false, error: 'could not save result' });
   return reply(200, { ok: true, message: 'AI Office에 결과를 보냈습니다. 사용자가 올리기 승인(B)을 할 때까지 GitHub에 올리지 않습니다.' });
