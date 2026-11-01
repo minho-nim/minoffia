@@ -409,6 +409,13 @@ a {
   border: 1px dashed var(--line);
 }
 
+/* 휴가 가는 AI 머리 위 표시(v0.4.53): 차분한 색 */
+.agent.is-leaving .agent-badge {
+  background: var(--surface-2);
+  color: var(--muted);
+  border-style: dashed;
+}
+
 /* 문에 닿은 휴가 AI는 사라진다 */
 .agent {
   transition: opacity 0.4s ease;
