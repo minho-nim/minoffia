@@ -21,9 +21,10 @@ export interface Speech {
 
 const RANK: Record<SpeechKind, number> = { alert: 0, ask: 1, busy: 2 };
 
-const agentOf = (assignee: AgentAssignment['assignee']): AgentId => (assignee === 'gemini' ? 'studioA' : assignee);
-
-export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech> {
+export function speechFor(tasks: Task[], all: WorkflowData, leave: AgentId[] = []): Map<AgentId, Speech> {
+  // 캐릭터 하나 = 계정 하나(v0.4.44): Gemini 일은 근무 중인 Studio(A 먼저, A가 휴가면 B)가, ChatGPT 기획은 Codex(같은 OpenAI 계정)가 말한다.
+  const gemini: AgentId = leave.includes('studioA') && !leave.includes('studioB') ? 'studioB' : 'studioA';
+  const agentOf = (assignee: AgentAssignment['assignee']): AgentId => (assignee === 'gemini' ? gemini : assignee);
   const found: { agent: AgentId; speech: Speech; at: string }[] = [];
   const say = (agent: AgentId, kind: SpeechKind, text: string, task: Task, label = text) =>
     found.push({ agent, speech: { text, label, kind, taskId: task.id }, at: task.updatedAt });
@@ -31,7 +32,7 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
   for (const t of tasks) {
     if (t.status === 'done') continue;
     const v = deriveWorkflow(t, all);
-    const planner: AgentId = v.spec?.planner === 'gemini_draft' ? 'studioA' : 'mina';
+    const planner: AgentId = v.spec?.planner === 'gemini_draft' ? gemini : 'codex';
     const mine = v.plan ? all.assignments.filter((a) => a.taskId === t.id && a.planRevision === v.plan!.planRevision) : [];
     // 말풍선 = 단계[표시]: ? 내 손이 가는 일, … 진행 중, ! 막힘(소유자 요청 2026-10-31)
     const mark = { ask: '?', busy: '…', alert: '!' } as const;
@@ -59,7 +60,7 @@ export function speechFor(tasks: Task[], all: WorkflowData): Map<AgentId, Speech
         tag('claude', 'ask', '계획', 'PM에 보내 주세요');
         break;
       case 'agent_handoff_pending':
-        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) tag('studioA', 'ask', '견본', '견본 승인해 주세요');
+        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) tag(gemini, 'ask', '견본', '견본 승인해 주세요');
         else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) tag('claude', 'ask', '계획', 'PM 계획을 보고 실행 승인해 주세요');
         work();
         break;

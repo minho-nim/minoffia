@@ -1,5 +1,5 @@
 // 입력창의 일반 질문을 Gemini 무료 API에 한 번 묻는다(소유자가 보냈을 때만). stream이면 답을 조각조각 바로 넘긴다(v0.4.15).
-// 키는 secrets(GEMINI_API_KEY = A, GEMINI_API_KEY2 = B 예비)에만 있다. A가 한도·오류로 실패할 때만 B를 쓴다.
+// 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만 있다. A가 한도·오류로 실패할 때만 B를 쓴다.
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
@@ -210,6 +210,12 @@ Deno.serve(async (req) => {
   ].join('');
   const started = Date.now();
   let last = { status: 0, message: '' };
+  // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
+  const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
+  const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
+  if (away.has('studioA')) keys[0] = '';
+  if (away.has('studioB')) keys[1] = '';
+  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
   for (const [i, key] of keys.entries()) {
     if (!key) continue;
     const slot = i + 1;
