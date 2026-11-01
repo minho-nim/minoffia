@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_KEY, SUPABASE_URL } from '../lib/supabase';
 import { MIME_EXT, storageContentType, type Attachment, type ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
-import type { Project, Task, UsageRun } from '../domain/types';
+import type { AgentId, Project, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
 import type { OfficeStore } from './store';
@@ -175,7 +175,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave',
 ];
 
 const toDeployment = (r: Row): Deployment => ({
@@ -260,7 +260,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -279,6 +279,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('agent_limits').select('assignee, max_running'),
         client.from('pr_checks').select('*').order('checked_at'),
         client.from('deployments').select('*').order('created_at'),
+        client.from('agent_leave').select('agent'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -299,6 +300,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           prChecks: prChecks.error ? [] : (prChecks.data ?? []).map(toPrCheck),
           deployments: deployments.error ? [] : (deployments.data ?? []).map(toDeployment),
         },
+        leave: leave.error ? [] : (leave.data ?? []).map((r: Row) => r.agent as AgentId),
         agentLimits: agentLimits.error ? {} : Object.fromEntries((agentLimits.data ?? []).map((r: Row) => [r.assignee as string, r.max_running as number])),
         // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
         aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : 'question') as 'question' | 'image', httpStatus: (r.http_status as number | null) ?? null, createdAt: r.created_at as string })),
@@ -608,6 +610,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         if (page.length < 1000) break;
       }
       return rows.map((r) => ({ id: r.id as string, role: r.role as ChatEntry['role'], text: r.text as string, projectId: (r.project_id as string | null) ?? null, taskId: (r.task_id as string | null) ?? null, createdAt: r.created_at as string }));
+    },
+    async setLeave(agent, onLeave) {
+      if (onLeave) check(await client.from('agent_leave').upsert({ agent }));
+      else check(await client.from('agent_leave').delete().eq('agent', agent));
     },
     async setAgentLimit(assignee, maxRunning) {
       check(await client.from('agent_limits').upsert({ assignee, max_running: maxRunning, updated_at: new Date().toISOString() }));

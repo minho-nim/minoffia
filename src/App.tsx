@@ -341,7 +341,7 @@ export function App() {
   };
 
   const addTask = async (d: TaskDraft, images: PendingImage[] = []): Promise<Task | null> => {
-    const route = routeTask(d, snap.usage);
+    const route = routeTask(d, snap.usage, new Date(), snap.leave ?? []);
     const now = new Date().toISOString();
     const task: Task = {
       id: newId(),
@@ -1221,7 +1221,7 @@ export function App() {
 
       <main className={`layout${mini ? ' is-mini' : ''}`}>
         <section className={`stage${mini ? ' is-mini' : ''}`} aria-label="오피스">
-          <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} workflow={snap.workflow} selected={selected} onSelect={selectAgent} onOpenTask={showTask} />
+          <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} workflow={snap.workflow} selected={selected} onSelect={selectAgent} onOpenTask={showTask} leave={snap.leave ?? []} />
           <p className="stage-note">
             캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.
           </p>
@@ -1352,7 +1352,7 @@ export function App() {
               />
               <details className="direct-entry">
                 <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
-                <TaskForm projects={snap.projects} usage={snap.usage} onSubmit={addTask} />
+                <TaskForm projects={snap.projects} usage={snap.usage} leave={snap.leave ?? []} onSubmit={addTask} />
               </details>
               <div className="filters" role="group" aria-label="업무 필터">
                 {(
@@ -1459,6 +1459,9 @@ export function App() {
               snap={snap}
               onLinearProbe={store.mode === 'supabase' ? () => store.linearProbe() : undefined}
               onSetLimit={(kind, n) => void mutate(() => store.setAgentLimit(kind, n), `동시 작업 상한을 ${n}개로 바꿨습니다.`)}
+              onSetLeave={(agent, onLeave) =>
+                void mutate(() => store.setLeave(agent, onLeave), `${AGENT_BY_ID[agent].name}: ${onLeave ? '휴가 — 새 업무는 다른 AI에게 맡겨요.' : '근무로 돌아왔어요.'}`)
+              }
               selected={selected}
               onSelect={(id) => setSelected(id)}
               serverMode={store.mode === 'supabase'}

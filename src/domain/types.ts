@@ -82,7 +82,12 @@ export interface Snapshot {
   aiCalls?: AiCall[];
   /** AI별 동시 작업 상한(소유자가 바꾼 것만, 나머지는 기본값) */
   agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
+  /** 휴가 중인 AI(v0.4.39). 새 배정·PM 계획에서 뺀다 */
+  leave?: AgentId[];
 }
+
+/** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */
+export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'grok', 'studioA', 'studioB'];
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 

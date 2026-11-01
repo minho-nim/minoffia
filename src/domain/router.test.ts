@@ -83,4 +83,15 @@ describe('영어 키워드는 단어 단위(v0.3.4)', () => {
     expect(classify('로그인 테스트를 돌려줘')?.type).toBe('qa');
     expect(classify('bug-fix 해줘')?.type).toBe('dev');
   });
+
+  it('휴가 중인 AI는 빼고 다음 후보에게 맡긴다', () => {
+    const r = routeTask({ title: '결제 기능 구현', description: '', requestedType: 'auto' }, [], now, ['codex']);
+    expect(r.assignee).toBe('claude');
+    expect(r.reason).toContain('Codex 휴가');
+  });
+
+  it('후보가 모두 휴가면 그 일을 할 줄 아는 다른 AI에게 맡긴다', () => {
+    const r = routeTask({ title: '시장 조사', description: '', requestedType: 'research' }, [], now, ['grok']);
+    expect(r.assignee).toBe('claude');
+  });
 });

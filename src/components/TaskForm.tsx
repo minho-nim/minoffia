@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AGENT_BY_ID } from '../domain/agents';
 import { MAX_REQUEST_FILES, ROLES_FOR } from '../domain/attachments';
 import { routeTask } from '../domain/router';
-import type { Priority, Project, RequestedType, UsageRun } from '../domain/types';
+import type { AgentId, Priority, Project, RequestedType, UsageRun } from '../domain/types';
 import { PRIORITY_LABEL, WORK_TYPE_LABEL } from '../domain/types';
 import { ImagePicker, type PendingImage } from './Attachments';
 
@@ -19,11 +19,13 @@ export interface TaskDraft {
 interface Props {
   projects: Project[];
   usage: UsageRun[];
+  /** 휴가 중인 AI(배정 미리보기에서 뺀다) */
+  leave?: AgentId[];
   /** 이미지는 업무를 저장한 뒤 비공개 저장소에 올린다. */
   onSubmit: (draft: TaskDraft, images: PendingImage[]) => Promise<unknown>;
 }
 
-export function TaskForm({ projects, usage, onSubmit }: Props) {
+export function TaskForm({ projects, usage, leave = [], onSubmit }: Props) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -33,7 +35,7 @@ export function TaskForm({ projects, usage, onSubmit }: Props) {
   const [images, setImages] = useState<PendingImage[]>([]);
 
   const pid = projects.some((p) => p.id === projectId) ? projectId : projects[0]?.id ?? '';
-  const preview = title.trim() ? routeTask({ title, description, requestedType }, usage) : null;
+  const preview = title.trim() ? routeTask({ title, description, requestedType }, usage, new Date(), leave) : null;
 
   if (projects.length === 0) {
     return <p className="empty">업무를 받으려면 먼저 프로젝트 탭에서 프로젝트를 등록하세요.</p>;
