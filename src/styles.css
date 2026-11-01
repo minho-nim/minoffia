@@ -35,6 +35,11 @@
   --st-blocked-ink: #8e2a19;
   --st-done: #d4ead3;
   --st-done-ink: #2d6634;
+  /* 내 차례 카드(말풍선과 같은 노랑·주황) */
+  --turn-bg: #fbe7b5;
+  --turn-alert-bg: #f6ad91;
+  --turn-ink: #2a1a10;
+  --turn-muted: #5a4632;
 
   --font-display: 'Galmuri11', 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   --font-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
@@ -71,6 +76,10 @@
     --st-blocked-ink: #ffc3b5;
     --st-done: #1f3d24;
     --st-done-ink: #b6e3b9;
+  --turn-bg: #4a3a1c;
+  --turn-alert-bg: #5c2a1d;
+  --turn-ink: #f6e3bf;
+  --turn-muted: #d2bb98;
     color-scheme: dark;
   }
 }
@@ -102,6 +111,10 @@
   --st-blocked-ink: #ffc3b5;
   --st-done: #1f3d24;
   --st-done-ink: #b6e3b9;
+  --turn-bg: #4a3a1c;
+  --turn-alert-bg: #5c2a1d;
+  --turn-ink: #f6e3bf;
+  --turn-muted: #d2bb98;
   color-scheme: dark;
 }
 
@@ -216,6 +229,23 @@ a {
 
 .mode-cloud {
   color: #9fd8a7;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 231, 200, 0.45);
+  background: transparent;
+  color: var(--brown-ink);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: rgba(246, 231, 200, 0.12);
 }
 
 .mode .link-btn {
@@ -2632,12 +2662,12 @@ a {
   gap: 6px 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #fbe7b5;
-  color: #2a1a10;
+  background: var(--turn-bg);
+  color: var(--turn-ink);
 }
 
 .my-turn li.is-alert {
-  background: #f6ad91;
+  background: var(--turn-alert-bg);
 }
 
 .my-turn-mark {
@@ -2658,7 +2688,7 @@ a {
 }
 
 .my-turn-text .muted {
-  color: #5a4632;
+  color: var(--turn-muted);
 }
 
 .my-turn-actions {

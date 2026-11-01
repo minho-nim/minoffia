@@ -1,3 +1,4 @@
+import { ThemeToggle } from './components/ThemeToggle';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentRoster } from './components/AgentPanel';
@@ -1162,6 +1163,7 @@ export function App() {
               <PushToggle store={store} />
             </span>
           )}
+          <ThemeToggle />
         </div>
         <ul className="usage" aria-label="오늘 등록된 실행 횟수">
           {AGENTS.filter((a) => a.dailyCap !== null).map((a) => {
