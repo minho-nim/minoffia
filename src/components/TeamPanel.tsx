@@ -6,7 +6,7 @@ import { spriteFor } from '../office/sprites';
 /**
  * 팀 관리 탭(v0.4.40, 소유자 2026-11-01): 근무 칸 · 가운데 옮기기 버튼 · 휴가 칸.
  * 카드를 눌러 체크한 뒤 가운데 버튼으로 옮기거나, 카드를 끌어 반대 칸에 놓는다.
- * 넓은 화면은 좌우, 좁은 화면은 위아래(버튼 화살표도 위아래로).
+ * 화면 크기와 상관없이 늘 좌우(좁으면 카드만 작게, v0.4.41).
  * 휴가인 AI는 사무실 아래 출입문으로 나가고, 새 배정·PM 계획에서 빠져 규칙대로 다른 AI가 맡는다.
  */
 export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (agent: AgentId, onLeave: boolean) => void }) {
@@ -96,13 +96,11 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
       <div className="team-board">
         {column('work', working)}
         <div className="team-moves" role="group" aria-label="옮기기">
-          <button type="button" className="btn btn-small" disabled={!pickedWork.length} onClick={() => move(pickedWork, true)}>
-            <span className="arrow-x">휴가로 →</span>
-            <span className="arrow-y">↓ 휴가로</span>
+          <button type="button" className="btn btn-small" disabled={!pickedWork.length} onClick={() => move(pickedWork, true)} title="고른 AI를 휴가로" aria-label="고른 AI를 휴가로">
+            →
           </button>
-          <button type="button" className="btn btn-small" disabled={!pickedAway.length} onClick={() => move(pickedAway, false)}>
-            <span className="arrow-x">← 근무로</span>
-            <span className="arrow-y">↑ 근무로</span>
+          <button type="button" className="btn btn-small" disabled={!pickedAway.length} onClick={() => move(pickedAway, false)} title="고른 AI를 근무로" aria-label="고른 AI를 근무로">
+            ←
           </button>
         </div>
         {column('leave', away)}
