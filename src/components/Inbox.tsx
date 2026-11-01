@@ -3,6 +3,7 @@ import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
+import { takeQueued } from '../domain/chatQueue';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction } from '../domain/stageNotice';
 import { deriveWorkflow } from '../domain/workflow';
@@ -772,12 +773,12 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     handleRequest(text, taskCandidates(text, aiProject, prior), prior);
   };
 
-  // 줄 선 말: 앞 일이 모두 끝나면 하나씩 꺼내 처리한다.
+  // 줄 선 말: 앞 일이 모두 끝나면 몰려온 말을 하나로 합쳐 한 번에 처리한다(v0.4.59, Claude처럼). 짧은 대답은 따로.
   useEffect(() => {
     if (busy || !queue.length) return;
-    const [next, ...rest] = queue;
+    const { next, rest } = takeQueued(queue);
     setQueue(rest);
-    handle(next.text, next.files);
+    if (next) handle(next.text, next.files);
     // handle은 매 렌더 새로 만들어지므로 의존성에서 뺀다(지금 화면 상태로 처리).
   }, [busy, queue]);
 
@@ -1107,7 +1108,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         </div>
       )}
       {busy && !log.some((m) => m.from === 'gemini' && !m.text) && <p className="muted small inbox-note">처리 중…</p>}
-      {queue.length > 0 && <p className="muted small inbox-note">앞 일이 끝나면 이어서 답할게요(기다리는 말 {queue.length}개).</p>}
+      {queue.length > 0 && <p className="muted small inbox-note">앞 일이 끝나면 기다리는 말 {queue.length}개를 한 번에 읽고 답할게요.</p>}
       <div ref={endRef} />
 
       {photos.length > 0 && (
