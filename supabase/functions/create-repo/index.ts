@@ -1,6 +1,7 @@
 // 새 프로젝트의 GitHub 저장소를 만든다(소유자가 "만들기"를 눌렀을 때만).
 // 비공개 + README·CLAUDE.md(AI 작업 규칙, v0.4.55)만 있는 빈 저장소. 코드는 지금처럼 B 승인 뒤에만 올라간다.
 // 토큰(GITHUB_REPO_TOKEN)은 secrets에만 있고, 이 함수는 저장소 만들기와 첫 규칙 파일(CLAUDE.md) 넣기 외에는 쓰지 않는다.
+// v0.4.60(소유자 2026-11-01): rulesOnly면 이미 있는 AI Office 저장소(managed_repos)에 CLAUDE.md가 없을 때만 넣는다(있으면 건드리지 않음).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { projectClaudeMd } from './rules.ts';
 import { repoNameError } from './naming.ts';
@@ -36,11 +37,51 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { projectId?: string; name?: string };
+  let body: { projectId?: string; name?: string; rulesOnly?: boolean };
   try {
     body = await req.json();
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
+  }
+
+  const gh = (path: string, init: RequestInit = {}) =>
+    fetch(`https://api.github.com${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'MinLabAIOffice',
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+
+  if (body.rulesOnly) {
+    // 이미 있는 저장소에 작업 규칙 파일 넣기: AI Office가 만든 저장소만, 파일이 없을 때만.
+    const { data: p } = await userClient.from('projects').select('id, name, repo').eq('id', body.projectId ?? '').maybeSingle();
+    if (!p?.repo) return reply(404, { ok: false, error: '저장소가 연결된 프로젝트를 찾을 수 없습니다.' });
+    const repo = String(p.repo);
+    const { data: managed } = await userClient.from('managed_repos').select('full_name').eq('owner_id', user.id);
+    const ok = repo.toLowerCase() !== 'minho-nim/minlab' && (managed ?? []).some((m) => String(m.full_name).toLowerCase() === repo.toLowerCase());
+    if (!ok) return reply(403, { ok: false, error: `AI Office가 만든 저장소에만 넣습니다(${repo}). 이 저장소는 직접 관리하세요.` });
+    try {
+      const head = await gh(`/repos/${repo}/contents/CLAUDE.md`);
+      await head.body?.cancel();
+      if (head.status === 200) return reply(200, { ok: true, repo, created: false });
+      if (head.status !== 404) return reply(502, { ok: false, error: `저장소를 읽지 못했습니다(HTTP ${head.status}).` });
+      const { data: ruleRows } = await userClient.from('project_rules').select('rule').eq('project_id', p.id).order('created_at').limit(40);
+      const md = projectClaudeMd(String(p.name), (ruleRows ?? []).map((r: { rule: string }) => r.rule));
+      const put = await gh(`/repos/${repo}/contents/CLAUDE.md`, {
+        method: 'PUT',
+        body: JSON.stringify({ message: 'docs: AI 작업 규칙(CLAUDE.md) 추가', content: btoa(String.fromCharCode(...new TextEncoder().encode(md))) }),
+      });
+      await put.body?.cancel();
+      if (put.status !== 201) return reply(502, { ok: false, error: `규칙 파일을 넣지 못했습니다(HTTP ${put.status}). 토큰에 Contents 쓰기 권한이 있는지 확인하세요.` });
+      return reply(200, { ok: true, repo, created: true });
+    } catch (e) {
+      return reply(504, { ok: false, error: `GitHub가 응답하지 않았습니다(${(e as Error).name}).` });
+    }
   }
   const name = (body.name ?? '').trim();
   const nameError = repoNameError(name);
