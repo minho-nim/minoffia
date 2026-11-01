@@ -315,8 +315,28 @@ export function App() {
         return { ...cur, leave: on ? [...rest, agent] : rest };
       });
     apply(onLeave);
+    // 휴가(v0.4.54, 소유자): 들고 있던 열린 업무는 배정 규칙대로 대신 맡을 AI에게 넘긴다. 맡을 AI가 없으면 그대로 둔다.
+    const handed: { task: Task; to: AgentId }[] = [];
+    if (onLeave) {
+      const nextLeave = [...(snap.leave ?? []).filter((a) => a !== agent), agent];
+      for (const t of snap.tasks.filter((x) => x.assignee === agent && x.status !== 'done')) {
+        const r = routeTask({ title: t.title, description: t.description, requestedType: t.type }, snap.usage, new Date(), nextLeave);
+        if (r.assignee !== agent && !nextLeave.includes(r.assignee)) handed.push({ task: t, to: r.assignee });
+      }
+      if (handed.length) {
+        const now = new Date().toISOString();
+        const moved = new Map(handed.map((h) => [h.task.id, { ...h.task, assignee: h.to, routeReason: `${AGENT_BY_ID[agent].name} 휴가 → ${AGENT_BY_ID[h.to].name}`, updatedAt: now }]));
+        setSnap((cur) => ({ ...cur, tasks: cur.tasks.map((t) => moved.get(t.id) ?? t) }));
+        for (const t of moved.values()) void store.saveTask(t).catch((e: Error) => say('error', `'${t.title}' 넘기기를 저장하지 못했습니다: ${e.message}`));
+      }
+    }
+    const kept = onLeave ? snap.tasks.filter((x) => x.assignee === agent && x.status !== 'done').length - handed.length : 0;
+    const handedNote = handed.length
+      ? ` 업무 ${handed.length}건을 넘겼어요(${[...new Set(handed.map((h) => AGENT_BY_ID[h.to].name))].join('·')}).`
+      : '';
+    const keptNote = kept > 0 ? ` 맡을 AI가 없는 업무 ${kept}건은 그대로예요.` : '';
     store.setLeave(agent, onLeave).then(
-      () => say('ok', `${AGENT_BY_ID[agent].name}: ${onLeave ? '휴가 — 새 업무는 다른 AI에게 맡겨요.' : '근무로 돌아왔어요.'}`),
+      () => say('ok', `${AGENT_BY_ID[agent].name}: ${onLeave ? `휴가.${handedNote}${keptNote}` : '근무로 돌아왔어요.'}`),
       (e: Error) => {
         apply(!onLeave);
         say('error', `저장하지 못했습니다: ${e.message}`);
