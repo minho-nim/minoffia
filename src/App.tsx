@@ -1228,7 +1228,7 @@ export function App() {
               )}
             </button>
             <button type="button" role="tab" aria-selected={tab === 'projects'} onClick={() => setTab('projects')}>
-              프로젝트 <span className="num">{snap.projects.length}</span>
+              프로젝트 <span className="num num-count">{snap.projects.length}</span>
             </button>
             <button
               type="button"

@@ -784,13 +784,30 @@ a {
   color: var(--accent);
 }
 
+/* 숫자 배지는 모두 둥근 네모(v0.4.28). 내 차례 = 주황 바탕, 그냥 개수 = 옅은 바탕 */
+.num-count,
+.tabs .num-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+
 /* 내 차례 숫자: 주황 바탕에 흰 글씨(탭의 .num 글자색보다 우선) */
 .tabs .num-turn,
+.my-turn h3 .num-turn,
 .topbar-mini .num-turn {
   display: inline-block;
   min-width: 18px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: 5px;
   background: #d9822b;
   color: #fffaf0;
   font-size: 12px;
@@ -1204,7 +1221,7 @@ a {
 .task-turn {
   flex: none;
   padding: 1px 7px;
-  border-radius: 9px;
+  border-radius: 5px;
   background: #d9822b;
   color: #fffaf0;
   font-size: 12px;
@@ -1444,7 +1461,7 @@ a {
   min-width: 18px;
   margin-left: 4px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: 5px;
   background: #d9822b;
   color: #fffaf0;
   font-size: 12px;
