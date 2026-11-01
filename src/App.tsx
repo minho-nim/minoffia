@@ -245,9 +245,20 @@ export function App() {
     topIo.current?.disconnect();
     topIo.current = null;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(([e]) => setMini(!e.isIntersecting), { rootMargin: '-36px 0px 0px 0px' });
+    // 켜기: 위 머리가 화면 밖으로 나가면. 끄기: 맨 위에 닿았을 때만(아래 scroll). 작은 사무실이 되며 아래 내용이
+    // 끌어올려져 페이지가 짧아져도 켜졌다 꺼졌다 반복하지 않게 한다(v0.4.26).
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) setMini(true);
+    }, { rootMargin: '-36px 0px 0px 0px' });
     io.observe(el);
     topIo.current = io;
+  }, []);
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.scrollY <= 2) setMini(false);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
   const [, setMinuteTick] = useState(0);
   useEffect(() => {
