@@ -742,9 +742,31 @@ a {
     margin-bottom: calc(-1 * (100vw - 32px) * 0.747 * 0.5);
   }
   /* 아래 패널이 화면을 채운다(휴대폰 앱처럼, v0.4.45). 내용이 짧은 탭(팀 관리 등)에서도 작은 사무실이 되고, 빈 곳은 패널 바탕이다. */
+  /* 아래 패널은 작은 사무실이 되는 데 필요한 만큼만 화면을 채운다(v0.4.48: 100svh → 화면 − 작은 사무실 높이) */
   .panel {
-    min-height: 100vh;
-    min-height: 100svh;
+    min-height: calc(100vh - (100vw - 32px) * 0.747 * 0.5 - 24px);
+    min-height: calc(100svh - (100vw - 32px) * 0.747 * 0.5 - 24px);
+  }
+  /* 대화 탭은 채팅 앱처럼: 남는 높이를 대화 칸이 차지하고 입력창은 아래에 붙는다 */
+  .panel > .chat-tab:not([hidden]) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-tab > .inbox {
+    flex: 1;
+  }
+  .chat-tab > .inbox > form {
+    margin-top: auto;
+  }
+  /* 팀 관리도 남는 높이를 근무·휴가 칸이 채운다(끌어다 놓을 자리가 넓어짐) */
+  .panel > .team-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .team-panel > .team-board {
+    flex: 1;
   }
   /* 작은 사무실이 아닐 때(맨 위·짧은 페이지)는 사무실·탭을 고정하지 않는다. 큰 사무실이 위에 붙어 탭이 겹치지 않게(v0.4.35) */
   .layout:not(.is-mini) .stage,
