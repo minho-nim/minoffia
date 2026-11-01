@@ -273,7 +273,16 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
             {isSel && (
               // 누르면: 표시(단계[표시] 또는 [상태]) 이름 / 무슨 뜻인지 / 어느 업무인지
               <span className="bubble" role="status">
-                <b>{say ? say.text : badge ?? `[${ACTIVITY_LABEL[s.activity]}]`}</b> {a.name}
+                {/* 누른 캐릭터 말풍선: 표시가 없으면 이름 · 휴식처럼 짧게(v0.4.50) */}
+                {say || badge ? (
+                  <>
+                    <b>{say ? say.text : badge}</b> {a.name}
+                  </>
+                ) : (
+                  <>
+                    <b>{a.name}</b> · {s.activity === 'resting' ? '휴식' : ACTIVITY_LABEL[s.activity]}
+                  </>
+                )}
                 {say ? (
                   <>
                     <br />
