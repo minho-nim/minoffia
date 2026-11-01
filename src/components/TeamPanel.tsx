@@ -78,7 +78,7 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
           <span className="team-name">
             <b>{a.name}</b>
             <span className="muted small">{a.role}</span>
-            {isAway && open > 0 && <span className="muted small">진행 중 {open}건은 그대로</span>}
+            {isAway && open > 0 && <span className="muted small">맡을 AI가 없어 {open}건 그대로</span>}
           </span>
         </div>
       </li>
@@ -130,7 +130,7 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
   return (
     <section className="team-panel" aria-label="팀 관리">
       <p className="muted small">
-        카드를 눌러 고른 뒤 가운데 버튼으로 옮기거나, 끌어서 반대 칸에 놓으세요. 휴가인 AI는 새 업무와 PM 계획에서 빠지고 일할 수 있는 다른 AI가 맡아요(진행 중인 업무는 그대로). 미니엉과
+        카드를 눌러 고른 뒤 가운데 버튼으로 옮기거나, 끌어서 반대 칸에 놓으세요. 휴가인 AI의 업무는 일할 수 있는 다른 AI에게 넘어가고, 새 업무와 PM 계획에서도 빠져요(맡을 AI가 없는 업무만 그대로). 미니엉과
         CI 봇은 늘 근무해요.
       </p>
       <div className="team-board">
