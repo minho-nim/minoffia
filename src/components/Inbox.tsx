@@ -3,7 +3,7 @@ import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
-import { matchRoutedProject, parseRouted, projectContext, type AskOptions } from '../domain/aiRoute';
+import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction } from '../domain/stageNotice';
 import { deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
@@ -28,6 +28,21 @@ interface Msg {
   taskId?: string;
   stage?: string;
   actions?: NoticeAction[];
+  /** 업무 접수 확인 카드(v0.4.58): 한 메시지에 업무가 여럿이어도 카드마다 따로 접수·취소한다 */
+  offer?: Offer;
+}
+
+interface Offer {
+  /** 업무로 만들 요청(여러 개로 나눴으면 그 조각) */
+  text: string;
+  /** AI·이름으로 고른 프로젝트(없으면 목록에서 고른다) */
+  projectId: string | null;
+  context?: PriorChat;
+  /** 여러 요청이 섞인 원래 메시지(나눴을 때만, 업무 설명에 참고로 넣는다) */
+  whole?: string;
+  /** 애매: 질문인지 업무인지 먼저 묻는 카드 */
+  ask?: boolean;
+  state: 'open' | 'done' | 'dropped';
 }
 
 /** 마지막 안내 메시지에 붙는 선택지 */
@@ -206,6 +221,11 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   // 계정 대화를 처음 받아 온 뒤에 단계 알림을 넣는다(받아 온 대화에 덮이지 않게).
   const [syncReady, setSyncReady] = useState(!sync);
   const [showOther, setShowOther] = useState(false);
+  /** 접수 카드 중 '다른 프로젝트'를 펼친 것 */
+  const [otherFor, setOtherFor] = useState<string | null>(null);
+  /** 답을 기다리는 동안 보낸 말(v0.4.58): 앞 일이 끝나면 차례로 처리한다 */
+  const [queue, setQueue] = useState<{ text: string; files: File[] }[]>([]);
+  const runs = useRef(0);
   const [photos, setPhotosState] = useState<File[]>(photoStore.draft);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -435,38 +455,49 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     setLog((l) => [...l, { id: mid(), from, text, ...(link.taskId ? { taskId: link.taskId } : {}) }].slice(-KEEP));
     if (link.projectId || link.taskId) archive({ role: from, text, projectId: link.projectId ?? null, taskId: link.taskId ?? null });
   };
+  // 여러 일이 겹쳐도(답 기다리는 중 접수 카드를 눌러도) 모두 끝나야 '처리 중'이 풀린다.
   const run = async (fn: () => Promise<void>) => {
+    runs.current += 1;
     setBusy(true);
     try {
       await fn();
     } finally {
-      setBusy(false);
+      runs.current -= 1;
+      if (runs.current === 0) setBusy(false);
     }
-  };
-
-  const askProject = (text: string, context?: PriorChat) => {
-    setShowOther(false);
-    setPending({ kind: 'pick', text, context });
-    say('office', `${context ? '앞 대화를 이어서 개발 요청으로 접수할게요. ' : ''}어느 프로젝트 업무인가요? 아래에서 고르거나 새 프로젝트를 만드세요.`);
   };
 
   const short = (t: string) => (t.length > 30 ? `${t.slice(0, 29)}…` : t);
 
-  const handleRequest = (text: string, candidates: Project[], context?: PriorChat) => {
-    if (candidates.length === 1) {
-      setPending({ kind: 'confirm', text, project: candidates[0], context });
-      say(
-        'office',
-        context
-          ? `앞 대화('${short(context.question)}')를 이어서 개발 요청으로 접수할까요? 프로젝트는 '${candidates[0].name}' 맞아요?`
-          : `'${candidates[0].name}' 프로젝트 업무로 접수할까요?`,
-      );
-    } else askProject(text, context);
+  /** 업무 접수 확인 카드를 띄운다(v0.4.58). 카드는 대화가 이어져도 남고, 카드마다 따로 접수한다. */
+  const offerTask = (text: string, candidates: Project[], context?: PriorChat, extra: { whole?: string; ask?: string } = {}) => {
+    const project = candidates.length === 1 ? candidates[0] : null;
+    const what = extra.whole ? `'${short(text)}' — ` : context ? `앞 대화('${short(context.question)}')를 이어서 개발 요청으로 — ` : '';
+    const line = extra.ask
+      ? `${extra.ask}${extra.whole ? `\n('${short(text)}')` : ''}`
+      : project
+        ? `${what}'${project.name}' 프로젝트 업무로 접수할까요?`
+        : `${what}어느 프로젝트 업무인가요? 아래에서 고르거나 새 프로젝트를 만드세요.`;
+    setLog((l) => [...l, { id: mid(), from: 'office' as From, text: line, offer: { text, projectId: project?.id ?? null, context, whole: extra.whole, ask: Boolean(extra.ask), state: 'open' as const } }].slice(-KEEP));
   };
+
+  const settleOffer = (id: string, state: Offer['state']) => setLog((l) => l.map((m) => (m.id === id && m.offer ? { ...m, offer: { ...m.offer, state } } : m)));
+
+  const acceptOffer = (m: Msg, project: Project) => {
+    const o = m.offer!;
+    settleOffer(m.id, 'done');
+    setOtherFor(null);
+    say('me', `${project.name} 맞아요${o.whole ? ` ('${short(o.text)}')` : ''}`, { projectId: project.id });
+    void run(() => create(o.text, project, o.context, o.whole));
+  };
+
+  const askProject = (text: string, context?: PriorChat) => offerTask(text, [], context);
+
+  const handleRequest = (text: string, candidates: Project[], context?: PriorChat) => offerTask(text, candidates, context);
 
   const submit = (raw: string, opts: { again?: boolean } = {}) => {
     const text = raw.trim();
-    if (!text || busy) return;
+    if (!text) return;
     if (opts.again) {
       // "새 질문이에요"를 고른 경우: 이미 화면에 있는 말을 확인 질문 답으로 보지 않고 다시 분류한다.
       setPending(null);
@@ -474,16 +505,27 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       return;
     }
     setInput('');
-    // 이 메시지에 사진이 있으면 미니엉의 다음 확인까지 들고 간다. 사진 없는 새 메시지는 이전 사진을 놓는다(확인 답만 할 때는 유지).
     const sent = photos;
     if (sent.length) {
-      photoStore.held = sent;
       setPhotos([]);
       setPhotoErrors([]);
-    } else if (!pending || !replyIntent(text)) {
-      if (pending?.kind !== 'naming') photoStore.held = [];
     }
     say('me', sent.length ? `${text}\n(첨부 ${sent.length}개: ${sent.map((f) => f.name).join(', ')})` : text);
+    // v0.4.58: 답을 기다리는 중에 보낸 말은 버리지 않고 줄 세웠다가 앞 일이 끝나면 차례로 처리한다.
+    if (busy || queue.length) {
+      setQueue((q) => [...q, { text, files: sent }]);
+      return;
+    }
+    handle(text, sent);
+  };
+
+  /** 이미 화면에 올린 내 말 하나를 처리한다(바로, 또는 줄 선 차례가 되었을 때) */
+  const handle = (text: string, sent: File[]) => {
+    // 이 메시지에 사진이 있으면 미니엉의 다음 확인까지 들고 간다. 사진 없는 새 메시지는 이전 사진을 놓는다(확인 답만 할 때는 유지).
+    if (sent.length) photoStore.held = sent;
+    else if (!pending || !replyIntent(text)) {
+      if (pending?.kind !== 'naming') photoStore.held = [];
+    }
     // 확인 질문에 버튼 대신 글로 답한 경우("응", "만들어", "아니" 등)
     const yn = replyIntent(text);
     // Gemini 확인 질문 바로 뒤에 쓴 글은 그 답으로 기록하고, Gemini가 기획서를 다시 쓴다.
@@ -531,6 +573,18 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           say('office', `${repo} 저장소를 만들고 '${project.name}'에 연결했어요.`);
         } else say('office', '저장소를 만들지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
       });
+      return;
+    }
+    // 접수 카드에 글로 답한 경우: 바로 위(최근 4개 말 안)의 열린 카드 하나에만 적용한다.
+    const recent = logRef.current.slice(-4);
+    const openCard = !pending && yn ? [...recent].reverse().find((m) => m.offer?.state === 'open' && !m.offer.ask) : undefined;
+    if (openCard) {
+      const project = snap.projects.find((p) => p.id === openCard.offer!.projectId);
+      if (yn === 'yes' && project) acceptOffer(openCard, project);
+      else {
+        setOtherFor(openCard.id);
+        say('office', '그럼 어느 프로젝트인가요? 카드에서 고르세요.');
+      }
       return;
     }
     if (pending?.kind === 'confirm' && yn) {
@@ -655,14 +709,20 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     } else say('office', 'GitHub 저장소는 아직 연결되지 않았습니다(프로젝트 탭에서 owner/repo 입력).');
   };
 
-  const create = async (text: string, project: Project, context?: PriorChat) => {
+  const create = async (text: string, project: Project, context?: PriorChat, whole?: string) => {
     const title = titleFrom(text);
     const images: PendingImage[] = photoStore.held.map((file, i) => ({ key: `${i}-${file.name}`, file, role: isImage(file.type) ? 'reference' : 'document', note: '' }));
     photoStore.held = [];
     const task = await onCreateTask({
       projectId: project.id,
       title,
-      description: context ? priorChatText(context) : text === title ? '' : text,
+      description: context
+        ? priorChatText(context)
+        : whole
+          ? `${text === title ? '' : `${text}\n\n`}참고 — 여러 요청이 함께 온 원래 메시지(이 업무는 위 요청만 한다):\n${whole}`.slice(0, 2000)
+          : text === title
+            ? ''
+            : text,
       requestedType: 'auto',
       priority: 'normal',
       originalText: text,
@@ -679,7 +739,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     say(
       'office',
       `'${project.name}'에 접수했어요: ${task.title}\n${
-        onAutoDraft ? 'Gemini(무료)가 기획서 초안을 써요. 다 되면 여기서 알려 드릴게요.' : '아래 업무 카드의 진행 단계에서 ChatGPT 기획부터 하세요.'
+        onAutoDraft ? 'Gemini(무료)가 기획서 초안을 써요. 다 되면 여기서 알려 드릴게요.' : '아래 업무 카드의 진행 단계에서 기획부터 하세요.'
       }\n대화는 여기서 그대로 이어서 하세요('${project.name}' 프로젝트로 연결했어요).`,
       { projectId: project.id, taskId: task.id },
     );
@@ -697,15 +757,29 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   };
 
   /** AI가 '업무'로 판단했을 때: AI가 고른 프로젝트(없으면 고른 칩·이름 맞추기)로 "이 프로젝트 맞아요?"를 묻는다 */
+  /** 업무의 프로젝트 후보: 대화에서 고른 프로젝트 → AI가 고른 프로젝트 → 글 속 이름 → 앞 대화 */
+  const taskCandidates = (text: string, aiProject: string | null, prior: PriorChat | undefined): Project[] => {
+    if (currentProject) return [currentProject];
+    const ai = matchRoutedProject(aiProject, snap.projects);
+    if (ai) return [ai];
+    const named = matchProjects(text, snap.projects);
+    if (named.length || !prior) return named;
+    return matchProjects(prior.question, snap.projects);
+  };
+
   const routedTask = (text: string, aiProject: string | null, summary: string, prior: PriorChat | undefined) => {
     say('office', `업무 요청으로 봤어요.${summary ? `\n${summary}` : ''}`);
-    let candidates: Project[] = currentProject ? [currentProject] : [];
-    const ai = candidates.length ? null : matchRoutedProject(aiProject, snap.projects);
-    if (ai) candidates = [ai];
-    if (!candidates.length) candidates = matchProjects(text, snap.projects);
-    if (!candidates.length && prior) candidates = matchProjects(prior.question, snap.projects);
-    handleRequest(text, candidates, prior);
+    handleRequest(text, taskCandidates(text, aiProject, prior), prior);
   };
+
+  // 줄 선 말: 앞 일이 모두 끝나면 하나씩 꺼내 처리한다.
+  useEffect(() => {
+    if (busy || !queue.length) return;
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    handle(next.text, next.files);
+    // handle은 매 렌더 새로 만들어지므로 의존성에서 뺀다(지금 화면 상태로 처리).
+  }, [busy, queue]);
 
   const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }) => {
     setPending(null);
@@ -727,10 +801,16 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         setLog((l) => [...l, { id, from: 'gemini' as From, text: '' }].slice(-KEEP));
         const set = (t: string) => setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
         // 판단을 맡겼으면 첫 줄(판단 머리)은 숨기고, 질문 답일 때만 본문을 바로 보여 준다.
+        // v0.4.58: 여러 개로 나눴으면 질문 답만 모아 보여 준다(업무·애매는 끝난 뒤 카드로).
+        const answersOf = (items: RoutedItem[]) =>
+          items
+            .filter((it) => it.kind === 'question' && it.body)
+            .map((it) => (items.length > 1 && it.label ? `【${it.label}】\n${it.body}` : it.body))
+            .join('\n\n');
         const put = (t: string) => {
           if (!route) return set(t);
-          const r = parseRouted(t);
-          if (r.ready && r.kind === 'question') set(r.body);
+          const r = parseRoutedAll(t);
+          if (r.ready) set(answersOf(r.items));
         };
         const opts: AskOptions = {
           ...(currentProject ? { project: projectContext(currentProject, snap.tasks) } : {}),
@@ -741,7 +821,28 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           const raw = got.answer;
           const via = VIA_OF_SLOT[got.keySlot];
           if (via) setLog((l) => l.map((m) => (m.id === id ? { ...m, via } : m)));
-          const r = route ? parseRouted(raw) : null;
+          const all = route ? parseRoutedAll(raw) : null;
+          if (all && all.items.length > 1) {
+            // 한 메시지에 여러 개: 질문은 위 말풍선에 모아 답하고, 업무는 카드마다 따로 접수 확인한다.
+            const answer = answersOf(all.items);
+            if (answer) set(answer);
+            else setLog((l) => l.filter((m) => m.id !== id));
+            const tasks = all.items.filter((it) => it.kind === 'task').length;
+            const asks = all.items.filter((it) => it.kind === 'ambiguous').length;
+            const questions = all.items.length - tasks - asks;
+            say(
+              'office',
+              `${all.items.length}가지로 나눴어요: ${[questions && `질문 ${questions}`, tasks && `업무 ${tasks}`, asks && `확인 필요 ${asks}`].filter(Boolean).join(' · ')}.${tasks + asks ? ' 아래 카드에서 하나씩 정해 주세요.' : ''}`,
+            );
+            for (const it of all.items) {
+              const piece = it.body && it.kind === 'task' ? it.body : it.label || it.body;
+              if (it.kind === 'task') offerTask(piece, taskCandidates(piece, it.project, route?.prior), undefined, { whole: text });
+              else if (it.kind === 'ambiguous') offerTask(it.label || text, [], undefined, { whole: text, ask: it.body || '질문인가요, 업무 요청인가요?' });
+            }
+            if (answer) setPending({ kind: 'followup', text, answer, projectName });
+            return;
+          }
+          const r = all ? { ...all.items[0], ready: true } : null;
           if (r && r.kind !== 'question') {
             // 업무·애매: 답 말풍선은 지우고 미니엉이 이어서 묻는다. 첨부는 업무 접수까지 들고 간다.
             setLog((l) => l.filter((m) => m.id !== id));
@@ -811,6 +912,62 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                   업무 보기 →
                 </button>
               )}
+              {m.offer?.state === 'open' && (() => {
+                const o = m.offer;
+                const project = snap.projects.find((p) => p.id === o.projectId);
+                const list = project && otherFor !== m.id ? [] : snap.projects.filter((p) => p.id !== project?.id);
+                return (
+                  <span className="inbox-choices" role="group" aria-label="이 요청 접수하기">
+                    {project && (
+                      <button type="button" className="btn btn-small btn-primary" onClick={() => acceptOffer(m, project)}>
+                        맞아요, 접수
+                      </button>
+                    )}
+                    {project && otherFor !== m.id && (
+                      <button type="button" className="btn btn-small btn-ghost" onClick={() => setOtherFor(m.id)}>
+                        다른 프로젝트
+                      </button>
+                    )}
+                    {list.map((p) => (
+                      <button key={p.id} type="button" className="btn btn-small btn-ghost" onClick={() => acceptOffer(m, p)}>
+                        {p.name}
+                      </button>
+                    ))}
+                    {(!project || otherFor === m.id) && (
+                      <button
+                        type="button"
+                        className="btn btn-small btn-ghost"
+                        onClick={() => {
+                          settleOffer(m.id, 'done');
+                          setPending({ kind: 'naming', text: o.text, context: o.context });
+                          say('office', '새 프로젝트 이름을 알려주세요.');
+                        }}
+                      >
+                        + 새 프로젝트
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-small btn-ghost"
+                      onClick={() => {
+                        settleOffer(m.id, 'dropped');
+                        if (canAskGemini) {
+                          say('me', `질문이에요: ${short(o.text)}`);
+                          askGemini(o.text);
+                        } else setPending({ kind: 'question', text: o.text });
+                      }}
+                    >
+                      {o.ask ? '질문이에요' : '질문이었어요'}
+                    </button>
+                    {o.whole && (
+                      <button type="button" className="btn btn-small btn-ghost" onClick={() => settleOffer(m.id, 'dropped')}>
+                        빼기
+                      </button>
+                    )}
+                  </span>
+                );
+              })()}
+              {m.offer && m.offer.state !== 'open' && <span className="muted small inbox-offer-done">{m.offer.state === 'done' ? '접수함' : '접수 안 함'}</span>}
               {m.actions && !busy && (() => {
                 // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
                 const task = snap.tasks.find((t) => t.id === m.taskId);
@@ -950,6 +1107,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         </div>
       )}
       {busy && !log.some((m) => m.from === 'gemini' && !m.text) && <p className="muted small inbox-note">처리 중…</p>}
+      {queue.length > 0 && <p className="muted small inbox-note">앞 일이 끝나면 이어서 답할게요(기다리는 말 {queue.length}개).</p>}
       <div ref={endRef} />
 
       {photos.length > 0 && (
@@ -1053,6 +1211,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             photoStore.held = [];
             setPending(null);
             setShowOther(false);
+            setQueue([]);
+            setOtherFor(null);
             setLog(hadPending ? [{ id: mid(), from: 'office', text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).' }] : []);
           }}
         >

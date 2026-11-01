@@ -30,10 +30,13 @@ function routeRules(projects: string[]) {
   return [
     '',
     '## 먼저 판단',
-    '답의 첫 줄에는 반드시 아래 셋 중 하나만 쓴다(다른 글 없이).',
+    '답의 첫 줄에는 반드시 아래 셋 중 하나만 쓴다(다른 글 없이). 머리 줄은 줄 맨 앞에 `@@`로 시작한다.',
     '- `@@질문` : 알고 싶은 것을 묻는 말. 둘째 줄부터 바로 답한다.',
     '- `@@업무 <프로젝트 이름>` : 무엇을 만들거나·고치거나·추가·삭제·조사해 달라는 작업 요청. 프로젝트를 모르면 `@@업무 없음`. 둘째 줄부터 요청을 한두 줄로 정리만 한다(답하거나 실행했다고 하지 않는다).',
     '- `@@애매` : 질문인지 작업 요청인지 정말 모를 때만. 둘째 줄에 확인 질문 한 줄.',
+    '한 메시지에 서로 다른 질문·요청이 여러 개 섞여 있으면(예: 질문 하나 + 개발 요청 둘) 하나씩 나눠, 위 머리 줄로 시작하는 덩어리를 차례로 쓴다(최대 5개).',
+    '여러 개로 나눌 때는 각 머리 줄 끝에 ` | <그 질문·요청의 한 줄 요약>`을 붙인다(예: `@@업무 MuscleMap | 다크 모드 추가`). 하나뿐이면 붙이지 않는다.',
+    '같은 기능에 대한 여러 조건·설명은 나누지 않고 한 덩어리로 둔다.',
     `프로젝트 목록: ${projects.length ? projects.map((p) => `'${p}'`).join(', ') : '(없음)'}`,
     '프로젝트 이름은 목록에 있는 그대로 쓴다. 대화 앞부분에서 이어지는 요청이면 앞 내용을 보고 판단한다.',
   ].join('\n');
@@ -117,7 +120,7 @@ function requestBody(question: string, history: Turn[], images: InlineImage[], m
       { role: 'user', parts: [...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
     ],
     // 짧은 질문 답에는 '생각' 단계를 가장 적게 한다(빠르게, v0.4.15·v0.4.23). 모델이 설정을 모르면(400) 다음 설정으로 다시 묻는다.
-    generationConfig: { maxOutputTokens: 1024, temperature: 0.4, ...(thinking ? { thinkingConfig: thinking } : {}) },
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.4, ...(thinking ? { thinkingConfig: thinking } : {}) },
   });
 }
 
