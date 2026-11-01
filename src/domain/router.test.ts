@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AGENT_BY_ID } from './agents';
-import { classify, routeTask } from './router';
+import { classify, coverFor, routeTask } from './router';
 import type { UsageRun } from './types';
 import { kstDay } from './usage';
 
@@ -93,5 +93,12 @@ describe('영어 키워드는 단어 단위(v0.3.4)', () => {
   it('후보가 모두 휴가면 그 일을 할 줄 아는 다른 AI에게 맡긴다', () => {
     const r = routeTask({ title: '시장 조사', description: '', requestedType: 'research' }, [], now, ['grok']);
     expect(r.assignee).toBe('claude');
+  });
+
+  it('휴가로 대신 맡은 일을 알려 준다', () => {
+    const c = coverFor(['codex', 'grok']);
+    expect(c.claude).toEqual(expect.arrayContaining(['개발(Codex 대신)', '리서치(Grok 대신)']));
+    expect(c.studioA).toEqual(['중요 기획(ChatGPT 대신)']);
+    expect(coverFor([])).toEqual({});
   });
 });
