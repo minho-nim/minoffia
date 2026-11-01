@@ -1305,9 +1305,9 @@ export function App() {
                 onWarmGemini={() => store.warmGemini?.()}
                 onCreateTask={(d, images) => addTask(d, images)}
                 onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
-                onAskGemini={async (q, history, images, onDelta) => {
+                onAskGemini={async (q, history, images, onDelta, opts) => {
                   try {
-                    return (await store.askGemini(q, history, images, onDelta)).answer;
+                    return (await store.askGemini(q, history, images, onDelta, opts)).answer;
                   } finally {
                     // 오늘 Gemini 횟수만 새로 읽는다(답 표시를 기다리게 하지 않음).
                     void store.load().then(setSnap, () => undefined);

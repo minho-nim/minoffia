@@ -1,3 +1,4 @@
+import type { AskOptions } from '../domain/aiRoute';
 import type { Attachment, ImageAnalysis } from '../domain/attachments';
 import type { ChatEntry } from '../domain/devlog';
 import type { Clarification, LinkRef } from '../domain/requestContext';
@@ -101,6 +102,8 @@ export interface OfficeStore {
     images?: { mime: string; data: string }[],
     /** 답 조각이 올 때마다 지금까지의 글 전체로 부른다(있으면 스트리밍, v0.4.15) */
     onDelta?: (soFar: string) => void,
+    /** AI 먼저 판단(프로젝트 이름들)·고른 프로젝트 정보(v0.4.29) */
+    opts?: AskOptions,
   ): Promise<{ answer: string; keySlot: number }>;
 }
 

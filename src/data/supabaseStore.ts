@@ -660,14 +660,14 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         }).catch(() => undefined),
       );
     },
-    async askGemini(question, history, images = [], onDelta) {
+    async askGemini(question, history, images = [], onDelta, opts) {
       if (onDelta && SUPABASE_URL && SUPABASE_KEY) {
         // 답을 조각조각 바로 보여 준다(한 줄에 JSON 하나: {"d":"글"} … {"done":true} 또는 {"error":"…"}).
         const { data: sess } = await client.auth.getSession();
         const res = await fetch(`${SUPABASE_URL}/functions/v1/ask-gemini`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${sess.session?.access_token ?? SUPABASE_KEY}` },
-          body: JSON.stringify({ question, history, images, stream: true }),
+          body: JSON.stringify({ question, history, images, stream: true, ...opts }),
         });
         if (!res.ok || !res.body || !(res.headers.get('content-type') ?? '').includes('ndjson')) {
           const b = await res.json().catch(() => ({}));
@@ -702,7 +702,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         if (!answer.trim()) throw new Error('Gemini가 답하지 못했습니다.');
         return { answer: answer.trim(), keySlot };
       }
-      const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history, images } });
+      const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history, images, ...opts } });
       if (error) {
         let message = error.message;
         const ctx = (error as { context?: Response }).context;
