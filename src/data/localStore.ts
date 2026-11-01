@@ -34,7 +34,8 @@ function read(): Snapshot | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as Snapshot;
     // v0.1에 저장된 데모 데이터에는 workflow가 없다.
-    return { ...s, workflow: { ...EMPTY_WORKFLOW, ...(s.workflow ?? {}) } };
+    // 휴가 기록이 없던 데모(v0.4.56 전)는 Grok을 휴가로 시작한다(소유자: Grok은 수동 없이 쓸 길이 없어 휴가).
+    return { ...s, leave: s.leave ?? ['grok'], workflow: { ...EMPTY_WORKFLOW, ...(s.workflow ?? {}) } };
   } catch {
     return null;
   }

@@ -62,8 +62,8 @@ export const AGENTS: Agent[] = [
   },
   {
     id: 'codex',
-    name: 'Codex',
-    role: '개발 · 중요 기획(ChatGPT)',
+    name: 'Codex (Linear)',
+    role: '주 개발',
     provider: 'OpenAI (ChatGPT 계정: Codex·ChatGPT)',
     mode: 'manual',
     home: 'dev',

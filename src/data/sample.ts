@@ -63,5 +63,6 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
       createdAt: at(120),
     },
   ];
-  return { projects, tasks, usage, workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] } };
+  // Grok은 수동 없이 쓸 길이 없어 휴가로 시작한다(v0.4.56, 소유자).
+  return { projects, tasks, usage, leave: ['grok'], workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] } };
 }

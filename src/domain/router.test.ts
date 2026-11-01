@@ -87,7 +87,7 @@ describe('영어 키워드는 단어 단위(v0.3.4)', () => {
   it('휴가 중인 AI는 빼고 다음 후보에게 맡긴다', () => {
     const r = routeTask({ title: '결제 기능 구현', description: '', requestedType: 'auto' }, [], now, ['codex']);
     expect(r.assignee).toBe('claude');
-    expect(r.reason).toContain('Codex 휴가');
+    expect(r.reason).toContain('Codex (Linear) 휴가');
   });
 
   it('후보가 모두 휴가면 그 일을 할 줄 아는 다른 AI에게 맡긴다', () => {
@@ -97,8 +97,7 @@ describe('영어 키워드는 단어 단위(v0.3.4)', () => {
 
   it('휴가로 대신 맡은 일을 알려 준다', () => {
     const c = coverFor(['codex', 'grok']);
-    expect(c.claude).toEqual(expect.arrayContaining(['개발(Codex 대신)', '리서치(Grok 대신)']));
-    expect(c.studioA).toEqual(['중요 기획(ChatGPT 대신)']);
+    expect(c.claude).toEqual(expect.arrayContaining(['개발(Codex (Linear) 대신)', '리서치(Grok 대신)']));
     expect(coverFor([])).toEqual({});
   });
 });
