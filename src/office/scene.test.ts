@@ -69,6 +69,11 @@ describe('pathBetween', () => {
   it('같은 방 안에서는 바로 간다', () => {
     expect(pathBetween({ x: 1, y: 1, zone: 'dev' }, { x: 5, y: 5, zone: 'dev' })).toEqual([{ x: 5, y: 5 }]);
   });
+
+  it('아래 두 방(기획실↔휴게실) 사이는 가로 복도를 찍지 않고 바로 간다', () => {
+    const path = pathBetween({ x: 60, y: 190, zone: 'planning' }, { x: 240, y: 200, zone: 'lounge' });
+    expect(path.every((p) => p.y > 113)).toBe(true);
+  });
 });
 
 describe('겹침', () => {

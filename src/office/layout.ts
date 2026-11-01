@@ -116,8 +116,8 @@ export const LOUNGE_SPOTS: Point[] = [
   { x: 205, y: 205 },
 ];
 
-/** 복도 메모 보드 아래, 미니엉이 서는 자리. */
-export const RECEPTION: Point = { x: 150, y: 196 };
+/** 복도 메모 보드 바로 위(가로 복도 쪽), 미니엉이 서는 자리. 보드 아래에 서면 대기열을 가려서 옮겼다(v0.4.30). */
+export const RECEPTION: Point = { x: 150, y: 140 };
 /** 복도 메모 보드(HTML 오버레이) 위치. */
 export const MEMO_BOARD = { x: 122, y: 143, w: 52, h: 34 };
 
@@ -144,9 +144,12 @@ export function pathBetween(from: Spot, to: Spot): Point[] {
     tail.push(d.outside, d.inside);
     end = d.outside;
   }
-  // 복도 안에서는 가로 복도 높이로 올라갔다가 옆으로 이동한다.
-  if (start.y !== HALL_Y || end.y !== HALL_Y) {
-    pts.push({ x: start.x, y: HALL_Y }, { x: end.x, y: HALL_Y });
+  // 복도 안: 둘 다 세로 복도(가로 복도 아래)에 있으면 바로 간다(v0.4.30, 가운데를 찍고 돌아오지 않게).
+  // 한쪽이 가로 복도(위층 방 문)면 세로로 가로 복도까지 간 뒤 옆으로 간다.
+  const bothLower = start.y > HALL_Y && end.y > HALL_Y;
+  if (!bothLower && (start.y !== HALL_Y || end.y !== HALL_Y)) {
+    if (start.y !== HALL_Y) pts.push({ x: start.x, y: HALL_Y });
+    if (end.y !== HALL_Y) pts.push({ x: end.x, y: HALL_Y });
   }
   pts.push(...tail, { x: to.x, y: to.y });
   return pts;
