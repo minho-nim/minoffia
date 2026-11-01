@@ -362,6 +362,81 @@ a {
   color: var(--muted);
 }
 
+/* AI 휴가(v0.4.39) */
+.pill.pill-mark-leave {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px dashed var(--line);
+}
+
+/* 문에 닿은 휴가 AI는 사라진다 */
+.agent {
+  transition: opacity 0.4s ease;
+}
+.agent.is-away {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.leave-board {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.leave-board h3 {
+  margin: 0 0 2px;
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+.leave-board p {
+  margin: 0 0 8px;
+}
+.leave-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.leave-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+.leave-chip input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+.leave-chip img {
+  width: 18px;
+  height: 24px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.leave-chip img.is-art {
+  image-rendering: auto;
+}
+.leave-chip .leave-state {
+  font-size: 11.5px;
+  color: var(--ok);
+}
+.leave-chip.is-away {
+  border-style: dashed;
+  opacity: 0.75;
+}
+.leave-chip.is-away img {
+  filter: grayscale(1);
+}
+.leave-chip.is-away .leave-state {
+  color: var(--muted);
+}
+
 /* 얇은 머리에서는 오른쪽 끝에 작게(.topbar-mini button 기본 글꼴·여백을 덮는다) */
 .topbar-mini .theme-toggle {
   margin-left: auto;

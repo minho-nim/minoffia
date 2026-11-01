@@ -118,6 +118,8 @@ export const LOUNGE_SPOTS: Point[] = [
 
 /** 복도 메모 보드 바로 위(가로 복도 쪽), 미니엉이 서는 자리. 보드 아래에 서면 대기열을 가려서 옮겼다(v0.4.30). */
 export const RECEPTION: Point = { x: 150, y: 140 };
+/** 사무실 아래쪽 출입문. 휴가 가는 AI는 여기로 나가 사라지고, 돌아오면 여기서 들어온다(v0.4.39). */
+export const EXIT: Point = { x: 150, y: 222 };
 /** 복도 메모 보드(HTML 오버레이) 위치. */
 export const MEMO_BOARD = { x: 122, y: 143, w: 52, h: 34 };
 

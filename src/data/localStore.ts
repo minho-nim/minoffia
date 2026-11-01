@@ -237,6 +237,10 @@ export function createLocalStore(): OfficeStore {
     async checkPr() {
       throw new Error('로컬 데모에서는 GitHub PR·CI를 확인할 수 없습니다.');
     },
+    async setLeave(agent, onLeave) {
+      const cur = state.leave ?? [];
+      commit({ ...state, leave: onLeave ? [...cur.filter((a) => a !== agent), agent] : cur.filter((a) => a !== agent) });
+    },
     async setAgentLimit(assignee, maxRunning) {
       if (!Number.isInteger(maxRunning) || maxRunning < 1 || maxRunning > 5) throw new Error('상한은 1~5입니다.');
       commit({ ...state, agentLimits: { ...(state.agentLimits ?? {}), [assignee]: maxRunning } });

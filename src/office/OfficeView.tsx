@@ -4,7 +4,7 @@ import type { AgentId, Task } from '../domain/types';
 import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
 import { STATUS_LABEL } from '../domain/types';
 import { drawOffice } from './draw';
-import { H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
+import { EXIT, H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
 import { ACTIVITY_LABEL, buildScene } from './scene';
 import { badgeFor } from './marks';
 import { speechFor } from './speech';
@@ -21,6 +21,8 @@ interface Props {
   workflow?: WorkflowData;
   /** 말풍선이 있는 캐릭터를 누르면 그 업무 카드를 연다 */
   onOpenTask?: (taskId: string) => void;
+  /** 휴가 중인 AI: 아래 문으로 나가 사라진다(v0.4.39) */
+  leave?: AgentId[];
 }
 
 interface Mover {
@@ -34,11 +36,18 @@ interface Mover {
 const SPEED = 22; // 논리 픽셀/초. 천천히 걷는다.
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
 
-export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask }: Props) {
+export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask, leave = [] }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRefs = useRef(new Map<AgentId, HTMLButtonElement>());
   const movers = useRef(new Map<AgentId, Mover>());
-  const scene = useMemo(() => buildScene(tasks, assignments), [tasks, assignments]);
+  const leaveKey = leave.join(',');
+  // 휴가 중인 AI는 자리 대신 아래 출입문으로 간다(도착하면 사라짐).
+  const scene = useMemo(
+    () => buildScene(tasks, assignments).map((s) => (leaveKey.split(',').includes(s.agent) ? { ...s, spot: { ...EXIT, zone: 'corridor' as const }, activity: 'resting' as const } : s)),
+    [tasks, assignments, leaveKey],
+  );
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
   const speech = useMemo(() => (workflow ? speechFor(tasks, workflow) : new Map()), [tasks, workflow]);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
@@ -159,6 +168,9 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
           if (img) img.src = sprite.src;
         }
         el.dataset.walking = walking ? 'true' : 'false';
+        // 휴가: 문에 닿으면 사라진다. 돌아오면 문에서 다시 보인다.
+        const gone = leaveRef.current.includes(s.agent) && !walking && m.x === EXIT.x && m.y === EXIT.y;
+        el.classList.toggle('is-away', gone);
       }
       raf = requestAnimationFrame(tick);
     };
@@ -219,7 +231,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
       {AGENTS.map((a) => {
         const s = scene.find((x) => x.agent === a.id);
         if (!s) return null;
-        const say = speech.get(a.id);
+        const say = leave.includes(a.id) ? undefined : speech.get(a.id);
         const talking = say && say.kind !== 'busy';
         const sayTask = say ? tasks.find((t) => t.id === say.taskId) : undefined;
         const badge = say?.kind === 'busy' ? say.text : talking ? undefined : badgeFor(s);
