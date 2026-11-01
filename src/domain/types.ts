@@ -14,9 +14,25 @@ export interface Project {
   /** GitHub `owner/repo`. 없으면 연결되지 않은 프로젝트. */
   repo: string | null;
   description: string;
+  /** 브랜치 미리보기 주소의 호스트(예: minlab-ai-office.pages.dev, Cloudflare Pages). 있으면 Claude 결과에 미리보기 링크가 붙는다(v0.4.57) */
+  previewHost?: string | null;
   sample?: boolean;
   createdAt: string;
 }
+
+/** 이 프로젝트에서 지켜야 할 것(v0.4.57): AI가 접수·계획·개발 결과에서 적어 두고, 다음 지시서에 함께 넣는다 */
+export interface ProjectRule {
+  id: string;
+  projectId: string;
+  rule: string;
+  /** spec = Gemini 기획서 초안, plan = Claude PM 계획, result = 개발 결과, owner = 소유자가 직접 */
+  source: 'spec' | 'plan' | 'result' | 'owner';
+  taskId: string | null;
+  createdAt: string;
+}
+
+export const RULE_SOURCE_LABEL: Record<ProjectRule['source'], string> = { spec: '기획서', plan: 'PM 계획', result: '개발 결과', owner: '내가 적음' };
+export const PREVIEW_HOST_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 
 export interface Dispatch {
   state: DispatchState;
@@ -84,6 +100,8 @@ export interface Snapshot {
   agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
   /** 휴가 중인 AI(v0.4.39). 새 배정·PM 계획에서 뺀다 */
   leave?: AgentId[];
+  /** 프로젝트에서 지켜야 할 것(v0.4.57) */
+  projectRules?: ProjectRule[];
 }
 
 /** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */

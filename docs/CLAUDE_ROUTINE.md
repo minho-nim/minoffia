@@ -47,7 +47,7 @@ GitHub 업로드는 사용자의 B 승인 뒤에만 하므로, 이 루틴은 저
 루틴 `MinLab AI Office 보조 개발`(trig_01GC5Hzeaj3razY5wM7ZF9n1, 2026-10-30 생성, 일정 없음). PM 계획에서 Claude(`claude_support`)에 배정한 작업을
 E 승인 뒤 앱의 **"Claude 보조 개발 시작(자동)"**으로 서버(`supabase/functions/dispatch-claude-dev`)가 시작한다.
 
-- 저장 프롬프트 요지: payload의 작업 브랜치(`ai/claude/<업무 8자>-<작업>`)에서만 작업, **B 승인 전 push·PR·병합·배포 금지**, 시험 결과 그대로, 마지막 메시지에 요약·바뀐 파일·`git diff main...HEAD`·시험 로그·남은 문제.
+- 저장 프롬프트 요지: payload의 작업 브랜치(`ai/claude/<업무 8자>-<작업>`)에서만 작업, **B 승인 전 PR·병합·배포 금지**(v0.4.57부터 시험 뒤 그 작업 브랜치만 미리보기용 push는 허용, payload가 시킴), 시험 결과 그대로, 마지막 메시지에 요약·바뀐 파일·`git diff main...HEAD`·시험 로그·남은 문제.
 - payload는 `dispatch-claude-dev/payload.ts`가 만든다(기획서·작업 목표·완료 기준·유지 조건·요청 자료 목록·승인된 견본).
 - 예약은 DB `claim_claude_dev`(0016)가 원자적으로: 최신 계획·E 승인·시작 준비 상태·하루 상한(PM과 함께 셈)·동시 작업 상한·앞 작업.
 - 세션 시작(HTTP 200)은 서버가 확인해 '시작됨'(server_verified)까지만 기록한다. 완료가 아니다. 결과는 세션 마지막 보고를 결과 패키지로 옮긴다.

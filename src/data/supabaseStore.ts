@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_KEY, SUPABASE_URL } from '../lib/supabase';
 import { MIME_EXT, storageContentType, type Attachment, type ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
-import type { AgentId, Project, Task, UsageRun } from '../domain/types';
+import type { AgentId, Project, ProjectRule, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
 import type { OfficeStore } from './store';
@@ -14,6 +14,8 @@ const toProject = (r: Row): Project => ({
   name: r.name as string,
   repo: (r.repo as string | null) ?? null,
   description: (r.description as string) ?? '',
+  // 마이그레이션 전 DB에는 칸이 없다(undefined면 저장할 때도 보내지 않음)
+  previewHost: r.preview_host === undefined ? undefined : ((r.preview_host as string | null) ?? null),
   createdAt: r.created_at as string,
 });
 
@@ -111,6 +113,7 @@ const toResult = (r: Row): ResultPackage => ({
   testLog: r.test_log as string,
   remainingIssues: r.remaining_issues as string,
   sha256: r.sha256 as string,
+  previewUrl: (r.preview_url as string | undefined) ?? '',
   createdAt: r.created_at as string,
 });
 
@@ -175,7 +178,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules',
 ];
 
 const toDeployment = (r: Row): Deployment => ({
@@ -260,7 +263,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -280,6 +283,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('pr_checks').select('*').order('checked_at'),
         client.from('deployments').select('*').order('created_at'),
         client.from('agent_leave').select('agent'),
+        client.from('project_rules').select('*').order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -301,13 +305,23 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           deployments: deployments.error ? [] : (deployments.data ?? []).map(toDeployment),
         },
         leave: leave.error ? [] : (leave.data ?? []).map((r: Row) => r.agent as AgentId),
+        projectRules: projectRules.error
+          ? []
+          : (projectRules.data ?? []).map((r: Row) => ({
+              id: r.id as string,
+              projectId: r.project_id as string,
+              rule: r.rule as string,
+              source: r.source as ProjectRule['source'],
+              taskId: (r.task_id as string | null) ?? null,
+              createdAt: r.created_at as string,
+            })),
         agentLimits: agentLimits.error ? {} : Object.fromEntries((agentLimits.data ?? []).map((r: Row) => [r.assignee as string, r.max_running as number])),
         // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
         aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : 'question') as 'question' | 'image', httpStatus: (r.http_status as number | null) ?? null, createdAt: r.created_at as string })),
       };
     },
     async saveProject(p) {
-      check(await client.from('projects').upsert({ id: p.id, name: p.name, repo: p.repo, description: p.description }));
+      check(await client.from('projects').upsert({ id: p.id, name: p.name, repo: p.repo, description: p.description, ...(p.previewHost !== undefined ? { preview_host: p.previewHost } : {}) }));
     },
     async deleteProject(id) {
       check(await client.from('projects').delete().eq('id', id));
@@ -519,7 +533,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async loadResultInbox() {
       const { data, error } = await client
         .from('dev_result_inbox')
-        .select('id, task_id, assignment_id, summary, changed_files, diff, test_log, remaining_issues, branch')
+        .select('*')
         .eq('status', 'new')
         .order('created_at');
       if (error) return [];
@@ -533,6 +547,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         testLog: r.test_log as string,
         remainingIssues: r.remaining_issues as string,
         branch: r.branch as string,
+        previewUrl: (r.preview_url as string | undefined) ?? '',
       }));
     },
     async markResultInbox(id, status, note) {
@@ -614,6 +629,12 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async setLeave(agent, onLeave) {
       if (onLeave) check(await client.from('agent_leave').upsert({ agent }));
       else check(await client.from('agent_leave').delete().eq('agent', agent));
+    },
+    async addProjectRule(projectId, rule) {
+      check(await client.from('project_rules').insert({ project_id: projectId, rule: rule.replace(/\s+/g, ' ').trim().slice(0, 200), source: 'owner' }));
+    },
+    async removeProjectRule(id) {
+      check(await client.from('project_rules').delete().eq('id', id));
     },
     async setAgentLimit(assignee, maxRunning) {
       check(await client.from('agent_limits').upsert({ assignee, max_running: maxRunning, updated_at: new Date().toISOString() }));
@@ -773,6 +794,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           test_log: x.testLog,
           remaining_issues: x.remainingIssues,
           sha256: x.sha256,
+          ...(x.previewUrl ? { preview_url: x.previewUrl } : {}),
         }),
       );
     },

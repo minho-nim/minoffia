@@ -41,7 +41,7 @@
 
 사용자 요청 → Gemini 기획서 초안(자동, 중요한 업무만 ChatGPT 수동) → **A 기획 승인** → Claude PM 계획(자동 시작·자동 제출, 저장소 쓰기 금지, 개발 방식 `prototype_first`/`direct` 제안) → (견본 먼저면: Gemini HTML 견본 자동 또는 AI Studio Build 수동 → 미리보기 → **P 견본 승인**) → **E 실행 승인**(Claude 작업은 자동 시작) → Codex Cloud 주 개발(자동 시작 미검증 → 수동 인계. 결정: Codex for Linear 절충안, `docs/CODEX_LINEAR_DECISION_2026-10-30.md`) → 결과 패키지 검토 → **B 승인** 후 GitHub 업로드·PR → **C 승인** 후 운영 배포.
 - 견본 먼저 계획에서 Codex 작업의 E는 P 뒤에만(`0014_prototype_first.sql`). P를 하면 견본 작업(gemini)은 끝난 것으로 기록되고 Codex 지시서에 승인된 견본이 들어간다.
-- Claude 보조 개발: PM이 Claude(`claude_support`)에 배정한 작업은 E 승인 뒤 서버(`supabase/functions/dispatch-claude-dev`, 예약 `claim_claude_dev` 0016)가 두 번째 루틴으로 시작한다. B 승인 전 push·PR 금지, 세션 시작은 '시작됨'까지만, 결과는 세션이 `submit-result`로 보낸다(안 되면 사용자가 옮김). 루틴·secrets는 `docs/CLAUDE_ROUTINE.md`.
+- Claude 보조 개발: PM이 Claude(`claude_support`)에 배정한 작업은 E 승인 뒤 서버(`supabase/functions/dispatch-claude-dev`, 예약 `claim_claude_dev` 0016)가 두 번째 루틴으로 시작한다. B 승인 전 PR 금지(시험 뒤 작업 브랜치만 미리보기용 push 허용, 소유자 2026-11-01 v0.4.57; 프로젝트 `preview_host`가 있으면 결과에 '미리보기 열기'), 세션 시작은 '시작됨'까지만, 결과는 세션이 `submit-result`로 보낸다(안 되면 사용자가 옮김). 루틴·secrets는 `docs/CLAUDE_ROUTINE.md`.
 - 수정 루프: A에서 수정 요청 → ChatGPT 재기획. 결과 검토에서 수정 요청 → Claude PM 재계획(같은 기획서 버전, 새 계획은 E 재승인). 보조 AI(Claude·Gemini·Grok)도 E 승인을 받는다(소유자 결정, 2026-10-29).
 - 배정 완료 ≠ 실행 중, 세션 시작(HTTP 200) ≠ 완료. 검증하지 않은 자동 실행을 성공으로 표시하지 않는다.
 - Claude 세션 안에 Codex CLI·Grok CLI를 설치·실행하지 않는다. 하위 에이전트를 Codex라고 부르지 않는다.
@@ -73,6 +73,7 @@
 - 원격 실행이 성공해도 상태는 `in_progress`까지. 완료는 사람이 검토 대기 → 완료로 승인한다.
 - AI 휴가(v0.4.39, 소유자 2026-11-01): '팀 관리' 탭(v0.4.40)에서 근무·휴가 칸 사이로 옮기면(체크 후 가운데 버튼, 또는 끌어다 놓기) 휴가(`agent_leave`, 0026). 휴가인 AI는 사무실 아래 출입문으로 나가 사라지고, 새 배정(`routeTask`의 leave)과 PM 계획(`dispatch-claude` 프롬프트)에서 빠져 규칙대로 다른 AI가 맡는다. 휴가를 보내면 그 AI의 열린 업무(업무 카드 담당)는 같은 규칙으로 대신 맡을 AI에게 넘긴다(v0.4.54, 맡을 AI가 없으면 그대로; PM 계획 안의 작업 배정은 서버 규칙상 바꾸지 않음). 미니엉·CI 봇은 휴가 대상이 아니다.
 - 캐릭터 하나 = 계정 하나(v0.4.44, 소유자 2026-11-01): 미니엉 = 대화창의 얼굴(규칙, 모델 호출 없음; 질문·판단은 근무 중인 Studio의 Gemini 답을 받아 전하고 말풍선 아래 'Gemini · Studio A가 답함'). Studio A = Gemini 키 A, Studio B = Gemini 키 B(휴가인 쪽 키는 서버 4곳 ask-gemini·analyze-image·draft-spec·draft-prototype에서 쓰지 않음, 둘 다 휴가면 Gemini 멈춤). Codex (Linear) = OpenAI(ChatGPT 계정): 주 개발(휴가면 GPT 링크 숨김). 기획에서 ChatGPT를 뺐다(v0.4.56 소유자: 기획서는 Gemini, 업무 계획은 Claude PM). Grok은 무료로 자동 호출할 길이 없어 휴가(데모 기본값도 휴가). 팀 관리에 칸별 전체 선택과 '대신 맡을 AI가 없는 일' 안내(위험 경고 아님).
+- 프로젝트에서 지켜야 할 것(v0.4.57, 소유자 "AI가 알아서"): AI가 기획서 초안·PM 계획·보조 개발 결과에 `project_rules`로 적어 보내면 서버가 `project_rules`(0027)에 쌓고, 다음 기획서 초안·PM·보조 개발·Codex 지시서에 함께 넣는다(공통 코드 `projectRules.ts` 5곳 복사). 소유자는 프로젝트 탭에서 지우기·직접 더하기만.
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
 
 ## 구조

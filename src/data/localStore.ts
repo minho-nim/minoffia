@@ -112,6 +112,7 @@ export function createLocalStore(): OfficeStore {
         ...state,
         projects: state.projects.filter((p) => p.id !== id),
         tasks: state.tasks.filter((t) => t.projectId !== id),
+        projectRules: (state.projectRules ?? []).filter((r) => r.projectId !== id),
       });
       const alive = new Set(state.tasks.map((t) => t.id));
       dropOrphans(alive);
@@ -237,6 +238,15 @@ export function createLocalStore(): OfficeStore {
     },
     async checkPr() {
       throw new Error('로컬 데모에서는 GitHub PR·CI를 확인할 수 없습니다.');
+    },
+    async addProjectRule(projectId, rule) {
+      const text = rule.replace(/\s+/g, ' ').trim().slice(0, 200);
+      const cur = state.projectRules ?? [];
+      if (text.length < 2 || cur.some((r) => r.projectId === projectId && r.rule === text)) return;
+      commit({ ...state, projectRules: [...cur, { id: newId(), projectId, rule: text, source: 'owner', taskId: null, createdAt: new Date().toISOString() }] });
+    },
+    async removeProjectRule(id) {
+      commit({ ...state, projectRules: (state.projectRules ?? []).filter((r) => r.id !== id) });
     },
     async setLeave(agent, onLeave) {
       const cur = state.leave ?? [];
