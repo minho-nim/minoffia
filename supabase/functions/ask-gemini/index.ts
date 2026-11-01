@@ -65,7 +65,27 @@ const cors = {
   'Access-Control-Allow-Origin': env('OFFICE_ALLOWED_ORIGIN') || '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-warm',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  // 브라우저가 사전 확인(OPTIONS)을 한동안 기억해, 질문마다 한 번 더 오가지 않게 한다(v0.4.38).
+  'Access-Control-Max-Age': '86400',
 };
+
+/**
+ * 로그인 확인(v0.4.38): 이 함수는 verify_jwt=true라 Supabase 관문이 토큰 서명·만료를 이미 확인했다.
+ * 그래서 인증 서버에 다시 묻지 않고(약 0.3초) 토큰 안의 사용자 id·이메일만 읽는다.
+ */
+function tokenUser(req: Request): { id: string; email: string } | null {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const part = token.split('.')[1];
+  if (!part) return null;
+  try {
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
+    if (json.role !== 'authenticated' || typeof json.sub !== 'string' || typeof json.email !== 'string') return null;
+    if (typeof json.exp === 'number' && json.exp * 1000 < Date.now()) return null;
+    return { id: json.sub, email: json.email };
+  } catch {
+    return null;
+  }
+}
 
 const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -146,11 +166,7 @@ Deno.serve(async (req) => {
   if (!ownerEmail) return reply(500, { ok: false, error: '서버 설정(OFFICE_OWNER_EMAIL)이 빠졌습니다.' });
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, error: 'Gemini 키가 설정되지 않았습니다(GEMINI_API_KEY).' });
 
-  const userClient = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
-    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
-  });
-  const { data: auth } = await userClient.auth.getUser();
-  const user = auth?.user;
+  const user = tokenUser(req);
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 

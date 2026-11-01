@@ -263,6 +263,16 @@ export function App() {
     window.addEventListener('scroll', checkMini, { passive: true });
     return () => window.removeEventListener('scroll', checkMini);
   }, [checkMini]);
+  // Gemini 질문 서버를 앱을 열 때·다시 볼 때 미리 깨운다(v0.4.38). 입력창을 누르자마자 보내도 깨어나기(약 2초)를 기다리지 않게.
+  useEffect(() => {
+    if (!store || store.mode !== 'supabase') return;
+    const warm = () => {
+      if (document.visibilityState === 'visible') store?.warmGemini?.();
+    };
+    warm();
+    document.addEventListener('visibilitychange', warm);
+    return () => document.removeEventListener('visibilitychange', warm);
+  }, [store]);
   const [, setMinuteTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => {
