@@ -3,6 +3,7 @@
 // 비밀값(Fire URL, Bearer token)은 이 함수의 secrets에만 둔다. 브라우저로 내려보내지 않는다.
 // 요청 형식 근거: https://platform.claude.com/docs/en/api/claude-code/routines-fire (2026-10-29 확인)
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { loadRules, rulesAsk, rulesSection } from './projectRules.ts';
 
 /** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
 const HARD_DAILY_CAP = 20;
@@ -195,6 +196,9 @@ Deno.serve(async (req) => {
       ]
     : [];
 
+  // 5-2. 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것(v0.4.57). 못 읽으면 넣지 않는다.
+  const projectRules = await loadRules(userClient, task.project_id);
+
   // 6. 루틴(PM) 실행. 사용자가 보낸 내용은 <routine-fire-payload>로 전달된다. 최대 65,536자.
   const text = [
     `MinLab AI Office 업무 (작업 ID ${task.id})`,
@@ -227,10 +231,16 @@ Deno.serve(async (req) => {
     ``,
     ...leaveLines,
     ``,
+    ...rulesSection(projectRules),
+    ``,
     `## 개발 방식 결정(필수, 07단계)`,
     `계획 JSON 최상위에 "development_mode"와 "mode_reason"(한 줄 이유)을 넣는다.`,
     `- "prototype_first": 신규 앱·UI 전면 개편·새 인터랙션. 첫 작업을 assignee_preference "gemini_optional"인 AI Studio Build 견본 작업으로 두고, Codex 작업은 dependencies로 그 견본 작업 뒤에 잇는다. 사용자가 견본을 승인(P)해야 Codex를 시작한다.`,
     `- "direct": 버그·기존 기능 수정·DB·성능 개선. 견본 없이 Codex로 바로 개발한다.`,
+    ``,
+    `## 앞으로도 지켜야 할 것(선택)`,
+    rulesAsk('project_rules').replace('- ', '계획 JSON 최상위 '),
+    `각 작업의 preserve_constraints에도 위 "이 프로젝트에서 지켜야 할 것" 중 그 작업에 해당하는 것을 넣는다.`,
     ``,
     `규칙: 작업 분해·배정 계획(JSON)만 작성한다. 저장소 쓰기·커밋·브랜치·푸시·PR·병합·배포 금지(B 승인 전 GitHub 업로드 금지).`,
     ...(ticketError

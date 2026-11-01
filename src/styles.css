@@ -1866,6 +1866,57 @@ a {
   justify-content: flex-end;
 }
 
+/* 프로젝트에서 지켜야 할 것(v0.4.57) */
+.project-rules {
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+  font-size: 13px;
+}
+
+.project-rules summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.project-rules ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-rules li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.project-rules li > span:first-child {
+  flex: 1 1 160px;
+  overflow-wrap: anywhere;
+}
+
+.project-rule-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.project-rule-add input {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-link {
+  font-weight: 600;
+}
+
 .project-delete {
   align-self: flex-start;
   color: var(--danger);

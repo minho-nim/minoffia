@@ -68,6 +68,8 @@ export function buildCodexHandoff(
   links: LinkRef[] = [],
   /** 견본 먼저 계획에서 견본 승인한 견본(있으면 보존하며 통합하라고 쓴다) */
   prototypes: Attachment[] = [],
+  /** 이 프로젝트에서 지켜야 할 것(앞선 업무에서 AI가 적어 둠, v0.4.57) */
+  projectRules: string[] = [],
 ): string {
   const images = describeAttachments(attachments);
   const linkText = describeLinks(links, false);
@@ -97,6 +99,7 @@ export function buildCodexHandoff(
           '- 견본과 다르게 해야 하는 부분이 있으면 이유를 결과 보고에 적는다.',
         ]
       : []),
+    ...(projectRules.length ? ['', '## 이 프로젝트에서 지켜야 할 것 (앞선 업무에서 AI가 적어 둠, 어기지 않는다)', ...projectRules.map((r) => `- ${r}`)] : []),
     '',
     '## 유지 조건',
     ...[spec.preserveConstraints, ...item.preserve_constraints].filter(Boolean).map((x) => `- ${x}`),

@@ -12,6 +12,7 @@ describe('올리기 승인 뒤 PR 열기 지시문(v0.4.5)', () => {
     expect(t).toContain('작업 브랜치: ai/claude/28333f7e-w1');
     expect(t).toContain('git apply --index /tmp/approved.diff');
     expect(t).toContain('**병합하지 않는다.**');
+    expect(t).toContain('git push --force-with-lease -u origin ai/claude/28333f7e-w1');
     expect(t).toContain('+자동 시험');
     expect(t).toContain('"README 한 줄 추가 (AI Office 결과 v2)"');
   });

@@ -90,6 +90,8 @@ interface Props {
   /** 모든 업무의 링크·확인 질문(이 업무 것만 골라 쓴다) */
   links: LinkRef[];
   clarifications: Clarification[];
+  /** 이 프로젝트에서 지켜야 할 것(Codex 지시서에 넣는다, v0.4.57) */
+  projectRules?: string[];
   /** 링크 읽기는 Supabase 연결 때만 */
   canReadLinks: boolean;
   /** null이면 PM 전송 가능 */
@@ -121,7 +123,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -590,7 +592,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                               a.id,
                               view.prototypeFirst && a.assignee === 'gemini'
                                 ? buildPrototypeHandoff(task, view.spec!, item, project, view.plan!.plan.mode_reason ?? '', requestImages, taskLinks)
-                                : buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : []),
+                                : buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules),
                             )
                           }
                         >
@@ -721,7 +723,17 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   </p>
                 );
               })()}
-              <p className="muted small mono">sha256 {view.result.sha256.slice(0, 16)}… · diff {view.result.diff.length.toLocaleString()}자 · 스크린샷 {resultShots.length}장 · 라이브 미리보기 미제공</p>
+              {view.result.previewUrl && (
+                <p className="small">
+                  <a className="preview-link" href={view.result.previewUrl} target="_blank" rel="noreferrer">
+                    미리보기 열기 ↗
+                  </a>{' '}
+                  <span className="muted">작업 브랜치 화면(빌드에 1~3분, 아직 PR·배포 아님)</span>
+                </p>
+              )}
+              <p className="muted small mono">
+                sha256 {view.result.sha256.slice(0, 16)}… · diff {view.result.diff.length.toLocaleString()}자 · 스크린샷 {resultShots.length}장{view.result.previewUrl ? '' : ' · 미리보기 없음'}
+              </p>
               {view.result.diff && <pre className="diff-view">{view.result.diff}</pre>}
               {view.result.testLog && (
                 <details>

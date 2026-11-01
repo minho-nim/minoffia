@@ -3,6 +3,7 @@
 // 받은 계획은 pm_plan_inbox에 원문으로만 넣는다. 검증·배정은 앱이 기존 규칙(parsePmPlan)으로 하고, 실행은 E 승인 전에는 없다.
 // verify_jwt = false(세션에 Supabase 로그인이 없다). 대신 제출표가 맞아야만 한 줄을 넣을 수 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { saveRules } from './projectRules.ts';
 
 const MAX_PLAN = 65_000;
 const MAX_USES = 3;
@@ -61,5 +62,7 @@ Deno.serve(async (req) => {
     plan_text: planText,
   });
   if (error) return reply(500, { ok: false, error: 'could not save plan' });
+  // v0.4.57: PM이 적어 보낸 "앞으로도 지켜야 할 것"은 프로젝트에 쌓는다(계획 검증과 별개, 실패해도 계획은 저장됨).
+  await saveRules(admin, ticket.owner_id, ticket.task_id, 'plan', (body.plan as Record<string, unknown>).project_rules);
   return reply(200, { ok: true, message: 'AI Office에 계획을 보냈습니다. 사용자가 E 승인할 때까지 아무것도 실행하지 않습니다.' });
 });

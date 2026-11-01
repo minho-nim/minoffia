@@ -30,8 +30,11 @@ describe('Claude 보조 개발 지시문', () => {
     expect(t).not.toContain('승인된 견본');
   });
 
-  it('B 승인 전 푸시·PR 금지와 결과 보고 형식', () => {
-    expect(t).toContain('git push·PR·병합·배포를 하지 않는다');
+  it('미리보기 push는 작업 브랜치만, PR·병합·배포는 금지, 결과 보고 형식', () => {
+    expect(t).toContain('git push --force-with-lease -u origin ai/claude/28333f7e-w1');
+    expect(t).toContain('PR·병합·배포는 하지 않는다');
+    expect(t).not.toContain('미리보기 주소:');
+    expect(buildDevPayload({ ...input, previewUrl: 'https://ai-claude-28333f7e-w1.x.pages.dev' })).toContain('미리보기 주소: https://ai-claude-28333f7e-w1.x.pages.dev');
     expect(t).toContain('git diff main...HEAD');
     expect(t).not.toMatch(/\n\n\n/);
   });
@@ -45,6 +48,16 @@ describe('Claude 보조 개발 지시문', () => {
     expect(withSubmit).toContain('## 결과 보내기');
     expect(withSubmit).toContain("curl -sS -X POST 'https://x.supabase.co/functions/v1/submit-result'");
     expect(withSubmit).toContain('"branch":"ai/claude/28333f7e-w1"');
+    expect(withSubmit).toContain('"preview_pushed":');
+    expect(withSubmit).toContain('"project_rules":[]');
     expect(t).not.toContain('결과 보내기');
+  });
+
+  it('프로젝트에서 지켜야 할 것이 있으면 절로 넣고 CLAUDE.md도 맞추게 한다', () => {
+    expect(t).not.toContain('## 이 프로젝트에서 지켜야 할 것 (');
+    const withRules = buildDevPayload({ ...input, projectRules: ['모바일 400px 가로 넘침 없게'] });
+    expect(withRules).toContain('## 이 프로젝트에서 지켜야 할 것 (');
+    expect(withRules).toContain('- 모바일 400px 가로 넘침 없게');
+    expect(withRules).toContain('CLAUDE.md');
   });
 });
