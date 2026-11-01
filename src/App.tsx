@@ -1184,6 +1184,16 @@ export function App() {
     }
   };
 
+  // 이미 있는 AI Office 저장소에 작업 규칙 파일(CLAUDE.md) 넣기(v0.4.60). 있으면 건드리지 않는다.
+  const addRepoRules = async (project: Project) => {
+    try {
+      const r = await store.addRepoRules(project.id);
+      say('ok', r.created ? `${r.repo}에 AI 작업 규칙 파일(CLAUDE.md)을 넣었어요.` : `${r.repo}에는 이미 CLAUDE.md가 있어 그대로 뒀어요.`);
+    } catch (e) {
+      say('error', `규칙 파일을 넣지 못했습니다: ${(e as Error).message}`);
+    }
+  };
+
   const selectAgent = (id: AgentId) => {
     setSelected((cur) => (cur === id && tab === 'agent' ? null : id));
     setTab('agent');
@@ -1507,6 +1517,7 @@ export function App() {
               onAddRule={(projectId, rule) => void mutate(() => store.addProjectRule(projectId, rule), '지켜야 할 것에 적었어요. 다음 지시서부터 함께 들어가요.')}
               onRemoveRule={(r) => void mutate(() => store.removeProjectRule(r.id), '지켜야 할 것에서 지웠어요.')}
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
+              onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
             />
           )}
           {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}

@@ -1,7 +1,7 @@
 // 새 프로젝트 저장소에 처음 넣는 작업 규칙 파일(CLAUDE.md, v0.4.55 소유자 2026-11-01).
 // Claude 루틴(PM·보조 개발)과 다른 코딩 AI가 이 저장소를 받으면 먼저 읽는다. 외부 의존 없음(Deno 함수와 vitest가 같이 쓴다).
 
-export function projectClaudeMd(projectName: string): string {
+export function projectClaudeMd(projectName: string, rules: string[] = []): string {
   const name = projectName.replace(/[\r\n]+/g, ' ').trim().slice(0, 80) || '새 프로젝트';
   return [
     `# ${name} — AI 작업 규칙`,
@@ -31,6 +31,7 @@ export function projectClaudeMd(projectName: string): string {
     '',
     '## 이 프로젝트에서 지켜야 할 것',
     '<!-- AI가 접수·계획·개발을 하며 이 프로젝트에서 계속 지킬 것을 적는다. MinLab AI Office의 목록과 같게 맞춘다. -->',
+    ...rules.map((r) => `- ${r.replace(/[\r\n]+/g, ' ').trim()}`),
     '',
   ].join('\n');
 }

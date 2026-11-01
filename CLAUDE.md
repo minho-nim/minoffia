@@ -64,7 +64,7 @@
 - 미니엉은 업무 단계·버전이 바뀌면 입력창에 알리고 버튼(A·B 승인, 업무 카드 보기)을 둔다(`src/domain/stageNotice.ts`, 규칙만). 승인은 업무 카드와 같은 `canApprove`를 지난다.
 - Gemini 답 바로 뒤의 개발 요청은 앞 질문·답을 업무에 함께 넣고, 애매한 말만 "질문인가요, 업무 요청인가요?"로 묻는다. 개발 전(E 승인 없음)에 지운 업무의 대화 기록은 함께 지운다(`0017_predev_task_chat.sql`).
 - 업무로 만들기 전에는 반드시 프로젝트를 사용자에게 확인받는다("이 프로젝트 맞아요?").
-- 새 프로젝트의 GitHub 저장소는 사용자가 버튼을 누를 때만 서버(`supabase/functions/create-repo`)가 비공개 빈 저장소로 만든다(소유자 결정 2026-10-29). 만들 때 AI 작업 규칙 파일 `CLAUDE.md`(`create-repo/rules.ts`)를 함께 넣는다(v0.4.55; 이미 있는 프로젝트 저장소는 나중에). Claude PM은 `CLAUDE_ALLOWED_REPOSITORY`와 `managed_repos`의 저장소에서만 일한다.
+- 새 프로젝트의 GitHub 저장소는 사용자가 버튼을 누를 때만 서버(`supabase/functions/create-repo`)가 비공개 빈 저장소로 만든다(소유자 결정 2026-10-29). 만들 때 AI 작업 규칙 파일 `CLAUDE.md`(`create-repo/rules.ts`)를 함께 넣는다(v0.4.55). 이미 있는 AI Office 저장소는 프로젝트 탭 '지켜야 할 것'의 버튼으로 `create-repo`(rulesOnly)가 CLAUDE.md가 없을 때만 넣는다(v0.4.60, 쌓인 지켜야 할 것 포함, 있으면 건드리지 않음). Claude PM은 `CLAUDE_ALLOWED_REPOSITORY`와 `managed_repos`의 저장소에서만 일한다.
 - C(운영 배포) 승인은 서버(`supabase/functions/pr-status`)가 확인한 최신 'CI 성공'(열린 PR 또는 병합됨) 기록이 있어야 한다(`0010`, v0.4.5 `0022_auto_pr_merge.sql`).
   C 승인 뒤 `deploy-release`가 CI를 확인한 그 커밋일 때만 PR을 squash 병합하고, fast-forward로만 release를 앞당기며 `deployments`에 기록한다(갈라진 release는 덮어쓰지 않음, 성공 기록은 C 승인 필수 `0011_inbox_deployments.sql`).
 - 꼬임 방지(v0.4.20): 같은 계획의 다른 작업이 진행 중이면 올리기 승인 불가(`0025_b_waits_all_work.sql`·`canApprove('B')`). 배포 승인 = 배포 시작, main에 다른 변경이 더 있으면 확인 필요, main CI가 끝나 통과해야 release를 앞당긴다. 결과 수정 요청 → PM 자동 재전송. 흐름 시뮬레이션은 `src/domain/simulation.test.ts`.

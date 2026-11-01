@@ -17,6 +17,8 @@ interface Props {
   onDelete: (p: Project) => void;
   /** 저장소 만들기(Supabase 모드에서만) */
   onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
+  /** 이미 있는 저장소에 AI 작업 규칙 파일(CLAUDE.md) 넣기(Supabase 모드에서만, 없을 때만 넣음) */
+  onAddRepoRules?: (project: Project) => void;
   /** 프로젝트에서 지켜야 할 것(v0.4.57): AI가 적고, 나는 지우거나 직접 더한다 */
   rules?: ProjectRule[];
   onAddRule?: (projectId: string, rule: string) => void;
@@ -27,7 +29,7 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, rules = [], onAddRule, onRemoveRule }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], onAddRule, onRemoveRule }: Props) {
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
@@ -222,6 +224,11 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                     지켜야 할 것 <span className="num num-count">{mineRules.length}</span>
                   </summary>
                   <p className="muted small">AI가 접수·계획·개발을 하며 이 프로젝트에서 계속 지킬 것을 적어 두고, 다음 기획서·계획·개발 지시서에 함께 넣어요. 틀린 건 지우세요.</p>
+                  {onAddRepoRules && p.repo && (
+                    <button type="button" className="link-btn small" onClick={() => onAddRepoRules(p)}>
+                      저장소에 AI 작업 규칙 파일(CLAUDE.md) 넣기 — 없을 때만
+                    </button>
+                  )}
                   {mineRules.length > 0 ? (
                     <ul>
                       {mineRules.map((r) => (
