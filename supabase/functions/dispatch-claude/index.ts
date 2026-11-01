@@ -182,6 +182,19 @@ Deno.serve(async (req) => {
     return reply(status, { ok: false, error: message });
   };
 
+  // 5-1. 휴가 중인 AI(v0.4.39, 0026_agent_leave). 표가 없거나 읽기에 실패하면 모두 근무로 본다.
+  const { data: leaveRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
+  const LEAVE_PREF: Record<string, string> = { codex: 'codex_primary', claude: 'claude_support', grok: 'grok_optional', studioA: 'gemini_optional', studioB: 'gemini_optional' };
+  const LEAVE_NAME: Record<string, string> = { codex: 'Codex', claude: 'Claude', grok: 'Grok', studioA: 'Studio A(AI Studio 견본)', studioB: 'Studio B(AI Studio 견본)' };
+  const away = [...new Set((leaveRows ?? []).map((r: { agent: string }) => r.agent).filter((a) => LEAVE_PREF[a]))];
+  const leaveLines = away.length
+    ? [
+        `## 휴가 중인 AI (이번 계획에 배정 금지)`,
+        ...away.map((a) => `- ${LEAVE_NAME[a]} → assignee_preference "${LEAVE_PREF[a]}" 쓰지 않기`),
+        `휴가 중인 AI가 맡던 일은 규칙대로 대신 할 수 있는 다른 AI에게 배정한다(예: Codex 휴가 → 개발은 "claude_support"). 아래 개발 방식 설명에 휴가 중인 AI가 나와도 그 AI 대신 다른 AI로 바꾼다. 맡길 AI가 없으면 계획의 mode_reason에 그 이유를 한 줄로 적는다.`,
+      ]
+    : [];
+
   // 6. 루틴(PM) 실행. 사용자가 보낸 내용은 <routine-fire-payload>로 전달된다. 최대 65,536자.
   const text = [
     `MinLab AI Office 업무 (작업 ID ${task.id})`,
@@ -211,6 +224,8 @@ Deno.serve(async (req) => {
     revision ? revision.feedback : '',
     revision && previousResult?.summary ? `이전 결과 요약: ${previousResult.summary}` : '',
     revision && previousResult?.remaining_issues ? `이전 결과의 남은 문제: ${previousResult.remaining_issues}` : '',
+    ``,
+    ...leaveLines,
     ``,
     `## 개발 방식 결정(필수, 07단계)`,
     `계획 JSON 최상위에 "development_mode"와 "mode_reason"(한 줄 이유)을 넣는다.`,

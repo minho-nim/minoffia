@@ -1,3 +1,4 @@
+import type { AgentId } from '../domain/types';
 import type { AskOptions } from '../domain/aiRoute';
 import type { Attachment, ImageAnalysis } from '../domain/attachments';
 import type { ChatEntry } from '../domain/devlog';
@@ -76,6 +77,8 @@ export interface OfficeStore {
   loadChat(fromIso: string, toIso: string): Promise<ChatEntry[]>;
   /** AI별 동시 작업 상한(1~5) */
   setAgentLimit(assignee: 'codex' | 'claude' | 'gemini' | 'grok', maxRunning: number): Promise<void>;
+  /** AI 휴가(true)·근무(false) 바꾸기(v0.4.39) */
+  setLeave(agent: AgentId, onLeave: boolean): Promise<void>;
   /** 새 프로젝트의 GitHub 저장소를 서버가 만들고 연결한다(로컬 데모는 지원하지 않음). */
   createRepo(projectId: string, name: string): Promise<{ repo: string; url: string; warning?: string }>;
   /** PM 세션이 보내 온 계획 중 아직 처리하지 않은 것(v0.4.2) */

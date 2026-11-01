@@ -1,4 +1,4 @@
-import { AGENT_BY_ID, CANDIDATES } from './agents';
+import { AGENT_BY_ID, AGENTS, CANDIDATES } from './agents';
 import { remainingToday } from './usage';
 import type { AgentId, RequestedType, UsageRun, WorkType } from './types';
 import { WORK_TYPE_LABEL } from './types';
@@ -47,7 +47,7 @@ export function classify(text: string): { type: WorkType; hits: string[] } | nul
 }
 
 /** 모델 호출 없이 규칙만으로 유형과 담당자를 정한다. */
-export function routeTask(input: RouteInput, usage: UsageRun[], now: Date = new Date()): RouteResult {
+export function routeTask(input: RouteInput, usage: UsageRun[], now: Date = new Date(), leave: AgentId[] = []): RouteResult {
   let type: WorkType;
   let why: string;
   if (input.requestedType !== 'auto') {
@@ -64,17 +64,26 @@ export function routeTask(input: RouteInput, usage: UsageRun[], now: Date = new 
     }
   }
 
-  const candidates = CANDIDATES[type];
+  // 휴가 중인 AI는 빼고(v0.4.39), 후보가 모두 휴가면 이 일을 할 줄 아는 다른 AI에게 맡긴다.
+  const onLeave = (id: AgentId) => leave.includes(id);
+  const away = CANDIDATES[type].filter(onLeave);
+  let candidates = CANDIDATES[type].filter((id) => !onLeave(id));
+  if (!candidates.length) candidates = AGENTS.filter((a) => a.skills.includes(type) && !onLeave(a.id)).map((a) => a.id);
+  const leaveNote = away.length ? `, ${away.map((id) => AGENT_BY_ID[id].name).join('·')} 휴가` : '';
+  if (!candidates.length) {
+    const primary = CANDIDATES[type][0];
+    return { type, assignee: primary, reason: `${why}${leaveNote} → ${AGENT_BY_ID[primary].name} (할 수 있는 AI가 모두 휴가, 복귀 뒤 실행)` };
+  }
   const available = candidates.find((id) => remainingToday(usage, id, now) > 0);
   if (available) {
     const skipped = candidates.slice(0, candidates.indexOf(available));
     const skipNote = skipped.length ? `, ${skipped.map((id) => AGENT_BY_ID[id].name).join('·')} 오늘 한도 소진` : '';
-    return { type, assignee: available, reason: `${why}${skipNote} → ${AGENT_BY_ID[available].name}` };
+    return { type, assignee: available, reason: `${why}${leaveNote}${skipNote} → ${AGENT_BY_ID[available].name}` };
   }
   const primary = candidates[0];
   return {
     type,
     assignee: primary,
-    reason: `${why} → ${AGENT_BY_ID[primary].name} (후보 모두 오늘 한도 소진, 내일 실행)`,
+    reason: `${why}${leaveNote} → ${AGENT_BY_ID[primary].name} (후보 모두 오늘 한도 소진, 내일 실행)`,
   };
 }

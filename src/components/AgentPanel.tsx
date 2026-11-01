@@ -1,3 +1,4 @@
+import { LEAVE_AGENTS } from '../domain/types';
 import { speechFor } from '../office/speech';
 import { markFor, type AgentMark } from '../office/marks';
 import { buildScene } from '../office/scene';
@@ -18,6 +19,8 @@ interface Props {
   agentId: AgentId;
   /** 사무실 말풍선과 같은 표시(없으면 휴식) */
   speech?: AgentMark;
+  /** 휴가 중이면 표시를 '휴가'로 */
+  leave?: boolean;
   tasks: Task[];
   usage: UsageRun[];
   assignments: AgentAssignment[];
@@ -83,7 +86,8 @@ function LinearCheck({ onProbe }: { onProbe: () => Promise<LinearProbe> }) {
 }
 
 /** 에이전트 상태는 사무실 말풍선과 같은 표시 하나만(v0.4.35): ! 막힘 > ? 내 차례 > … 일하는 중 > 휴식 */
-function SpeechMark({ speech }: { speech?: AgentMark }) {
+function SpeechMark({ speech, leave }: { speech?: AgentMark; leave?: boolean }) {
+  if (leave) return <span className="pill pill-mark pill-mark-leave">휴가</span>;
   if (!speech) return <span className="pill pill-mark pill-mark-rest">휴식</span>;
   return (
     <span className={`pill pill-mark pill-mark-${speech.kind}`} title={speech.label}>
@@ -92,7 +96,7 @@ function SpeechMark({ speech }: { speech?: AgentMark }) {
   );
 }
 
-export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech }: Props) {
+export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech, leave }: Props) {
   const a = AGENT_BY_ID[agentId];
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
   const mine = tasks.filter((t) => t.assignee === agentId);
@@ -110,7 +114,7 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
           </p>
           <p>
             <span className="pill">{MODE_LABEL[a.mode]}</span>{' '}
-            <SpeechMark speech={speech} />
+            <SpeechMark speech={speech} leave={leave} />
           </p>
         </div>
       </div>
@@ -190,8 +194,11 @@ export function AgentRoster({
   serverMode,
   onSetLimit,
   onLinearProbe,
+  onSetLeave,
 }: {
   onLinearProbe?: () => Promise<LinearProbe>;
+  /** 근무·휴가 바꾸기(v0.4.39) */
+  onSetLeave: (agent: AgentId, onLeave: boolean) => void;
   snap: Snapshot;
   onSetLimit: (kind: AgentKind, n: number) => void;
   selected: AgentId | null;
@@ -203,8 +210,27 @@ export function AgentRoster({
   const scene = buildScene(snap.tasks, snap.workflow.assignments);
   const markOf = (id: AgentId) => markFor(id, scene, speechMap);
   const ordered = selected ? [AGENT_BY_ID[selected], ...AGENTS.filter((a) => a.id !== selected)] : AGENTS;
+  const leave = snap.leave ?? [];
   return (
     <div className="stack">
+      {/* 근무·휴가(v0.4.39): 체크를 풀면 휴가. 휴가인 AI는 사무실 아래 문으로 나가고, 새 배정·PM 계획에서 빠진다 */}
+      <section className="leave-board" aria-label="근무·휴가">
+        <h3>근무 · 휴가</h3>
+        <p className="muted small">체크를 풀면 휴가예요. 새 업무와 PM 계획은 일할 수 있는 다른 AI에게 맡겨요(진행 중인 업무는 그대로).</p>
+        <div className="leave-chips">
+          {LEAVE_AGENTS.map((id) => {
+            const away = leave.includes(id);
+            return (
+              <label key={id} className={`leave-chip${away ? ' is-away' : ''}`}>
+                <input type="checkbox" checked={!away} onChange={(e) => onSetLeave(id, !e.target.checked)} />
+                <img className={spriteFor(AGENT_BY_ID[id], 'stand').art ? 'is-art' : undefined} src={spriteFor(AGENT_BY_ID[id], 'stand').src} alt="" />
+                <span>{AGENT_BY_ID[id].name}</span>
+                <span className="leave-state">{away ? '휴가' : '근무'}</span>
+              </label>
+            );
+          })}
+        </div>
+      </section>
       {ordered.map((a) => {
         if (a.id === selected) {
           return (
@@ -212,6 +238,7 @@ export function AgentRoster({
               <AgentPanel
                 agentId={a.id}
                 speech={markOf(a.id)}
+                leave={leave.includes(a.id)}
                 tasks={snap.tasks}
                 usage={snap.usage}
                 assignments={snap.workflow.assignments}
@@ -241,7 +268,7 @@ export function AgentRoster({
             <span className="agent-row-main">
               <b>{a.name}</b> <span className="muted small">{a.role}</span>
               <span className="agent-row-pills">
-                <SpeechMark speech={markOf(a.id)} />
+                <SpeechMark speech={markOf(a.id)} leave={leave.includes(a.id)} />
                 <span className={`pill pill-quota-${q.state}`} title={q.detail}>
                   {q.label}
                 </span>
