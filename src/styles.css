@@ -3097,6 +3097,18 @@ a {
   .tabs button {
     padding: 8px 10px;
   }
+}
+
+/* 휴대폰(v0.4.47): 탭 5개가 한 줄에 들어가게 여백·글자를 줄인다. 이보다 좁으면 두 줄로 내려간다(flex-wrap). */
+@media (max-width: 480px) {
+  .tabs {
+    gap: 0;
+  }
+  .tabs button {
+    padding: 8px 5px;
+    font-size: 12.5px;
+    letter-spacing: 0;
+  }
   .inbox {
     padding: 10px;
     gap: 8px;
