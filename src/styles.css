@@ -384,11 +384,12 @@ a {
 .team-panel > p {
   margin: 0 0 10px;
 }
-/* 근무 · 옮기기 버튼 · 휴가: 넓으면 좌우, 좁으면 위아래 */
+/* 근무 · 옮기기 버튼 · 휴가: 화면 크기와 상관없이 늘 좌우(v0.4.41, 소유자: 한 가지 배치로) */
 .team-board {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
 }
 .team-col {
   min-width: 0;
@@ -465,25 +466,29 @@ a {
 }
 .team-moves {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-self: center;
   gap: 8px;
 }
-.team-moves .arrow-x {
-  display: none;
+.team-moves .btn {
+  padding-inline: 8px;
+  font-size: 16px;
+  line-height: 1;
 }
-@container (min-width: 560px) {
-  .team-board {
-    grid-template-columns: 1fr auto 1fr;
-    align-items: start;
+/* 좁으면 카드만 작게: 역할 글자를 숨기고 여백을 줄인다 */
+@container (max-width: 520px) {
+  .team-col {
+    padding: 6px;
   }
-  .team-moves {
-    flex-direction: column;
-    align-self: center;
+  .team-card {
+    gap: 6px;
+    padding: 5px 6px;
   }
-  .team-moves .arrow-x {
-    display: inline;
+  .team-card img {
+    width: 20px;
+    height: 28px;
   }
-  .team-moves .arrow-y {
+  .team-name .muted {
     display: none;
   }
 }
