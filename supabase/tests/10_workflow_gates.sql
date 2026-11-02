@@ -165,5 +165,16 @@ select pg_temp.expect_fail($q$insert into revision_requests (task_id, spec_revis
 select pg_temp.as_user('22222222-2222-4222-8222-222222222222', 'other@example.invalid');
 select pg_temp.check((select count(*) from revision_requests) = 0, '다른 사용자는 수정 요청을 볼 수 없음');
 
+-- v0.4.93 PM이 계획을 보류하고 물은 것에 답하면 같은 버전으로 한 번 더 보낼 수 있다(0032) ------
+select pg_temp.as_service();
+update tasks set dispatch_state = 'dispatched', dispatch_at = now() - interval '1 minute' where id = 'bbbbbbbb-0000-4000-8000-000000000001';
+select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', false, 99, 3)) = 'not_claimable', 'PM 질문 답 없이 같은 버전 재전송 불가');
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111', 'owner@example.invalid');
+insert into clarifications (task_id, spec_revision, question, answer) values ('bbbbbbbb-0000-4000-8000-000000000001', 3, '[PM 질문] 저장소?', 'TestRepo');
+select pg_temp.as_service();
+select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', false, 99, 3)) = 'claimed', 'PM 질문에 답한 뒤 같은 버전 한 번 재전송');
+update tasks set dispatch_state = 'dispatched' where id = 'bbbbbbbb-0000-4000-8000-000000000001';
+select pg_temp.check((select reason from claim_claude_dispatch('bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', false, 99, 3)) = 'not_claimable', '답 1건으로 재전송은 한 번만');
+
 reset role;
 \echo 승인 게이트 테스트 완료
