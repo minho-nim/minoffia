@@ -1178,7 +1178,7 @@ const MARK: Record<'met' | 'partial' | 'unmet', string> = { met: '✓', partial:
 
 /** 결과 점수표(v0.4.64): 규칙 검사·AI 점수·판정. 올리기 승인은 늘 사람이 한다. */
 function ReviewCard({ review }: { review: ResultReview | null }) {
-  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Claude 채점, 안 되면 Gemini)</p>;
+  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → 다른 AI가 채점: Claude 결과는 Gemini, 나머지는 Claude)</p>;
   const bad = review.gates.filter((g) => !g.ok);
   return (
     <div className={`review-card is-${review.verdict}`}>
