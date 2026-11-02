@@ -3914,3 +3914,11 @@ a {
 .devlog-controls .field input[type='date']::-webkit-date-and-time-value {
   text-align: left;
 }
+/* PM 질문 목록(v0.4.93) */
+.wf-pm-questions {
+  margin: 4px 0 0;
+  padding-left: 1.6em;
+}
+.wf-pm-questions li + li {
+  margin-top: 4px;
+}

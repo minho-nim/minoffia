@@ -138,6 +138,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
   const [qaReply, setQaReply] = useState('');
+  const [pmReply, setPmReply] = useState('');
   const toggle = (key: string) =>
     setUnfolded((cur) => {
       const next = new Set(cur);
@@ -149,8 +150,9 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   // 바로 가기: 그 칸을 펼치고(지난 단계로 접혀 있어도) 화면에 보이게 내린다. 확인 질문(qa)은 기획 칸 안에 있다.
   useEffect(() => {
     if (!jump) return;
-    const key = jump.step === 'qa' ? 'plan' : jump.step;
-    setUnfolded((cur) => new Set(cur).add(key));
+    // 확인 질문은 기획 칸 또는 PM 칸(PM이 계획을 보류하고 물은 경우) 안에 있다
+    const keys = jump.step === 'qa' ? ['plan', 'pm'] : [jump.step];
+    setUnfolded((cur) => new Set([...cur, ...keys]));
     const t = window.setTimeout(() => {
       const el = document.getElementById(`wf-${task.id}-${jump.step}`);
       // 업무 카드의 '진행 단계'가 접혀 있으면 먼저 편다
@@ -579,7 +581,49 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
             </>
           )}
           {view.plan?.plan.status === 'needs_clarification' && view.planCurrent && (
-            <div className="wf-pre">PM 질문: {view.plan.plan.questions.join(' / ')}</div>
+            // PM이 계획을 보류하고 물었다(v0.4.93): 여기서 답하면 기록하고 같은 기획서 버전으로 PM에 다시 보낸다.
+            <div className="wf-anchor" id={view.spec?.intent === 'ambiguous' ? undefined : `wf-${task.id}-qa`}>
+              <p className="small">PM이 계획을 멈추고 물었어요. 답하면 PM이 그 답으로 계획을 다시 짭니다.</p>
+              <ol className="wf-pre wf-pm-questions">
+                {view.plan.plan.questions.map((q, i) => (
+                  <li key={i}>{q}</li>
+                ))}
+              </ol>
+              {task.dispatch.at && clarifications.some((c) => c.createdAt > task.dispatch.at!) ? (
+                <p className="muted small">답을 보냈어요. PM이 새 계획을 보내면 여기에 나옵니다.</p>
+              ) : (
+                <form
+                  className="wf-answer"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const text = pmReply.trim();
+                    if (!text) return;
+                    const questions = view.plan!.plan.questions;
+                    void run(async () => {
+                      const q = questions.map((x, i) => `${i + 1}. ${x}`).join('\n');
+                      if (await actions.addClarification(task, `[PM 질문]\n${q}`.slice(0, 2000), text)) {
+                        actions.echoAnswer?.(task, text);
+                        setPmReply('');
+                        await actions.dispatchPm(task, false);
+                      }
+                    });
+                  }}
+                >
+                  <textarea
+                    rows={3}
+                    value={pmReply}
+                    maxLength={4000}
+                    placeholder="번호별로 짧게 답하세요(예: 1. TestRepo 2. 방은 거실·작업실 3. 네)"
+                    aria-label="PM 질문에 답하기"
+                    onChange={(e) => setPmReply(e.target.value)}
+                  />
+                  <button type="submit" className="btn btn-small btn-primary" disabled={busy || !pmReply.trim() || Boolean(dispatchBlocker)}>
+                    답하고 PM에 다시 보내기
+                  </button>
+                  {dispatchBlocker && <p className="muted small">{dispatchBlocker}</p>}
+                </form>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -746,7 +790,10 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
             Claude PM이 <b>견본 먼저</b>를 골랐습니다. 계획이 오면 Gemini(무료)가 HTML 견본 한 장을 자동으로 만들어 여기에 올립니다. 미리보기를 보고 견본 승인(P)하세요.
             더 정교한 견본이 필요하면 위 견본 작업의 "AI Studio 견본 지시서"로 Google AI Studio Build에서 만들어 올려도 됩니다. 견본을 승인(P)하면 Codex 지시서에 이 견본이 들어갑니다.
           </p>
-          {!view.pApproved && prototypeFiles.length === 0 && canReadLinks && (
+          {!view.pApproved && prototypeFiles.length === 0 && view.plan!.plan.status === 'needs_clarification' && (
+            <p className="muted small">PM이 계획을 멈추고 질문했어요. 위 PM 칸에서 먼저 답해 주세요. 계획이 오면 견본을 만듭니다.</p>
+          )}
+          {!view.pApproved && prototypeFiles.length === 0 && canReadLinks && view.plan!.plan.status !== 'needs_clarification' && (
             <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.makePrototype(task))}>
               Gemini로 견본 만들기(무료)
             </button>
