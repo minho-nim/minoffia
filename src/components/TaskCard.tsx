@@ -23,7 +23,8 @@ interface Props {
   expanded?: boolean;
   onToggle?: (task: Task) => void;
   /** 이 업무의 내 차례 표시(기획? · 배포! 등) */
-  turn?: { word: string; alert?: boolean };
+  /** 내 차례 표시. onJump가 있으면 눌러서 그 칸으로 간다(v0.4.86) */
+  turn?: { word: string; alert?: boolean; onJump?: () => void };
 }
 
 const STATUS_VERB: Record<TaskStatus, string> = {
@@ -49,7 +50,24 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
           <span className="task-head">
             <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>
             <span className="task-title">{task.title}</span>
-            {turn && <span className={`task-turn${turn.alert ? ' is-alert' : ''}`}>{turn.word}{turn.alert ? '!' : '?'}</span>}
+            {turn && (
+              <span
+                className={`task-turn${turn.alert ? ' is-alert' : ''}${turn.onJump ? ' is-link' : ''}`}
+                // 카드 열고 닫기 버튼 안이라 진짜 버튼을 둘 수 없어 눌림만 받는다(키보드는 내 차례 목록의 '보기'로).
+                onClick={
+                  turn.onJump
+                    ? (e) => {
+                        e.stopPropagation();
+                        turn.onJump!();
+                      }
+                    : undefined
+                }
+                title={turn.onJump ? '눌러서 할 일 칸으로 가기' : undefined}
+              >
+                {turn.word}
+                {turn.alert ? '!' : '?'}
+              </span>
+            )}
             <span className="task-chevron" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
           </span>
           <span className="task-sub">

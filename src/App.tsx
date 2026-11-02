@@ -21,7 +21,7 @@ import { AGENT_BY_ID, AGENTS } from './domain/agents';
 import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
 import { buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
-import { myTurns } from './domain/myTurn';
+import { myTurns, type TurnStep } from './domain/myTurn';
 import { clarificationsOf, linksOf } from './domain/requestContext';
 import { routeTask } from './domain/router';
 import { canTransition } from './domain/status';
@@ -288,6 +288,8 @@ export function App() {
   const [barOn, setBarOn] = useState(false);
   /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
   const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
+  /** 업무 카드의 어느 칸으로 갈지(내 차례 '보기'·카드의 ?표시, v0.4.86) */
+  const [jump, setJump] = useState<{ taskId: string; step: TurnStep; n: number } | null>(null);
   /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
   const [draft, setDraft] = useState<{ text: string; n: number } | null>(null);
   // 얇은 머리·작은 사무실(v0.4.14~, v0.4.35): 켜기 = 위 머리가 화면 밖으로 나갔고, 사무실이 줄어든 뒤에도
@@ -799,9 +801,11 @@ export function App() {
   const turns = myTurns(snap.tasks, snap.workflow);
 
   /** 업무 카드로 이동(입력창 알림·사무실 말풍선). 지금 필터에 없으면 '전체'로 바꾼다. */
-  const showTask = (id: string) => {
+  const showTask = (id: string, step?: TurnStep) => {
     setTab('tasks');
     setOpenCards((cur) => new Set(cur).add(id));
+    // 그 일을 하는 칸까지 바로 내려간다(v0.4.86): 업무 카드가 펼쳐진 뒤 진행 단계 패널이 그 칸을 펼치고 보여 준다.
+    if (step) setJump((j) => ({ taskId: id, step, n: (j?.n ?? 0) + 1 }));
     // 사무실에서 그 업무 담당 AI를 같이 표시한다(사무실 ↔ 목록 연결).
     const owner = snap.tasks.find((x) => x.id === id)?.assignee;
     if (owner) setSelected(owner);
@@ -810,7 +814,7 @@ export function App() {
       const t = snap.tasks.find((x) => x.id === id);
       if (t && projectFilter !== 'all' && t.projectId !== projectFilter) setProjectFilter('all');
     }
-    window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    if (!step) window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   };
 
   /**
@@ -1574,7 +1578,7 @@ export function App() {
                     }
                     turn={(() => {
                       const it = turns.find((x) => x.taskId === t.id);
-                      return it ? { word: it.word, alert: it.alert } : undefined;
+                      return it ? { word: it.word, alert: it.alert, onJump: it.step ? () => showTask(t.id, it.step) : undefined } : undefined;
                     })()}
                     onAsk={(task) => {
                       setTab('chat');
@@ -1588,6 +1592,7 @@ export function App() {
                     stageLabel={STAGE_LABEL[deriveWorkflow(t, snap.workflow).stage]}
                     workflow={
                       <WorkflowPanel
+                        jump={jump?.taskId === t.id ? jump : undefined}
                         task={t}
                         project={projectById.get(t.projectId)}
                         view={deriveWorkflow(t, snap.workflow)}
