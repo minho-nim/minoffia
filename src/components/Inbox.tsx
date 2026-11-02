@@ -1,4 +1,3 @@
-import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
@@ -11,6 +10,7 @@ import { stageNotices, type NoticeAction } from '../domain/stageNotice';
 import { deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
+import { ImageZoom } from './ImageZoom';
 import { RepoCreate } from './RepoCreate';
 import type { TaskDraft } from './TaskForm';
 
@@ -268,12 +268,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const [previews, setPreviews] = useState<string[]>([]);
   /** 크게 보기(v0.4.89): 첨부 미리보기를 누르면 화면 가득 */
   const [zoom, setZoom] = useState<{ src: string; name: string } | null>(null);
-  useEffect(() => {
-    if (!zoom) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setZoom(null);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [zoom]);
+
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -1036,15 +1031,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
 
   return (
     <section className={`inbox${shown.length === 0 ? ' is-empty' : ''}`} aria-label="묻기·요청 입력창">
-      {/* 화면 전체를 덮도록 body에 바로 그린다(조상 상자의 레이아웃 제한을 받지 않게) */}
-      {zoom &&
-        createPortal(
-          <div className="inbox-zoom" role="dialog" aria-modal="true" aria-label={`${zoom.name} 크게 보기`} onClick={() => setZoom(null)}>
-            <img src={zoom.src} alt={zoom.name} />
-            <span className="inbox-zoom-name">{zoom.name} · 아무 곳이나 누르면 닫혀요</span>
-          </div>,
-          document.body,
-        )}
+      {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
       {shown.length === 0 && (
         <div className="inbox-empty">
           <p className="inbox-hello">무엇을 도와드릴까요?</p>
