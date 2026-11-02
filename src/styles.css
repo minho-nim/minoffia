@@ -3806,3 +3806,55 @@ a {
 .chip-general {
   font-weight: 700;
 }
+
+/* 보낸 첨부 미리보기·크게 보기(v0.4.89) */
+.inbox-sent-files {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.inbox-thumb {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.inbox-sent-files img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.inbox-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgba(20, 12, 6, 0.86);
+  cursor: zoom-out;
+}
+.inbox-zoom img {
+  max-width: 100%;
+  max-height: calc(100svh - 80px);
+  object-fit: contain;
+  border-radius: 6px;
+  background: #fff;
+}
+.inbox-zoom-name {
+  color: #f6e7c8;
+  font-size: 13px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

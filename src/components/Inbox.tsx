@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
@@ -38,6 +39,28 @@ interface Msg {
   sources?: Source[];
   /** 업무 접수 확인 카드(v0.4.58): 한 메시지에 업무가 여럿이어도 카드마다 따로 접수·취소한다 */
   offer?: Offer;
+  /** 함께 보낸 첨부(v0.4.89): 이름과 작은 미리보기(누르면 크게). 원본은 이 화면에서만 기억한다 */
+  files?: { name: string; thumb?: string; key?: string }[];
+}
+
+/** 보낸 첨부 원본(이 화면에서만, 크게 보기용). 키 = 메시지 id:순번 */
+const fullUrls = new Map<string, string>();
+
+/** 사진 파일 → 작은 미리보기(JPEG data URL, 긴 변 360px). 못 읽는 형식이면 undefined */
+async function thumbOf(file: File): Promise<string | undefined> {
+  if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') return undefined;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 360 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(bmp.width * scale));
+    c.height = Math.max(1, Math.round(bmp.height * scale));
+    c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close();
+    return c.toDataURL('image/jpeg', 0.72);
+  } catch {
+    return undefined;
+  }
 }
 
 interface Offer {
@@ -241,6 +264,14 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const [photos, setPhotosState] = useState<File[]>(photoStore.draft);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  /** 크게 보기(v0.4.89): 첨부 미리보기를 누르면 화면 가득 */
+  const [zoom, setZoom] = useState<{ src: string; name: string } | null>(null);
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setZoom(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoom]);
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -426,7 +457,18 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     const add = (before ? notices : []).filter((n) => !have.has(n.id));
     if (!add.length) return;
     add.forEach((n) => archive({ role: 'office', text: n.text, projectId: n.projectId, taskId: n.taskId }));
-    const msgs: Msg[] = add.map((n) => ({ id: n.id, from: 'office', text: n.text, taskId: n.taskId, stage: n.stage, actions: n.actions }));
+    // 기본 대화창과 그 프로젝트 대화창 둘 다에 보이고, 어느 프로젝트 일인지 앞에 적는다(v0.4.89 소유자)
+    const pname = (id: string) => snap.projects.find((p) => p.id === id)?.name;
+    const msgs: Msg[] = add.map((n) => ({
+      id: n.id,
+      from: 'office',
+      text: pname(n.projectId) ? `[${pname(n.projectId)}] ${n.text}` : n.text,
+      taskId: n.taskId,
+      stage: n.stage,
+      actions: n.actions,
+      home: '',
+      projects: [n.projectId],
+    }));
     setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
   }, [snap.tasks, snap.workflow, syncReady]);
 
@@ -562,7 +604,19 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       setPhotos([]);
       setPhotoErrors([]);
     }
-    say('me', sent.length ? `${text}\n(첨부 ${sent.length}개: ${sent.map((f) => f.name).join(', ')})` : text);
+    if (sent.length) {
+      // 보낸 말 아래에 무엇을 첨부했는지 작은 미리보기로 남긴다(누르면 크게, v0.4.89)
+      const id = mid();
+      const files = sent.map((f, i) => {
+        const key = `${id}:${i}`;
+        if (f.type.startsWith('image/')) fullUrls.set(key, URL.createObjectURL(f));
+        return { name: f.name, key };
+      });
+      setLog((l) => [...l, { id, from: 'me' as From, text, home: thread, files }].slice(-KEEP));
+      void Promise.all(sent.map(thumbOf)).then((thumbs) =>
+        setLog((l) => l.map((m) => (m.id === id && m.files ? { ...m, files: m.files.map((f, i) => ({ ...f, thumb: thumbs[i] })) } : m))),
+      );
+    } else say('me', text);
     // v0.4.58: 답을 기다리는 중에 보낸 말은 버리지 않고 줄 세웠다가 앞 일이 끝나면 차례로 처리한다.
     if (busy || queue.length) {
       setQueue((q) => [...q, { text, files: sent }]);
@@ -951,6 +1005,15 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
 
   return (
     <section className={`inbox${shown.length === 0 ? ' is-empty' : ''}`} aria-label="묻기·요청 입력창">
+      {/* 화면 전체를 덮도록 body에 바로 그린다(조상 상자의 레이아웃 제한을 받지 않게) */}
+      {zoom &&
+        createPortal(
+          <div className="inbox-zoom" role="dialog" aria-modal="true" aria-label={`${zoom.name} 크게 보기`} onClick={() => setZoom(null)}>
+            <img src={zoom.src} alt={zoom.name} />
+            <span className="inbox-zoom-name">{zoom.name} · 아무 곳이나 누르면 닫혀요</span>
+          </div>,
+          document.body,
+        )}
       {shown.length === 0 && (
         <div className="inbox-empty">
           <p className="inbox-hello">무엇을 도와드릴까요?</p>
@@ -975,6 +1038,26 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                   <span />
                   <span />
                 </p>
+              )}
+              {m.files && m.files.length > 0 && (
+                <ul className="inbox-sent-files" aria-label="보낸 첨부">
+                  {m.files.map((f) => {
+                    const src = (f.key && fullUrls.get(f.key)) || f.thumb;
+                    return (
+                      <li key={f.key ?? f.name}>
+                        {f.thumb || src ? (
+                          <button type="button" className="inbox-thumb" onClick={() => setZoom({ src: src!, name: f.name })} aria-label={`${f.name} 크게 보기`}>
+                            <img src={f.thumb ?? src} alt="" />
+                          </button>
+                        ) : (
+                          <span className="inbox-doc" title={f.name}>
+                            {f.name}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
               {m.sources && m.sources.length > 0 && (
                 <ul className="inbox-sources" aria-label="출처">
@@ -1234,7 +1317,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             {photos.map((f, i) => (
               <li key={`${i}-${f.name}`}>
                 {previews[i] ? (
-                  <img src={previews[i]} alt={f.name} />
+                  <button type="button" className="inbox-thumb" onClick={() => setZoom({ src: previews[i], name: f.name })} aria-label={`${f.name} 크게 보기`}>
+                    <img src={previews[i]} alt={f.name} />
+                  </button>
                 ) : (
                   <span className="inbox-doc" title={f.name}>
                     {(MIME_EXT[f.type] ?? 'file').toUpperCase()}
