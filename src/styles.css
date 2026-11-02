@@ -3491,22 +3491,18 @@ a {
   margin-top: 6px;
 }
 
-/* 대화 탭 프로젝트 칩 줄은 내려도 탭 바로 아래에 고정(v0.4.68, 소유자) */
+/* 대화 탭 프로젝트 칩 줄: 휴대폰(작은 사무실)에서만 탭 바로 아래에 고정(v0.4.68). PC는 제자리(칩 줄만 떠 보여 이상함, v0.4.69) */
 .project-chips {
-  position: sticky;
-  top: 0;
-  z-index: 44;
-  background: var(--surface);
   margin-inline: -4px;
   padding: 6px 4px 6px;
 }
 @media (max-width: 1039px) {
   .layout.is-mini .project-chips {
+    position: sticky;
+    z-index: 44;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
     /* 탭 고정 위치 + 탭 높이 */
-    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + 42px);
-  }
-  .layout:not(.is-mini) .project-chips {
-    position: relative;
-    top: auto;
+    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + 43px);
   }
 }
