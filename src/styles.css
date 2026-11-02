@@ -3760,6 +3760,8 @@ a {
   top: calc(36px + env(safe-area-inset-top, 0px));
   z-index: 30;
   margin: -12px -14px 0;
+  /* 양옆 -14px 여백만큼 넓혀 카드 오른쪽 끝까지 덮는다(v0.4.99: width 100%라 오른쪽이 28px 모자랐음) */
+  width: calc(100% + 28px);
   padding: 10px 14px 6px;
   background: var(--surface);
   border-radius: var(--radius) var(--radius) 0 0;
