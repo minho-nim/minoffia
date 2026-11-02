@@ -1,3 +1,4 @@
+import { ImageZoom } from './ImageZoom';
 import { useEffect, useRef, useState } from 'react';
 import { FilePreview } from './FilePreview';
 import {
@@ -147,6 +148,7 @@ export function ImagePicker({
 }) {
   const [errors, setErrors] = useState<string[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
+  const [zoom, setZoom] = useState<{ src: string; name: string } | null>(null);
   useEffect(() => {
     const next: Record<string, string> = {};
     for (const it of items) next[it.key] = urls[it.key] ?? URL.createObjectURL(it.file);
@@ -183,11 +185,18 @@ export function ImagePicker({
 
   return (
     <div className="att">
+      {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
       {items.length > 0 && (
         <ol className="att-list">
           {items.map((it, i) => (
             <li key={it.key} className="att-item">
-              <Thumb src={urls[it.key] ?? null} alt={it.file.name} mime={it.file.type} />
+              {urls[it.key] && isRaster(it.file.type) ? (
+                <button type="button" className="att-zoom" onClick={() => setZoom({ src: urls[it.key]!, name: it.file.name })} aria-label={`${it.file.name} 크게 보기`}>
+                  <Thumb src={urls[it.key]!} alt={it.file.name} mime={it.file.type} />
+                </button>
+              ) : (
+                <Thumb src={urls[it.key] ?? null} alt={it.file.name} mime={it.file.type} />
+              )}
               <div className="att-body">
                 <p className="att-name small">
                   {i + 1}. {it.file.name} <span className="muted">· {kb(it.file.size)}</span>
@@ -266,6 +275,7 @@ export function AttachmentGallery({
   const [errors, setErrors] = useState<string[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({});
+  const [zoom, setZoom] = useState<{ src: string; name: string } | null>(null);
   const editable = !blocker && !!onUpdate;
 
   useEffect(() => {
@@ -294,14 +304,20 @@ export function AttachmentGallery({
 
   return (
     <div className="att">
+      {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
       {items.length === 0 ? (
         emptyText && <p className="muted small">{emptyText}</p>
       ) : (
         <ol className="att-list">
           {items.map((a, i) => (
             <li key={a.id} className="att-item">
-              {urls[a.id] && linkable(a.mime) ? (
-                <a href={urls[a.id]!} target="_blank" rel="noreferrer" title={isImage(a.mime) ? '원본 보기' : '열기·내려받기'}>
+              {urls[a.id] && isRaster(a.mime) ? (
+                // 사진은 팝업으로 크게(v0.4.91 소유자), 문서는 지금처럼 열기·내려받기
+                <button type="button" className="att-zoom" onClick={() => setZoom({ src: urls[a.id]!, name: a.fileName })} aria-label={`${a.fileName} 크게 보기`}>
+                  <Thumb src={urls[a.id]!} alt={a.fileName} mime={a.mime} />
+                </button>
+              ) : urls[a.id] && linkable(a.mime) ? (
+                <a href={urls[a.id]!} target="_blank" rel="noreferrer" title="열기·내려받기">
                   <Thumb src={urls[a.id]!} alt={a.fileName} mime={a.mime} />
                 </a>
               ) : (
