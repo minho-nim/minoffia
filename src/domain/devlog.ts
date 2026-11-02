@@ -102,33 +102,3 @@ export function buildDevlog(snap: Snapshot, chat: ChatEntry[], range: { from: st
   return out.join('\n');
 }
 
-/** 프로젝트 '한 일 기록'의 한 줄(v0.4.74) */
-export interface HistoryItem {
-  at: string;
-  time: string;
-  kind: DevlogEvent['kind'];
-  taskId: string | null;
-  taskTitle: string;
-  /** 첫 줄(짧게) */
-  head: string;
-  /** 첫 줄 뒤의 나머지(없으면 빈 문자열) */
-  more: string;
-}
-
-/**
- * 프로젝트별 '한 일 기록'(v0.4.74, 소유자 "프로젝트별로 무슨 일을 했는지 보였으면"): 업무 기록 + 그 프로젝트 대화를
- * 날짜(KST)별로 최근 것부터. AI 호출 없음.
- */
-export function projectHistory(snap: Snapshot, chat: ChatEntry[], projectId: string): { day: string; items: HistoryItem[] }[] {
-  const titles = new Map(snap.tasks.map((t) => [t.id, t.title]));
-  const days = new Map<string, HistoryItem[]>();
-  const events = devlogEvents(snap, chat).filter((e) => e.projectId === projectId);
-  for (const e of events.reverse()) {
-    const [first, ...rest] = e.text.split('\n');
-    const head = first.length > 140 ? `${first.slice(0, 140)}…` : first;
-    const more = [first.length > 140 ? first : '', ...rest].filter(Boolean).join('\n');
-    const day = kstDay(new Date(e.at));
-    days.set(day, [...(days.get(day) ?? []), { at: e.at, time: kstTime(e.at), kind: e.kind, taskId: e.taskId, taskTitle: e.taskId ? titles.get(e.taskId) ?? '' : '', head, more }]);
-  }
-  return [...days.entries()].map(([day, items]) => ({ day, items }));
-}
