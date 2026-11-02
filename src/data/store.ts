@@ -101,6 +101,8 @@ export interface OfficeStore {
   loadResultInbox(): Promise<ResultInboxItem[]>;
   /** 받은 결과를 처리함으로 표시. 이미 다른 기기가 처리했으면 false */
   markResultInbox(id: string, status: 'imported' | 'invalid', note: string): Promise<boolean>;
+  /** 서버가 이미 올린 결과 화면을 결과 스크린샷으로 붙인다(파일은 다시 올리지 않음, v0.4.97) */
+  linkResultShots(taskId: string, resultRevision: number, shots: ResultInboxItem['screenshots']): Promise<void>;
   /** 휴대폰 알림(웹 푸시, v0.4.12): 공개키 받기·구독 저장·해제·시험 */
   push(action: 'key' | 'subscribe' | 'unsubscribe' | 'test', body?: Record<string, string>): Promise<Record<string, unknown>>;
   /** Linear 연결 확인(읽기만, 아무것도 만들지 않음) */
@@ -152,6 +154,8 @@ export interface ResultInboxItem {
   branch: string;
   /** 서버가 계산한 브랜치 미리보기 링크(없으면 빈 문자열) */
   previewUrl: string;
+  /** 자동 개발이 찍어 보낸 화면(서버가 비공개 버킷에 올림, v0.4.97) */
+  screenshots: { path: string; sha256: string; size: number; mime: string; name: string }[];
 }
 
 export function newId(): string {
