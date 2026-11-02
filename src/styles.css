@@ -3293,12 +3293,7 @@ a {
 
 .team-unassigned li {
   display: flex;
-  flex: 1 1 90px;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  max-width: 140px;
-  text-align: center;
+  justify-content: center;
 }
 
 .team-unassigned img {
