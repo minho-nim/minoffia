@@ -1117,7 +1117,16 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                   Gemini에게 묻기
                 </button>
               )}
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => askProject(pending.text)}>
+              <button
+                type="button"
+                className="btn btn-small btn-ghost"
+                onClick={() => {
+                  // 접수 카드가 대신하므로 질문 쪽 버튼은 접는다(v0.4.75).
+                  const t = pending.text;
+                  setPending(null);
+                  askProject(t);
+                }}
+              >
                 사실은 업무 요청이에요
               </button>
               <p className="muted small inbox-note">

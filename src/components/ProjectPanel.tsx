@@ -248,7 +248,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   <p className="muted small">기본 규칙은 모든 프로젝트에 늘 들어가요. 아래는 AI가 접수·계획·개발을 하며 이 프로젝트에서만 계속 지킬 것을 적어 둔 것이고, 다음 기획서·계획·개발 지시서에 함께 넣어요. 틀린 건 지우세요.</p>
                   {onAddRepoRules && p.repo && (
                     <button type="button" className="link-btn small" onClick={() => onAddRepoRules(p)}>
-                      저장소에 AI 작업 규칙 파일(CLAUDE.md) 넣기 — 없을 때만
+                      저장소 CLAUDE.md 지금 맞추기 — 없으면 넣고, 다르면 '지켜야 할 것'만 맞춤(개발할 때는 AI가 알아서 맞춰요)
                     </button>
                   )}
                   {mineRules.length > 0 ? (

@@ -1,9 +1,11 @@
 // 새 프로젝트의 GitHub 저장소를 만든다(소유자가 "만들기"를 눌렀을 때만).
 // 비공개 + README·CLAUDE.md(AI 작업 규칙, v0.4.55)만 있는 빈 저장소. 코드는 지금처럼 B 승인 뒤에만 올라간다.
 // 토큰(GITHUB_REPO_TOKEN)은 secrets에만 있고, 이 함수는 저장소 만들기와 첫 규칙 파일(CLAUDE.md) 넣기 외에는 쓰지 않는다.
-// v0.4.60(소유자 2026-11-01): rulesOnly면 이미 있는 AI Office 저장소(managed_repos)에 CLAUDE.md가 없을 때만 넣는다(있으면 건드리지 않음).
+// v0.4.60(소유자 2026-11-01): rulesOnly면 이미 있는 AI Office 저장소(managed_repos)에 CLAUDE.md를 넣는다.
+// v0.4.75(소유자 "다르면 맞춰줘"): 이미 있으면 '이 프로젝트에서 지켜야 할 것' 절만 기본 규칙 + 프로젝트 규칙과 같게 맞춘다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { projectClaudeMd } from './rules.ts';
+import { BASE_RULES, loadRules } from './projectRules.ts';
+import { projectClaudeMd, syncRulesSection } from './rules.ts';
 import { repoNameError } from './naming.ts';
 
 /** 하루(KST)에 만들 수 있는 저장소 수 */
@@ -66,19 +68,29 @@ Deno.serve(async (req) => {
     const ok = repo.toLowerCase() !== 'minho-nim/minlab' && (managed ?? []).some((m) => String(m.full_name).toLowerCase() === repo.toLowerCase());
     if (!ok) return reply(403, { ok: false, error: `AI Office가 만든 저장소에만 넣습니다(${repo}). 이 저장소는 직접 관리하세요.` });
     try {
+      // v0.4.75: 기본 규칙 + 프로젝트 규칙. 파일이 없으면 만들고, 있으면 '지켜야 할 것' 절만 맞춘다(다른 부분은 그대로).
+      const rules = await loadRules(userClient, p.id);
       const head = await gh(`/repos/${repo}/contents/CLAUDE.md`);
-      await head.body?.cancel();
-      if (head.status === 200) return reply(200, { ok: true, repo, created: false });
-      if (head.status !== 404) return reply(502, { ok: false, error: `저장소를 읽지 못했습니다(HTTP ${head.status}).` });
-      const { data: ruleRows } = await userClient.from('project_rules').select('rule').eq('project_id', p.id).order('created_at').limit(40);
-      const md = projectClaudeMd(String(p.name), (ruleRows ?? []).map((r: { rule: string }) => r.rule));
+      if (head.status !== 200 && head.status !== 404) {
+        await head.body?.cancel();
+        return reply(502, { ok: false, error: `저장소를 읽지 못했습니다(HTTP ${head.status}).` });
+      }
+      const file = head.status === 200 ? ((await head.json()) as { sha?: string; content?: string }) : null;
+      if (!file) await head.body?.cancel();
+      const now = file?.content ? new TextDecoder().decode(Uint8Array.from(atob(file.content.replace(/\s/g, '')), (c) => c.charCodeAt(0))) : '';
+      const md = file ? syncRulesSection(now, rules) : projectClaudeMd(String(p.name), rules);
+      if (file && md === now) return reply(200, { ok: true, repo, created: false, updated: false });
       const put = await gh(`/repos/${repo}/contents/CLAUDE.md`, {
         method: 'PUT',
-        body: JSON.stringify({ message: 'docs: AI 작업 규칙(CLAUDE.md) 추가', content: btoa(String.fromCharCode(...new TextEncoder().encode(md))) }),
+        body: JSON.stringify({
+          message: file ? 'docs: CLAUDE.md 지켜야 할 것 맞춤' : 'docs: AI 작업 규칙(CLAUDE.md) 추가',
+          content: btoa(String.fromCharCode(...new TextEncoder().encode(md))),
+          ...(file?.sha ? { sha: file.sha } : {}),
+        }),
       });
       await put.body?.cancel();
-      if (put.status !== 201) return reply(502, { ok: false, error: `규칙 파일을 넣지 못했습니다(HTTP ${put.status}). 토큰에 Contents 쓰기 권한이 있는지 확인하세요.` });
-      return reply(200, { ok: true, repo, created: true });
+      if (put.status !== 201 && put.status !== 200) return reply(502, { ok: false, error: `규칙 파일을 넣지 못했습니다(HTTP ${put.status}). 토큰에 Contents 쓰기 권한이 있는지 확인하세요.` });
+      return reply(200, { ok: true, repo, created: !file, updated: Boolean(file) });
     } catch (e) {
       return reply(504, { ok: false, error: `GitHub가 응답하지 않았습니다(${(e as Error).name}).` });
     }
@@ -137,7 +149,7 @@ Deno.serve(async (req) => {
   // AI 작업 규칙 파일(CLAUDE.md)을 함께 넣는다(v0.4.55). 실패해도 저장소는 그대로 쓰고 알림만 남긴다.
   let rulesWarning = '';
   try {
-    const content = btoa(String.fromCharCode(...new TextEncoder().encode(projectClaudeMd(String(project.name)))));
+    const content = btoa(String.fromCharCode(...new TextEncoder().encode(projectClaudeMd(String(project.name), [...BASE_RULES]))));
     const put = await fetch(`https://api.github.com/repos/${data.full_name}/contents/CLAUDE.md`, {
       method: 'PUT',
       headers: {

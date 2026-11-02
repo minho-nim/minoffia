@@ -88,7 +88,8 @@ export interface OfficeStore {
   /** 새 프로젝트의 GitHub 저장소를 서버가 만들고 연결한다(로컬 데모는 지원하지 않음). */
   createRepo(projectId: string, name: string): Promise<{ repo: string; url: string; warning?: string }>;
   /** 이미 있는 AI Office 저장소에 작업 규칙 파일(CLAUDE.md)이 없으면 넣는다(v0.4.60). created=false면 이미 있음 */
-  addRepoRules(projectId: string): Promise<{ repo: string; created: boolean }>;
+  /** 없으면 넣고, 있으면 '지켜야 할 것' 절만 맞춘다(v0.4.75) */
+  addRepoRules(projectId: string): Promise<{ repo: string; created: boolean; updated?: boolean }>;
   /** PM 세션이 보내 온 계획 중 아직 처리하지 않은 것(v0.4.2) */
   loadPlanInbox(): Promise<PlanInboxItem[]>;
   /** 받은 계획을 처리함으로 표시. 이미 다른 기기가 처리했으면 false */

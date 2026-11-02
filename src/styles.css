@@ -3523,7 +3523,8 @@ a {
     border-bottom: 1px solid var(--line);
   }
 }
-@media (max-width: 1039px) {
+/* 탭이 고정될 때(세로 620px 이상)만 칩도 고정한다. 탭은 안 붙는데 칩만 붙어 내려오던 문제(v0.4.75) */
+@media (max-width: 1039px) and (min-height: 620px) {
   .layout.is-mini .project-chips {
     position: sticky;
     z-index: 44;
@@ -3543,57 +3544,122 @@ a {
   opacity: 0.85;
 }
 
-/* 프로젝트 한 일 기록(v0.4.74) */
+/* 프로젝트 한 일 기록(v0.4.74, 업무별로 읽기 쉽게 v0.4.75) */
 .project-history {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-top: 6px;
-  max-height: 420px;
-  overflow-y: auto;
 }
-.history-day h4 {
-  margin: 0 0 4px;
-  font-family: var(--font-body);
+.history-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  font-size: 13px;
+}
+.history-chat-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12.5px;
   color: var(--muted);
+  cursor: pointer;
 }
-.history-day ul {
-  list-style: none;
+.history-chat-toggle input {
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  accent-color: var(--accent);
 }
-.project-rules .history-day li {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: 6px;
+.history-task-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--surface);
-  border-left: 3px solid var(--accent);
+  padding: 6px 8px;
 }
-.history-day li.is-chat {
-  border-left-color: var(--line);
+.project-rules .history-task-card > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--ink);
+  list-style: none;
 }
-.project-rules .history-day li > .history-time {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 12px;
+.history-task-card > summary::-webkit-details-marker {
+  display: none;
+}
+.history-task-card > summary::before {
+  content: '▸';
   color: var(--muted);
 }
-.history-body {
-  flex: 1;
+.history-task-card[open] > summary::before {
+  content: '▾';
+}
+.history-task-title {
+  flex: 1 1 120px;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.history-status.is-done {
+  color: var(--ok);
+}
+.history-status.is-blocked {
+  color: var(--danger);
+}
+.history-steps {
+  list-style: none;
+  margin: 6px 0 4px;
+  padding: 0 0 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.project-rules .history-steps li {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+.history-steps li.is-warn {
+  border-left-color: var(--danger);
+}
+.history-when {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.history-step {
+  justify-self: start;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.step-deploy .history-step,
+.step-approval .history-step {
+  color: var(--ok);
+}
+.is-warn .history-step {
+  color: var(--danger);
+}
+.step-chat .history-step {
+  color: var(--muted);
+  font-weight: 400;
+}
+.history-line {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.history-task {
-  display: block;
-  text-align: left;
-}
-.history-body summary {
+.history-line > summary {
   cursor: pointer;
   color: var(--ink);
 }
@@ -3602,4 +3668,12 @@ a {
   white-space: pre-wrap;
   margin-top: 2px;
   color: var(--muted);
+}
+@media (max-width: 420px) {
+  .project-rules .history-steps li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .history-line {
+    grid-column: 1 / -1;
+  }
 }
