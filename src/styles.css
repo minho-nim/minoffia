@@ -1167,15 +1167,15 @@ a {
   left: 50%;
   transform: translateX(-50%);
   width: max-content;
-  max-width: max(150px, 26cqw);
-  padding: 0.45em 0.7em;
+  max-width: max(110px, 20cqw);
+  padding: 0.3em 0.55em;
   border-radius: 4px;
   border: 2px solid #3b2416;
   background: #fffaf0;
   color: #2a1a10;
   font-family: var(--font-display);
-  font-size: max(10px, 1.55cqw);
-  line-height: 1.35;
+  font-size: max(9px, 1.3cqw);
+  line-height: 1.3;
   text-align: left;
   white-space: normal;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
@@ -3493,14 +3493,14 @@ a {
   overflow-wrap: anywhere;
 }
 
-/* 대화가 없을 때는 입력창을 맨 위에(첫 화면에 바로 보이게), 인사말·예시는 그 아래(v0.4.67, 소유자: 휴대폰에서 아래가 잘림) */
-.inbox.is-empty > .inbox-form {
-  position: static;
-  order: -1;
-  margin-top: 0 !important;
-}
+/* 대화가 없을 때도 입력창은 다른 때처럼 아래에, 인사말·예시는 입력창 바로 위 설명으로(v0.4.78 소유자: "아래에 붙는 게 맞을 듯") */
 .inbox.is-empty > .inbox-empty {
-  margin-top: 6px;
+  margin-top: auto;
+  /* 화면이 길어 입력창이 아래에 붙어 있을 때도 인사말은 그 바로 위에 보인다 */
+  position: sticky;
+  bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--inbox-form-h, 110px) + 8px);
+  z-index: 3;
+  background: var(--surface);
 }
 
 /* 대화 탭 프로젝트 칩 줄: 내려도 탭 바로 아래에 붙어 있다(휴대폰 v0.4.68, PC도 탭과 한 덩어리로 v0.4.70) */
@@ -3709,4 +3709,26 @@ a {
   font-size: 12px;
   font-weight: 400;
   color: var(--ok);
+}
+
+/* 업무 카드를 펼쳐 내릴 때 제목 줄은 탭·칩 줄 바로 아래에 붙어 있다(v0.4.78, 소유자) */
+.task-card:not(.is-folded) > .task-toggle {
+  position: sticky;
+  top: calc(36px + env(safe-area-inset-top, 0px));
+  z-index: 30;
+  margin: -12px -14px 0;
+  padding: 10px 14px 6px;
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 1040px) {
+  .task-card:not(.is-folded) > .task-toggle {
+    top: calc(var(--tabs-h, 42px) + var(--chips-h, 0px));
+  }
+}
+@media (max-width: 1039px) and (min-height: 620px) {
+  .layout.is-mini .task-card:not(.is-folded) > .task-toggle {
+    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px) + var(--chips-h, 0px));
+  }
 }

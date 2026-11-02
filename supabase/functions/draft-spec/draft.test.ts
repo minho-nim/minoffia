@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseDraft } from './draft';
+import { titleFrom } from '../../../src/domain/triage';
+import { autoTitle, cleanTitle, parseDraft } from './draft';
 
 describe('Gemini 기획서 초안 해석(v0.4.0)', () => {
   it('코드 블록에 싸인 JSON도 읽는다', () => {
@@ -22,5 +23,17 @@ describe('Gemini 기획서 초안 해석(v0.4.0)', () => {
   it('앞으로 지킬 것(project_rules)은 다듬어 받고, 없으면 빈 목록', () => {
     expect(parseDraft('{"intent":"change_request","final_prompt":"x","project_rules":["- 항상 다크 모드 지원"]}')?.projectRules).toEqual(['항상 다크 모드 지원']);
     expect(parseDraft('{"intent":"change_request","final_prompt":"x"}')?.projectRules).toEqual([]);
+  });
+
+  it('짧은 제목을 받아 다듬는다(v0.4.78)', () => {
+    const d = parseDraft('{"intent":"change_request","title":"\\"운동 기록 다크 모드.\\"","final_prompt":"다크 모드 추가"}');
+    expect(d?.title).toBe('운동 기록 다크 모드');
+    expect(cleanTitle('가'.repeat(31))).toBe('');
+    expect(cleanTitle(3)).toBe('');
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x"}')?.title).toBe('');
+  });
+
+  it('자동 제목 규칙은 앱(titleFrom)과 같다', () => {
+    for (const t of ['  첫 줄\n둘째 줄', '가'.repeat(80), '이 화면의 다른 스타일을 만들고 싶어 스타일 바꾸고, 구조도 변경']) expect(autoTitle(t)).toBe(titleFrom(t));
   });
 });
