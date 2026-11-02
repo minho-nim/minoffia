@@ -1354,9 +1354,10 @@ export function App() {
               <button type="button" className="link-btn" onClick={() => void client?.auth.signOut()}>
                 로그아웃
               </button>
-              <PushToggle store={store} />
             </span>
           )}
+          {/* 알림 켜기·끄기 아이콘은 밝기 버튼 바로 옆(v0.4.89) */}
+          {store.mode === 'supabase' && <PushToggle store={store} />}
           <ThemeToggle />
         </div>
         <ul className="usage" aria-label="오늘 등록된 실행 횟수">
