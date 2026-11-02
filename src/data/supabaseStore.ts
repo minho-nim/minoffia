@@ -597,6 +597,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('dispatch-claude-dev', { assignmentId, acknowledgeRetry });
       return { sessionUrl: (data.sessionUrl as string | null) ?? null };
     },
+    async startGeminiDev(assignmentId, acknowledgeRetry) {
+      const data = await invoke('dispatch-gemini-dev', { assignmentId, acknowledgeRetry });
+      return { runUrl: (data.runUrl as string | null) ?? null, key: String(data.key ?? '') };
+    },
     async deployRelease(taskId, allowExtra = false) {
       const { data, error } = await client.functions.invoke('deploy-release', { body: { taskId, allowExtra } });
       // 202 = main 시험이 끝나기를 기다리는 중(실패 아님)

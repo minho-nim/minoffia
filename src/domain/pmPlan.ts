@@ -1,7 +1,7 @@
 import { cleanDifficulty } from './difficulty';
 import type { AgentKind, AssigneePreference, DevelopmentMode, ExecutionMode, PlanBody, WorkItem } from './workflow-types';
 
-const PREFS: AssigneePreference[] = ['codex_primary', 'claude_support', 'gemini_optional', 'grok_optional'];
+const PREFS: AssigneePreference[] = ['codex_primary', 'claude_support', 'gemini_optional', 'grok_optional', 'gemini_dev'];
 const MODES: ExecutionMode[] = ['codex_cloud', 'manual_handoff'];
 
 export const PREF_AGENT: Record<AssigneePreference, AgentKind> = {
@@ -9,6 +9,7 @@ export const PREF_AGENT: Record<AssigneePreference, AgentKind> = {
   claude_support: 'claude',
   gemini_optional: 'gemini',
   grok_optional: 'grok',
+  gemini_dev: 'gemini',
 };
 
 export type ParseResult = { ok: true; plan: PlanBody } | { ok: false; errors: string[] };

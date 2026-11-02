@@ -59,6 +59,8 @@ export interface OfficeStore {
   checkPr(taskId: string): Promise<PrCheck>;
   /** Claude 보조 개발: 실행 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작한다(세션 주소). 로컬 데모는 지원하지 않음. */
   startClaudeDev(assignmentId: string, acknowledgeRetry: boolean): Promise<{ sessionUrl: string | null }>;
+  /** Gemini 개발: 서버가 GitHub Actions 워크플로를 시작(v0.4.82). runUrl은 워크플로 실행 목록 */
+  startGeminiDev(assignmentId: string, acknowledgeRetry: boolean): Promise<{ runUrl: string | null; key: string }>;
   /** 올리기 승인(B)된 Claude 결과로 Claude가 PR을 연다(서버, v0.4.5) */
   dispatchClaudePr(taskId: string, acknowledgeRetry: boolean): Promise<{ sessionUrl: string | null; branch: string }>;
   /** 배포 승인 뒤 서버가 release를 main으로 앞당긴다(운영 배포). 로컬 데모는 지원하지 않음. */
