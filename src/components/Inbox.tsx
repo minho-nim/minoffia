@@ -243,6 +243,40 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const [previews, setPreviews] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  /**
+   * 맨 아래 새 말이 아래에 붙은 입력창·휴대폰 키보드에 가리지 않게 화면을 올린다(v0.4.78, 소유자 "채팅 창 오류").
+   * 보이는 화면(visualViewport, 키보드 위)의 아래 끝이 '마지막 말 + 입력창 높이' 밑에 오도록만 내린다.
+   */
+  const revealEnd = () => {
+    const end = endRef.current;
+    if (!end) return;
+    const vv = window.visualViewport;
+    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const need = end.getBoundingClientRect().bottom + (formRef.current?.offsetHeight ?? 0) + 16 - viewBottom;
+    if (need > 1) window.scrollBy({ top: need });
+  };
+  // 입력창 높이를 CSS 변수(--inbox-form-h)로: 빈 대화의 인사말을 입력창 바로 위에 붙이는 데 쓴다(v0.4.78).
+  useEffect(() => {
+    const form = formRef.current;
+    const box = form?.parentElement;
+    if (!form || !box || typeof ResizeObserver === 'undefined') return;
+    const set = () => box.style.setProperty('--inbox-form-h', `${form.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(form);
+    return () => ro.disconnect();
+  }, []);
+  // 키보드가 열리고 닫히면(보이는 화면 높이가 바뀌면) 입력 중일 때만 다시 맞춘다.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      if (document.activeElement === inputRef.current) revealEnd();
+    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
   const fileInput = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // 입력칸은 쓴 만큼 늘어난다(최대 높이는 CSS max-height). 보내서 비우면 다시 줄어든다.
@@ -286,7 +320,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     // 대화 상자 안을 맨 아래(새 메시지)로 내리고, 화면도 입력창이 보이게 맞춘다.
     const box = listRef.current;
     if (box) box.scrollTop = box.scrollHeight;
-    endRef.current?.scrollIntoView({ block: 'nearest' });
+    // 화면에 대화가 하나도 없으면 맨 위 그대로 둔다(첫 화면).
+    if (log.length) revealEnd();
   }, [log, pending, busy]);
 
   useEffect(() => {
@@ -1206,6 +1241,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         </ul>
       )}
       <form
+        ref={formRef}
         className="inbox-form"
         onSubmit={(e) => {
           e.preventDefault();
@@ -1245,6 +1281,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           aria-label="묻기·요청"
           onFocus={() => {
             if (canAskGemini) onWarmGemini?.();
+            // 휴대폰 키보드가 올라온 뒤(애니메이션 끝) 마지막 말이 입력창 위에 보이게
+            window.setTimeout(revealEnd, 350);
           }}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

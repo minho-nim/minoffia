@@ -2,7 +2,7 @@
 // 소유자 결정(2026-10-30): 기본은 Gemini 초안, 어렵거나 중요한 업무만 ChatGPT(수동)로 넘긴다. 사용자는 초안을 보고 A 승인·수정 요청만 한다.
 // 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만 있다. 글은 저장하지 않고 횟수·길이만 ai_calls(purpose plan)에 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { DRAFT_SYSTEM, parseDraft } from './draft.ts';
+import { autoTitle, DRAFT_SYSTEM, parseDraft } from './draft.ts';
 import { loadRules, rulesSection, saveRules } from './projectRules.ts';
 
 const HARD_DAILY_CAP = 50;
@@ -117,6 +117,11 @@ Deno.serve(async (req) => {
       });
       if (error) return reply(409, { ok: false, error: `초안을 저장하지 못했습니다: ${error.message}` });
       if (draft.intent === 'change_request' || draft.intent === 'asset_request') await saveRules(admin, user.id, task.id, 'spec', draft.projectRules);
+      // v0.4.78(소유자 "제목은 내용에 따라 자동 생성"): 같은 호출로 받은 짧은 제목으로 바꾼다. 사람이 고친 제목(자동 제목과 다름)은 건드리지 않는다.
+      const original = task.user_original_text ?? '';
+      if (draft.title && original && task.title === autoTitle(original) && draft.title !== task.title) {
+        await userClient.from('tasks').update({ title: draft.title }).eq('id', task.id).eq('title', task.title);
+      }
       return reply(200, { ok: true, revision, intent: draft.intent, model });
     }
     last = { status: r.status, message: r.message };

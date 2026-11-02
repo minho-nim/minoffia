@@ -89,17 +89,24 @@ function explainDbError(message: string): string {
   return hit ? hit[1] : `저장하지 못했습니다: ${message}`;
 }
 
-/** 탭 높이를 CSS 변수(--tabs-h)로: 넓은 화면에서 칩 줄을 탭 바로 아래에 붙이는 데 쓴다(탭이 두 줄이 되어도, v0.4.70) */
-let tabsObserver: ResizeObserver | null = null;
-function watchTabsHeight(el: HTMLElement | null) {
-  tabsObserver?.disconnect();
-  tabsObserver = null;
-  if (!el || typeof ResizeObserver === 'undefined') return;
-  const set = () => document.documentElement.style.setProperty('--tabs-h', `${el.offsetHeight}px`);
-  set();
-  tabsObserver = new ResizeObserver(set);
-  tabsObserver.observe(el);
+/**
+ * 요소 높이를 CSS 변수로: 탭(--tabs-h, v0.4.70)·업무 탭 칩 줄(--chips-h, v0.4.78) 아래에 다음 고정 줄을 붙이는 데 쓴다.
+ * 요소가 사라지면 0으로 둔다.
+ */
+function heightWatcher(name: string) {
+  let observer: ResizeObserver | null = null;
+  return (el: HTMLElement | null) => {
+    observer?.disconnect();
+    observer = null;
+    const set = () => document.documentElement.style.setProperty(name, `${el ? el.offsetHeight : 0}px`);
+    set();
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    observer = new ResizeObserver(set);
+    observer.observe(el);
+  };
 }
+const watchTabsHeight = heightWatcher('--tabs-h');
+const watchChipsHeight = heightWatcher('--chips-h');
 
 export function App() {
   const [booting, setBooting] = useState(true);
@@ -1404,7 +1411,7 @@ export function App() {
 
           {/* 업무 탭 프로젝트 칩(v0.4.18~). 고르면 내 차례·업무가 그 프로젝트 기준 */}
           {tab === 'tasks' && snap.projects.length > 1 && (
-            <div className="filters project-chips" role="group" aria-label="프로젝트">
+            <div className="filters project-chips" role="group" aria-label="프로젝트" ref={watchChipsHeight}>
               {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects].map((p) => {
                 const n = p.id === 'all' ? turns.length : (turnsByProject.get(p.id) ?? 0);
                 return (
