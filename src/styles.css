@@ -3534,3 +3534,11 @@ a {
   }
 }
 
+
+/* 기본 규칙(모든 프로젝트, v0.4.73): 접어 두고 지우기 버튼 없음 */
+.project-base-rules {
+  margin: 4px 0;
+}
+.project-base-rules li {
+  opacity: 0.85;
+}

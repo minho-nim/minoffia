@@ -71,7 +71,7 @@ describe('견본 먼저(v0.3.5)', () => {
     expect(t).toContain('보존하면서');
     expect(buildCodexHandoff(task, spec, item, project, '', [], [])).not.toContain('승인된 견본');
     expect(buildCodexHandoff(task, spec, item, project, '', [], [])).not.toContain('이 프로젝트에서 지켜야 할 것');
-    expect(buildCodexHandoff(task, spec, item, project, '', [], [], [], ['결제 기능 넣지 않기'])).toContain('## 이 프로젝트에서 지켜야 할 것 (앞선 업무에서 AI가 적어 둠, 어기지 않는다)\n- 결제 기능 넣지 않기');
+    expect(buildCodexHandoff(task, spec, item, project, '', [], [], [], ['결제 기능 넣지 않기'])).toContain('## 이 프로젝트에서 지켜야 할 것 (기본 규칙과 앞선 업무에서 적어 둔 것, 어기지 않는다)\n- 결제 기능 넣지 않기');
   });
 });
 

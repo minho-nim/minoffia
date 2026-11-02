@@ -99,7 +99,7 @@ export function buildCodexHandoff(
           '- 견본과 다르게 해야 하는 부분이 있으면 이유를 결과 보고에 적는다.',
         ]
       : []),
-    ...(projectRules.length ? ['', '## 이 프로젝트에서 지켜야 할 것 (앞선 업무에서 AI가 적어 둠, 어기지 않는다)', ...projectRules.map((r) => `- ${r}`)] : []),
+    ...(projectRules.length ? ['', '## 이 프로젝트에서 지켜야 할 것 (기본 규칙과 앞선 업무에서 적어 둔 것, 어기지 않는다)', ...projectRules.map((r) => `- ${r}`)] : []),
     '',
     '## 유지 조건',
     ...[spec.preserveConstraints, ...item.preserve_constraints].filter(Boolean).map((x) => `- ${x}`),

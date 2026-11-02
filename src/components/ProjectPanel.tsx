@@ -1,3 +1,4 @@
+import { BASE_RULES } from '../domain/baseRules';
 import { useState } from 'react';
 import type { Project, ProjectRule, Task } from '../domain/types';
 import { RepoCreate } from './RepoCreate';
@@ -218,12 +219,23 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   수정
                 </button>
               </span>
-              {(onAddRule || mineRules.length > 0) && (
+              {(
                 <details className="project-rules">
                   <summary>
                     지켜야 할 것 <span className="num num-count">{mineRules.length}</span>
+                    <span className="muted small"> + 기본 {BASE_RULES.length}</span>
                   </summary>
-                  <p className="muted small">AI가 접수·계획·개발을 하며 이 프로젝트에서 계속 지킬 것을 적어 두고, 다음 기획서·계획·개발 지시서에 함께 넣어요. 틀린 건 지우세요.</p>
+                  <details className="project-base-rules">
+                    <summary className="small">기본 규칙(모든 프로젝트에 늘 적용) {BASE_RULES.length}</summary>
+                    <ul>
+                      {BASE_RULES.map((r) => (
+                        <li key={r}>
+                          <span>{r}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <p className="muted small">기본 규칙은 모든 프로젝트에 늘 들어가요. 아래는 AI가 접수·계획·개발을 하며 이 프로젝트에서만 계속 지킬 것을 적어 둔 것이고, 다음 기획서·계획·개발 지시서에 함께 넣어요. 틀린 건 지우세요.</p>
                   {onAddRepoRules && p.repo && (
                     <button type="button" className="link-btn small" onClick={() => onAddRepoRules(p)}>
                       저장소에 AI 작업 규칙 파일(CLAUDE.md) 넣기 — 없을 때만

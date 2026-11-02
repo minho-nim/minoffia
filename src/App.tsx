@@ -1,3 +1,4 @@
+import { withBaseRules } from './domain/baseRules';
 import { TeamPanel } from './components/TeamPanel';
 import { TurnMenu } from './components/TurnMenu';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -1534,7 +1535,7 @@ export function App() {
                         agentLimits={snap.agentLimits}
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}
-                        projectRules={(snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule)}
+                        projectRules={withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule))}
                         reviews={(snap.workflow.reviews ?? []).filter((r) => r.taskId === t.id)}
                         canReadLinks={store.mode === 'supabase'}
                         dispatchBlocker={dispatchBlocker(t)}
