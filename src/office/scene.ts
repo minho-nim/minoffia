@@ -56,7 +56,8 @@ export function assignmentTasks(tasks: Task[], assignments: AgentAssignment[]): 
     const blocked = a.dispatchStatus.startsWith('blocked') || a.dispatchStatus === 'failed';
     if (!waiting && !running && !blocked) return [];
     // 배정 작업은 개발 단계의 일이다. 방은 담당 AI의 역할로 정한다.
-    const type = a.assignee === 'gemini' ? 'design' : a.assignee === 'grok' ? 'qa' : 'dev';
+    // Gemini 개발(gemini_actions, v0.4.82)은 개발실, 견본(수동 인계)은 기획·디자인 쪽
+    const type = a.assignee === 'gemini' && a.executionMode !== 'gemini_actions' ? 'design' : a.assignee === 'grok' ? 'qa' : 'dev';
     return [{ ...p, id: `${p.id}:${a.workItemId}`, title: a.title || p.title, type, assignee: agent, status: running ? 'in_progress' : blocked ? 'blocked' : 'queued' }];
   });
 }

@@ -20,7 +20,7 @@ import { newId, type InboxState, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
 import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
-import { buildGptPackage, buildPrototypeHandoff } from './domain/handoffV2';
+import { buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
 import { myTurns } from './domain/myTurn';
 import { clarificationsOf, linksOf } from './domain/requestContext';
 import { routeTask } from './domain/router';
@@ -603,7 +603,8 @@ export function App() {
       title: w.title,
       assignee: PREF_AGENT[w.assignee_preference],
       // 자동 실행 경로가 검증되기 전까지는 계획이 codex_cloud라고 해도 수동 인계로 둔다.
-      executionMode: 'manual_handoff',
+      // Gemini 개발(gemini_dev)은 실행 승인 뒤 서버가 GitHub Actions 워크플로로 시작한다(v0.4.82).
+      executionMode: w.assignee_preference === 'gemini_dev' ? 'gemini_actions' : 'manual_handoff',
       dispatchStatus: 'awaiting_user_execution_approval',
       statusSource: 'none',
       providerExecutionId: null,
@@ -667,9 +668,10 @@ export function App() {
             continue;
           }
           const view = deriveWorkflow(task, snap.workflow);
+          const fromGemini = a.assignee === 'gemini' && a.executionMode === 'gemini_actions';
           const why =
-            a.assignee !== 'claude'
-              ? 'Claude 작업이 아닙니다.'
+            a.assignee !== 'claude' && !fromGemini
+              ? '자동 개발(Claude·Gemini) 작업이 아닙니다.'
               : !view.plan || a.planRevision !== view.plan.planRevision
                 ? '지금 계획의 작업이 아닙니다(계획이 바뀌었음).'
                 : a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting'
@@ -678,13 +680,13 @@ export function App() {
                     ? '이미 올리기 승인(B)한 결과가 있습니다.'
                     : null;
           if (why) {
-            if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `Claude가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
+            if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `${fromGemini ? 'Gemini' : 'Claude'}가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
             continue;
           }
           const summary = [
             item.summary,
             item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
-            item.branch ? `\n작업 브랜치: ${item.branch} (${item.previewUrl ? '미리보기용으로 올림, PR은 올리기 승인 뒤' : 'PR은 올리기 승인 뒤'})` : '',
+            item.branch ? `\n작업 브랜치: ${item.branch} (${item.previewUrl ? '미리보기용으로 올림, PR은 올리기 승인 뒤' : fromGemini ? 'Gemini가 올림, PR은 올리기 승인 뒤' : 'PR은 올리기 승인 뒤'})` : '',
           ].join('\n');
           const ok = await step(
             task.id,
@@ -695,7 +697,7 @@ export function App() {
                 revision: nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision),
                 planRevision: a.planRevision,
                 workItemId: a.workItemId,
-                source: 'claude_session_auto',
+                source: fromGemini ? 'gemini_actions_auto' : 'claude_session_auto',
                 summary: summary.slice(0, 4000),
                 diff: item.diff,
                 testLog: item.testLog,
@@ -729,7 +731,7 @@ export function App() {
         for (const t of snap.tasks) {
           const v = deriveWorkflow(t, snap.workflow);
           if (!v.bApproved || v.cApproved) continue;
-          if (!t.prUrl && !(v.result?.source === 'claude_session_auto' || v.result?.source === 'claude_manual')) continue;
+          if (!t.prUrl && !(v.result?.source === 'claude_session_auto' || v.result?.source === 'claude_manual' || v.result?.source === 'gemini_actions_auto')) continue;
           const c = latestPrCheck(t, snap.workflow);
           if (c && (c.ciState === 'success' || c.ciState === 'failure' || c.prState === 'closed')) continue;
           if (Date.now() - (autoPrAt.current.get(t.id) ?? 0) < 60_000) continue;
@@ -901,9 +903,17 @@ export function App() {
         if (gate === 'E') {
           const a = snap.workflow.assignments.find((x) => x.taskId === task.id && x.planRevision === revision && x.workItemId === workItemId);
           if (a?.assignee === 'claude') await workflowActions.startClaudeDev?.(a, false);
+          // Gemini 개발(v0.4.82): 실행 승인 → 서버가 GitHub Actions 워크플로 시작
+          if (a?.assignee === 'gemini' && a.executionMode === 'gemini_actions') await workflowActions.startGeminiDev?.(a, false);
         }
         if (gate === 'B') {
           const r = snap.workflow.results.find((x) => x.taskId === task.id && x.revision === revision);
+          // Gemini 개발 결과(v0.4.82): 작업 브랜치가 이미 올라가 있어 GitHub에서 PR만 만들면 된다(병합은 배포 승인 뒤 서버가).
+          const repo = projectById.get(task.projectId)?.repo;
+          if (r?.source === 'gemini_actions_auto' && repo) {
+            const branch = codexBranch(task, r.workItemId, 'gemini');
+            say('ok', `올리기 승인했어요. GitHub에서 PR을 만들어 주세요: https://github.com/${repo}/compare/main...${branch}?expand=1 (PR이 생기면 CI를 자동으로 확인합니다)`);
+          }
           if (r && (r.source === 'claude_session_auto' || r.source === 'claude_manual')) {
             try {
               const sent = await store.dispatchClaudePr(task.id, false);
@@ -1132,6 +1142,21 @@ export function App() {
               return true;
             } catch (e) {
               say('error', `Claude 보조 개발을 시작하지 못했습니다: ${(e as Error).message}`);
+              return false;
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
+    startGeminiDev:
+      store.mode === 'supabase'
+        ? async (a, ack) => {
+            try {
+              const r = await store.startGeminiDev(a.id, ack);
+              say('ok', `Gemini 개발을 시작했습니다(키 ${r.key || '?'}, 완료 아님). GitHub Actions에서 고치고 시험한 뒤 결과를 자동으로 보냅니다.`);
+              return true;
+            } catch (e) {
+              say('error', `Gemini 개발을 시작하지 못했습니다: ${(e as Error).message}`);
               return false;
             } finally {
               setSnap(await store.load());

@@ -43,6 +43,8 @@ export interface WorkflowActions {
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
   /** Claude 보조 개발: 실행 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
   startClaudeDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
+  /** Gemini 개발: 실행 승인한 Gemini 개발 작업을 서버가 GitHub Actions 워크플로로 시작(Supabase 모드만, v0.4.82) */
+  startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** 견본 먼저: 견본 승인 + 견본 작업 끝냄 */
   approvePrototype: (task: Task) => Promise<boolean>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
@@ -537,7 +539,14 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
           <ul className="wf-items">
             {view.assignments.map((a) => {
               const item = view.plan!.plan.work_items.find((w) => w.id === a.workItemId);
-              const adapter = adapterFor(a.assignee);
+              const adapter = adapterFor(a.assignee, a.executionMode);
+              // 자동 실행 길: Claude 보조 개발(루틴) 또는 Gemini 개발(GitHub Actions, v0.4.82)
+              const auto =
+                a.assignee === 'claude' && actions.startClaudeDev
+                  ? { start: actions.startClaudeDev, label: 'Claude 보조 개발 시작(자동)', ack: 'Routines 기록에서 실제로 시작되지 않았음을 확인했습니다', note: '실행 승인하면 Claude가 클라우드에서 바로 개발을 시작합니다(PM과 함께 하루 상한).' }
+                  : a.executionMode === 'gemini_actions' && actions.startGeminiDev
+                    ? { start: actions.startGeminiDev, label: 'Gemini 개발 시작(자동)', ack: 'GitHub Actions 기록에서 실제로 돌지 않았음을 확인했습니다', note: '실행 승인하면 Gemini(무료 키)가 GitHub Actions에서 바로 개발을 시작합니다.' }
+                    : null;
               const eOk = view.eApproved(a.workItemId);
               const eCheck = canApprove(view, 'E', a.workItemId);
               return (
@@ -554,27 +563,27 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   {item && item.dependencies.length > 0 && <p className="muted small">먼저 끝나야 할 작업: {item.dependencies.join(', ')}</p>}
 
                   {/* 자동 실행: 검증된 경로만 버튼이 켜진다 */}
-                  {a.assignee === 'claude' && actions.startClaudeDev ? (
+                  {auto ? (
                     <div className="wf-auto">
                       {eOk && (a.dispatchStatus === 'ready' || a.dispatchStatus === 'failed') ? (
                         <span className="wf-inline">
                           {a.dispatchStatus === 'failed' && (
                             <label className="check small">
                               <input type="checkbox" checked={!!devAck[a.id]} onChange={(e) => setDevAck({ ...devAck, [a.id]: e.target.checked })} />
-                              Routines 기록에서 실제로 시작되지 않았음을 확인했습니다
+                              {auto.ack}
                             </label>
                           )}
                           <button
                             type="button"
                             className="btn btn-small btn-primary"
                             disabled={busy || (a.dispatchStatus === 'failed' && !devAck[a.id]) || !!startBlocker(a, allAssignments, view.plan, agentLimits)}
-                            onClick={() => void run(() => actions.startClaudeDev!(a, !!devAck[a.id]))}
+                            onClick={() => void run(() => auto.start(a, !!devAck[a.id]))}
                           >
-                            Claude 보조 개발 시작(자동)
+                            {auto.label}
                           </button>
                         </span>
                       ) : (
-                        !eOk && <p className="muted small">실행 승인하면 Claude가 클라우드에서 바로 개발을 시작합니다(PM과 함께 하루 상한).</p>
+                        !eOk && <p className="muted small">{auto.note}</p>
                       )}
                       {a.dispatchStatus === 'failed' && a.actualProviderStatus && a.actualProviderStatus !== 'unknown' && <p className="task-error small">{a.actualProviderStatus}</p>}
                       <p className="muted small">{adapter.reason}</p>

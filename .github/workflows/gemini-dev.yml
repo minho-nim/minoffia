@@ -7,7 +7,7 @@
 #   GEMINI_API_KEY2     Gemini 무료 키 B(앱의 Studio B). 둘 중 하나만 있어도 돈다(v0.4.81: A가 한도·오류로 실패하면 B로 한 번 더).
 #   TARGET_REPO_TOKEN   대상 저장소에만 Contents 읽기·쓰기 권한을 준 fine-grained 토큰.
 # 안전: 토큰은 Gemini가 도는 단계에 넘기지 않는다(받기·올리기 단계에만). 이 저장소와 minho-nim/MinLab은 대상으로 받지 않는다.
-name: Gemini 개발(시험)
+name: Gemini 개발
 
 on:
   workflow_dispatch:
@@ -32,6 +32,14 @@ on:
         description: 'Gemini 모델(무료 키에서 되는 것)'
         required: false
         default: 'gemini-3.5-flash-lite'
+      task_id:
+        description: '(앱이 채움) AI Office 업무 ID — 있으면 끝난 뒤 결과를 앱으로 보낸다'
+        required: false
+        default: ''
+      submit_token:
+        description: '(앱이 채움) 결과 제출용 1회용 표 — 손으로 실행할 때는 비워 둔다'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -50,10 +58,13 @@ jobs:
     steps:
       - name: 입력 확인
         env:
+          SUBMIT_TOKEN: ${{ inputs.submit_token }}
           HAS_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
           HAS_KEY2: ${{ secrets.GEMINI_API_KEY2 != '' }}
           HAS_TOKEN: ${{ secrets.TARGET_REPO_TOKEN != '' }}
         run: |
+          # 제출표는 로그에 남기지 않는다(v0.4.82)
+          if [ -n "$SUBMIT_TOKEN" ]; then echo "::add-mask::$SUBMIT_TOKEN"; fi
           if ! [[ "$REPO" =~ ^minho-nim/[A-Za-z0-9._-]+$ ]]; then echo "::error::minho-nim/… 저장소만 받습니다."; exit 1; fi
           lower=$(echo "$REPO" | tr 'A-Z' 'a-z')
           if [ "$lower" = "minho-nim/minlab" ] || [ "$lower" = "minho-nim/minlab-ai-office" ]; then echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; fi
@@ -83,6 +94,7 @@ jobs:
         run: |
           git config user.name "MinLab AI Office (Gemini)"
           git config user.email "gemini-dev@users.noreply.github.com"
+          git rev-parse HEAD > /tmp/base.sha
           git checkout -b "$BRANCH"
 
       - name: Gemini CLI로 고치기
@@ -156,7 +168,7 @@ jobs:
           if git diff --cached -U0 | grep -E '^\+' | grep -qE 'sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}'; then
             echo "::error::비밀값처럼 보이는 줄이 추가돼 올리지 않습니다."; exit 1
           fi
-          git commit -q -m "Gemini 개발(시험): $(printf '%s' "$INSTRUCTIONS_HEAD" | head -c 60)"
+          git commit -q -m "Gemini 개발: $(printf '%s' "$INSTRUCTIONS_HEAD" | head -n1 | sed 's/^#* *//' | head -c 60)"
           echo "changed=true" >> "$GITHUB_OUTPUT"
         env:
           INSTRUCTIONS_HEAD: ${{ inputs.instructions }}
@@ -168,6 +180,7 @@ jobs:
           TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
         run: |
           git push --force-with-lease "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${BRANCH}"
+          echo "PUSHED=1" >> "$GITHUB_ENV"
 
       - name: 요약
         if: always()
@@ -189,3 +202,47 @@ jobs:
             tail -40 /tmp/test.log 2>/dev/null || echo '(시험 없음)'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # 앱에서 시작했으면(제출표가 있으면) 성공·실패와 상관없이 결과를 AI Office로 보낸다(v0.4.82). 결과 패키지·자동 채점으로 이어진다.
+      - name: 결과 보내기(AI Office)
+        if: always() && inputs.submit_token != ''
+        env:
+          TASK_ID: ${{ inputs.task_id }}
+          SUBMIT_TOKEN: ${{ inputs.submit_token }}
+          JOB_STATUS: ${{ job.status }}
+          SUBMIT_URL: https://kmmicksimbredbyvdmvx.supabase.co/functions/v1/submit-result
+        run: |
+          cd work 2>/dev/null || { echo "입력 확인에서 멈춰 보낼 결과가 없습니다."; exit 0; }
+          base=$(cat /tmp/base.sha 2>/dev/null || git rev-parse HEAD)
+          git add -A >/dev/null 2>&1 || true
+          git diff --cached "$base" > /tmp/result.diff || true
+          git diff --cached --name-only "$base" > /tmp/result.files || true
+          python3 - <<'PY'
+          import json, os
+          def read(p, n=None):
+              try:
+                  t = open(p, encoding='utf-8', errors='replace').read()
+              except OSError:
+                  return ''
+              return t[-n:] if n else t
+          log = read('/tmp/gemini.log')
+          tail = log.split('### Gemini 키')[-1].splitlines()[1:] if '### Gemini 키' in log else log.splitlines()
+          summary = '\n'.join([l for l in tail if l.strip() and not l.startswith(('[STARTUP]', 'YOLO mode', 'Warning:', 'Ripgrep'))][-15:]).strip()
+          ok = os.environ.get('JOB_STATUS') == 'success'
+          pushed = os.environ.get('PUSHED') == '1'
+          result = {
+              'summary': (summary or 'Gemini가 요약을 남기지 않았습니다.')[:3900],
+              'changed_files': [f for f in read('/tmp/result.files').splitlines() if f],
+              'diff': read('/tmp/result.diff')[:490000],
+              'test_log': read('/tmp/test.log', 90000) or '(시험 로그 없음)',
+              'remaining_issues': '' if ok else 'Gemini 개발 워크플로가 끝까지 성공하지 못했습니다(시험 실패·키 한도·비밀값 검사 등). 작업 브랜치는 올리지 않았습니다.',
+              'branch': os.environ['BRANCH'] if pushed else '',
+              'preview_pushed': False,
+              'project_rules': [],
+          }
+          json.dump({'task_id': os.environ['TASK_ID'], 'token': os.environ['SUBMIT_TOKEN'], 'result': result}, open('/tmp/result-submit.json', 'w'), ensure_ascii=False)
+          PY
+          code=$(curl -sS -o /tmp/submit.out -w '%{http_code}' -X POST "$SUBMIT_URL" -H 'content-type: application/json' --data-binary @/tmp/result-submit.json || echo 000)
+          rm -f /tmp/result-submit.json
+          echo "AI Office 결과 보내기: HTTP ${code} $(head -c 200 /tmp/submit.out 2>/dev/null)"
+          [ "$code" = "200" ] || echo "::warning::결과를 AI Office로 보내지 못했습니다(HTTP ${code})."

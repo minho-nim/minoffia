@@ -17,12 +17,17 @@ export function cleanDifficulty(v: unknown): number | undefined {
   return Number.isInteger(n) && n >= 1 && n <= 10 ? n : undefined;
 }
 
-/** 개발 작업 기본 배정: 쉬움·보통 = Codex(구독), 어려움 = Claude. 휴가인 AI는 건너뛴다 */
-export function suggestedPreference(difficulty: number | undefined, away: { codex?: boolean; claude?: boolean } = {}): AssigneePreference | null {
+/**
+ * 개발 작업 기본 배정: 쉬움 = Gemini 개발(무료, v0.4.82), 보통 = Codex(구독), 어려움 = Claude. 휴가인 AI는 건너뛴다.
+ * gemini는 Studio A·B가 둘 다 휴가일 때만 휴가로 본다(키가 하나라도 있으면 일한다).
+ */
+export function suggestedPreference(difficulty: number | undefined, away: { codex?: boolean; claude?: boolean; gemini?: boolean } = {}): AssigneePreference | null {
   const level = levelOf(difficulty);
   if (!level) return null;
-  const order: AssigneePreference[] = level === 'hard' ? ['claude_support', 'codex_primary'] : ['codex_primary', 'claude_support'];
-  return order.find((p) => !(p === 'codex_primary' ? away.codex : away.claude)) ?? null;
+  const order: AssigneePreference[] =
+    level === 'hard' ? ['claude_support', 'codex_primary'] : level === 'easy' ? ['gemini_dev', 'codex_primary', 'claude_support'] : ['codex_primary', 'claude_support'];
+  const off = (p: AssigneePreference) => (p === 'codex_primary' ? away.codex : p === 'claude_support' ? away.claude : away.gemini);
+  return order.find((p) => !off(p)) ?? null;
 }
 
 /** PM 배정이 난이도에 비해 비싼지(쉬운 일을 Claude에게) — 안내용 */

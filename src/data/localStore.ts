@@ -297,6 +297,9 @@ export function createLocalStore(): OfficeStore {
     async startClaudeDev() {
       throw new Error('로컬 데모에서는 Claude 보조 개발을 시작할 수 없습니다.');
     },
+    async startGeminiDev() {
+      throw new Error('로컬 데모에서는 Gemini 개발을 시작할 수 없습니다.');
+    },
     async deployRelease() {
       throw new Error('로컬 데모에서는 운영 배포를 할 수 없습니다.');
     },

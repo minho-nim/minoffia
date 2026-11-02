@@ -45,7 +45,15 @@ Deno.serve(async (req) => {
 
   // v0.4.5: 올리기 승인 뒤 Claude가 연 PR은 주소를 사람이 적지 않는다. 작업 브랜치로 GitHub에서 찾아 기록한다.
   if (!task.pr_url) {
-    const { data: sent } = await userClient.from('pr_dispatches').select('branch').eq('task_id', task.id).neq('branch', '').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    let { data: sent } = await userClient.from('pr_dispatches').select('branch').eq('task_id', task.id).neq('branch', '').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    // v0.4.82: Gemini 개발 결과는 워크플로가 ai/gemini/<업무 앞 8자>-<작업> 브랜치를 이미 올려 두었다. 소유자가 GitHub에서 연 PR을 그 브랜치로 찾는다.
+    if (!sent?.branch) {
+      const { data: res } = await userClient.from('result_packages').select('source, work_item_id').eq('task_id', task.id).order('revision', { ascending: false }).limit(1).maybeSingle();
+      if (res?.source === 'gemini_actions_auto') {
+        const item = String(res.work_item_id ?? '').replace(/[^a-z0-9-]/gi, '').toLowerCase();
+        sent = { branch: `ai/gemini/${String(task.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase()}${item ? `-${item}` : ''}` };
+      }
+    }
     const projectRepo = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
     if (!sent?.branch || !projectRepo.includes('/')) return reply(400, { ok: false, error: 'PR 주소(https://github.com/…/pull/번호)를 먼저 기록하세요.' });
     const [owner] = projectRepo.split('/');
@@ -54,7 +62,7 @@ Deno.serve(async (req) => {
       signal: AbortSignal.timeout(10_000),
     }).catch(() => null);
     const list = found && found.ok ? ((await found.json()) as { html_url?: string }[]) : [];
-    if (!list[0]?.html_url) return reply(409, { ok: false, waiting: true, error: `PR이 아직 열리지 않았습니다(Claude가 ${sent.branch} 브랜치로 여는 중).` });
+    if (!list[0]?.html_url) return reply(409, { ok: false, waiting: true, error: `PR이 아직 열리지 않았습니다(${sent.branch} 브랜치).` });
     await admin.from('tasks').update({ pr_url: list[0].html_url }).eq('id', task.id);
     task.pr_url = list[0].html_url;
   }
