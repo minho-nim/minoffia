@@ -50,7 +50,10 @@ jobs:
           lower=$(echo "$REPO" | tr 'A-Z' 'a-z')
           if [ "$lower" = "minho-nim/minlab" ] || [ "$lower" = "minho-nim/minlab-ai-office" ]; then echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; fi
           if ! [[ "$BRANCH" =~ ^ai/gemini/[a-z0-9._/-]+$ ]]; then echo "::error::브랜치는 ai/gemini/로 시작해야 합니다(소문자·숫자·-·_·.)."; exit 1; fi
-          if [ "$HAS_KEY" != "true" ] || [ "$HAS_TOKEN" != "true" ]; then echo "::error::secrets(GEMINI_API_KEY·TARGET_REPO_TOKEN)가 없습니다."; exit 1; fi
+          missing=""
+          [ "$HAS_KEY" = "true" ] || missing="$missing GEMINI_API_KEY"
+          [ "$HAS_TOKEN" = "true" ] || missing="$missing TARGET_REPO_TOKEN"
+          if [ -n "$missing" ]; then echo "::error::이 저장소(MinLab-AI-Office)의 Actions secrets에 없는 것:${missing} (Settings → Secrets and variables → Actions)"; exit 1; fi
 
       - name: 대상 저장소 받기(토큰은 남기지 않음)
         uses: actions/checkout@v4
@@ -138,8 +141,8 @@ jobs:
 
       - name: 요약
         if: always()
-        working-directory: work
         run: |
+          cd work 2>/dev/null || { echo "입력 확인에서 멈춰 요약할 것이 없습니다." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
           {
             echo "## Gemini 개발(시험) — ${REPO} · ${BRANCH}"
             echo ""
