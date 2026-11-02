@@ -30,6 +30,10 @@ interface Msg {
   taskId?: string;
   stage?: string;
   actions?: NoticeAction[];
+  /** 쓴 대화창(v0.4.66): '' = 기본 대화창, 아니면 그 프로젝트 대화창 */
+  home?: string;
+  /** 함께 보이는 프로젝트 대화창(기본창에서 물어본 것이 그 프로젝트로 확인되면 연결) */
+  projects?: string[];
   /** 조사 답의 출처(v0.4.61) */
   sources?: Source[];
   /** 업무 접수 확인 카드(v0.4.58): 한 메시지에 업무가 여럿이어도 카드마다 따로 접수·취소한다 */
@@ -144,7 +148,7 @@ function writeOutbox(list: NewChatEntry[]) {
 
 /** 이 기기 대화를 마지막으로 바꾼(또는 서버에서 받은) 시각 */
 const STAMP_KEY = 'minlab-ai-office:inbox-updated:v1';
-const KEEP = 40;
+const KEEP = 150;
 /** 다른 기기에서 바꾼 대화를 확인하는 간격 */
 const SYNC_POLL_MS = 15_000;
 
@@ -215,8 +219,12 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onLinkProject, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
+  // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
+  const thread = currentProject?.id ?? '';
+  const inThread = (m: Msg) => (m.home ?? '') === thread || (thread !== '' && Boolean(m.projects?.includes(thread)));
+  const shown = log.filter(inThread);
   const logRef = useRef(log);
   logRef.current = log;
   const [input, setInput] = useState('');
@@ -456,7 +464,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   }, []);
   // 소유자 결정(2026-10-30): 일반 대화·질문은 기록하지 않고, 프로젝트·업무가 정해진 메시지만 개발일지용으로 남긴다.
   const say = (from: From, text: string, link: { projectId?: string; taskId?: string } = {}) => {
-    setLog((l) => [...l, { id: mid(), from, text, ...(link.taskId ? { taskId: link.taskId } : {}) }].slice(-KEEP));
+    // v0.4.66: 지금 대화창에 쓰고, 프로젝트가 정해진 말은 그 프로젝트 대화창에도 보인다.
+    setLog((l) => [...l, { id: mid(), from, text, home: thread, ...(link.projectId && link.projectId !== thread ? { projects: [link.projectId] } : {}), ...(link.taskId ? { taskId: link.taskId } : {}) }].slice(-KEEP));
     if (link.projectId || link.taskId) archive({ role: from, text, projectId: link.projectId ?? null, taskId: link.taskId ?? null });
   };
   // 여러 일이 겹쳐도(답 기다리는 중 접수 카드를 눌러도) 모두 끝나야 '처리 중'이 풀린다.
@@ -475,14 +484,16 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
 
   /** 업무 접수 확인 카드를 띄운다(v0.4.58). 카드는 대화가 이어져도 남고, 카드마다 따로 접수한다. */
   const offerTask = (text: string, candidates: Project[], context?: PriorChat, extra: { whole?: string; ask?: string } = {}) => {
-    const project = candidates.length === 1 ? candidates[0] : null;
+    // 프로젝트 대화창에서 한 요청은 그 프로젝트로 바로(v0.4.66, 소유자)
+    const list = candidates.length ? candidates : currentProject ? [currentProject] : [];
+    const project = list.length === 1 ? list[0] : null;
     const what = extra.whole ? `'${short(text)}' — ` : context ? `앞 대화('${short(context.question)}')를 이어서 개발 요청으로 — ` : '';
     const line = extra.ask
       ? `${extra.ask}${extra.whole ? `\n('${short(text)}')` : ''}`
       : project
         ? `${what}'${project.name}' 프로젝트 업무로 접수할까요?`
         : `${what}어느 프로젝트 업무인가요? 아래에서 고르거나 새 프로젝트를 만드세요.`;
-    setLog((l) => [...l, { id: mid(), from: 'office' as From, text: line, offer: { text, projectId: project?.id ?? null, context, whole: extra.whole, ask: Boolean(extra.ask), state: 'open' as const } }].slice(-KEEP));
+    setLog((l) => [...l, { id: mid(), from: 'office' as From, text: line, home: thread, offer: { text, projectId: project?.id ?? null, context, whole: extra.whole, ask: Boolean(extra.ask), state: 'open' as const } }].slice(-KEEP));
   };
 
   const settleOffer = (id: string, state: Offer['state']) => setLog((l) => l.map((m) => (m.id === id && m.offer ? { ...m, offer: { ...m.offer, state } } : m)));
@@ -732,8 +743,12 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       originalText: text,
     }, images);
     if (!task) return say('office', '업무를 저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.');
-    // 대화는 그대로 두고 프로젝트만 연결한다(다음 말부터 이 프로젝트 기준).
-    onLinkProject?.(project.id);
+    // v0.4.66: 대화창은 그대로 두고, 이 요청에 얽힌 말(요청·앞 대화·접수 카드)을 그 프로젝트 대화창에도 올린다.
+    const related = (m: Msg) =>
+      (m.from === 'me' && (m.text === text || m.text.startsWith(`${text}\n`))) ||
+      m.offer?.text === text ||
+      (context && (m.text === context.question || m.text === context.answer));
+    setLog((l) => l.map((m) => (related(m) && (m.home ?? '') !== project.id && !m.projects?.includes(project.id) ? { ...m, projects: [...(m.projects ?? []), project.id] } : m)));
     // 접수된 요청 원문은 화면에 이미 있으므로 기록에만 남긴다. 이어 온 앞 대화도 이 업무 기록이 된다(개발 전 삭제 시 함께 지워짐).
     if (context) {
       archive({ role: 'me', text: context.question, projectId: project.id, taskId: task.id });
@@ -744,7 +759,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       'office',
       `'${project.name}'에 접수했어요: ${task.title}\n${
         onAutoDraft ? 'Gemini(무료)가 기획서 초안을 써요. 다 되면 여기서 알려 드릴게요.' : '아래 업무 카드의 진행 단계에서 기획부터 하세요.'
-      }\n대화는 여기서 그대로 이어서 하세요('${project.name}' 프로젝트로 연결했어요).`,
+      }\n'${project.name}' 프로젝트 대화창에도 올렸어요.`,
       { projectId: project.id, taskId: task.id },
     );
     onAutoDraft?.(task);
@@ -792,8 +807,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
       const history: { role: 'user' | 'model'; text: string }[] = [];
-      log.forEach((m, i) => {
-        if (m.from === 'gemini' && log[i - 1]?.from === 'me') history.push({ role: 'user', text: log[i - 1].text }, { role: 'model', text: m.text });
+      shown.forEach((m, i) => {
+        if (m.from === 'gemini' && shown[i - 1]?.from === 'me') history.push({ role: 'user', text: shown[i - 1].text }, { role: 'model', text: m.text });
       });
       // 질문에는 이미지만 보낸다(문서는 업무 요청 자료로 올린 뒤 'Gemini로 요약').
       const held = photoStore.held.filter((f) => isRaster(f.type));
@@ -804,7 +819,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         const encoded = await Promise.all(images.map(async (f) => ({ mime: f.type, data: await toBase64(f) })));
         // 보내자마자 빈 Gemini 말(입력 중 …)을 두고, 답 조각이 오면 그 자리에 글을 채운다.
         const id = mid();
-        setLog((l) => [...l, { id, from: 'gemini' as From, text: '' }].slice(-KEEP));
+        setLog((l) => [...l, { id, from: 'gemini' as From, text: '', home: thread }].slice(-KEEP));
         const set = (t: string) => setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
         // 판단을 맡겼으면 첫 줄(판단 머리)은 숨기고, 질문 답일 때만 본문을 바로 보여 준다.
         // v0.4.58: 여러 개로 나눴으면 질문 답만 모아 보여 준다(업무·애매는 끝난 뒤 카드로).
@@ -899,7 +914,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
 
   return (
     <section className="inbox" aria-label="묻기·요청 입력창">
-      {log.length === 0 && (
+      {shown.length === 0 && (
         <div className="inbox-empty">
           <p className="inbox-hello">무엇을 도와드릴까요?</p>
           <p className="muted small inbox-note">
@@ -907,9 +922,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           </p>
         </div>
       )}
-      {log.length > 0 && (
+      {shown.length > 0 && (
         <ol ref={listRef} className="inbox-log" aria-live="polite">
-          {log.map((m) => (
+          {shown.map((m) => (
             <li key={m.id} className={`inbox-msg from-${m.from}`}>
               <span className="inbox-who">
                 {FROM_LABEL[m.from]}
@@ -1244,7 +1259,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           </button>
         </div>
       </form>
-      {log.length > 0 && (
+      {shown.length > 0 && (
         <button
           type="button"
           className="link-btn small"
@@ -1257,7 +1272,11 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             setShowOther(false);
             setQueue([]);
             setOtherFor(null);
-            setLog(hadPending ? [{ id: mid(), from: 'office', text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).' }] : []);
+            // v0.4.66: 지금 보고 있는 대화창의 말만 지운다(다른 프로젝트 대화창은 그대로).
+            setLog((l) => [
+              ...l.filter((m) => !inThread(m)),
+              ...(hadPending ? [{ id: mid(), from: 'office' as From, text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).', home: thread }] : []),
+            ]);
           }}
         >
           {pending ? '대화 지우기 · 진행 중인 요청 취소' : sync ? '대화 지우기(모든 기기)' : '대화 지우기(이 기기)'}
