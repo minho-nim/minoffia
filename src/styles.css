@@ -1170,10 +1170,17 @@ a {
   display: flex;
   /* 탭 5개(v0.4.40~): 칸이 좁으면 두 줄로 내려간다(v0.4.46). 탭 글자 자체는 한 줄 그대로 */
   flex-wrap: wrap;
-  /* 한 줄일 때는 좌우 끝까지 고르게 펼친다(v0.4.49). 두 줄로 내려간 탭은 왼쪽부터 */
-  justify-content: space-between;
-  gap: 2px;
+  /* 넓은 화면은 왼쪽부터 붙여 놓는다(v0.4.63, 소유자: 넓으면 벌어져 어색). 휴대폰 폭에서만 좌우 끝까지 펼친다(v0.4.49) */
+  justify-content: flex-start;
+  gap: 4px;
   border-bottom: 2px solid var(--line);
+}
+
+@media (max-width: 600px) {
+  .tabs {
+    justify-content: space-between;
+    gap: 2px;
+  }
 }
 
 .tabs button {
