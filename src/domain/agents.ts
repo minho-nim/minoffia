@@ -93,7 +93,7 @@ export const AGENTS: Agent[] = [
     provider: 'Google AI Studio Build (계정 1)',
     mode: 'manual',
     home: 'planning',
-    skills: ['design', 'prototype'],
+    skills: ['design', 'prototype', 'research'],
     dailyCap: 5,
     note: 'AI Studio Build 외부 호출은 확인되지 않았다. 수동 인계만 가능하다.',
     sprite: 'person',
@@ -106,7 +106,7 @@ export const AGENTS: Agent[] = [
     provider: 'Google AI Studio Build (계정 2)',
     mode: 'manual',
     home: 'planning',
-    skills: ['prototype', 'design'],
+    skills: ['prototype', 'design', 'research'],
     dailyCap: 5,
     note: 'AI Studio Build 외부 호출은 확인되지 않았다. 수동 인계만 가능하다.',
     sprite: 'person',
@@ -135,7 +135,8 @@ export const CANDIDATES: Record<WorkType, AgentId[]> = {
   dev: ['codex', 'claude'],
   design: ['studioA', 'studioB'],
   prototype: ['studioB', 'studioA'],
-  research: ['grok', 'claude'],
+  // 조사: Grok이 휴가면 Gemini(무료, Google 검색 연결)가 먼저, Claude는 마지막(v0.4.76 소유자 "대신 해줄 AI")
+  research: ['grok', 'studioA', 'studioB', 'claude'],
   qa: ['ci'],
 };
 

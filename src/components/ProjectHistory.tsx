@@ -18,7 +18,7 @@ const PAGE = 5;
 
 /**
  * 프로젝트 '한 일 기록'(v0.4.74, 읽기 쉽게 v0.4.75): 업무마다 접수부터 배포까지 단계 이름표와 한 줄로.
- * 최근에 움직인 업무가 위, 맨 위 업무만 펼쳐 둔다. 대화는 '대화도 보기'를 켜야 보인다(AI 호출 없음).
+ * 최근에 움직인 업무가 위, 맨 위 업무만 펼쳐 둔다. 대화는 '대화보기'를 켜야 보인다(AI 호출 없음).
  */
 export function ProjectHistory({ snap, projectId, loadChat, onOpenTask }: Props) {
   const [chat, setChat] = useState<ChatEntry[]>([]);
@@ -26,7 +26,7 @@ export function ProjectHistory({ snap, projectId, loadChat, onOpenTask }: Props)
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [shown, setShown] = useState(PAGE);
-  // 부모가 매번 새 함수를 넘겨도 한 번만 읽는다(대화도 보기를 처음 켤 때).
+  // 부모가 매번 새 함수를 넘겨도 한 번만 읽는다(대화보기를 처음 켤 때).
   const load = useRef(loadChat);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export function ProjectHistory({ snap, projectId, loadChat, onOpenTask }: Props)
           {story.lastDay && <span className="muted"> · 최근 {story.lastDay.slice(5).replace('-', '/')}</span>}
         </span>
         <label className="history-chat-toggle">
-          <input type="checkbox" checked={withChat} onChange={(e) => setWithChat(e.target.checked)} /> 대화도 보기
+          <input type="checkbox" checked={withChat} onChange={(e) => setWithChat(e.target.checked)} /> 대화보기
         </label>
       </div>
       {error && <p className="muted small">{error}</p>}

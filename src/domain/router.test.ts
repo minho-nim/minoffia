@@ -91,13 +91,17 @@ describe('영어 키워드는 단어 단위(v0.3.4)', () => {
   });
 
   it('후보가 모두 휴가면 그 일을 할 줄 아는 다른 AI에게 맡긴다', () => {
+    // v0.4.76: 조사는 Grok 휴가면 Gemini(Studio A) 먼저, Studio 둘 다 휴가일 때만 Claude
     const r = routeTask({ title: '시장 조사', description: '', requestedType: 'research' }, [], now, ['grok']);
-    expect(r.assignee).toBe('claude');
+    expect(r.assignee).toBe('studioA');
+    const r2 = routeTask({ title: '시장 조사', description: '', requestedType: 'research' }, [], now, ['grok', 'studioA', 'studioB']);
+    expect(r2.assignee).toBe('claude');
   });
 
   it('휴가로 대신 맡은 일을 알려 준다', () => {
     const c = coverFor(['codex', 'grok']);
-    expect(c.claude).toEqual(expect.arrayContaining(['개발(Codex (Linear) 대신)', '리서치(Grok 대신)']));
+    expect(c.claude).toEqual(expect.arrayContaining(['개발(Codex (Linear) 대신)']));
+    expect(c.studioA).toEqual(expect.arrayContaining(['리서치(Grok 대신)']));
     expect(coverFor([])).toEqual({});
   });
 });
