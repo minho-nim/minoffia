@@ -1,3 +1,4 @@
+import type { Source } from '../domain/research';
 import type { AgentId } from '../domain/types';
 import type { AskOptions } from '../domain/aiRoute';
 import type { Attachment, ImageAnalysis } from '../domain/attachments';
@@ -112,7 +113,7 @@ export interface OfficeStore {
     onDelta?: (soFar: string) => void,
     /** AI 먼저 판단(프로젝트 이름들)·고른 프로젝트 정보(v0.4.29) */
     opts?: AskOptions,
-  ): Promise<{ answer: string; keySlot: number }>;
+  ): Promise<{ answer: string; keySlot: number; sources?: Source[] }>;
 }
 
 /** Linear 연결 확인 결과(읽기만, v0.4.11) */

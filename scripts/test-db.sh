@@ -65,5 +65,6 @@ runm supabase/migrations/0024_push_notifications.sql
 runm supabase/migrations/0025_b_waits_all_work.sql
 runm supabase/migrations/0026_agent_leave.sql
 runm supabase/migrations/0027_preview_and_project_rules.sql
+runm supabase/migrations/0028_research_ai_calls.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"
