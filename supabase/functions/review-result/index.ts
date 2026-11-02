@@ -156,7 +156,10 @@ Deno.serve(async (req) => {
   if (!gates.some((g) => g.blocking && !g.ok)) {
     // 2단계(v0.4.94 소유자 "코딩 작업은 클로드가 보고 채점"): Claude 보조 개발 루틴에 채점만 맡긴다(구독 안, 하루 상한 함께 셈).
     // 점수는 세션이 submit-review로 보낸다. Claude가 휴가·상한·미연결이거나 6시간 안에 점수가 안 오면 아래 Gemini 무료 채점.
-    const pending = await askClaude();
+    // 서로 바꿔 채점(v0.4.95 소유자): Claude가 만든 결과는 Claude가 채점하지 않는다(자기 채점 방지) → Gemini.
+    // (나중에 Codex for Linear가 확인되면 Claude 결과는 GPT가 먼저, 안 되면 Gemini)
+    const byClaude = assignee === 'claude' || ['claude_session_auto', 'claude_manual'].includes(String(result.source ?? ''));
+    const pending = byClaude ? null : await askClaude();
     if (pending) return reply(200, { ok: true, pending: true, judge: 'Claude', sessionUrl: pending.sessionUrl });
     // 2단계(대신): Gemini 무료 채점
     const keys = [env('GEMINI_API_KEY'), env('GEMINI_API_KEY2')];
