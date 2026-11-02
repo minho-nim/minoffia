@@ -1,3 +1,4 @@
+import { taskContext } from '../domain/taskContext';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
@@ -106,7 +107,8 @@ interface Props {
   /** 지금 고른 프로젝트(위 프로젝트 칩). 요청에 프로젝트 이름이 없으면 이 프로젝트로 묻는다(v0.4.19) */
   currentProject?: Project | null;
   /** 다른 탭에서 넘겨준 입력 초안(업무 카드 "대화로 묻기", 프로젝트 "요청하기"). n이 바뀔 때마다 채운다 */
-  draft?: { text: string; n: number } | null;
+  /** 다른 탭에서 넘어온 입력 초안. taskId가 있으면 그 업무에 대한 질문(보낼 때 업무 상태를 참고로 붙임, v0.5.1) */
+  draft?: { text: string; n: number; taskId?: string } | null;
   onAskGemini: (
     question: string,
     history: { role: 'user' | 'model'; text: string }[],
@@ -270,6 +272,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const [zoom, setZoom] = useState<{ src: string; name: string } | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
+  // 업무 카드에서 '대화로 묻기'로 온 질문(그 업무 상태를 Gemini에 참고로 함께 보낸다, v0.5.1)
+  const focusTask = useRef<{ taskId: string; prefix: string } | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   /**
@@ -490,6 +494,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   useEffect(() => {
     if (!draft) return;
     setInput(draft.text);
+    focusTask.current = draft.taskId ? { taskId: draft.taskId, prefix: draft.text.trim() } : null;
     window.setTimeout(() => {
       const el = inputRef.current;
       if (!el) return;
@@ -955,15 +960,20 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           ...(route ? { route: { projects: snap.projects.map((p) => p.name) } } : {}),
           ...(research ? { research: true } : {}),
         };
+        // 업무 카드에서 '대화로 묻기'로 시작한 질문이면 그 업무의 지금 상태를 참고로 붙인다(화면에는 안 보임)
+        const focus = focusTask.current;
+        const focusedTask = focus && text.trim().startsWith(focus.prefix) ? snap.tasks.find((t) => t.id === focus.taskId) : undefined;
+        if (focus) focusTask.current = null;
+        const ask = focusedTask ? `${text}\n\n${taskContext(focusedTask, snap.workflow)}` : text;
         try {
           let got: Awaited<ReturnType<typeof onAskGemini>>;
           try {
-            got = await onAskGemini(text, history.slice(-6), encoded, put, opts);
+            got = await onAskGemini(ask, history.slice(-6), encoded, put, opts);
           } catch (e) {
             if (!research) throw e;
             // 검색 연결이 안 되면(무료 검색 한도 등) 검색 없이 한 번 더 묻는다.
             set('');
-            got = await onAskGemini(text, history.slice(-6), encoded, put, { ...opts, research: false });
+            got = await onAskGemini(ask, history.slice(-6), encoded, put, { ...opts, research: false });
             say('office', `웹 검색은 안 돼서 Gemini가 아는 범위로만 답했어요(${(e as Error).message})`);
           }
           const raw = got.answer;
