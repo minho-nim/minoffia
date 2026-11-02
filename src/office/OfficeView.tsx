@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AGENT_BY_ID, AGENTS } from '../domain/agents';
 import type { AgentId, Task } from '../domain/types';
 import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
-import { STATUS_LABEL } from '../domain/types';
 import { drawOffice } from './draw';
 import { EXIT, H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
 import { ACTIVITY_LABEL, buildScene } from './scene';
@@ -233,7 +232,6 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         if (!s) return null;
         const say = leave.includes(a.id) ? undefined : speech.get(a.id);
         const talking = say && say.kind !== 'busy';
-        const sayTask = say ? tasks.find((t) => t.id === say.taskId) : undefined;
         // 휴가(v0.4.53): 문으로 걸어 나가는 동안 '휴가'를 띄운다. 들고 있던 업무가 있으면 그대로 둔다는 것도 함께.
         const onLeave = leave.includes(a.id);
         const held = onLeave ? tasks.filter((t) => t.assignee === a.id && t.status !== 'done').length : 0;
@@ -290,21 +288,15 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
                   <>
                     <br />
                     {say.label}
-                    {sayTask && (
-                      <>
-                        <br />
-                        <span className="bubble-task">{sayTask.title}</span>
-                      </>
-                    )}
                   </>
                 ) : (
-                  s.task && (
+                  // 일하는지만 보이면 된다(v0.4.78 소유자 "너무 크게 나옴"): 업무 제목은 빼고 상태만. 누르면 업무 카드로 간다.
+                  s.task &&
+                  badge && (
                     <>
                       <br />
-                      {badge && <>{ACTIVITY_LABEL[s.activity]} · </>}
-                      <span className="bubble-task">{s.task.title}</span>
-                      {s.activity === 'waiting' && s.open > 1 ? ` 외 ${s.open - 1}건` : ''}
-                      {a.id === 'mina' && ` (${STATUS_LABEL[s.task.status]})`}
+                      {ACTIVITY_LABEL[s.activity]}
+                      {s.open > 1 ? ` · ${s.open}건` : ''}
                     </>
                   )
                 )}
