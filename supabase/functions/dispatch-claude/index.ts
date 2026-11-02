@@ -4,6 +4,7 @@
 // 요청 형식 근거: https://platform.claude.com/docs/en/api/claude-code/routines-fire (2026-10-29 확인)
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { loadRules, rulesAsk, rulesSection } from './projectRules.ts';
+import { PM_HABITS, repoMapStep } from './devHabits.ts';
 
 /** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
 const HARD_DAILY_CAP = 20;
@@ -248,6 +249,12 @@ Deno.serve(async (req) => {
       ? `배정: 쉬움은 assignee_preference "gemini_dev"(Gemini 개발, 무료, GitHub Actions에서 자동), 보통은 "codex_primary", 어려움만 "claude_support". 위 휴가 중인 AI는 빼고 남은 쪽에 맡긴다. 어려운 일은 가능하면 쉬운 작업 여러 개로 쪼갠다.`
       : `배정: 쉬움·보통은 assignee_preference "codex_primary", 어려움만 "claude_support". 위 휴가 중인 AI는 빼고 남은 쪽에 맡긴다. 어려운 일은 가능하면 쉬운 작업 여러 개로 쪼갠다. 이 저장소에는 "gemini_dev"를 쓰지 않는다.`,
     `"gemini_dev"(개발)와 "gemini_optional"(AI Studio 견본)은 다르다. 견본 먼저 계획의 견본 작업만 "gemini_optional"을 쓴다.`,
+    ``,
+    `## 작업 나누기(v0.4.96)`,
+    ...PM_HABITS.map((x) => `- ${x}`),
+    ``,
+    ...repoMapStep(),
+    `지도에 있는 것으로 될 일은 작업 목표에 "기존 ○○을 써서"라고 적어 개발 AI가 다시 찾지 않게 한다.`,
     ``,
     `## 앞으로도 지켜야 할 것(선택)`,
     rulesAsk('project_rules').replace('- ', '계획 JSON 최상위 '),
