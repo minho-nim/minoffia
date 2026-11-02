@@ -3490,3 +3490,23 @@ a {
 .inbox.is-empty > .inbox-empty {
   margin-top: 6px;
 }
+
+/* 대화 탭 프로젝트 칩 줄은 내려도 탭 바로 아래에 고정(v0.4.68, 소유자) */
+.project-chips {
+  position: sticky;
+  top: 0;
+  z-index: 44;
+  background: var(--surface);
+  margin-inline: -4px;
+  padding: 6px 4px 6px;
+}
+@media (max-width: 1039px) {
+  .layout.is-mini .project-chips {
+    /* 탭 고정 위치 + 탭 높이 */
+    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + 42px);
+  }
+  .layout:not(.is-mini) .project-chips {
+    position: relative;
+    top: auto;
+  }
+}
