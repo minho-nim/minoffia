@@ -3480,3 +3480,13 @@ a {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* 대화가 없을 때는 입력창을 맨 위에(첫 화면에 바로 보이게), 인사말·예시는 그 아래(v0.4.67, 소유자: 휴대폰에서 아래가 잘림) */
+.inbox.is-empty > .inbox-form {
+  position: static;
+  order: -1;
+  margin-top: 0 !important;
+}
+.inbox.is-empty > .inbox-empty {
+  margin-top: 6px;
+}

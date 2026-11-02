@@ -913,7 +913,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const others = (exclude?: string) => snap.projects.filter((p) => p.id !== exclude);
 
   return (
-    <section className="inbox" aria-label="묻기·요청 입력창">
+    <section className={`inbox${shown.length === 0 ? ' is-empty' : ''}`} aria-label="묻기·요청 입력창">
       {shown.length === 0 && (
         <div className="inbox-empty">
           <p className="inbox-hello">무엇을 도와드릴까요?</p>
