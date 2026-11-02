@@ -3,6 +3,10 @@
 // 앞선 업무에서 AI가 적어 둔 "이 프로젝트에서 지켜야 할 것"을 함께 넣고, 새로 알게 된 것은 결과와 함께 적어 보내게 한다.
 import { rulesAsk, rulesSection } from './projectRules.ts';
 
+/** CLAUDE.md를 알아서 만들거나 맞춘다(v0.4.75). 앱 src/domain/handoffV2.ts의 CLAUDE_MD_SYNC와 같은 문장(시험이 확인) */
+export const CLAUDE_MD_SYNC =
+  '- 저장소 루트에 CLAUDE.md가 없으면 만들고(위 "이 프로젝트에서 지켜야 할 것" 목록을 같은 제목의 절로), 있으면 그 절만 위 목록과 이번에 새로 적는 것에 맞춘다(절이 없으면 파일 끝에 추가). CLAUDE.md의 다른 부분은 바꾸지 않고, 이 변경도 같은 작업 브랜치에 함께 넣는다.';
+
 export interface DevPayloadInput {
   taskId: string;
   repo: string;
@@ -71,7 +75,7 @@ export function buildDevPayload(p: DevPayloadInput): string {
     '- 저장소가 정한 시험(typecheck·test·build 등)을 돌리고 결과를 줄이지 말고 그대로 보고한다.',
     `- **미리보기 push(소유자 승인 2026-11-01)**: 시험을 돌린 뒤 커밋하고 이 작업 브랜치만 \`git push --force-with-lease -u origin ${branch}\`로 올린다. 소유자가 미리보기로 화면을 직접 보고 올리기 승인(B)을 한다.${p.previewUrl ? ` 미리보기 주소: ${p.previewUrl}` : ''}`,
     '- **PR·병합·배포는 하지 않는다.** main이나 다른 브랜치에 push하지 않는다. PR은 올리기 승인 뒤 서버가 따로 시킨다.',
-    '- 저장소 루트에 CLAUDE.md가 있으면 그 안의 "## 이 프로젝트에서 지켜야 할 것" 절을 위 목록과 이번에 새로 적는 것에 맞춘다(절이 없으면 파일 끝에 추가, 목록이 비면 건드리지 않음). CLAUDE.md의 다른 부분은 바꾸지 않는다.',
+    ...(rules.length ? [CLAUDE_MD_SYNC] : []),
     '- 비밀키·토큰·.env 내용을 출력하거나 커밋하지 않는다. 유료 API를 쓰지 않는다. Codex CLI·Grok CLI를 설치하지 않는다.',
     '- 할 일이 불분명하면 코드를 바꾸지 말고 확인 질문만 남긴다.',
     '',

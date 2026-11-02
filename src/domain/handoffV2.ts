@@ -3,6 +3,10 @@ import { describeClarifications, describeLinks, type Clarification, type LinkRef
 import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
 
+/** 개발 AI가 CLAUDE.md를 알아서 만들거나 맞추게 하는 한 줄(v0.4.75, 소유자 "다르면 맞춰줘, AI가 알아서"). 서버 dispatch-claude-dev/payload.ts에도 같은 문장 */
+export const CLAUDE_MD_SYNC =
+  '- 저장소 루트에 CLAUDE.md가 없으면 만들고(위 "이 프로젝트에서 지켜야 할 것" 목록을 같은 제목의 절로), 있으면 그 절만 위 목록과 이번에 새로 적는 것에 맞춘다(절이 없으면 파일 끝에 추가). CLAUDE.md의 다른 부분은 바꾸지 않고, 이 변경도 같은 작업 브랜치에 함께 넣는다.';
+
 /** ChatGPT에 붙여넣을 기획 자료. GPT는 원문을 우선 해석하고 아래 형식으로 답한다. */
 export function buildGptPackage(
   task: Task,
@@ -114,6 +118,7 @@ export function buildCodexHandoff(
     '- 화면이 바뀌는 작업이면 바뀐 화면의 데스크톱(약 1400px)·모바일(약 400px) 스크린샷을 만들어 결과에 보여 준다(GitHub 업로드 전 검토용, 저장소에 커밋하지 않음).',
     '- **PR 생성·브랜치 푸시를 하지 않는다.** GitHub 업로드는 사용자의 올리기 승인 뒤에만 한다.',
     '- 비밀키·토큰·.env 내용을 출력하거나 커밋하지 않는다.',
+    ...(projectRules.length ? [CLAUDE_MD_SYNC] : []),
   ]
     .filter((line, i, all) => !(line === '' && all[i - 1] === ''))
     .join('\n');

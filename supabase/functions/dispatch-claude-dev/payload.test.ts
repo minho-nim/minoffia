@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { codexBranch } from '../../../src/domain/handoffV2';
-import { buildDevPayload, claudeBranch } from './payload';
+import { CLAUDE_MD_SYNC as APP_SYNC, codexBranch } from '../../../src/domain/handoffV2';
+import { buildDevPayload, CLAUDE_MD_SYNC, claudeBranch } from './payload';
 
 const input = {
   taskId: '28333f7e-53cd-44d4-b481-4659e53d5708',
@@ -59,5 +59,9 @@ describe('Claude 보조 개발 지시문', () => {
     expect(withRules).toContain('## 이 프로젝트에서 지켜야 할 것 (');
     expect(withRules).toContain('- 모바일 400px 가로 넘침 없게');
     expect(withRules).toContain('CLAUDE.md');
+  });
+
+  it('CLAUDE.md를 알아서 만들거나 맞추라는 문장은 앱(Codex 지시서)과 같다(v0.4.75)', () => {
+    expect(CLAUDE_MD_SYNC).toBe(APP_SYNC);
   });
 });

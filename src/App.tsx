@@ -1242,7 +1242,14 @@ export function App() {
   const addRepoRules = async (project: Project) => {
     try {
       const r = await store.addRepoRules(project.id);
-      say('ok', r.created ? `${r.repo}에 AI 작업 규칙 파일(CLAUDE.md)을 넣었어요.` : `${r.repo}에는 이미 CLAUDE.md가 있어 그대로 뒀어요.`);
+      say(
+        'ok',
+        r.created
+          ? `${r.repo}에 AI 작업 규칙 파일(CLAUDE.md)을 넣었어요.`
+          : r.updated
+            ? `${r.repo}의 CLAUDE.md '지켜야 할 것'을 지금 목록과 같게 맞췄어요.`
+            : `${r.repo}의 CLAUDE.md는 이미 지금 목록과 같아요.`,
+      );
     } catch (e) {
       say('error', `규칙 파일을 넣지 못했습니다: ${(e as Error).message}`);
     }

@@ -1,6 +1,29 @@
 // 새 프로젝트 저장소에 처음 넣는 작업 규칙 파일(CLAUDE.md, v0.4.55 소유자 2026-11-01).
 // Claude 루틴(PM·보조 개발)과 다른 코딩 AI가 이 저장소를 받으면 먼저 읽는다. 외부 의존 없음(Deno 함수와 vitest가 같이 쓴다).
 
+const RULES_HEADING = '## 이 프로젝트에서 지켜야 할 것';
+const RULES_NOTE = '<!-- AI가 접수·계획·개발을 하며 이 프로젝트에서 계속 지킬 것을 적는다. MinLab AI Office의 목록과 같게 맞춘다. -->';
+
+/**
+ * 이미 있는 CLAUDE.md의 "## 이 프로젝트에서 지켜야 할 것" 절만 목록과 같게 맞춘다(v0.4.75, 소유자 "다르면 맞춰줘").
+ * 절이 없으면 파일 끝에 붙이고, 다른 부분은 그대로 둔다. 바꿀 것이 없으면 원문 그대로 돌려준다.
+ */
+export function syncRulesSection(md: string, rules: string[]): string {
+  const body = [RULES_HEADING, RULES_NOTE, ...rules.map((r) => `- ${r.replace(/[\r\n]+/g, ' ').trim()}`)].join('\n');
+  const text = md.replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const start = lines.findIndex((l) => l.trim() === RULES_HEADING);
+  if (start < 0) return `${text.replace(/\n*$/, '')}\n\n${body}\n`;
+  let end = lines.findIndex((l, i) => i > start && /^#{1,2} /.test(l));
+  if (end < 0) end = lines.length;
+  const parts: string[] = [];
+  if (start > 0) parts.push(lines.slice(0, start).join('\n').replace(/\n*$/, ''), '');
+  parts.push(body);
+  if (end < lines.length) parts.push('', lines.slice(end).join('\n'));
+  const out = `${parts.join('\n').replace(/\n*$/, '')}\n`;
+  return out.trim() === text.trim() ? md : out;
+}
+
 export function projectClaudeMd(projectName: string, rules: string[] = []): string {
   const name = projectName.replace(/[\r\n]+/g, ' ').trim().slice(0, 80) || '새 프로젝트';
   return [
@@ -29,8 +52,8 @@ export function projectClaudeMd(projectName: string, rules: string[] = []): stri
     '- 할 일이 불분명하면 코드를 바꾸지 말고 확인 질문만 남긴다.',
     '- 화면 문구·커밋·PR 설명은 한국어로 쓴다.',
     '',
-    '## 이 프로젝트에서 지켜야 할 것',
-    '<!-- AI가 접수·계획·개발을 하며 이 프로젝트에서 계속 지킬 것을 적는다. MinLab AI Office의 목록과 같게 맞춘다. -->',
+    RULES_HEADING,
+    RULES_NOTE,
     ...rules.map((r) => `- ${r.replace(/[\r\n]+/g, ' ').trim()}`),
     '',
   ].join('\n');
