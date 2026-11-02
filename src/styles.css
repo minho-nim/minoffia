@@ -3940,3 +3940,23 @@ a {
 .project-debt li span {
   overflow-wrap: anywhere;
 }
+/* 첨부 칸 안내 글이 칸 밖으로 빠지지 않게(v0.4.98) */
+.att-drop {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.att-drop > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* 아래에 붙은 입력창 둘레·아래로 대화 글이 비치지 않게 같은 바탕색으로 덮는다(v0.4.98).
+   대화가 짧아 제자리에 있을 때는 대화 상자 밖으로 덮개가 나가지 않게 자른다(clip은 sticky를 깨지 않음) */
+.inbox {
+  overflow: clip;
+}
+.inbox > .inbox-form {
+  box-shadow:
+    0 2px 10px -6px rgba(0, 0, 0, 0.3),
+    0 0 0 14px var(--surface),
+    0 max(8px, env(safe-area-inset-bottom)) 0 14px var(--surface);
+}
