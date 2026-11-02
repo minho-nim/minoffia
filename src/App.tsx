@@ -294,7 +294,7 @@ export function App() {
   /** 업무 카드에서 확인 질문에 답한 것을 대화창에도 올린다(v0.4.90) */
   const [chatEcho, setChatEcho] = useState<{ n: number; taskId: string; projectId: string; text: string } | null>(null);
   /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
-  const [draft, setDraft] = useState<{ text: string; n: number } | null>(null);
+  const [draft, setDraft] = useState<{ text: string; n: number; taskId?: string } | null>(null);
   // 얇은 머리·작은 사무실(v0.4.14~, v0.4.35): 켜기 = 위 머리가 화면 밖으로 나갔고, 사무실이 줄어든 뒤에도
   // 페이지가 머리 높이 넘게 내려갈 수 있을 때(짧은 페이지에서 아래 빈 공간이 생기거나 깜빡이지 않게).
   // 끄기 = 맨 위에 닿았을 때만.
@@ -1631,8 +1631,10 @@ export function App() {
                       return it ? { word: it.word, alert: it.alert, onJump: it.step ? () => showTask(t.id, it.step) : undefined } : undefined;
                     })()}
                     onAsk={(task) => {
+                      // 그 업무의 프로젝트 대화창으로 가고, 보낼 때 업무 상태를 참고로 붙인다(v0.5.1)
+                      setChatProject(task.projectId);
                       setTab('chat');
-                      setDraft((d) => ({ text: `'${task.title}' 업무: `, n: (d?.n ?? 0) + 1 }));
+                      setDraft((d) => ({ text: `'${task.title}' 업무: `, n: (d?.n ?? 0) + 1, taskId: task.id }));
                     }}
                     onShowAgent={(task) => {
                       setSelected(task.assignee);
