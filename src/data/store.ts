@@ -36,7 +36,8 @@ export interface OfficeStore {
   /** 결과 검토 → Claude PM 수정 요청 */
   addRevisionRequest(request: RevisionRequest): Promise<void>;
   /** 결과 점수 평가(v0.4.64): 규칙 검사 → Gemini 채점 → 판정. 같은 결과 버전은 한 번만(이미 있으면 그것을 돌려줌) */
-  reviewResult(taskId: string, resultRevision: number): Promise<ResultReview>;
+  /** 'started' = Claude에 채점을 막 맡김, 'waiting' = Claude 채점을 기다리는 중(v0.4.94) */
+  reviewResult(taskId: string, resultRevision: number): Promise<ResultReview | 'started' | 'waiting'>;
   /**
    * 이미지 첨부. 파일을 비공개 저장소에 올린 뒤 기록을 남긴다. 같은 업무의 같은 파일(sha256)은 한 번만 저장한다.
    * `storagePath`는 저장소가 정한다.
@@ -105,7 +106,8 @@ export interface OfficeStore {
   /** Linear 연결 확인(읽기만, 아무것도 만들지 않음) */
   linearProbe(): Promise<LinearProbe>;
   /** Gemini 무료가 견본 지시서로 HTML 견본 한 장을 만든다(서버, 저장은 앱이 견본으로 올림, v0.4.7) */
-  draftPrototype(taskId: string, text: string): Promise<{ html: string; planRevision: number }>;
+  /** v0.4.94: 근무 중인 Studio A·B가 하나씩(최대 두 장) */
+  draftPrototype(taskId: string, text: string): Promise<{ drafts: { slot: 'A' | 'B'; html: string }[]; planRevision: number }>;
   /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
   /** 질문 전에 Gemini 질문 서버를 미리 깨운다(입력창을 누를 때, Gemini는 부르지 않음, v0.4.23) */

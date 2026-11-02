@@ -40,6 +40,8 @@ GitHub 업로드는 사용자의 B 승인 뒤에만 하므로, 이 루틴은 저
 
 ## 보조 개발 루틴(v0.3.8)
 
+- **v0.4.94 채점**: 세 번째 실행 종류 "MinLab AI Office 채점"(payload 첫 줄). `review-result`가 규칙 검사를 지난 코딩 결과를 보내고, 세션은 읽기·시험만 하고 점수 JSON을 `submit-review`로 보낸다(코드 수정·push·PR 금지). 저장 프롬프트에 C 종류를 더해야 한다.
+
 - **v0.4.5 올리기(B) 자동 PR**: 저장 지시가 두 종류를 구분한다. "MinLab AI Office 보조 개발"(push·PR 금지) / "MinLab AI Office 올리기(B 승인됨)"(payload의 승인된 diff만 적용해 작업 브랜치 push + main 대상 PR, 병합·배포 금지). 서버 `dispatch-claude-pr`가 올리기 승인 뒤 보낸다. 루틴 실행 환경에서 GitHub push가 되어야 한다(루틴에 저장소 연결 필요).
 
 - **v0.4.3 결과 자동 저장**: `dispatch-claude-dev`가 payload 끝에 "결과 보내기" 절과 이 작업 전용 1회용 제출표(24시간, 3번까지)를 붙인다. 세션이 시험까지 끝나면 `submit-result`로 결과를 보내고 앱이 결과 패키지로 저장한다. **소유자 설정**: 보조 개발 루틴이 쓰는 클라우드 환경 Network access에도 `kmmicksimbredbyvdmvx.supabase.co`를 허용한다(PM 루틴과 같은 환경이면 이미 됨).

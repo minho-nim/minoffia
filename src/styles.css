@@ -3922,3 +3922,13 @@ a {
 .wf-pm-questions li + li {
   margin-top: 4px;
 }
+/* 두 견본 중 고르기(v0.4.94) */
+.wf-pick {
+  margin: 8px 0;
+}
+.wf-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}

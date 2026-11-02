@@ -1,6 +1,6 @@
 // Gemini 견본(무료, v0.4.7): "견본 먼저" 계획이면 견본 지시서로 HTML 견본 한 장을 만든다(소유자 승인 2026-10-31).
 // 만든 HTML은 앱이 견본(kind prototype)으로 올리고, 사용자는 미리보기를 보고 견본 승인(P)만 한다. AI Studio Build 수동 견본도 그대로 쓸 수 있다.
-// 이 계획 버전에 견본이 이미 있으면 만들지 않는다. 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만, 글은 저장하지 않고 횟수만 ai_calls(purpose prototype).
+// v0.4.94부터 근무 중인 Studio A·B가 하나씩(최대 두 장) 만들고 소유자가 하나를 고른다. 이 계획 버전에 견본이 이미 있으면 만들지 않는다. 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만, 글은 저장하지 않고 횟수만 ai_calls(purpose prototype).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { extractHtml, PROTOTYPE_SYSTEM, stripActive } from './prototype.ts';
 
@@ -85,27 +85,29 @@ Deno.serve(async (req) => {
   if (away.has('studioA')) keys[0] = '';
   if (away.has('studioB')) keys[1] = '';
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
-  for (const [i, key] of keys.entries()) {
-    if (!key) continue;
-    let r: { status: number; text: string; message: string };
-    try {
-      r = await callGemini(key, model, text);
-    } catch (e) {
-      r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
-    }
-    if (r.status === 200 && r.text) {
-      const html = extractHtml(r.text);
-      if (!html) {
-        last = { status: 200, message: 'HTML 견본 형식이 아닙니다.' };
-        break;
+  // v0.4.94(소유자 "그림은 두 Gemini가 해 온 걸 내가 보고 고르기"): 근무 중인 Studio A·B가 같은 지시서로 하나씩 동시에 만든다.
+  // 한쪽만 되면 그 하나만 올린다. 오늘 남은 횟수가 하나뿐이면 A(없으면 B) 하나만.
+  const slots = keys.map((key, i) => ({ key, i })).filter((x) => x.key).slice(0, Math.max(1, cap - (count ?? 0)));
+  const runs = await Promise.all(
+    slots.map(async ({ key, i }) => {
+      let r: { status: number; text: string; message: string };
+      try {
+        r = await callGemini(key, model, text);
+      } catch (e) {
+        r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
       }
-      const clean = stripActive(html);
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'prototype', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: clean.length });
-      return reply(200, { ok: true, html: clean, planRevision: plan.plan_revision, model });
-    }
-    last = { status: r.status, message: r.message };
-    if (r.status === 400 || r.status === 404) break;
-  }
+      const html = r.status === 200 && r.text ? extractHtml(r.text) : '';
+      if (html) {
+        const clean = stripActive(html);
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'prototype', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: clean.length });
+        return { slot: i === 0 ? 'A' : 'B', html: clean, status: 200, message: '' };
+      }
+      return { slot: i === 0 ? 'A' : 'B', html: '', status: r.status, message: r.status === 200 ? 'HTML 견본 형식이 아닙니다.' : r.message };
+    }),
+  );
+  const drafts = runs.filter((r) => r.html).map(({ slot, html }) => ({ slot, html }));
+  if (drafts.length) return reply(200, { ok: true, html: drafts[0].html, drafts, planRevision: plan.plan_revision, model });
+  last = runs.find((r) => r.status !== 200) ?? runs[0] ?? last;
   await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'prototype', key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: text.length, error: last.message.slice(0, 300) });
   const hint = last.status === 429 ? 'Gemini 무료 한도에 걸렸습니다.' : last.status === 200 ? 'Gemini가 HTML 견본을 만들지 못했습니다.' : 'Gemini가 답하지 못했습니다.';
   return reply(502, { ok: false, error: `${hint} 다시 누르거나 AI Studio 견본 지시서로 진행하세요.` });
