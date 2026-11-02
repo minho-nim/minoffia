@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
 import { nextStatuses } from '../domain/status';
 import type { AgentId, Project, Task, TaskStatus } from '../domain/types';
@@ -43,8 +43,26 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
   // 진행 중인 일의 담당을 바꾸면 오피스에 없는 활동이 생긴다. 접수·차단 상태에서만 바꾼다.
   const canReassign = (task.status === 'queued' || task.status === 'blocked') && task.dispatch.state !== 'dispatching';
 
+  // 위에 붙는 제목·진행 단계 줄의 높이를 CSS 변수로(진행 단계 줄이 제목 바로 아래에 붙게, v0.5.0)
+  const cardRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card || !expanded || typeof ResizeObserver === 'undefined') return;
+    // 진행 단계는 접힌 <details> 안에 있다가 나중에 생길 수 있어, 카드 크기가 바뀔 때마다 다시 찾는다.
+    const set = () => {
+      const title = card.querySelector<HTMLElement>(':scope > .task-toggle');
+      const steps = card.querySelector<HTMLElement>('.wf-head');
+      if (title) card.style.setProperty('--task-title-h', `${title.offsetHeight}px`);
+      if (steps) card.style.setProperty('--task-steps-h', `${steps.offsetHeight}px`);
+    };
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, [expanded]);
+
   return (
-    <article id={`task-${task.id}`} className={`task-card status-${task.status}${expanded ? '' : ' is-folded'}`}>
+    <article ref={cardRef} id={`task-${task.id}`} className={`task-card status-${task.status}${expanded ? '' : ' is-folded'}`}>
       {onToggle ? (
         <button type="button" className="task-toggle" aria-expanded={expanded} onClick={() => onToggle(task)}>
           <span className="task-head">
