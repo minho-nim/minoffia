@@ -1,3 +1,4 @@
+import { VERDICT_LABEL } from '../domain/review';
 import type { ResultReview } from '../domain/workflow-types';
 import { coverFor } from '../domain/router';
 import { speechFor } from '../office/speech';
@@ -104,9 +105,16 @@ function LinearCheck({ onProbe }: { onProbe: () => Promise<LinearProbe> }) {
 }
 
 /** 에이전트 상태는 사무실 말풍선과 같은 표시 하나만(v0.4.35): ! 막힘 > ? 내 차례 > … 일하는 중 > 휴식 */
-function SpeechMark({ speech, leave }: { speech?: AgentMark; leave?: boolean }) {
+function SpeechMark({ speech, leave, onOpen }: { speech?: AgentMark; leave?: boolean; onOpen?: (taskId: string) => void }) {
   if (leave) return <span className="pill pill-mark pill-mark-leave">휴가</span>;
   if (!speech) return <span className="pill pill-mark pill-mark-rest">휴식</span>;
+  // 표시를 누르면 그 업무 카드로(v0.4.65, 소유자)
+  if (onOpen && speech.taskId)
+    return (
+      <button type="button" className={`pill pill-mark pill-mark-${speech.kind} pill-link`} title={`${speech.label} — 업무 카드 열기`} onClick={() => onOpen(speech.taskId!)}>
+        {speech.text}
+      </button>
+    );
   return (
     <span className={`pill pill-mark pill-mark-${speech.kind}`} title={speech.label}>
       {speech.text}
@@ -118,7 +126,9 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
   const card = reportCard(reviews, KIND_OF[agentId]);
   const a = AGENT_BY_ID[agentId];
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
-  const mine = tasks.filter((t) => t.assignee === agentId);
+  // 미니엉은 담당자가 아니라 접수 데스크를 지킨다: 사무실과 같은 기준(끝나지 않았고 진행 중이 아닌 업무)으로 보여 준다(v0.4.65).
+  const isDesk = agentId === 'mina';
+  const mine = isDesk ? tasks.filter((t) => t.status !== 'done' && t.status !== 'in_progress') : tasks.filter((t) => t.assignee === agentId);
   const used = runsToday(usage, agentId);
   const left = remainingToday(usage, agentId);
 
@@ -134,7 +144,14 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
           </p>
           <p>
             <span className="pill">{MODE_LABEL[a.mode]}</span>{' '}
-            <SpeechMark speech={speech} leave={leave} />
+            <SpeechMark
+              speech={speech}
+              leave={leave}
+              onOpen={(id) => {
+                const t = tasks.find((x) => x.id === id);
+                if (t) onOpenTask(t);
+              }}
+            />
           </p>
         </div>
       </div>
@@ -189,9 +206,11 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
           결과 평가 통과 <b className="num">{card.passed}</b> / {card.total}건{card.avg !== null && <> · 평균 <b className="num">{card.avg}</b>점</>}
         </p>
       )}
-      <h4>맡은 업무 {mine.length}</h4>
+      <h4>
+        {isDesk ? '접수 데스크의 업무' : '맡은 업무'} {mine.length}
+      </h4>
       {mine.length === 0 ? (
-        <p className="empty">맡은 업무가 없어 휴게실에서 쉬고 있습니다.</p>
+        <p className="empty">{isDesk ? '접수·검토·막힌 업무가 없어 휴게실에서 쉬고 있습니다.' : '맡은 업무가 없어 휴게실에서 쉬고 있습니다.'}</p>
       ) : (
         <ul className="mini-list">
           {mine.map((t) => (
@@ -293,3 +312,45 @@ export function AgentRoster({
     </div>
   );
 }
+
+/** 결과 평가 기록(v0.4.66, 소유자 "채점 결과 확인"): 최근 평가를 점수·판정과 함께. 누르면 그 업무 카드로 */
+export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultReview[]; tasks: Task[]; onOpenTask: (task: Task) => void }) {
+  const [all, setAll] = useState(false);
+  const list = [...reviews].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const rows = all ? list : list.slice(0, 5);
+  return (
+    <section className="review-log" aria-label="결과 평가 기록">
+      <h3>
+        결과 평가 <span className="num num-count">{reviews.length}</span>
+      </h3>
+      {!reviews.length ? (
+        <p className="muted small">아직 평가한 결과가 없어요. 개발 결과가 오면 규칙 검사와 Gemini 채점이 자동으로 돌아요.</p>
+      ) : (
+        <ul>
+          {rows.map((r) => {
+            const t = tasks.find((x) => x.id === r.taskId);
+            return (
+              <li key={r.id}>
+                <button type="button" className="link-btn review-log-row" disabled={!t} onClick={() => t && onOpenTask(t)}>
+                  <span className={`review-verdict is-${r.verdict}`}>{VERDICT_LABEL[r.verdict]}</span>
+                  <b className="num">{r.total === null ? '–' : `${r.total}점`}</b>
+                  <span className="review-log-title">
+                    {t?.title ?? '(지운 업무)'} · 결과 v{r.resultRevision}
+                  </span>
+                  <span className="muted small">{r.assignee ? AGENT_NAME_OF[r.assignee] ?? r.assignee : ''}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {list.length > 5 && (
+        <button type="button" className="link-btn small" onClick={() => setAll((v) => !v)}>
+          {all ? '접기' : `모두 보기(${list.length})`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+const AGENT_NAME_OF: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
