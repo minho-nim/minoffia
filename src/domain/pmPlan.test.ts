@@ -100,3 +100,18 @@ describe('개발 방식(v0.3.5 Prototype First)', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('난이도(v0.4.71)', () => {
+  it('난이도가 있으면 받고, 틀리거나 없어도 계획은 그대로 받는다', () => {
+    const withD = JSON.parse(plan());
+    withD.work_items[0].difficulty = 3;
+    withD.work_items[0].difficulty_reason = '문구 수정';
+    const r = parsePmPlan(JSON.stringify(withD), TASK);
+    expect(r.ok && r.plan.work_items[0].difficulty).toBe(3);
+    const bad = JSON.parse(plan());
+    bad.work_items[0].difficulty = 99;
+    const r2 = parsePmPlan(JSON.stringify(bad), TASK);
+    expect(r2.ok).toBe(true);
+    expect(r2.ok && r2.plan.work_items[0].difficulty).toBeUndefined();
+  });
+});

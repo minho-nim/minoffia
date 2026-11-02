@@ -1,3 +1,4 @@
+import { cleanDifficulty } from './difficulty';
 import type { AgentKind, AssigneePreference, DevelopmentMode, ExecutionMode, PlanBody, WorkItem } from './workflow-types';
 
 const PREFS: AssigneePreference[] = ['codex_primary', 'claude_support', 'gemini_optional', 'grok_optional'];
@@ -70,6 +71,9 @@ export function parsePmPlan(text: string, expectedTaskId: string): ParseResult {
       attachment_refs: isStrArray(item.attachment_refs) ? item.attachment_refs : [],
       // 실행 승인은 항상 필요하다. 계획이 false로 와도 무시한다.
       requires_execution_approval: true,
+      // 난이도(v0.4.71): 1~10 정수만, 틀리거나 없으면 빼고 계획은 그대로 받는다(예전 계획 호환)
+      ...(cleanDifficulty(item.difficulty) !== undefined ? { difficulty: cleanDifficulty(item.difficulty) } : {}),
+      ...(typeof item.difficulty_reason === 'string' && item.difficulty_reason.trim() ? { difficulty_reason: item.difficulty_reason.trim().slice(0, 200) } : {}),
     });
   });
   for (const item of items) {

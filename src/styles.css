@@ -3521,3 +3521,11 @@ a {
     top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + 43px);
   }
 }
+
+/* 작업 난이도 표시(v0.4.71) */
+.pill-level-easy {
+  color: var(--ok);
+}
+.pill-level-hard {
+  color: var(--danger);
+}
