@@ -10,6 +10,8 @@ export type RouteKind = 'question' | 'task' | 'ambiguous';
 export interface AskOptions {
   route?: { projects: string[] };
   project?: { name: string; description: string; repo: string | null; openTasks: string[] };
+  /** 조사: Google 검색 연결로 답하고 출처를 붙인다(v0.4.61) */
+  research?: boolean;
 }
 
 export interface Routed {

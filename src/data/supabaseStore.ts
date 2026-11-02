@@ -5,6 +5,7 @@ import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { AgentId, Project, ProjectRule, Task, UsageRun } from '../domain/types';
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
+import { cleanSources, type Source } from '../domain/research';
 import type { OfficeStore } from './store';
 
 type Row = Record<string, unknown>;
@@ -718,7 +719,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           const b = await res.json().catch(() => ({}));
           if (res.ok && b?.ok && b.answer) {
             onDelta(b.answer);
-            return { answer: b.answer as string, keySlot: b.keySlot as number };
+            return { answer: b.answer as string, keySlot: b.keySlot as number, sources: cleanSources(b.sources) };
           }
           throw new Error(b?.error ?? `Gemini가 답하지 못했습니다(HTTP ${res.status}).`);
         }
@@ -726,6 +727,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         let buf = '';
         let answer = '';
         let keySlot = 0;
+        let sources: Source[] = [];
         for (;;) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -735,17 +737,20 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
             const line = buf.slice(0, nl).trim();
             buf = buf.slice(nl + 1);
             if (!line) continue;
-            const m = JSON.parse(line) as { d?: string; done?: boolean; keySlot?: number; error?: string };
+            const m = JSON.parse(line) as { d?: string; done?: boolean; keySlot?: number; error?: string; sources?: unknown };
             if (m.error) throw new Error(answer ? `${m.error} (받은 데까지 보여 드렸어요)` : m.error);
             if (m.d) {
               answer += m.d;
               onDelta(answer);
             }
-            if (m.done) keySlot = m.keySlot ?? 0;
+            if (m.done) {
+              keySlot = m.keySlot ?? 0;
+              sources = cleanSources(m.sources);
+            }
           }
         }
         if (!answer.trim()) throw new Error('Gemini가 답하지 못했습니다.');
-        return { answer: answer.trim(), keySlot };
+        return { answer: answer.trim(), keySlot, sources };
       }
       const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history, images, ...opts } });
       if (error) {
@@ -762,7 +767,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         throw new Error(message);
       }
       if (!data?.ok || !data.answer) throw new Error(data?.error ?? 'Gemini가 답하지 못했습니다.');
-      return { answer: data.answer as string, keySlot: data.keySlot as number };
+      return { answer: data.answer as string, keySlot: data.keySlot as number, sources: cleanSources(data.sources) };
     },
     async readLink(taskId, url) {
       const { data, error } = await client.functions.invoke('fetch-link', { body: { taskId, url } });

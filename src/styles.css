@@ -3248,3 +3248,23 @@ a {
   display: block;
   margin-top: 4px;
 }
+
+/* 조사 답의 출처(v0.4.61) */
+.inbox-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.inbox-sources a {
+  overflow-wrap: anywhere;
+}
+
+.inbox-sources li::before {
+  content: '출처 ';
+  color: var(--muted);
+}

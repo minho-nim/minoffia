@@ -16,6 +16,19 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const TIMEOUT_MS = 25_000;
+/** 조사(Google 검색 연결, v0.4.61) 하루 상한: 기본 20, 코드 최대 50(GEMINI_RESEARCH_DAILY_CAP). 질문과 따로 센다. */
+const RESEARCH_HARD_CAP = 50;
+const RESEARCH_DEFAULT_CAP = 20;
+
+/** 검색 연결 답의 출처(groundingMetadata.groundingChunks[].web) */
+function sourcesOf(data: unknown, into: Map<string, string>) {
+  const chunks = (data as { candidates?: { groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[] }).candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  for (const c of chunks) {
+    const uri = c.web?.uri;
+    if (uri && /^https?:\/\//.test(uri) && !into.has(uri) && into.size < 5) into.set(uri, String(c.web?.title ?? '').slice(0, 120));
+  }
+}
+const sourceList = (m: Map<string, string>) => [...m].map(([uri, title]) => ({ uri, title }));
 
 const SYSTEM = [
   '너는 MinLab AI Office의 질문 담당이다. 한국어로 짧고 정확하게 답한다.',
@@ -111,9 +124,11 @@ const THINKING: Record<ThinkingMode, Record<string, unknown> | null> = {
   none: null,
 };
 
-function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode, system: string) {
+function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode, system: string, research = false) {
   const thinking = THINKING[mode];
   return JSON.stringify({
+    // 조사(v0.4.61): Google 검색 연결. 웹에서 찾은 내용으로 답하고 출처를 groundingMetadata로 돌려준다.
+    ...(research ? { tools: [{ google_search: {} }] } : {}),
     systemInstruction: { parts: [{ text: system }] },
     contents: [
       ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
@@ -130,13 +145,13 @@ export function thinkingOrder(model: string): ThinkingMode[] {
 }
 
 /** Gemini에 묻는다. stream이면 SSE 응답(Response)을 그대로 돌려주고, 아니면 글을 모아 돌려준다. */
-async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string) {
+async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string, research = false) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
   const call = (mode: ThinkingMode) =>
     fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(question, history, images, mode, system),
+      body: requestBody(question, history, images, mode, system, research),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   const order = thinkingOrder(model);
@@ -173,7 +188,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo };
+  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -196,10 +211,16 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+  const research = body.research === true;
+  const purpose = research ? 'research' : 'question';
+  const cap = research
+    ? Math.min(RESEARCH_HARD_CAP, Number(env('GEMINI_RESEARCH_DAILY_CAP')) || RESEARCH_DEFAULT_CAP)
+    : Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'question').eq('ok', true).gte('created_at', kstMidnight);
-  if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
+  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', purpose).eq('ok', true).gte('created_at', kstMidnight);
+  if ((count ?? 0) >= cap) {
+    return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
+  }
 
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   const stream = body.stream === true;
@@ -226,7 +247,7 @@ Deno.serve(async (req) => {
     let mode: ThinkingMode;
     let headMs = 0;
     try {
-      ({ res, mode } = await openGemini(key, model, question, history, images, stream, system));
+      ({ res, mode } = await openGemini(key, model, question, history, images, stream, system, research));
       headMs = Date.now() - started;
     } catch (e) {
       last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
@@ -241,6 +262,7 @@ Deno.serve(async (req) => {
           let buf = '';
           let total = 0;
           let first = 0;
+          const found = new Map<string, string>();
           try {
             for (;;) {
               const { value, done } = await reader.read();
@@ -251,20 +273,22 @@ Deno.serve(async (req) => {
                 const line = buf.slice(0, nl).trim();
                 buf = buf.slice(nl + 1);
                 if (!line.startsWith('data:')) continue;
-                const text = partsText(JSON.parse(line.slice(5).trim() || '{}'));
+                const chunk = JSON.parse(line.slice(5).trim() || '{}');
+                if (research) sourcesOf(chunk, found);
+                const text = partsText(chunk);
                 if (!text) continue;
                 if (!first) first = Date.now() - started;
                 total += text.length;
                 controller.enqueue(enc.encode(JSON.stringify({ d: text }) + '\n'));
               }
             }
-            controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
+            controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
           } catch (e) {
             controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
           } finally {
             controller.close();
-            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
-            await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
+            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
+            await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
           }
         },
       });
@@ -274,14 +298,16 @@ Deno.serve(async (req) => {
     const text = res.status === 200 ? partsText(data).trim() : '';
     if (text) {
       console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length });
-      return reply(200, { ok: true, answer: text, keySlot: slot, model });
+      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length });
+      const found = new Map<string, string>();
+      if (research) sourcesOf(data, found);
+      return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
     }
     last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
     // 요청 자체가 잘못된 경우(400·404)는 B로 넘겨도 같으므로 멈춘다. 한도(429)·인증·서버 오류만 B를 쓴다.
     if (res.status === 400 || res.status === 404) break;
   }
-  await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'question', key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
+  await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
   const hint =
     last.status === 429
       ? 'Gemini 무료 한도에 걸렸습니다.'
