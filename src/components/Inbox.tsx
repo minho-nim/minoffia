@@ -502,6 +502,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     const o = m.offer!;
     settleOffer(m.id, 'done');
     setOtherFor(null);
+    // 접수 카드로 받았으면 예전에 남은 선택 버튼(예: '사실은 업무 요청이에요')은 접는다.
+    setPending(null);
     say('me', `${project.name} 맞아요${o.whole ? ` ('${short(o.text)}')` : ''}`, { projectId: project.id });
     void run(() => create(o.text, project, o.context, o.whole));
   };
@@ -759,7 +761,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       'office',
       `'${project.name}'에 접수했어요: ${task.title}\n${
         onAutoDraft ? 'Gemini(무료)가 기획서 초안을 써요. 다 되면 여기서 알려 드릴게요.' : '아래 업무 카드의 진행 단계에서 기획부터 하세요.'
-      }\n'${project.name}' 프로젝트 대화창에도 올렸어요.`,
+      }${thread === project.id ? '' : `\n'${project.name}' 프로젝트 대화창에도 올렸어요.`}`,
       { projectId: project.id, taskId: task.id },
     );
     onAutoDraft?.(task);
