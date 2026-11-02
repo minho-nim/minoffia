@@ -3,7 +3,7 @@ import { TurnMenu } from './components/TurnMenu';
 import { ThemeToggle } from './components/ThemeToggle';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AgentRoster } from './components/AgentPanel';
+import { AgentRoster, ReviewLog } from './components/AgentPanel';
 import { DevlogPanel } from './components/DevlogPanel';
 import { Inbox } from './components/Inbox';
 import { MyTurnList } from './components/MyTurn';
@@ -1364,7 +1364,15 @@ export function App() {
                 const n = turnsByProject.get(p.id) ?? 0;
                 const on = chatProjectId === p.id;
                 return (
-                  <button key={p.id} type="button" className="chip chip-project" aria-pressed={on} onClick={() => setChatProject(on ? null : p.id)}>
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="chip chip-project"
+                    aria-pressed={on}
+                    onClick={() => setChatProject(on ? null : p.id)}
+                    // 프로젝트에서 '요청하기'로 넘어오면 고른 칩이 보이게 가운데로(v0.4.66)
+                    ref={on ? (el) => el?.scrollIntoView({ inline: 'center', block: 'nearest' }) : undefined}
+                  >
                     {p.name}
                     {n > 0 && <span className="num num-turn">{n}</span>}
                   </button>
@@ -1563,6 +1571,7 @@ export function App() {
           )}
           {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}
 
+          {tab === 'agent' && <ReviewLog reviews={snap.workflow.reviews ?? []} tasks={snap.tasks} onOpenTask={(t) => showTask(t.id)} />}
           {tab === 'agent' && (
             <AgentRoster
               snap={snap}
@@ -1571,10 +1580,7 @@ export function App() {
               selected={selected}
               onSelect={(id) => setSelected(id)}
               serverMode={store.mode === 'supabase'}
-              onOpenTask={() => {
-                setFilter('all');
-                setTab('tasks');
-              }}
+              onOpenTask={(t) => showTask(t.id)}
             />
           )}
 

@@ -21,15 +21,18 @@ export interface AgentMark {
   text: string;
   kind: SpeechKind;
   label: string;
+  /** 누르면 열 업무(v0.4.65) */
+  taskId?: string;
 }
 
 /** 캐릭터 하나의 표시. 없으면 휴식 */
 export function markFor(agent: AgentId, scene: AgentScene[], speech: Map<AgentId, Speech>): AgentMark | undefined {
   const say = speech.get(agent);
-  if (say) return { text: say.text, kind: say.kind, label: say.label };
+  if (say) return { text: say.text, kind: say.kind, label: say.label, taskId: say.taskId };
   const s = scene.find((x) => x.agent === agent);
   const badge = s ? badgeFor(s) : undefined;
   if (!badge || !s) return undefined;
   const m = badge.match(/\[(.)\]$/)?.[1] ?? '…';
-  return { text: badge, kind: KIND_OF_MARK[m] ?? 'busy', label: s.task ? s.task.title : badge };
+  // 계획 작업은 '업무id:작업id' 모양이라 업무 id만 남긴다
+  return { text: badge, kind: KIND_OF_MARK[m] ?? 'busy', label: s.task ? s.task.title : badge, taskId: s.task?.id.split(':')[0] };
 }
