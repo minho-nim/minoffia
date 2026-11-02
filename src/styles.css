@@ -3896,3 +3896,21 @@ a {
   background: none;
   cursor: zoom-in;
 }
+
+/* 개발일지 날짜 칸이 옆으로 빠지던 문제(v0.4.92): 아이폰 날짜 입력칸의 기본 최소 너비를 없애고 칸 안에 맞춘다 */
+.devlog-controls .field input,
+.devlog-controls .field select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.devlog-controls .field input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+}
+.devlog-controls .field input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
