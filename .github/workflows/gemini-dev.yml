@@ -1,0 +1,158 @@
+# Gemini 개발 시험(v0.4.77, 소유자 2026-11-02 "Gemini로 개발 되는지 시험"): 쉬운 개발 한 건을 Gemini CLI(무료 키)로 맡긴다.
+# 지금은 손으로만 실행한다: Actions → "Gemini 개발(시험)" → Run workflow. 앱과는 아직 연결하지 않았다(결과가 괜찮으면 붙인다).
+# 하는 일: 대상 저장소(AI Office가 관리하는 minho-nim/… 저장소)의 main에서 ai/gemini/… 브랜치를 만들고,
+#   Gemini CLI가 지시대로 고친 뒤 시험을 돌리고, 그 브랜치만 push한다. PR·병합·배포는 하지 않는다.
+# 필요한 저장소 secrets(소유자가 Settings → Secrets and variables → Actions에서 넣음):
+#   GEMINI_API_KEY      Gemini 무료 키(AI Studio). 유료 결제가 연결되지 않은 키만.
+#   TARGET_REPO_TOKEN   대상 저장소에만 Contents 읽기·쓰기 권한을 준 fine-grained 토큰.
+# 안전: 토큰은 Gemini가 도는 단계에 넘기지 않는다(받기·올리기 단계에만). 이 저장소와 minho-nim/MinLab은 대상으로 받지 않는다.
+name: Gemini 개발(시험)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '대상 저장소(예: minho-nim/TestRepo)'
+        required: true
+      branch:
+        description: '만들 작업 브랜치(ai/gemini/로 시작)'
+        required: true
+        default: 'ai/gemini/try-1'
+      instructions:
+        description: '할 일(쉬운 수정 한 건)'
+        required: true
+      model:
+        description: 'Gemini 모델(무료 키에서 되는 것)'
+        required: false
+        default: 'gemini-3.5-flash-lite'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gemini-dev-${{ inputs.repo }}
+  cancel-in-progress: false
+
+jobs:
+  develop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REPO: ${{ inputs.repo }}
+      BRANCH: ${{ inputs.branch }}
+    steps:
+      - name: 입력 확인
+        env:
+          HAS_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+          HAS_TOKEN: ${{ secrets.TARGET_REPO_TOKEN != '' }}
+        run: |
+          if ! [[ "$REPO" =~ ^minho-nim/[A-Za-z0-9._-]+$ ]]; then echo "::error::minho-nim/… 저장소만 받습니다."; exit 1; fi
+          lower=$(echo "$REPO" | tr 'A-Z' 'a-z')
+          if [ "$lower" = "minho-nim/minlab" ] || [ "$lower" = "minho-nim/minlab-ai-office" ]; then echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; fi
+          if ! [[ "$BRANCH" =~ ^ai/gemini/[a-z0-9._/-]+$ ]]; then echo "::error::브랜치는 ai/gemini/로 시작해야 합니다(소문자·숫자·-·_·.)."; exit 1; fi
+          if [ "$HAS_KEY" != "true" ] || [ "$HAS_TOKEN" != "true" ]; then echo "::error::secrets(GEMINI_API_KEY·TARGET_REPO_TOKEN)가 없습니다."; exit 1; fi
+
+      - name: 대상 저장소 받기(토큰은 남기지 않음)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}
+          token: ${{ secrets.TARGET_REPO_TOKEN }}
+          path: work
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 작업 브랜치 만들기
+        working-directory: work
+        run: |
+          git config user.name "MinLab AI Office (Gemini)"
+          git config user.email "gemini-dev@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+      - name: Gemini CLI로 고치기
+        working-directory: work
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          INSTRUCTIONS: ${{ inputs.instructions }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          mkdir -p ~/.gemini
+          echo '{"privacy":{"usageStatisticsEnabled":false}}' > ~/.gemini/settings.json
+          {
+            echo "너는 MinLab AI Office의 개발 담당이다. 지금 폴더(저장소)에서 아래 할 일 하나만 한다."
+            echo "- 저장소 루트에 CLAUDE.md가 있으면 먼저 읽고 그 규칙을 따른다."
+            echo "- 할 일 범위 밖 파일은 바꾸지 않는다. 비밀값·토큰·.env 내용을 출력하거나 파일에 쓰지 않는다."
+            echo "- git commit·push·PR·배포는 하지 않는다(다음 단계가 한다). 다른 AI CLI를 설치하지 않는다."
+            echo "- package.json이 있으면 고친 뒤 있는 시험(typecheck·test·build)을 돌려 통과시킨다."
+            echo "- 할 일이 불분명하면 코드를 바꾸지 말고 이유만 적고 끝낸다."
+            echo "- 화면 문구는 한국어로 쓴다. 끝나면 무엇을 바꿨는지 한국어로 3줄 이내로 요약한다."
+            echo ""
+            echo "## 할 일"
+            printf '%s\n' "$INSTRUCTIONS"
+          } > /tmp/task.md
+          npx -y @google/gemini-cli@0.64.0 -m "$MODEL" --approval-mode yolo -p "$(cat /tmp/task.md)" 2>&1 | tee /tmp/gemini.log
+          rm -f /tmp/task.md
+
+      - name: 시험
+        working-directory: work
+        run: |
+          : > /tmp/test.log
+          if [ -f package.json ]; then
+            (npm ci || npm install) >/tmp/install.log 2>&1 || { tail -40 /tmp/install.log; echo "::error::의존성 설치 실패"; exit 1; }
+            for s in typecheck test build; do
+              if node -e "process.exit(require('./package.json').scripts?.['$s'] ? 0 : 1)"; then
+                echo "## npm run $s" | tee -a /tmp/test.log
+                npm run "$s" 2>&1 | tail -60 | tee -a /tmp/test.log
+                test "${PIPESTATUS[0]}" -eq 0 || { echo "::error::npm run $s 실패"; exit 1; }
+              fi
+            done
+          else
+            echo "package.json 없음: 시험 건너뜀" | tee /tmp/test.log
+          fi
+
+      - name: 비밀값 검사·커밋
+        id: commit
+        working-directory: work
+        run: |
+          git add -A
+          if git diff --cached --quiet; then echo "changed=false" >> "$GITHUB_OUTPUT"; echo "바뀐 것이 없습니다."; exit 0; fi
+          if git diff --cached -U0 | grep -E '^\+' | grep -qE 'sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}'; then
+            echo "::error::비밀값처럼 보이는 줄이 추가돼 올리지 않습니다."; exit 1
+          fi
+          git commit -q -m "Gemini 개발(시험): $(printf '%s' "$INSTRUCTIONS_HEAD" | head -c 60)"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        env:
+          INSTRUCTIONS_HEAD: ${{ inputs.instructions }}
+
+      - name: 작업 브랜치만 올리기
+        if: steps.commit.outputs.changed == 'true'
+        working-directory: work
+        env:
+          TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          git push --force-with-lease "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${BRANCH}"
+
+      - name: 요약
+        if: always()
+        working-directory: work
+        run: |
+          {
+            echo "## Gemini 개발(시험) — ${REPO} · ${BRANCH}"
+            echo ""
+            echo "### Gemini 요약(마지막 30줄)"
+            echo '```'
+            tail -30 /tmp/gemini.log 2>/dev/null || echo '(로그 없음)'
+            echo '```'
+            echo "### 바뀐 파일"
+            echo '```'
+            git diff --stat origin/HEAD...HEAD 2>/dev/null || git show --stat --oneline HEAD 2>/dev/null | head -40
+            echo '```'
+            echo "### 시험(마지막 40줄)"
+            echo '```'
+            tail -40 /tmp/test.log 2>/dev/null || echo '(시험 없음)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
