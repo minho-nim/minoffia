@@ -810,8 +810,9 @@ a {
   /* 사무실이 위에 고정되므로, 대화 목록은 사무실 아래 남는 화면을 거의 다 쓴다(사무실 높이 ≈ 화면 너비 × 224/300). */
   /* 말풍선·알림에서 업무 카드로 갈 때 위에 고정된 사무실에 가리지 않게 */
   .task-card,
-  .task-card .wf-section {
-    scroll-margin-top: calc((100vw - 32px) * 0.747 * 0.5 + 100px + env(safe-area-inset-top, 0px));
+  .task-card .wf-section,
+  .task-card .wf-anchor {
+    scroll-margin-top: calc((100vw - 32px) * 0.747 * 0.5 + 100px + var(--chips-h, 0px) + 56px + env(safe-area-inset-top, 0px));
   }
   /* 아래로 내리면(얇은 머리가 보일 때) 사무실도 절반 크기로 줄여 위에 둔다. 크기는 transform으로만 바꿔서
      자리(레이아웃)가 그대로라 화면이 튀지 않는다. 줄어든 사무실 옆·아래는 비워 두어 아래 글이 보이고 눌린다. */
@@ -3760,5 +3761,18 @@ a {
   .inbox-log {
     max-height: none;
     overflow-y: visible;
+  }
+}
+
+/* 내 차례 바로 가기(v0.4.86): 카드의 ?표시는 눌러서 그 칸으로 간다. 넓은 화면에서도 위에 붙은 탭·칩·제목 줄 밑으로 숨지 않게 */
+.task-turn.is-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+@media (min-width: 1040px) {
+  .task-card .wf-section,
+  .task-card .wf-anchor {
+    scroll-margin-top: calc(var(--tabs-h, 42px) + var(--chips-h, 0px) + 64px);
   }
 }

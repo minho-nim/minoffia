@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import type { MyTurn } from '../domain/myTurn';
+import type { MyTurn, TurnStep } from '../domain/myTurn';
 
 interface Props {
   items: MyTurn[];
-  /** 업무 카드로 이동 */
-  onOpen: (taskId: string) => void;
+  /** 업무 카드로 이동(step이 있으면 그 칸까지 내려간다, v0.4.86) */
+  onOpen: (taskId: string, step?: TurnStep) => void;
   /** 목록에서 바로 승인(업무 카드와 같은 규칙). 없으면 버튼을 숨긴다 */
   onApprove?: (taskId: string, gate: 'A' | 'B') => Promise<boolean>;
 }
@@ -50,7 +50,7 @@ export function MyTurnList({ items, onOpen, onApprove }: Props) {
                     {QUICK_LABEL[m.quick]}
                   </button>
                 )}
-                <button type="button" className="btn btn-small btn-ghost" onClick={() => onOpen(m.taskId)}>
+                <button type="button" className="btn btn-small btn-ghost" onClick={() => onOpen(m.taskId, m.step)}>
                   보기
                 </button>
               </span>
