@@ -6,6 +6,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentRoster, ReviewLog } from './components/AgentPanel';
 import { DevlogPanel } from './components/DevlogPanel';
+import { ProjectHistory } from './components/ProjectHistory';
 import { Inbox } from './components/Inbox';
 import { MyTurnList } from './components/MyTurn';
 import { Login } from './components/Login';
@@ -1580,6 +1581,7 @@ export function App() {
               onRemoveRule={(r) => void mutate(() => store.removeProjectRule(r.id), '지켜야 할 것에서 지웠어요.')}
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
               onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
+              renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
           )}
           {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}
