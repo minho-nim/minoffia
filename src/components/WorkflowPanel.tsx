@@ -1,7 +1,7 @@
 import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
 import type { ResultReview } from '../domain/workflow-types';
 import { AGENT_BY_ID } from '../domain/agents';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { attachmentBlocker, attachmentsOf, MAX_PROTOTYPE_FILES, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind, type ImageAnalysis } from '../domain/attachments';
 import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments';
 import { RequestContext } from './RequestContext';
@@ -129,6 +129,29 @@ const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', chan
 
 export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
+  // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
+  const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
+  const toggle = (key: string) =>
+    setUnfolded((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const folded = (key: string, idx: number) => idx < current && !unfolded.has(key);
+  const fold = {
+    cls: (key: string, idx: number) => `wf-section${idx < current ? ' is-past' : ''}${folded(key, idx) ? ' is-folded' : ''}`,
+    head: (key: string, idx: number, title: ReactNode) =>
+      idx < current ? (
+        <h4>
+          <button type="button" className="wf-fold" aria-expanded={!folded(key, idx)} onClick={() => toggle(key)}>
+            <span aria-hidden="true">{folded(key, idx) ? '▸' : '▾'}</span> {title} <span className="wf-fold-done">지난 단계 ✓</span>
+          </button>
+        </h4>
+      ) : (
+        <h4>{title}</h4>
+      ),
+  };
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
   const [planText, setPlanText] = useState('');
@@ -209,7 +232,10 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             <li key={s.key} className={i < current ? 'is-done' : i === current ? 'is-current' : ''}>
               <button
                 type="button"
-                onClick={() => document.getElementById(`wf-${task.id}-${s.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                onClick={() => {
+                  setUnfolded((cur) => new Set(cur).add(s.key));
+                  requestAnimationFrame(() => document.getElementById(`wf-${task.id}-${s.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+                }}
               >
                 {s.label}
               </button>
@@ -219,8 +245,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
       </div>
 
       {/* 1. 기획: Gemini 무료 초안(자동). v0.4.56 소유자: 기획에서 ChatGPT를 뺐다(기획서는 Gemini, 업무 계획은 Claude PM) */}
-      <section className="wf-section" id={`wf-${task.id}-plan`}>
-        <h4>1. 기획 — Gemini 초안</h4>
+      <section className={fold.cls('plan', 0)} id={`wf-${task.id}-plan`}>
+        {fold.head('plan', 0, <>1. 기획 — Gemini 초안</>)}
         {view.plannerFeedback && (
           <p className="task-error">
             v{view.spec?.revision}에 수정 요청: {view.plannerFeedback} —{' '}
@@ -353,8 +379,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 2. 기획 승인 */}
       {view.spec && view.spec.intent !== 'question' && (
-        <section className="wf-section" id={`wf-${task.id}-A`}>
-          <h4>2. {GATE_LABEL.A}</h4>
+        <section className={fold.cls('A', 1)} id={`wf-${task.id}-A`}>
+          {fold.head('A', 1, <>2. {GATE_LABEL.A}</>)}
           {view.spec.intent === 'ambiguous' ? (
             <p className="muted small">
               {view.spec.planner === 'gemini_draft'
@@ -412,8 +438,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 3. Claude PM */}
       {view.aApproved && (
-        <section className="wf-section" id={`wf-${task.id}-pm`}>
-          <h4>3. Claude PM — 작업 분해·배정</h4>
+        <section className={fold.cls('pm', 2)} id={`wf-${task.id}-pm`}>
+          {fold.head('pm', 2, <>3. Claude PM — 작업 분해·배정</>)}
           <p className="muted small">Claude는 계획만 만들고 저장소에 쓰지 않습니다. 세션이 시작돼도 계획이 오기 전까지는 완료가 아닙니다.</p>
           {!view.planCurrent && (
             <>
@@ -506,8 +532,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 4. 배정 + 실행 승인 */}
       {view.planCurrent && view.assignments.length > 0 && (
-        <section className="wf-section" id={`wf-${task.id}-E`}>
-          <h4>4. 배정된 작업 — {GATE_LABEL.E}</h4>
+        <section className={fold.cls('E', 3)} id={`wf-${task.id}-E`}>
+          {fold.head('E', 3, <>4. 배정된 작업 — {GATE_LABEL.E}</>)}
           <ul className="wf-items">
             {view.assignments.map((a) => {
               const item = view.plan!.plan.work_items.find((w) => w.id === a.workItemId);
@@ -653,8 +679,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 4-1. 견본 먼저: AI Studio 견본 → 미리보기 검토 → 견본 승인 */}
       {view.planCurrent && view.prototypeFirst && (
-        <section className="wf-section">
-          <h4>4-1. 견본 검토 — {GATE_LABEL.P}</h4>
+        <section className={fold.cls('P', 3)}>
+          {fold.head('P', 3, <>4-1. 견본 검토 — {GATE_LABEL.P}</>)}
           <p className="muted small">
             Claude PM이 <b>견본 먼저</b>를 골랐습니다. 계획이 오면 Gemini(무료)가 HTML 견본 한 장을 자동으로 만들어 여기에 올립니다. 미리보기를 보고 견본 승인(P)하세요.
             더 정교한 견본이 필요하면 위 견본 작업의 "AI Studio 견본 지시서"로 Google AI Studio Build에서 만들어 올려도 됩니다. 견본을 승인(P)하면 Codex 지시서에 이 견본이 들어갑니다.
@@ -692,8 +718,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 5. 결과 패키지 + B */}
       {view.aApproved && (view.planCurrent || view.result) && (
-        <section className="wf-section" id={`wf-${task.id}-B`}>
-          <h4>5. 결과 검토 — {GATE_LABEL.B}</h4>
+        <section className={fold.cls('B', 4)} id={`wf-${task.id}-B`}>
+          {fold.head('B', 4, <>5. 결과 검토 — {GATE_LABEL.B}</>)}
           <p className="muted small">
             GitHub에 올리기 전에 여기서 diff와 테스트 결과를 봅니다. Codex 웹의 diff(또는 `codex cloud diff` 출력)를 붙여넣으세요. PR·푸시는 올리기 승인 뒤에만 합니다.
           </p>
@@ -927,8 +953,8 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 6. C 운영 배포 */}
       {view.bApproved && (
-        <section className="wf-section" id={`wf-${task.id}-C`}>
-          <h4>6. {GATE_LABEL.C}</h4>
+        <section className={fold.cls('C', 5)} id={`wf-${task.id}-C`}>
+          {fold.head('C', 5, <>6. {GATE_LABEL.C}</>)}
           {view.cApproved ? (
             actions.deploy ? (
               <div className="wf-manual">

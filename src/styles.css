@@ -3677,3 +3677,36 @@ a {
     grid-column: 1 / -1;
   }
 }
+
+/* 업무 카드: 지나간 진행 단계는 제목만(v0.4.76) */
+.wf-section.is-folded > :not(h4) {
+  display: none;
+}
+.wf-section.is-folded {
+  padding-block: 6px;
+  opacity: 0.85;
+}
+.wf-section.is-folded > h4 {
+  margin: 0;
+}
+.wf-fold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wf-fold-done {
+  margin-left: auto;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ok);
+}
