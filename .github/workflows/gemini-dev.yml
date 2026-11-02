@@ -3,7 +3,8 @@
 # 하는 일: 대상 저장소(AI Office가 관리하는 minho-nim/… 저장소)의 main에서 ai/gemini/… 브랜치를 만들고,
 #   Gemini CLI가 지시대로 고친 뒤 시험을 돌리고, 그 브랜치만 push한다. PR·병합·배포는 하지 않는다.
 # 필요한 저장소 secrets(소유자가 Settings → Secrets and variables → Actions에서 넣음):
-#   GEMINI_API_KEY      Gemini 무료 키(AI Studio). 유료 결제가 연결되지 않은 키만.
+#   GEMINI_API_KEY      Gemini 무료 키 A(AI Studio, 앱의 Studio A). 유료 결제가 연결되지 않은 키만.
+#   GEMINI_API_KEY2     Gemini 무료 키 B(앱의 Studio B). 둘 중 하나만 있어도 돈다(v0.4.81: A가 한도·오류로 실패하면 B로 한 번 더).
 #   TARGET_REPO_TOKEN   대상 저장소에만 Contents 읽기·쓰기 권한을 준 fine-grained 토큰.
 # 안전: 토큰은 Gemini가 도는 단계에 넘기지 않는다(받기·올리기 단계에만). 이 저장소와 minho-nim/MinLab은 대상으로 받지 않는다.
 name: Gemini 개발(시험)
@@ -21,6 +22,12 @@ on:
       instructions:
         description: '할 일(쉬운 수정 한 건)'
         required: true
+      key:
+        description: '먼저 쓸 Gemini 키(auto = A 먼저, 실패하면 B)'
+        required: false
+        type: choice
+        options: [auto, A, B]
+        default: auto
       model:
         description: 'Gemini 모델(무료 키에서 되는 것)'
         required: false
@@ -44,6 +51,7 @@ jobs:
       - name: 입력 확인
         env:
           HAS_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+          HAS_KEY2: ${{ secrets.GEMINI_API_KEY2 != '' }}
           HAS_TOKEN: ${{ secrets.TARGET_REPO_TOKEN != '' }}
         run: |
           if ! [[ "$REPO" =~ ^minho-nim/[A-Za-z0-9._-]+$ ]]; then echo "::error::minho-nim/… 저장소만 받습니다."; exit 1; fi
@@ -51,7 +59,9 @@ jobs:
           if [ "$lower" = "minho-nim/minlab" ] || [ "$lower" = "minho-nim/minlab-ai-office" ]; then echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; fi
           if ! [[ "$BRANCH" =~ ^ai/gemini/[a-z0-9._/-]+$ ]]; then echo "::error::브랜치는 ai/gemini/로 시작해야 합니다(소문자·숫자·-·_·.)."; exit 1; fi
           missing=""
-          [ "$HAS_KEY" = "true" ] || missing="$missing GEMINI_API_KEY"
+          if [ "$HAS_KEY" != "true" ] && [ "$HAS_KEY2" != "true" ]; then missing="$missing GEMINI_API_KEY(또는 GEMINI_API_KEY2)"; fi
+          [ "$HAS_KEY" = "true" ] || echo "::notice::GEMINI_API_KEY(키 A)가 없어 키 B만 씁니다."
+          [ "$HAS_KEY2" = "true" ] || echo "::notice::GEMINI_API_KEY2(키 B)가 없어 키 A만 씁니다."
           [ "$HAS_TOKEN" = "true" ] || missing="$missing TARGET_REPO_TOKEN"
           if [ -n "$missing" ]; then echo "::error::이 저장소(MinLab-AI-Office)의 Actions secrets에 없는 것:${missing} (Settings → Secrets and variables → Actions)"; exit 1; fi
 
@@ -78,7 +88,9 @@ jobs:
       - name: Gemini CLI로 고치기
         working-directory: work
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          KEY_A: ${{ secrets.GEMINI_API_KEY }}
+          KEY_B: ${{ secrets.GEMINI_API_KEY2 }}
+          FIRST: ${{ inputs.key }}
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
           INSTRUCTIONS: ${{ inputs.instructions }}
           MODEL: ${{ inputs.model }}
@@ -97,8 +109,26 @@ jobs:
             echo "## 할 일"
             printf '%s\n' "$INSTRUCTIONS"
           } > /tmp/task.md
-          npx -y @google/gemini-cli@0.64.0 -m "$MODEL" --approval-mode yolo -p "$(cat /tmp/task.md)" 2>&1 | tee /tmp/gemini.log
-          rm -f /tmp/task.md
+          # 키 순서: auto·A면 A→B, B면 B→A. 한도(429)·오류로 실패하면 고친 것을 되돌리고 다른 키로 한 번 더(v0.4.81).
+          if [ "$FIRST" = "B" ]; then order="B A"; else order="A B"; fi
+          used=""
+          for slot in $order; do
+            if [ "$slot" = "A" ]; then key="$KEY_A"; else key="$KEY_B"; fi
+            [ -n "$key" ] || continue
+            echo "### Gemini 키 ${slot}로 시작" | tee -a /tmp/gemini.log
+            set +e
+            GEMINI_API_KEY="$key" npx -y @google/gemini-cli@0.64.0 -m "$MODEL" --approval-mode yolo -p "$(cat /tmp/task.md)" > /tmp/gemini-run.log 2>&1
+            code=$?
+            set -e
+            cat /tmp/gemini-run.log | tee -a /tmp/gemini.log
+            if [ "$code" -eq 0 ] && ! grep -qiE 'RESOURCE_EXHAUSTED|quota|status 429|"code": ?429' /tmp/gemini-run.log; then used="$slot"; break; fi
+            echo "::warning::키 ${slot} 실패(종료 코드 ${code}). 고친 것을 되돌리고 다른 키로 해 봅니다."
+            git reset -q --hard && git clean -qfd
+          done
+          rm -f /tmp/task.md /tmp/gemini-run.log
+          if [ -z "$used" ]; then echo "::error::두 키 모두 실패했습니다(한도·키 오류). 위 로그를 확인하세요."; exit 1; fi
+          echo "GEMINI_KEY_USED=$used" >> "$GITHUB_ENV"
+          echo "Gemini 키 ${used}로 끝냈습니다." | tee -a /tmp/gemini.log
 
       - name: 시험
         working-directory: work
@@ -144,7 +174,7 @@ jobs:
         run: |
           cd work 2>/dev/null || { echo "입력 확인에서 멈춰 요약할 것이 없습니다." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
           {
-            echo "## Gemini 개발(시험) — ${REPO} · ${BRANCH}"
+            echo "## Gemini 개발(시험) — ${REPO} · ${BRANCH} · 키 ${GEMINI_KEY_USED:-없음}"
             echo ""
             echo "### Gemini 요약(마지막 30줄)"
             echo '```'
