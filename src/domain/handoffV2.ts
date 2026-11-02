@@ -2,6 +2,7 @@ import { describeAnalyses, describeAttachments, type Attachment, type ImageAnaly
 import { describeClarifications, describeLinks, type Clarification, type LinkRef } from './requestContext';
 import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
+import { DEV_HABITS, repoMapStep } from './devHabits';
 
 /** 개발 AI가 CLAUDE.md를 알아서 만들거나 맞추게 하는 한 줄(v0.4.75, 소유자 "다르면 맞춰줘, AI가 알아서"). 서버 dispatch-claude-dev/payload.ts에도 같은 문장 */
 export const CLAUDE_MD_SYNC =
@@ -110,6 +111,11 @@ export function buildCodexHandoff(
     '',
     '## 완료 기준',
     ...[...item.acceptance_tests, spec.testCriteria].filter(Boolean).map((x) => `- ${x}`),
+    '',
+    ...repoMapStep(),
+    '',
+    '## 개발 습관(토큰·범위 아끼기)',
+    ...DEV_HABITS.map((x) => `- ${x}`),
     '',
     '## 규칙',
     '- 작업 전에 최신 기본 브랜치(main)를 받아 그 위에서 작업한다. 계획 당시 기준 커밋 이후 이 작업이 고칠 파일이 바뀌어 지시와 맞지 않으면 고치지 말고 멈춰서 보고한다.',

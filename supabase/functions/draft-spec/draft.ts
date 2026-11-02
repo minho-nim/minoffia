@@ -43,6 +43,8 @@ export const DRAFT_SYSTEM = [
   '- ambiguous이면 answer에 꼭 필요한 확인 질문만 번호를 붙여 쓴다(3개 이하). 나머지는 빈 문자열.',
   '- change_request·asset_request이면 final_prompt에 개발 AI가 그대로 따를 지시(목표·기능·화면 요구), change_scope에 바꿀 범위,',
   '  preserve_constraints에 바꾸면 안 되는 것, test_criteria에 확인 방법(데스크톱·모바일 화면 확인 포함)을 쓴다. answer는 빈 문자열.',
+  '- test_criteria는 확인할 수 있는 문장으로 쓴다(예: "400px에서 가로 넘침 없음"). "보기 좋게" 같은 말은 쓰지 않는다.',
+  '- 요청에 없어 스스로 정한 전제(예: 휴대폰 화면 기준)는 final_prompt 끝에 "전제:"로 적어 사용자가 확인하게 한다.',
 ].join('\n');
 
 const INTENTS: DraftIntent[] = ['question', 'change_request', 'asset_request', 'ambiguous'];
