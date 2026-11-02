@@ -1441,6 +1441,16 @@ export function App() {
           {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
           {tab === 'chat' && snap.projects.length > 0 && (
             <div className="filters project-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)">
+              {/* 기본 대화창(일반 대화, v0.4.88 소유자): 늘 맨 앞에, 프로젝트를 안 고르면 이 창 */}
+              <button
+                type="button"
+                className="chip chip-project chip-general"
+                aria-pressed={chatProjectId === null}
+                onClick={() => setChatProject(null)}
+                ref={chatProjectId === null ? (el) => el?.scrollIntoView({ inline: 'center', block: 'nearest' }) : undefined}
+              >
+                기본
+              </button>
               {snap.projects.map((p) => {
                 const n = turnsByProject.get(p.id) ?? 0;
                 const on = chatProjectId === p.id;
@@ -1450,7 +1460,7 @@ export function App() {
                     type="button"
                     className="chip chip-project"
                     aria-pressed={on}
-                    onClick={() => setChatProject(on ? null : p.id)}
+                    onClick={() => setChatProject(p.id)}
                     // 프로젝트에서 '요청하기'로 넘어오면 고른 칩이 보이게 가운데로(v0.4.66)
                     ref={on ? (el) => el?.scrollIntoView({ inline: 'center', block: 'nearest' }) : undefined}
                   >
