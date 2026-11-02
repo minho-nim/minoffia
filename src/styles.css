@@ -3757,7 +3757,7 @@ a {
 /* 업무 카드를 펼쳐 내릴 때 제목 줄은 탭·칩 줄 바로 아래에 붙어 있다(v0.4.78, 소유자) */
 .task-card:not(.is-folded) > .task-toggle {
   position: sticky;
-  top: calc(36px + env(safe-area-inset-top, 0px));
+  top: var(--task-sticky-top);
   z-index: 30;
   margin: -12px -14px 0;
   /* 양옆 -14px 여백만큼 넓혀 카드 오른쪽 끝까지 덮는다(v0.4.99: width 100%라 오른쪽이 28px 모자랐음) */
@@ -3767,15 +3767,35 @@ a {
   border-radius: var(--radius) var(--radius) 0 0;
   border-bottom: 1px solid var(--line);
 }
+/* 제목 줄이 붙는 높이(화면마다 다름). 진행 단계 줄도 이 값 + 제목 높이에 붙는다(v0.5.0) */
+.task-card {
+  --task-sticky-top: calc(36px + env(safe-area-inset-top, 0px));
+}
 @media (min-width: 1040px) {
-  .task-card:not(.is-folded) > .task-toggle {
-    top: calc(var(--tabs-h, 42px) + var(--chips-h, 0px));
+  .task-card {
+    --task-sticky-top: calc(var(--tabs-h, 42px) + var(--chips-h, 0px));
   }
 }
 @media (max-width: 1039px) and (min-height: 620px) {
-  .layout.is-mini .task-card:not(.is-folded) > .task-toggle {
-    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px) + var(--chips-h, 0px));
+  .layout.is-mini .task-card {
+    --task-sticky-top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px) + var(--chips-h, 0px));
   }
+}
+/* 업무별 진행 단계 줄도 제목 줄 바로 아래에 붙는다(v0.5.0, 소유자 "업무 진행상황에서 탭이 고정되게").
+   제목 높이(--task-title-h)는 TaskCard가 재서 넣는다. 그 업무 카드 안에서만 붙고, 다음 카드로 넘어가면 같이 올라간다. */
+.task-card:not(.is-folded) .wf-head {
+  position: sticky;
+  top: calc(var(--task-sticky-top) + var(--task-title-h, 64px));
+  z-index: 29;
+  margin: 0 -2px;
+  padding: 8px 2px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+/* 바로 가기로 간 칸이 위에 붙은 제목·단계 줄 밑으로 숨지 않게 */
+.task-card:not(.is-folded) .wf-section,
+.task-card:not(.is-folded) .wf-anchor {
+  scroll-margin-top: calc(var(--task-sticky-top) + var(--task-title-h, 64px) + var(--task-steps-h, 44px) + 8px) !important;
 }
 
 /* 휴대폰·좁은 화면(v0.4.84 소유자 "아래 짤린다"): 대화 목록은 따로 스크롤하지 않고 페이지와 함께 내린다.
