@@ -18,6 +18,9 @@ export function uncovered(leave: AgentId[]): string[] {
   return out;
 }
 import { spriteFor } from '../office/sprites';
+import { unassignedCharacters } from '../office/unassigned';
+
+const UNASSIGNED = unassignedCharacters();
 
 /**
  * 팀 관리 탭(v0.4.40, 소유자 2026-11-01): 근무 칸 · 가운데 옮기기 버튼 · 휴가 칸.
@@ -143,6 +146,22 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
         </div>
         {column('leave', away)}
       </div>
+      {UNASSIGNED.length > 0 && (
+        <section className="team-unassigned" aria-label="미배정 캐릭터">
+          <h3>
+            미배정 캐릭터 <span className="num num-count">{UNASSIGNED.length}</span>
+          </h3>
+          <p className="muted small">아직 연결된 AI가 없어 사무실에는 나오지 않아요. 새 AI를 연결하면 이 중에서 골라 그 AI의 캐릭터로 써요.</p>
+          <ul>
+            {UNASSIGNED.map((c) => (
+              <li key={c.id}>
+                <img className="is-art" src={c.stand} alt="" />
+                <span className="muted small">{c.label}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {notes.length > 0 && (
         <div className="team-notes" role="status">
           <b>대신 맡을 AI가 없는 일</b>

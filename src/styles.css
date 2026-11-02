@@ -3268,3 +3268,41 @@ a {
   content: '출처 ';
   color: var(--muted);
 }
+
+/* 미배정 캐릭터(팀 관리, 2026-11-02) */
+.team-unassigned {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+.team-unassigned h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.team-unassigned ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-unassigned li {
+  display: flex;
+  flex: 1 1 90px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 140px;
+  text-align: center;
+}
+
+.team-unassigned img {
+  height: 76px;
+  width: auto;
+  opacity: 0.85;
+}
