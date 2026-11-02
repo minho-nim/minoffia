@@ -1,3 +1,4 @@
+import { costlyFor, LEVEL_LABEL, levelOf } from '../domain/difficulty';
 import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
 import type { ResultReview } from '../domain/workflow-types';
 import { AGENT_BY_ID } from '../domain/agents';
@@ -523,7 +524,15 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                     <span className="pill">{adapter.label}</span>
                     <span className={`pill pill-adapter-${adapter.state}`}>{ADAPTER_STATE_LABEL[adapter.state]}</span>
                     <span className="pill">{DISPATCH_STATUS_LABEL[a.dispatchStatus]}</span>
+                    {levelOf(item?.difficulty) && (
+                      <span className={`pill pill-level-${levelOf(item?.difficulty)}`} title={item?.difficulty_reason ?? ''}>
+                        난이도 {item!.difficulty} · {LEVEL_LABEL[levelOf(item?.difficulty)!]}
+                      </span>
+                    )}
                   </div>
+                  {item && costlyFor(item.difficulty, item.assignee_preference) && (
+                    <p className="muted small">쉬운 일인데 Claude에게 배정됐어요. Codex가 근무 중이면 Codex가 더 싸요(실행 승인 전에 PM에 수정 요청 가능).</p>
+                  )}
                   {item?.goal && <p className="small">{item.goal}</p>}
                   {item && item.dependencies.length > 0 && <p className="muted small">먼저 끝나야 할 작업: {item.dependencies.join(', ')}</p>}
 
