@@ -78,7 +78,7 @@
 - 캐릭터 하나 = 계정 하나(v0.4.44, 소유자 2026-11-01): 미니엉 = 대화창의 얼굴(규칙, 모델 호출 없음; 질문·판단은 근무 중인 Studio의 Gemini 답을 받아 전하고 말풍선 아래 'Gemini · Studio A가 답함'). Studio A = Gemini 키 A, Studio B = Gemini 키 B(휴가인 쪽 키는 서버 4곳 ask-gemini·analyze-image·draft-spec·draft-prototype에서 쓰지 않음, 둘 다 휴가면 Gemini 멈춤). Codex (Linear) = OpenAI(ChatGPT 계정): 주 개발(휴가면 GPT 링크 숨김). 기획에서 ChatGPT를 뺐다(v0.4.56 소유자: 기획서는 Gemini, 업무 계획은 Claude PM). Grok은 무료로 자동 호출할 길이 없어 휴가(데모 기본값도 휴가). 팀 관리에 칸별 전체 선택과 '대신 맡을 AI가 없는 일' 안내(위험 경고 아님).
 - 프로젝트에서 지켜야 할 것(v0.4.57, 소유자 "AI가 알아서"): AI가 기획서 초안·PM 계획·보조 개발 결과에 `project_rules`로 적어 보내면 서버가 `project_rules`(0027)에 쌓고, 다음 기획서 초안·PM·보조 개발·Codex 지시서에 함께 넣는다(공통 코드 `projectRules.ts` 5곳 복사). 소유자는 프로젝트 탭에서 지우기·직접 더하기만.
 - 결과 점수 평가(v0.4.64, 소유자 2026-11-02): 결과 버전마다 서버 `review-result`가 한 번 1단계 규칙 검사(시험·변경·비밀값 막힘, 위험 패턴·범위는 참고, 토큰 0) → 막히지 않으면 2단계 Gemini 무료 채점(완료 기준 40·기획 25·유지 조건 15·범위 10·품질 10, 경계 70~85점이면 한 번 더 평균) → 판정(80점 이상·위반 없음=통과). 미달이면 앱이 고칠 점만 적어 기존 수정 요청 길로 자동 재전송(최대 2번, 그다음 소유자). 규칙은 `src/domain/review.ts`(서버 `review-result/rubric.ts`로 복사), 기록 `result_reviews`(0030, 추가만). 올리기 승인(B)은 늘 소유자(미달이면 버튼에 표시). 에이전트 카드에 AI별 평가 통과율.
-- 난이도 기반 배정(v0.4.71, 소유자, Task Master 아이디어): PM이 작업마다 `difficulty`(1~10)·`difficulty_reason`을 매기고 쉬움·보통(1~6)은 Codex, 어려움(7~10)만 Claude(휴가면 다른 쪽, `src/domain/difficulty.ts`·`dispatch-claude` 안내). 없으면 예전 계획 그대로. 업무 카드 작업에 난이도 표시, 쉬운 일을 Claude에게 주면 안내만(막지 않음).
+- 난이도 기반 배정(v0.4.71, 소유자, Task Master 아이디어): PM이 작업마다 `difficulty`(1~10)·`difficulty_reason`을 매기고 쉬움·보통(1~6)은 Codex, 어려움(7~10)만 Claude(휴가면 다른 쪽, `src/domain/difficulty.ts`·`dispatch-claude` 안내). 없으면 예전 계획 그대로. 배정은 PM이 알아서 하고 화면에는 난이도를 보여 주지 않는다(v0.4.72 소유자: 표시·안내 모두 뺌).
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
 
 ## 구조
