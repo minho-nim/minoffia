@@ -76,11 +76,13 @@ Deno.serve(async (req) => {
   if (!project?.repo || !allowed) return reply(403, { ok: false, error: 'Gemini 개발은 AI Office가 만든 저장소의 프로젝트에서만 합니다.' });
 
   // 휴가(v0.4.44): Studio A = 키 A, Studio B = 키 B. 둘 다 휴가면 시작하지 않는다.
+  // 키 나눠 쓰기(v0.4.83, 소유자 "A, B 적절히 분배"): 개발은 요청을 많이 쓰므로 키 B가 먼저(대화·기획·채점은 키 A가 먼저).
+  // 워크플로는 먼저 쓴 키가 한도·오류로 실패하면 다른 키로 한 번 더 한다.
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (away.has('studioA') && away.has('studioB')) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
-  const key = away.has('studioA') ? 'B' : 'A';
+  const key = away.has('studioB') ? 'A' : 'B';
 
   const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DEV_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const { data: claim, error: claimError } = await admin.rpc('claim_gemini_dev', {

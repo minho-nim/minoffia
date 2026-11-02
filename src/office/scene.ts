@@ -49,7 +49,8 @@ export function assignmentTasks(tasks: Task[], assignments: AgentAssignment[]): 
   const parent = new Map(tasks.map((t) => [t.id, t]));
   return assignments.flatMap((a) => {
     const p = parent.get(a.taskId);
-    const agent = a.assignee === 'gemini' ? 'studioA' : a.assignee;
+    // Gemini 개발(gemini_actions)은 키 B(Studio B)가 먼저 맡는다(v0.4.83). 견본은 Studio A
+    const agent = a.assignee === 'gemini' ? (a.executionMode === 'gemini_actions' ? 'studioB' : 'studioA') : a.assignee;
     if (!p || p.status === 'done' || agent === p.assignee) return [];
     const waiting = ['proposed', 'awaiting_user_execution_approval', 'ready'].includes(a.dispatchStatus);
     const running = a.dispatchStatus === 'started' || a.dispatchStatus === 'starting';
