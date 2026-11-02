@@ -1215,31 +1215,6 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       {queue.length > 0 && <p className="muted small inbox-note">앞 일이 끝나면 기다리는 말 {queue.length}개를 한 번에 읽고 답할게요.</p>}
       <div ref={endRef} />
 
-      {photos.length > 0 && (
-        <ul className="inbox-photos" aria-label="보낼 첨부">
-          {photos.map((f, i) => (
-            <li key={`${i}-${f.name}`}>
-              {previews[i] ? (
-                <img src={previews[i]} alt={f.name} />
-              ) : (
-                <span className="inbox-doc" title={f.name}>
-                  {(MIME_EXT[f.type] ?? 'file').toUpperCase()}
-                </span>
-              )}
-              <button type="button" className="inbox-photo-x" aria-label={`${f.name} 빼기`} onClick={() => setPhotos(photos.filter((_, j) => j !== i))}>
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {photoErrors.length > 0 && (
-        <ul className="task-error small">
-          {photoErrors.map((e) => (
-            <li key={e}>{e}</li>
-          ))}
-        </ul>
-      )}
       <form
         ref={formRef}
         className="inbox-form"
@@ -1253,6 +1228,32 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           if (e.dataTransfer.files.length) addPhotos(e.dataTransfer.files);
         }}
       >
+        {/* 보낼 첨부는 입력창 안 위쪽에 붙는다(v0.4.88 소유자: 따로 떨어져 보였음) */}
+        {photos.length > 0 && (
+          <ul className="inbox-photos" aria-label="보낼 첨부">
+            {photos.map((f, i) => (
+              <li key={`${i}-${f.name}`}>
+                {previews[i] ? (
+                  <img src={previews[i]} alt={f.name} />
+                ) : (
+                  <span className="inbox-doc" title={f.name}>
+                    {(MIME_EXT[f.type] ?? 'file').toUpperCase()}
+                  </span>
+                )}
+                <button type="button" className="inbox-photo-x" aria-label={`${f.name} 빼기`} onClick={() => setPhotos(photos.filter((_, j) => j !== i))}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {photoErrors.length > 0 && (
+          <ul className="task-error small">
+            {photoErrors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        )}
         <input
           ref={fileInput}
           type="file"

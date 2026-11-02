@@ -3797,3 +3797,12 @@ a {
     scroll-margin-top: calc(var(--tabs-h, 42px) + var(--chips-h, 0px) + 64px);
   }
 }
+
+/* 빈 대화에서 첨부를 고르면 입력창이 커지므로 예시 줄은 숨기고 인사말만(v0.4.88) */
+.inbox.is-empty:has(.inbox-photos) > .inbox-empty .inbox-note {
+  display: none;
+}
+/* 기본 대화창 칩(v0.4.88) */
+.chip-general {
+  font-weight: 700;
+}
