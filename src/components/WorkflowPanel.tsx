@@ -73,6 +73,8 @@ export interface WorkflowActions {
   readLink: (task: Task, url: string) => Promise<boolean>;
   deleteLink: (link: LinkRef) => Promise<boolean>;
   addClarification: (task: Task, question: string, answer: string) => Promise<boolean>;
+  /** 업무 카드에서 확인 질문에 답했을 때 대화창(기본·프로젝트)에도 같은 문답을 남긴다(v0.4.90) */
+  echoAnswer?: (task: Task, answer: string) => void;
 }
 
 interface Props {
@@ -135,6 +137,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   const current = stepIndex(view);
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
+  const [qaReply, setQaReply] = useState('');
   const toggle = (key: string) =>
     setUnfolded((cur) => {
       const next = new Set(cur);
@@ -296,7 +299,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
             allowDocs
           />
         </div>
-        <div id={`wf-${task.id}-qa`} className="wf-anchor">
+        <div id={view.spec?.intent === 'ambiguous' ? undefined : `wf-${task.id}-qa`} className="wf-anchor">
           <RequestContext task={task} view={view} links={taskLinks} clarifications={taskQa} canReadLinks={canReadLinks} actions={actions} />
         </div>
         <div className="task-actions">
@@ -312,7 +315,8 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           )}
         </div>
         {view.spec && !editing && (
-          <div className="wf-spec">
+          // 확인 질문이 있으면 '질문' 바로 가기는 이 칸(질문 + 바로 답하기)으로 온다(v0.4.90)
+          <div className="wf-spec wf-anchor" id={view.spec.intent === 'ambiguous' ? `wf-${task.id}-qa` : undefined}>
             <p>
               <b>v{view.spec.revision}</b> · {INTENT_LABEL[view.spec.intent]} · {view.spec.planner === 'gemini_draft' ? 'Gemini 초안' : 'ChatGPT 기획'}
             </p>
@@ -320,6 +324,35 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               <>
                 {view.spec.intent === 'ambiguous' && <p className="small">확인 질문</p>}
                 <p className="wf-pre">{view.spec.answer || '(답변 없음)'}</p>
+                {/* 여기서 바로 답하기(v0.4.90 소유자): 답을 기록하면 Gemini가 기획서를 다시 쓰고, 대화창에도 같은 문답이 남는다 */}
+                {view.spec.intent === 'ambiguous' && view.stage === 'needs_clarification' && view.spec.answer && (
+                  <form
+                    className="wf-answer"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const text = qaReply.trim();
+                      if (!text) return;
+                      void run(async () => {
+                        if (await actions.addClarification(task, view.spec!.answer, text)) {
+                          actions.echoAnswer?.(task, text);
+                          setQaReply('');
+                        }
+                      });
+                    }}
+                  >
+                    <textarea
+                      rows={3}
+                      value={qaReply}
+                      maxLength={4000}
+                      placeholder="여기에 답을 쓰세요(번호별로 짧게 써도 돼요)"
+                      aria-label="확인 질문에 답하기"
+                      onChange={(e) => setQaReply(e.target.value)}
+                    />
+                    <button type="submit" className="btn btn-small btn-primary" disabled={busy || !qaReply.trim()}>
+                      답하기 — Gemini가 기획서 다시 쓰기
+                    </button>
+                  </form>
+                )}
               </>
             ) : (
               <>
