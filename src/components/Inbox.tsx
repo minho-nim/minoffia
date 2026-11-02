@@ -97,6 +97,8 @@ interface Props {
   /** 입력창을 누르면 Gemini 질문 서버를 미리 깨운다(있을 때만) */
   onWarmGemini?: () => void;
   /** 업무 접수(사진이 있으면 요청 자료로 함께 올린다) */
+  /** 업무 카드에서 확인 질문에 답한 것(v0.4.90): 기본 대화창과 그 프로젝트 대화창에 같이 남긴다 */
+  echo?: { n: number; taskId: string; projectId: string; text: string } | null;
   onCreateTask: (draft: TaskDraft, images: PendingImage[]) => Promise<Task | null>;
   onCreateProject: (name: string) => Promise<Project | null>;
   /** 업무를 접수하면 그 프로젝트를 대화에 연결만 한다(대화 칩을 켬, 대화는 그대로 이어감, v0.4.30) */
@@ -242,7 +244,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -471,6 +473,23 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     }));
     setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
   }, [snap.tasks, snap.workflow, syncReady]);
+
+  // 업무 카드에서 답한 확인 질문 답을 대화창(기본·그 프로젝트)에도 남긴다(v0.4.90).
+  useEffect(() => {
+    if (!echo) return;
+    const name = snap.projects.find((p) => p.id === echo.projectId)?.name;
+    const tag = name ? `[${name}] ` : '';
+    const both = { home: '', projects: [echo.projectId] };
+    setLog((l) =>
+      [
+        ...l,
+        { id: mid(), from: 'me' as From, text: `${tag}(업무 카드에서 답함) ${echo.text}`, taskId: echo.taskId, ...both },
+        { id: mid(), from: 'office' as From, text: `${tag}답을 받았어요. Gemini가 기획서를 다시 써요.`, taskId: echo.taskId, ...both },
+      ].slice(-KEEP),
+    );
+    archive({ role: 'me', text: echo.text, projectId: echo.projectId, taskId: echo.taskId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [echo?.n]);
 
   // 다른 탭에서 넘어온 초안을 입력칸에 채우고 바로 쓸 수 있게 한다.
   useEffect(() => {
@@ -791,8 +810,20 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       return;
     }
     archive({ role: 'me', text, projectId: task.projectId, taskId: task.id });
+    // 대화창에서 한 답은 기본 창과 그 프로젝트 창 둘 다에 보이게(v0.4.90). 업무 카드의 문답 목록에도 기록된다.
+    setLog((l) => {
+      const at = [...l].reverse().findIndex((m) => m.from === 'me' && m.text.startsWith(text));
+      if (at < 0) return l;
+      const idx = l.length - 1 - at;
+      const m = l[idx];
+      const projects = [...new Set([...(m.projects ?? []), task.projectId, ''])].filter((x) => x !== (m.home ?? ''));
+      return l.map((x, i) => (i === idx ? { ...x, taskId: task.id, projects } : x));
+    });
     void run(async () => {
-      if (!(await onClarify(task, v.spec!.answer, text))) say('office', '답을 기록하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드의 확인 질문 칸에서 하세요.');
+      if (await onClarify(task, v.spec!.answer, text)) {
+        const name = snap.projects.find((p) => p.id === task.projectId)?.name;
+        setLog((l) => [...l, { id: mid(), from: 'office' as From, text: `${name ? `[${name}] ` : ''}답을 받았어요. Gemini가 기획서를 다시 써요.`, home: '', projects: [task.projectId], taskId: task.id }].slice(-KEEP));
+      } else say('office', '답을 기록하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드의 확인 질문 칸에서 하세요.');
     });
   };
 

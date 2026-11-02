@@ -290,6 +290,8 @@ export function App() {
   const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   /** 업무 카드의 어느 칸으로 갈지(내 차례 '보기'·카드의 ?표시, v0.4.86) */
   const [jump, setJump] = useState<{ taskId: string; step: TurnStep; n: number } | null>(null);
+  /** 업무 카드에서 확인 질문에 답한 것을 대화창에도 올린다(v0.4.90) */
+  const [chatEcho, setChatEcho] = useState<{ n: number; taskId: string; projectId: string; text: string } | null>(null);
   /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
   const [draft, setDraft] = useState<{ text: string; n: number } | null>(null);
   // 얇은 머리·작은 사무실(v0.4.14~, v0.4.35): 켜기 = 위 머리가 화면 밖으로 나갔고, 사무실이 줄어든 뒤에도
@@ -1098,6 +1100,7 @@ export function App() {
       if (ok && latest?.planner === 'gemini_draft' && latest.intent === 'ambiguous') await draftSpec(task.id);
       return ok;
     },
+    echoAnswer: (task, text) => setChatEcho((e) => ({ n: (e?.n ?? 0) + 1, taskId: task.id, projectId: task.projectId, text })),
     attachmentUrl: (a) => store.attachmentUrl(a),
     analyzeImage:
       store.mode === 'supabase'
@@ -1540,6 +1543,7 @@ export function App() {
                 onApprove={quickApprove}
                 currentProject={chatProjectId ? (snap.projects.find((p) => p.id === chatProjectId) ?? null) : null}
                 draft={draft}
+                echo={chatEcho}
               />
           </div>
 
