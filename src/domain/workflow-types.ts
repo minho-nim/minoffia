@@ -191,6 +191,30 @@ export interface WorkflowData {
   deployments: Deployment[];
   /** GPT 확인 질문·답변 */
   clarifications: Clarification[];
+  /** 결과 점수 평가(v0.4.64) */
+  reviews?: ResultReview[];
+}
+
+/** 결과 점수 평가 기록(서버 review-result가 결과 버전마다 한 번, v0.4.64) */
+export interface ResultReview {
+  id: string;
+  taskId: string;
+  resultRevision: number;
+  workItemId: string;
+  /** 그 결과를 만든 AI(배정 기준) */
+  assignee: string;
+  gates: import('./review').Gate[];
+  score: import('./review').Score | null;
+  total: number | null;
+  verdict: import('./review').Verdict;
+  reasons: string[];
+  /** 다시 개발할 때 PM에 넘길 글 */
+  feedback: string;
+  /** 이 평가 전까지 자동으로 다시 개발한 횟수 */
+  autoRedo: number;
+  /** 채점한 쪽(규칙, Gemini · Studio A 등) */
+  judge: string;
+  createdAt: string;
 }
 
 export const EMPTY_WORKFLOW: WorkflowData = { specs: [], approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] };

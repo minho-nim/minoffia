@@ -1,3 +1,4 @@
+import type { ResultReview } from '../domain/workflow-types';
 import { coverFor } from '../domain/router';
 import { speechFor } from '../office/speech';
 import { markFor, type AgentMark } from '../office/marks';
@@ -37,6 +38,21 @@ interface Props {
   limit?: { kind: AgentKind; value: number; running: number; onSet: (n: number) => void };
   /** Codex: Linear 연결 확인(읽기만) */
   onLinearProbe?: () => Promise<LinearProbe>;
+  /** 결과 점수 평가 기록(AI별 성적, v0.4.64) */
+  reviews?: ResultReview[];
+}
+
+/** AI별 성적(v0.4.64): 이 AI가 만든 결과의 평가 통과 수·평균 점수. 나중에 배정 순서에 쓴다 */
+export function reportCard(reviews: ResultReview[], kind: string | undefined): { total: number; passed: number; avg: number | null } | null {
+  if (!kind) return null;
+  const mine = reviews.filter((r) => r.assignee === kind);
+  if (!mine.length) return null;
+  const scored = mine.filter((r) => r.total !== null);
+  return {
+    total: mine.length,
+    passed: mine.filter((r) => r.verdict === 'pass').length,
+    avg: scored.length ? Math.round(scored.reduce((s, r) => s + (r.total ?? 0), 0) / scored.length) : null,
+  };
 }
 
 /** 오피스 캐릭터 → 개발 작업을 맡는 AI(동시 작업 상한 대상) */
@@ -98,7 +114,8 @@ function SpeechMark({ speech, leave }: { speech?: AgentMark; leave?: boolean }) 
   );
 }
 
-export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech, leave, cover }: Props) {
+export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech, leave, cover, reviews = [] }: Props) {
+  const card = reportCard(reviews, KIND_OF[agentId]);
   const a = AGENT_BY_ID[agentId];
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
   const mine = tasks.filter((t) => t.assignee === agentId);
@@ -167,6 +184,11 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
         <br />
         <span className="muted">공급자의 잔여 토큰이 아니라 이 오피스에 기록된 실행 횟수입니다.</span>
       </p>
+      {card && (
+        <p className="small">
+          결과 평가 통과 <b className="num">{card.passed}</b> / {card.total}건{card.avg !== null && <> · 평균 <b className="num">{card.avg}</b>점</>}
+        </p>
+      )}
       <h4>맡은 업무 {mine.length}</h4>
       {mine.length === 0 ? (
         <p className="empty">맡은 업무가 없어 휴게실에서 쉬고 있습니다.</p>
@@ -228,6 +250,7 @@ export function AgentRoster({
                 tasks={snap.tasks}
                 usage={snap.usage}
                 assignments={snap.workflow.assignments}
+                reviews={snap.workflow.reviews ?? []}
                 aiCalls={snap.aiCalls ?? []}
                 serverMode={serverMode}
                 quota={quotaFor(a.id, snap)}

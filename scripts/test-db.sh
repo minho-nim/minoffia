@@ -32,6 +32,7 @@ run supabase/tests/99_push.sql
 run supabase/tests/99_b_waits.sql
 run supabase/tests/99_agent_leave.sql
 run supabase/tests/99_project_rules.sql
+run supabase/tests/99_result_reviews.sql
 
 # 기존 v0.1 데이터가 0003 적용 후에도 남는지
 psql -q -c "drop database if exists ${DB}_mig" -c "create database ${DB}_mig"
@@ -67,5 +68,6 @@ runm supabase/migrations/0026_agent_leave.sql
 runm supabase/migrations/0027_preview_and_project_rules.sql
 runm supabase/migrations/0028_research_ai_calls.sql
 runm supabase/migrations/0029_pg_net_extensions_schema.sql
+runm supabase/migrations/0030_result_reviews.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"
