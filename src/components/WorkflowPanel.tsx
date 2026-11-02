@@ -1,7 +1,7 @@
 import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
 import type { ResultReview } from '../domain/workflow-types';
 import { AGENT_BY_ID } from '../domain/agents';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { attachmentBlocker, attachmentsOf, MAX_PROTOTYPE_FILES, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind, type ImageAnalysis } from '../domain/attachments';
 import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments';
 import { RequestContext } from './RequestContext';
@@ -76,6 +76,8 @@ export interface WorkflowActions {
 }
 
 interface Props {
+  /** 이 칸으로 바로 가기(내 차례 '보기'·카드의 ?표시, v0.4.86). n이 바뀔 때마다 다시 간다 */
+  jump?: { step: string; n: number };
   task: Task;
   project: Project | undefined;
   view: WorkflowView;
@@ -129,7 +131,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
@@ -141,6 +143,21 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
       return next;
     });
   const folded = (key: string, idx: number) => idx < current && !unfolded.has(key);
+  // 바로 가기: 그 칸을 펼치고(지난 단계로 접혀 있어도) 화면에 보이게 내린다. 확인 질문(qa)은 기획 칸 안에 있다.
+  useEffect(() => {
+    if (!jump) return;
+    const key = jump.step === 'qa' ? 'plan' : jump.step;
+    setUnfolded((cur) => new Set(cur).add(key));
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`wf-${task.id}-${jump.step}`);
+      // 업무 카드의 '진행 단계'가 접혀 있으면 먼저 편다
+      const box = el?.closest('details');
+      if (box && !box.open) box.open = true;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jump?.n]);
   const fold = {
     cls: (key: string, idx: number) => `wf-section${idx < current ? ' is-past' : ''}${folded(key, idx) ? ' is-folded' : ''}`,
     head: (key: string, idx: number, title: ReactNode) =>
@@ -279,7 +296,9 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             allowDocs
           />
         </div>
-        <RequestContext task={task} view={view} links={taskLinks} clarifications={taskQa} canReadLinks={canReadLinks} actions={actions} />
+        <div id={`wf-${task.id}-qa`} className="wf-anchor">
+          <RequestContext task={task} view={view} links={taskLinks} clarifications={taskQa} canReadLinks={canReadLinks} actions={actions} />
+        </div>
         <div className="task-actions">
           {canReadLinks && !view.aApproved && (
             <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void run(() => actions.draftSpec(task))}>
@@ -688,7 +707,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
 
       {/* 4-1. 견본 먼저: AI Studio 견본 → 미리보기 검토 → 견본 승인 */}
       {view.planCurrent && view.prototypeFirst && (
-        <section className={fold.cls('P', 3)}>
+        <section className={fold.cls('P', 3)} id={`wf-${task.id}-P`}>
           {fold.head('P', 3, <>4-1. 견본 검토 — {GATE_LABEL.P}</>)}
           <p className="muted small">
             Claude PM이 <b>견본 먼저</b>를 골랐습니다. 계획이 오면 Gemini(무료)가 HTML 견본 한 장을 자동으로 만들어 여기에 올립니다. 미리보기를 보고 견본 승인(P)하세요.

@@ -21,7 +21,11 @@ export interface MyTurn {
   alert?: boolean;
   /** 정렬용(오래 기다린 것부터) */
   at: string;
+  /** 업무 카드에서 바로 갈 칸(v0.4.86): qa 확인 질문, pm 계획 보내기, A 기획 승인, P 견본, E 실행, B 결과, C 배포 */
+  step?: TurnStep;
 }
+
+export type TurnStep = 'qa' | 'pm' | 'A' | 'P' | 'E' | 'B' | 'C';
 
 export function myTurns(tasks: Task[], all: WorkflowData, now: number = Date.now()): MyTurn[] {
   const out: MyTurn[] = [];
@@ -34,34 +38,34 @@ export function myTurns(tasks: Task[], all: WorkflowData, now: number = Date.now
       continue;
     }
     if (t.status === 'done') continue;
-    const add = (word: string, label: string, quick?: 'A' | 'B') => out.push({ taskId: t.id, title: t.title, word, label, quick, at: t.updatedAt });
+    const add = (word: string, label: string, quick?: 'A' | 'B', step?: TurnStep) => out.push({ taskId: t.id, title: t.title, word, label, quick, at: t.updatedAt, step });
     const mine = v.plan ? all.assignments.filter((a) => a.taskId === t.id && a.planRevision === v.plan!.planRevision) : [];
     switch (v.stage) {
       case 'needs_clarification':
-        add('질문', '확인 질문에 답해 주세요(입력창이나 업무 카드)');
+        add('질문', '확인 질문에 답해 주세요(입력창이나 업무 카드)', undefined, 'qa');
         break;
       case 'pm_queued':
         // 기획 승인·수정 요청 뒤 PM에 자동으로 못 보낸 경우(저장소 없음 등)
-        add('계획', 'PM에 보내 주세요(저장소가 없으면 프로젝트에 저장소부터 연결)');
+        add('계획', 'PM에 보내 주세요(저장소가 없으면 프로젝트에 저장소부터 연결)', undefined, 'pm');
         break;
       case 'spec_ready':
       case 'development_approval_pending':
-        add('기획', '기획서를 보고 승인하거나 수정 요청', canApprove(v, 'A').ok ? 'A' : undefined);
+        add('기획', '기획서를 보고 승인하거나 수정 요청', canApprove(v, 'A').ok ? 'A' : undefined, 'A');
         break;
       case 'agent_handoff_pending':
-        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) add('견본', '견본 미리보기를 보고 승인');
-        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) add('계획', 'PM 계획을 보고 작업별 실행 승인');
-        if (mine.some((a) => a.dispatchStatus === 'ready')) add('시작', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)');
+        if (v.prototypeFirst && !v.pApproved && v.prototypeCount > 0) add('견본', '견본 미리보기를 보고 승인', undefined, 'P');
+        else if (mine.some((a) => a.dispatchStatus === 'awaiting_user_execution_approval')) add('계획', 'PM 계획을 보고 작업별 실행 승인', undefined, 'E');
+        if (mine.some((a) => a.dispatchStatus === 'ready')) add('시작', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)', undefined, 'E');
         break;
       case 'executing':
-        if (mine.some((a) => a.dispatchStatus === 'ready')) add('시작', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)');
+        if (mine.some((a) => a.dispatchStatus === 'ready')) add('시작', '실행 승인된 작업 시작(Codex 지시서 넘기기 등)', undefined, 'E');
         break;
       case 'result_review':
       case 'github_approval_pending':
-        add('결과', '결과를 보고 올리기 승인하거나 수정 요청', canApprove(v, 'B').ok ? 'B' : undefined);
+        add('결과', '결과를 보고 올리기 승인하거나 수정 요청', canApprove(v, 'B').ok ? 'B' : undefined, 'B');
         break;
       case 'deployment_approval_pending':
-        if (prCheckPasses(latestPrCheck(t, all))) add('배포', 'CI 통과. 배포 승인');
+        if (prCheckPasses(latestPrCheck(t, all))) add('배포', 'CI 통과. 배포 승인', undefined, 'C');
         break;
       case 'failed':
       case 'integration_blocked':
