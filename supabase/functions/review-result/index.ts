@@ -5,11 +5,16 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, redoFeedback, REVIEW_SYSTEM, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
 import { loadRules } from './projectRules.ts';
+import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 45_000;
+const CLAUDE_HARD_DAILY_CAP = 20;
+const FIRE_TIMEOUT_MS = 20_000;
+const ANTHROPIC_VERSION = '2026-10-21';
+const REVIEW_TICKET_HOURS = 6;
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 const cors = {
@@ -62,9 +67,9 @@ Deno.serve(async (req) => {
   // RLS를 거쳐 내 업무만 읽는다.
   const { data: existing } = await userClient.from('result_reviews').select('*').eq('task_id', taskId).eq('result_revision', revision).maybeSingle();
   if (existing) return reply(200, { ok: true, review: existing, cached: true });
-  const { data: result } = await userClient.from('result_packages').select('revision, plan_revision, work_item_id, diff, test_log, remaining_issues').eq('task_id', taskId).eq('revision', revision).maybeSingle();
+  const { data: result } = await userClient.from('result_packages').select('revision, plan_revision, work_item_id, source, diff, test_log, remaining_issues').eq('task_id', taskId).eq('revision', revision).maybeSingle();
   if (!result) return reply(404, { ok: false, error: '결과 패키지를 찾을 수 없습니다.' });
-  const { data: task } = await userClient.from('tasks').select('id, project_id').eq('id', taskId).maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('id, project_id, projects(repo)').eq('id', taskId).maybeSingle();
   const { data: spec } = await userClient.from('task_specs').select('final_prompt, change_scope, preserve_constraints, test_criteria').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
   if (!task || !spec) return reply(409, { ok: false, error: '기획서를 찾을 수 없습니다.' });
   let item: { title: string; goal: string; acceptance_tests: string[]; preserve_constraints: string[] } | null = null;
@@ -80,22 +85,8 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { count: redos } = await admin.from('result_reviews').select('id', { count: 'exact', head: true }).eq('task_id', taskId).eq('verdict', 'redo');
 
-  // 1단계: 규칙 검사(토큰 0). 막히면 AI를 부르지 않는다.
-  const gates = ruleCheck({ diff: String(result.diff ?? ''), testLog: String(result.test_log ?? ''), changeScope: String(spec.change_scope ?? '') });
-  let score: Score | null = null;
-  let judge = '규칙';
-  if (!gates.some((g) => g.blocking && !g.ok)) {
-    // 2단계: Gemini 무료 채점
-    const keys = [env('GEMINI_API_KEY'), env('GEMINI_API_KEY2')];
-    const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
-    const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
-    if (away.has('studioA')) keys[0] = '';
-    if (away.has('studioB')) keys[1] = '';
-    const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_REVIEW_DAILY_CAP')) || DEFAULT_DAILY_CAP);
-    const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-    const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);
-    const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
-    const prompt = buildReviewPrompt({
+  const reviewMaterial = () =>
+    buildReviewPrompt({
       finalPrompt: String(spec.final_prompt ?? ''),
       changeScope: String(spec.change_scope ?? ''),
       preserveConstraints: String(spec.preserve_constraints ?? ''),
@@ -107,6 +98,77 @@ Deno.serve(async (req) => {
       testLog: String(result.test_log ?? ''),
       remainingIssues: String(result.remaining_issues ?? ''),
     });
+  const askClaude = async (): Promise<{ sessionUrl: string | null } | null> => {
+    const fireUrl = env('CLAUDE_SUPPORT_FIRE_URL');
+    const fireToken = env('CLAUDE_SUPPORT_TOKEN');
+    if (!fireUrl || !fireToken) return null;
+    const repo = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
+    if (repo.toLowerCase() === 'minho-nim/minlab') return null;
+    const { data: leave } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id).eq('agent', 'claude');
+    if (leave?.length) return null;
+    // 이미 보낸 채점이 아직 살아 있으면 다시 보내지 않고 기다린다. 기한이 지났으면 Gemini로 넘어간다.
+    const { data: sent } = await admin.from('plan_submit_tokens').select('expires_at').eq('task_id', taskId).eq('kind', 'review').eq('result_revision', revision).maybeSingle();
+    if (sent) return new Date(sent.expires_at).getTime() > Date.now() ? { sessionUrl: null } : null;
+    const cap = Math.min(CLAUDE_HARD_DAILY_CAP, Number(env('CLAUDE_DAILY_CAP')) || CLAUDE_HARD_DAILY_CAP);
+    const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+    const { count: used } = await admin.from('usage_runs').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('agent', 'claude').eq('kind', 'cloud').eq('day', day);
+    if ((used ?? 0) >= cap) return null;
+    const ticket = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '');
+    const ticketHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ticket)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const { data: specRow } = await admin.from('task_specs').select('revision').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
+    const { data: made, error: ticketError } = await admin
+      .from('plan_submit_tokens')
+      .insert({ owner_id: user.id, task_id: taskId, spec_revision: specRow?.revision ?? 1, token_hash: ticketHash, expires_at: new Date(Date.now() + REVIEW_TICKET_HOURS * 3600_000).toISOString(), kind: 'review', result_revision: revision })
+      .select('id')
+      .single();
+    // 동시에 두 번 불렸으면(같은 결과 버전 표가 이미 있음) 먼저 보낸 쪽을 기다린다.
+    if (ticketError || !made) return ticketError?.code === '23505' ? { sessionUrl: null } : null;
+    const text = buildClaudeReviewPayload({
+      taskId,
+      resultRevision: revision,
+      repo,
+      branch: resultBranch(String(result.source ?? ''), taskId, String(result.work_item_id ?? '')),
+      material: reviewMaterial(),
+      submit: { url: `${env('SUPABASE_URL')}/functions/v1/submit-review`, token: ticket },
+    });
+    try {
+      const res = await fetch(fireUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${fireToken}`, 'Content-Type': 'application/json', 'anthropic-version': ANTHROPIC_VERSION },
+        body: JSON.stringify({ text }),
+        signal: AbortSignal.timeout(FIRE_TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      await admin.from('usage_runs').insert({ owner_id: user.id, agent: 'claude', task_id: taskId, kind: 'cloud' });
+      return { sessionUrl: (data.claude_code_session_url as string | undefined) ?? null };
+    } catch {
+      // 시작 못 했으면 표를 지우고 Gemini가 바로 채점한다(같은 일을 두 번 시키지 않음: Claude 세션은 없음).
+      await admin.from('plan_submit_tokens').delete().eq('id', made.id);
+      return null;
+    }
+  };
+
+  // 1단계: 규칙 검사(토큰 0). 막히면 AI를 부르지 않는다.
+  const gates = ruleCheck({ diff: String(result.diff ?? ''), testLog: String(result.test_log ?? ''), changeScope: String(spec.change_scope ?? '') });
+  let score: Score | null = null;
+  let judge = '규칙';
+  if (!gates.some((g) => g.blocking && !g.ok)) {
+    // 2단계(v0.4.94 소유자 "코딩 작업은 클로드가 보고 채점"): Claude 보조 개발 루틴에 채점만 맡긴다(구독 안, 하루 상한 함께 셈).
+    // 점수는 세션이 submit-review로 보낸다. Claude가 휴가·상한·미연결이거나 6시간 안에 점수가 안 오면 아래 Gemini 무료 채점.
+    const pending = await askClaude();
+    if (pending) return reply(200, { ok: true, pending: true, judge: 'Claude', sessionUrl: pending.sessionUrl });
+    // 2단계(대신): Gemini 무료 채점
+    const keys = [env('GEMINI_API_KEY'), env('GEMINI_API_KEY2')];
+    const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
+    const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
+    if (away.has('studioA')) keys[0] = '';
+    if (away.has('studioB')) keys[1] = '';
+    const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_REVIEW_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+    const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
+    const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);
+    const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
+    const prompt = reviewMaterial();
     const ask = async (): Promise<Score | null> => {
       for (const [i, key] of keys.entries()) {
         if (!key) continue;

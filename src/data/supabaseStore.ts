@@ -583,7 +583,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async draftPrototype(taskId, text) {
       const data = await invoke('draft-prototype', { taskId, text });
-      return { html: String(data.html ?? ''), planRevision: Number(data.planRevision) };
+      const drafts = Array.isArray(data.drafts)
+        ? (data.drafts as { slot?: string; html?: string }[]).filter((d) => d.html).map((d) => ({ slot: (d.slot === 'B' ? 'B' : 'A') as 'A' | 'B', html: String(d.html) }))
+        : [{ slot: 'A' as const, html: String(data.html ?? '') }];
+      return { drafts, planRevision: Number(data.planRevision) };
     },
     async draftSpec(taskId, text) {
       const data = await invoke('draft-spec', { taskId, text });
@@ -656,6 +659,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async reviewResult(taskId, resultRevision) {
       const data = await invoke('review-result', { taskId, resultRevision });
+      if (data.pending) return data.sessionUrl ? 'started' : 'waiting';
       return toReview(data.review as Row);
     },
     async addProjectRule(projectId, rule) {

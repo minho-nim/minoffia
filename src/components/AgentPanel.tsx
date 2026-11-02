@@ -324,7 +324,7 @@ export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultRevie
         결과 평가 <span className="num num-count">{reviews.length}</span>
       </h3>
       {!reviews.length ? (
-        <p className="muted small">아직 평가한 결과가 없어요. 개발 결과가 오면 규칙 검사와 Gemini 채점이 자동으로 돌아요.</p>
+        <p className="muted small">아직 평가한 결과가 없어요. 개발 결과가 오면 규칙 검사와 Claude 채점(안 되면 Gemini)이 자동으로 돌아요.</p>
       ) : (
         <ul>
           {rows.map((r) => {

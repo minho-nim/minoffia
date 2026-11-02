@@ -47,6 +47,8 @@ export interface WorkflowActions {
   startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** 견본 먼저: 견본 승인 + 견본 작업 끝냄 */
   approvePrototype: (task: Task) => Promise<boolean>;
+  /** 두 견본 중 하나 고르기(나머지 지우고 P 승인, v0.4.94) */
+  pickPrototype?: (task: Task, keep: Attachment) => Promise<void>;
   importPlan: (task: Task, text: string) => Promise<string[] | null>;
   recordStart: (assignment: AgentAssignment, url: string) => Promise<boolean>;
   /** 시작한 작업을 중단으로 기록(동시 실행 1개 제한을 푼다) */
@@ -787,7 +789,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
         <section className={fold.cls('P', 3)} id={`wf-${task.id}-P`}>
           {fold.head('P', 3, <>4-1. 견본 검토 — {GATE_LABEL.P}</>)}
           <p className="muted small">
-            Claude PM이 <b>견본 먼저</b>를 골랐습니다. 계획이 오면 Gemini(무료)가 HTML 견본 한 장을 자동으로 만들어 여기에 올립니다. 미리보기를 보고 견본 승인(P)하세요.
+            Claude PM이 <b>견본 먼저</b>를 골랐습니다. 계획이 오면 Gemini(무료) Studio A·B가 HTML 견본을 하나씩 만들어 여기에 올립니다. 둘을 보고 하나를 고르세요(고르면 견본 승인 P).
             더 정교한 견본이 필요하면 위 견본 작업의 "AI Studio 견본 지시서"로 Google AI Studio Build에서 만들어 올려도 됩니다. 견본을 승인(P)하면 Codex 지시서에 이 견본이 들어갑니다.
           </p>
           {!view.pApproved && prototypeFiles.length === 0 && view.plan!.plan.status === 'needs_clarification' && (
@@ -811,6 +813,26 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
             emptyText="아직 올린 견본이 없습니다."
             allowDocs
           />
+          {!view.pApproved && prototypeFiles.length > 1 && actions.pickPrototype && (
+            <div className="wf-pick">
+              <p className="small">
+                <b>견본 {prototypeFiles.length}장 중 하나를 고르세요.</b> 위에서 눌러 크게 보고 고르면, 나머지는 지우고 견본 승인(P)까지 합니다.
+              </p>
+              <div className="wf-pick-row">
+                {prototypeFiles.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className="btn btn-small btn-primary"
+                    disabled={busy || !canApprove(view, 'P').ok}
+                    onClick={() => void run(() => actions.pickPrototype!(task, f))}
+                  >
+                    {(f.note.split('(')[0].trim() || f.fileName)}로 고르기
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {view.pApproved ? (
             <p className="ok-text">견본 승인됨(P). 이제 Codex 작업을 실행 승인하세요.</p>
           ) : (
@@ -1156,7 +1178,7 @@ const MARK: Record<'met' | 'partial' | 'unmet', string> = { met: '✓', partial:
 
 /** 결과 점수표(v0.4.64): 규칙 검사·AI 점수·판정. 올리기 승인은 늘 사람이 한다. */
 function ReviewCard({ review }: { review: ResultReview | null }) {
-  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Gemini 채점)</p>;
+  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Claude 채점, 안 되면 Gemini)</p>;
   const bad = review.gates.filter((g) => !g.ok);
   return (
     <div className={`review-card is-${review.verdict}`}>

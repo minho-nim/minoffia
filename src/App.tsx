@@ -339,6 +339,8 @@ export function App() {
 
   // 결과 점수 평가(v0.4.64): 훅은 아래 이른 반환보다 위에 두고, 실제 처리(reviewTick)는 아래에서 매 렌더 새로 정한다.
   const reviewing = useRef(new Set<string>());
+  // Claude 채점을 기다리는 결과(점수가 들어오면 한 번 알린다, v0.4.94)
+  const claudeWaiting = useRef(new Set<string>());
   const autoRedoSent = useRef(new Set<string>());
   const reviewTick = useRef<() => void>(() => undefined);
   useEffect(() => {
@@ -848,14 +850,19 @@ export function App() {
     say('ok', `Gemini가 '${task.title}' 견본을 만들고 있어요(무료, HTML 한 장).`);
     try {
       const r = await store.draftPrototype(task.id, text);
-      const file = new File([r.html], `견본-v${r.planRevision}.html`, { type: 'text/html' });
-      const errors = await uploadImages(task.id, 'prototype', r.planRevision, [{ file, role: 'prototype', note: 'Gemini 견본(자동, HTML)' }], 0);
+      // v0.4.94: Studio A·B가 하나씩 만든 견본을 둘 다 올리고, 사장님이 보고 하나를 고른다.
+      const files = r.drafts.map((d) => ({
+        file: new File([d.html], `견본-${d.slot}-v${r.planRevision}.html`, { type: 'text/html' }),
+        role: 'prototype' as const,
+        note: `Studio ${d.slot} 견본(Gemini 자동, HTML)`,
+      }));
+      const errors = await uploadImages(task.id, 'prototype', r.planRevision, files, 0);
       setSnap(await store.load());
       if (errors.length) {
         say('error', `견본을 올리지 못했습니다: ${errors[0]}`);
         return false;
       }
-      say('ok', '견본이 올라왔어요. 업무 카드의 4-1에서 미리보기를 보고 견본 승인(P)하세요.');
+      say('ok', r.drafts.length > 1 ? '견본 두 장(Studio A·B)이 올라왔어요. 업무 카드의 4-1에서 둘을 보고 하나를 고르세요.' : '견본이 올라왔어요. 업무 카드의 4-1에서 미리보기를 보고 견본 승인(P)하세요.');
       return true;
     } catch (e) {
       say('error', `Gemini 견본을 만들지 못했습니다: ${(e as Error).message}`);
@@ -1134,6 +1141,18 @@ export function App() {
       return errors;
     },
     updateAttachment: (a) => step(a.taskId, () => store.updateAttachment(a)),
+    // v0.4.94: 두 견본 중 하나를 고르면 나머지는 지우고 견본 승인(P)한다(Codex 지시서에는 고른 견본만 들어간다).
+    pickPrototype: async (task, keep) => {
+      const others = attachmentsOf(snap.workflow.attachments, task.id, 'prototype', keep.planRevision ?? null).filter((x) => x.id !== keep.id);
+      const ok = await step(
+        task.id,
+        async () => {
+          for (const o of others) await store.deleteAttachment(o);
+        },
+        `${keep.note.split('(')[0].trim() || keep.fileName}을(를) 골랐어요.`,
+      );
+      if (ok) await workflowActions.approvePrototype(task);
+    },
     deleteAttachment: (a) => step(a.taskId, () => store.deleteAttachment(a), `${a.fileName}을(를) 지웠습니다.`),
     moveAttachment: (task, id, delta) =>
       step(task.id, async () => {
@@ -1240,7 +1259,7 @@ export function App() {
       }),
   };
 
-  // 결과 점수 평가(v0.4.64): 새 결과가 오면 서버가 규칙 검사 → Gemini 채점을 한 번 하고,
+  // 결과 점수 평가(v0.4.64): 새 결과가 오면 서버가 규칙 검사 → Claude 채점(v0.4.94, 안 되면 Gemini)을 한 번 하고,
   // '다시 개발'이면 고칠 점만 적어 기존 수정 요청 길(PM 재계획 → 실행 승인)로 자동으로 보낸다(최대 2번, 그다음은 사장님).
   reviewTick.current = () => {
     if (store.mode === 'supabase' && !client) return;
@@ -1251,6 +1270,12 @@ export function App() {
       const key = `${t.id}:${r.revision}`;
       const review = (snap.workflow.reviews ?? []).find((x) => x.taskId === t.id && x.resultRevision === r.revision);
       if (review) {
+        if (claudeWaiting.current.delete(key)) {
+          const score = review.total === null ? '' : ` ${review.total}점`;
+          if (review.verdict === 'pass') say('ok', `'${t.title}' 결과 v${r.revision} Claude 채점${score}: 검토 통과. 확인하고 올리기 승인하세요.`);
+          else if (review.verdict === 'redo') say('ok', `'${t.title}' 결과 v${r.revision} Claude 채점${score}: 고칠 점이 있어 다시 개발을 보내요(자동 ${review.autoRedo + 1}/2).`);
+          else say('error', `'${t.title}' 결과 v${r.revision} Claude 채점${score}: 사장님 확인이 필요해요. 업무 카드의 점수표를 보세요.`);
+        }
         if (review.verdict === 'redo' && review.feedback && !autoRedoSent.current.has(key)) {
           autoRedoSent.current.add(key);
           void workflowActions.requestRevision(t, review.feedback);
@@ -1262,6 +1287,12 @@ export function App() {
       void store
         .reviewResult(t.id, r.revision)
         .then(async (rv) => {
+          // v0.4.94: 코딩 결과는 Claude가 채점한다. 점수는 세션이 보내면 실시간으로 들어오고, 그때 위에서 다시 개발을 보낸다.
+          if (rv === 'started') say('ok', `'${t.title}' 결과 v${r.revision}을 Claude가 채점하고 있어요. 점수가 오면 알려 드려요.`);
+          if (typeof rv === 'string') {
+            claudeWaiting.current.add(key);
+            return;
+          }
           setSnap(await store.load());
           const score = rv.total === null ? '' : ` ${rv.total}점`;
           if (rv.verdict === 'pass') say('ok', `'${t.title}' 결과 v${r.revision} 평가${score}: 검토 통과. 확인하고 올리기 승인하세요.`);
