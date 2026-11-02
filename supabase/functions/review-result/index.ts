@@ -4,6 +4,7 @@
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않는다. 글은 저장하지 않고 점수·이유만 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, redoFeedback, REVIEW_SYSTEM, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
+import { loadRules } from './projectRules.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
     const { data: a } = await userClient.from('agent_assignments').select('assignee').eq('task_id', taskId).eq('plan_revision', result.plan_revision).eq('work_item_id', result.work_item_id).maybeSingle();
     assignee = String(a?.assignee ?? '');
   }
-  const { data: ruleRows } = await userClient.from('project_rules').select('rule').eq('project_id', task.project_id).order('created_at').limit(40);
+  const projectRules = await loadRules(userClient, task.project_id);
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { count: redos } = await admin.from('result_reviews').select('id', { count: 'exact', head: true }).eq('task_id', taskId).eq('verdict', 'redo');
 
@@ -100,7 +101,7 @@ Deno.serve(async (req) => {
       preserveConstraints: String(spec.preserve_constraints ?? ''),
       testCriteria: String(spec.test_criteria ?? ''),
       item,
-      projectRules: (ruleRows ?? []).map((r: { rule: string }) => r.rule),
+      projectRules,
       gates,
       diff: String(result.diff ?? ''),
       testLog: String(result.test_log ?? ''),
