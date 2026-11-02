@@ -87,6 +87,18 @@ function explainDbError(message: string): string {
   return hit ? hit[1] : `저장하지 못했습니다: ${message}`;
 }
 
+/** 탭 높이를 CSS 변수(--tabs-h)로: 넓은 화면에서 칩 줄을 탭 바로 아래에 붙이는 데 쓴다(탭이 두 줄이 되어도, v0.4.70) */
+let tabsObserver: ResizeObserver | null = null;
+function watchTabsHeight(el: HTMLElement | null) {
+  tabsObserver?.disconnect();
+  tabsObserver = null;
+  if (!el || typeof ResizeObserver === 'undefined') return;
+  const set = () => document.documentElement.style.setProperty('--tabs-h', `${el.offsetHeight}px`);
+  set();
+  tabsObserver = new ResizeObserver(set);
+  tabsObserver.observe(el);
+}
+
 export function App() {
   const [booting, setBooting] = useState(true);
   const [client, setClient] = useState<SupabaseClient | null>(null);
@@ -1326,7 +1338,7 @@ export function App() {
         </section>
 
         <aside className="panel">
-          <nav className="tabs" role="tablist">
+          <nav className="tabs" role="tablist" ref={watchTabsHeight}>
             <button type="button" role="tab" aria-selected={tab === 'chat'} onClick={() => setTab('chat')}>
               대화
             </button>
