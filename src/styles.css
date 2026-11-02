@@ -622,8 +622,29 @@ a {
   gap: 8px;
 }
 
-.mode .link-btn.push-off {
-  color: #ff8a73;
+/* 휴대폰 알림 켜기·끄기 아이콘(v0.4.87): 밝기 버튼과 같은 둥근 테두리 */
+.push-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 231, 200, 0.45);
+  background: transparent;
+  color: rgba(246, 231, 200, 0.7);
+  cursor: pointer;
+}
+.push-icon:hover {
+  background: rgba(246, 231, 200, 0.12);
+}
+.push-icon.is-on {
+  color: #ffd27a;
+  border-color: rgba(255, 210, 122, 0.6);
+}
+.push-icon.is-blocked {
+  opacity: 0.55;
 }
 
 .push-note {
