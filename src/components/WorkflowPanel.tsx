@@ -260,7 +260,9 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 type="button"
                 onClick={() => {
                   setUnfolded((cur) => new Set(cur).add(s.key));
-                  requestAnimationFrame(() => document.getElementById(`wf-${task.id}-${s.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+                  // 그 칸이 아직 없으면(예: 작업이 0개라 실행 칸이 없음) 견본 칸, 그다음 바로 앞의 있는 칸으로 간다(v0.4.98)
+                  const keys = [s.key, ...(s.key === 'E' ? ['P'] : []), ...STEPS.slice(0, i).map((x) => x.key).reverse()];
+                  requestAnimationFrame(() => keys.map((k) => document.getElementById(`wf-${task.id}-${k}`)).find(Boolean)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
                 }}
               >
                 {s.label}
