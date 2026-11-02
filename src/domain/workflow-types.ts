@@ -59,6 +59,10 @@ export interface WorkItem {
   preserve_constraints: string[];
   attachment_refs: string[];
   requires_execution_approval: boolean;
+  /** 난이도 1~10(v0.4.71, 없으면 예전 계획) */
+  difficulty?: number;
+  /** 난이도 이유 한 줄 */
+  difficulty_reason?: string;
 }
 
 /** 개발 방식(새 플로우 07단계): 견본 먼저(AI Studio Build → 견본 승인 → Codex) / 바로 개발 */
