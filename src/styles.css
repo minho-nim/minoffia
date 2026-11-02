@@ -3534,10 +3534,3 @@ a {
   }
 }
 
-/* 작업 난이도 표시(v0.4.71) */
-.pill-level-easy {
-  color: var(--ok);
-}
-.pill-level-hard {
-  color: var(--danger);
-}
