@@ -80,6 +80,7 @@
 - 프로젝트에서 지켜야 할 것(v0.4.57, 소유자 "AI가 알아서"): AI가 기획서 초안·PM 계획·보조 개발 결과에 `project_rules`로 적어 보내면 서버가 `project_rules`(0027)에 쌓고, 다음 기획서 초안·PM·보조 개발·Codex 지시서에 함께 넣는다(공통 코드 `projectRules.ts` 5곳 복사). 소유자는 프로젝트 탭에서 지우기·직접 더하기만. 기본 규칙(v0.4.73, 소유자 "모든 프로젝트에 기본 적용"): `src/domain/baseRules.ts`의 `BASE_RULES`가 모든 프로젝트 지시서(기획서·PM·보조 개발·Codex·채점)에 늘 먼저 들어간다(서버 `projectRules.ts`의 `loadRules`, 7곳 복사(create-repo 포함), 같은지는 시험이 확인). 바꾸면 함수도 다시 배포.
 - 결과 점수 평가(v0.4.64, 소유자 2026-11-02): 결과 버전마다 서버 `review-result`가 한 번 1단계 규칙 검사(시험·변경·비밀값 막힘, 위험 패턴·범위는 참고, 토큰 0) → 막히지 않으면 2단계 Gemini 무료 채점(완료 기준 40·기획 25·유지 조건 15·범위 10·품질 10, 경계 70~85점이면 한 번 더 평균) → 판정(80점 이상·위반 없음=통과). 미달이면 앱이 고칠 점만 적어 기존 수정 요청 길로 자동 재전송(최대 2번, 그다음 소유자). 규칙은 `src/domain/review.ts`(서버 `review-result/rubric.ts`로 복사), 기록 `result_reviews`(0030, 추가만). 올리기 승인(B)은 늘 소유자(미달이면 버튼에 표시). 에이전트 카드에 AI별 평가 통과율.
 - 난이도 기반 배정(v0.4.71, 소유자, Task Master 아이디어): PM이 작업마다 `difficulty`(1~10)·`difficulty_reason`을 매기고 쉬움·보통(1~6)은 Codex, 어려움(7~10)만 Claude(휴가면 다른 쪽, `src/domain/difficulty.ts`·`dispatch-claude` 안내). 없으면 예전 계획 그대로. 배정은 PM이 알아서 하고 화면에는 난이도를 보여 주지 않는다(v0.4.72 소유자: 표시·안내 모두 뺌).
+- Gemini 개발 시험(v0.4.77, 소유자 2026-11-02): `.github/workflows/gemini-dev.yml`(손으로 실행)이 대상 저장소 main에서 `ai/gemini/…` 브랜치를 만들고 Gemini CLI(0.64.0 고정, 무료 키 `GEMINI_API_KEY`)로 고친 뒤 시험·비밀값 검사를 지나면 그 브랜치만 push한다(PR·병합 없음, 토큰 `TARGET_REPO_TOKEN`은 Gemini 단계에 넘기지 않음, 이 저장소·minho-nim/MinLab은 대상 아님). 앱 연결(쉬움 1~3 → Gemini)은 시험 결과를 본 뒤. 개인정보·비밀값만 안 보내면 코드는 Gemini에 보내도 된다(소유자).
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
 
 ## 구조
