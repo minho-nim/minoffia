@@ -128,7 +128,7 @@ export function buildCodexHandoff(
 const shortId = (id: string) => id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
 
 /** PR 브랜치 이름: ai/<codex|claude>/<업무 앞 8자>-<작업> (Claude 보조 개발 지시문 dispatch-claude-dev/payload.ts와 같은 규칙) */
-export function codexBranch(task: Task, workItemId: string, tool: 'codex' | 'claude' = 'codex'): string {
+export function codexBranch(task: Task, workItemId: string, tool: 'codex' | 'claude' | 'gemini' = 'codex'): string {
   const item = workItemId.replace(/[^a-z0-9-]/gi, '').toLowerCase();
   return `ai/${tool}/${shortId(task.id)}${item ? `-${item}` : ''}`;
 }

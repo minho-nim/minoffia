@@ -45,7 +45,8 @@ export interface Approval {
   createdAt: string;
 }
 
-export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional' | 'grok_optional';
+/** gemini_dev = Gemini 개발(GitHub Actions의 Gemini CLI, 쉬운 일, v0.4.82). gemini_optional은 견본(AI Studio) */
+export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional' | 'grok_optional' | 'gemini_dev';
 export type ExecutionMode = 'codex_cloud' | 'manual_handoff';
 
 export interface WorkItem {
@@ -111,7 +112,8 @@ export interface AgentAssignment {
   workItemId: string;
   title: string;
   assignee: AgentKind;
-  executionMode: ExecutionMode;
+  /** gemini_actions = Gemini 개발 워크플로(GitHub Actions)로 자동 실행(v0.4.82) */
+  executionMode: ExecutionMode | 'gemini_actions';
   dispatchStatus: DispatchStatus;
   /** none: 아직 없음 / server_verified: 서버가 공급자에게 확인 / user_reported: 사용자가 직접 기록 */
   statusSource: 'none' | 'server_verified' | 'user_reported';
@@ -129,8 +131,8 @@ export interface ResultPackage {
   revision: number;
   planRevision: number | null;
   workItemId: string;
-  /** claude_session_auto = Claude 보조 개발 세션이 submit-result로 보낸 결과(v0.4.3) */
-  source: 'codex_cloud_manual' | 'claude_manual' | 'claude_session_auto' | 'manual';
+  /** claude_session_auto = Claude 보조 개발 세션이 submit-result로 보낸 결과(v0.4.3), gemini_actions_auto = Gemini 개발 워크플로(v0.4.82) */
+  source: 'codex_cloud_manual' | 'claude_manual' | 'claude_session_auto' | 'gemini_actions_auto' | 'manual';
   summary: string;
   diff: string;
   testLog: string;
