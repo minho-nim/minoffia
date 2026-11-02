@@ -760,6 +760,31 @@ a {
   .topbar-mini .ver {
     font-size: 11px;
   }
+  /* 글자는 왼쪽 맞춤, 바 높이(36px) 밖으로 넘치지 않게(넘치면 아래 작은 사무실이 가려졌다, v0.4.80) */
+  .topbar-mini {
+    overflow: hidden;
+  }
+  .topbar-mini > button:first-child {
+    min-width: 0;
+    text-align: left;
+    line-height: 1.1;
+  }
+}
+/* 아주 좁으면(v0.4.80 소유자): 이름·버전을 왼쪽 맞춤 두 줄로, 왼쪽 여백도 줄인다 */
+@media (max-width: 380px) {
+  .topbar-mini {
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    gap: 6px;
+  }
+  .topbar-mini > button:first-child {
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+  .topbar-mini .ver {
+    display: block;
+    font-size: 10px;
+    line-height: 1;
+  }
 }
 
 @media (max-width: 1039px) and (prefers-reduced-motion: reduce) {
