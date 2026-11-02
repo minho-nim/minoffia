@@ -3493,10 +3493,9 @@ a {
   overflow-wrap: anywhere;
 }
 
-/* 대화가 없을 때도 입력창은 다른 때처럼 아래에, 인사말·예시는 입력창 바로 위 설명으로(v0.4.78 소유자: "아래에 붙는 게 맞을 듯") */
+/* 대화가 없을 때: 인사말·예시는 채팅창 맨 위, 입력창은 다른 때처럼 아래(v0.4.79 소유자 "채팅창 맨 위가 나으려나?") */
 .inbox.is-empty > .inbox-empty {
-  margin-top: auto;
-  /* 화면이 길어 입력창이 아래에 붙어 있을 때도 인사말은 그 바로 위에 보인다 */
+  /* 휴대폰처럼 입력창이 화면 아래에 붙어 인사말을 가릴 때만 그 바로 위로 올라온다 */
   position: sticky;
   bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--inbox-form-h, 110px) + 8px);
   z-index: 3;
