@@ -211,10 +211,34 @@ export function App() {
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') void reload();
     }, unsubscribe ? POLL_WITH_REALTIME_MS : POLL_MS);
+    // 휴대폰에서 앱이 뒤로 가 있으면 실시간 연결이 끊겨 그동안의 변경을 놓친다(v0.4.85, 소유자 "알림이 온 후 반영이 느린 듯").
+    // 다시 화면에 나오면(알림 누름·앱 다시 열기·인터넷 다시 연결) 곧바로 다시 읽고, 알림이 오면 서비스 워커가 알려 준다.
+    let last = 0;
+    const wake = (force = false) => {
+      if (!force && document.visibilityState !== 'visible') return;
+      if (Date.now() - last < 1500) return;
+      last = Date.now();
+      void reload();
+      setInboxTick((n) => n + 1);
+    };
+    const onVisible = () => wake();
+    const onMessage = (e: MessageEvent) => {
+      if ((e.data as { type?: string } | null)?.type === 'refresh') wake(true);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    window.addEventListener('pageshow', onVisible);
+    window.addEventListener('online', onVisible);
+    navigator.serviceWorker?.addEventListener('message', onMessage);
     return () => {
       window.clearInterval(id);
       window.clearTimeout(timer);
       unsubscribe?.();
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+      window.removeEventListener('online', onVisible);
+      navigator.serviceWorker?.removeEventListener('message', onMessage);
     };
   }, [store, reload]);
 

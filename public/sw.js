@@ -10,16 +10,26 @@ self.addEventListener('push', (event) => {
     // 내용을 못 읽으면 기본 문구
   }
   event.waitUntil(
-    self.registration.showNotification(msg.title, {
-      body: msg.body,
-      tag: msg.tag,
-      renotify: true,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-      data: { url: msg.url },
-    }),
+    Promise.all([
+      self.registration.showNotification(msg.title, {
+        body: msg.body,
+        tag: msg.tag,
+        renotify: true,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        data: { url: msg.url },
+      }),
+      // 열려 있는 앱 화면에 바로 다시 읽으라고 알린다(v0.4.85)
+      refreshClients(),
+    ]),
   );
 });
+
+function refreshClients() {
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const c of list) c.postMessage({ type: 'refresh' });
+  });
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
@@ -27,7 +37,10 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
-        if (c.url.startsWith(self.location.origin) && 'focus' in c) return c.focus();
+        if (c.url.startsWith(self.location.origin) && 'focus' in c) {
+          c.postMessage({ type: 'refresh' });
+          return c.focus();
+        }
       }
       return self.clients.openWindow(url);
     }),
