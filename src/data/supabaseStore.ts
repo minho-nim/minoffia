@@ -3,7 +3,7 @@ import { SUPABASE_KEY, SUPABASE_URL } from '../lib/supabase';
 import { MIME_EXT, storageContentType, type Attachment, type ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { AgentId, Project, ProjectRule, Task, UsageRun } from '../domain/types';
-import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
+import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, ResultReview, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
 import type { OfficeStore } from './store';
@@ -179,8 +179,25 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews',
 ];
+
+const toReview = (r: Row): ResultReview => ({
+  id: r.id as string,
+  taskId: r.task_id as string,
+  resultRevision: r.result_revision as number,
+  workItemId: (r.work_item_id as string) ?? '',
+  assignee: (r.assignee as string) ?? '',
+  gates: (r.gates as ResultReview['gates']) ?? [],
+  score: (r.score as ResultReview['score']) ?? null,
+  total: (r.total as number | null) ?? null,
+  verdict: r.verdict as ResultReview['verdict'],
+  reasons: (r.reasons as string[]) ?? [],
+  feedback: (r.feedback as string) ?? '',
+  autoRedo: (r.auto_redo as number) ?? 0,
+  judge: (r.judge as string) ?? '',
+  createdAt: r.created_at as string,
+});
 
 const toDeployment = (r: Row): Deployment => ({
   id: r.id as string,
@@ -264,7 +281,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules, reviews] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -285,6 +302,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('deployments').select('*').order('created_at'),
         client.from('agent_leave').select('agent'),
         client.from('project_rules').select('*').order('created_at'),
+        client.from('result_reviews').select('*').order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -304,6 +322,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           imageAnalyses: imageAnalyses.error ? [] : (imageAnalyses.data ?? []).map(toAnalysis),
           prChecks: prChecks.error ? [] : (prChecks.data ?? []).map(toPrCheck),
           deployments: deployments.error ? [] : (deployments.data ?? []).map(toDeployment),
+          reviews: reviews.error ? [] : (reviews.data ?? []).map(toReview),
         },
         leave: leave.error ? [] : (leave.data ?? []).map((r: Row) => r.agent as AgentId),
         projectRules: projectRules.error
@@ -630,6 +649,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async setLeave(agent, onLeave) {
       if (onLeave) check(await client.from('agent_leave').upsert({ agent }));
       else check(await client.from('agent_leave').delete().eq('agent', agent));
+    },
+    async reviewResult(taskId, resultRevision) {
+      const data = await invoke('review-result', { taskId, resultRevision });
+      return toReview(data.review as Row);
     },
     async addProjectRule(projectId, rule) {
       check(await client.from('project_rules').insert({ project_id: projectId, rule: rule.replace(/\s+/g, ' ').trim().slice(0, 200), source: 'owner' }));

@@ -76,6 +76,7 @@
 - AI 휴가(v0.4.39, 소유자 2026-11-01): '팀 관리' 탭(v0.4.40)에서 근무·휴가 칸 사이로 옮기면(체크 후 가운데 버튼, 또는 끌어다 놓기) 휴가(`agent_leave`, 0026). 휴가인 AI는 사무실 아래 출입문으로 나가 사라지고, 새 배정(`routeTask`의 leave)과 PM 계획(`dispatch-claude` 프롬프트)에서 빠져 규칙대로 다른 AI가 맡는다. 휴가를 보내면 그 AI의 열린 업무(업무 카드 담당)는 같은 규칙으로 대신 맡을 AI에게 넘긴다(v0.4.54, 맡을 AI가 없으면 그대로; PM 계획 안의 작업 배정은 서버 규칙상 바꾸지 않음). 미니엉·CI 봇은 휴가 대상이 아니다.
 - 캐릭터 하나 = 계정 하나(v0.4.44, 소유자 2026-11-01): 미니엉 = 대화창의 얼굴(규칙, 모델 호출 없음; 질문·판단은 근무 중인 Studio의 Gemini 답을 받아 전하고 말풍선 아래 'Gemini · Studio A가 답함'). Studio A = Gemini 키 A, Studio B = Gemini 키 B(휴가인 쪽 키는 서버 4곳 ask-gemini·analyze-image·draft-spec·draft-prototype에서 쓰지 않음, 둘 다 휴가면 Gemini 멈춤). Codex (Linear) = OpenAI(ChatGPT 계정): 주 개발(휴가면 GPT 링크 숨김). 기획에서 ChatGPT를 뺐다(v0.4.56 소유자: 기획서는 Gemini, 업무 계획은 Claude PM). Grok은 무료로 자동 호출할 길이 없어 휴가(데모 기본값도 휴가). 팀 관리에 칸별 전체 선택과 '대신 맡을 AI가 없는 일' 안내(위험 경고 아님).
 - 프로젝트에서 지켜야 할 것(v0.4.57, 소유자 "AI가 알아서"): AI가 기획서 초안·PM 계획·보조 개발 결과에 `project_rules`로 적어 보내면 서버가 `project_rules`(0027)에 쌓고, 다음 기획서 초안·PM·보조 개발·Codex 지시서에 함께 넣는다(공통 코드 `projectRules.ts` 5곳 복사). 소유자는 프로젝트 탭에서 지우기·직접 더하기만.
+- 결과 점수 평가(v0.4.64, 소유자 2026-11-02): 결과 버전마다 서버 `review-result`가 한 번 1단계 규칙 검사(시험·변경·비밀값 막힘, 위험 패턴·범위는 참고, 토큰 0) → 막히지 않으면 2단계 Gemini 무료 채점(완료 기준 40·기획 25·유지 조건 15·범위 10·품질 10, 경계 70~85점이면 한 번 더 평균) → 판정(80점 이상·위반 없음=통과). 미달이면 앱이 고칠 점만 적어 기존 수정 요청 길로 자동 재전송(최대 2번, 그다음 소유자). 규칙은 `src/domain/review.ts`(서버 `review-result/rubric.ts`로 복사), 기록 `result_reviews`(0030, 추가만). 올리기 승인(B)은 늘 소유자(미달이면 버튼에 표시). 에이전트 카드에 AI별 평가 통과율.
 - `minho-nim/MinLab` 저장소는 건드리지 않는다.
 
 ## 구조
@@ -89,7 +90,7 @@
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase(여러 기기 실시간 반영은 Supabase Realtime, 표 목록은 `0015_realtime.sql`·`0020`과 `supabaseStore.ts`의 `REALTIME_TABLES`가 같아야 함)
-- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release · push (전체 그림은 `docs/ARCHITECTURE.md`)
+- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release · push · review-result (전체 그림은 `docs/ARCHITECTURE.md`)
 - `src/domain/myTurn.ts`·`stall.ts`·`src/components/MyTurn.tsx` 내 차례·멈춤 감지, `src/office/speech.ts` 사무실 말풍선
 - `src/domain/devlog.ts`·`src/components/DevlogPanel.tsx` 개발일지(대화 + 업무 기록 → 프로젝트별·날짜별 Markdown)
 
