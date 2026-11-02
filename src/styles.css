@@ -3491,10 +3491,25 @@ a {
   margin-top: 6px;
 }
 
-/* 대화 탭 프로젝트 칩 줄: 휴대폰(작은 사무실)에서만 탭 바로 아래에 고정(v0.4.68). PC는 제자리(칩 줄만 떠 보여 이상함, v0.4.69) */
+/* 대화 탭 프로젝트 칩 줄: 내려도 탭 바로 아래에 붙어 있다(휴대폰 v0.4.68, PC도 탭과 한 덩어리로 v0.4.70) */
 .project-chips {
   margin-inline: -4px;
   padding: 6px 4px 6px;
+}
+@media (min-width: 1040px) {
+  .tabs {
+    position: sticky;
+    top: 0;
+    z-index: 45;
+    background: var(--surface);
+  }
+  .project-chips {
+    position: sticky;
+    top: var(--tabs-h, 42px);
+    z-index: 44;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
 }
 @media (max-width: 1039px) {
   .layout.is-mini .project-chips {
