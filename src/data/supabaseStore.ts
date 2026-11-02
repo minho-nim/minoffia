@@ -6,7 +6,7 @@ import type { AgentId, Project, ProjectRule, Task, UsageRun } from '../domain/ty
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, ResultReview, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
-import type { OfficeStore } from './store';
+import type { OfficeStore, ResultInboxItem } from './store';
 
 type Row = Record<string, unknown>;
 
@@ -568,7 +568,28 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         remainingIssues: r.remaining_issues as string,
         branch: r.branch as string,
         previewUrl: (r.preview_url as string | undefined) ?? '',
+        screenshots: Array.isArray(r.screenshots) ? (r.screenshots as ResultInboxItem['screenshots']) : [],
       }));
+    },
+    async linkResultShots(taskId, resultRevision, shots) {
+      const owner = await userId();
+      for (const [i, s] of shots.entries()) {
+        if (!s.path.startsWith(`${owner}/${taskId}/`) || !['image/jpeg', 'image/png'].includes(s.mime)) continue;
+        const res = await client.from('attachments').insert({
+          task_id: taskId,
+          kind: 'result',
+          result_revision: resultRevision,
+          position: i,
+          role: 'after',
+          note: s.name.includes('mobile') || s.name.includes('휴대폰') ? '자동 화면 확인(휴대폰 400px)' : '자동 화면 확인(데스크톱 1400px)',
+          file_name: s.name.slice(0, 200),
+          mime: s.mime,
+          size_bytes: s.size,
+          sha256: s.sha256,
+          storage_path: s.path,
+        });
+        if (res.error && !/duplicate/i.test(res.error.message)) throw new Error(res.error.message);
+      }
     },
     async markResultInbox(id, status, note) {
       const { data, error } = await client.from('dev_result_inbox').update({ status, note: note.slice(0, 2000) }).eq('id', id).eq('status', 'new').select('id');

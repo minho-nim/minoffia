@@ -24,3 +24,4 @@ end $$;
 insert into plan_submit_tokens (owner_id, task_id, spec_revision, token_hash, expires_at, kind, result_revision)
   values ('e9e9e9e9-0000-4000-8000-000000000001', 'e9e9e9e9-0000-4000-8000-000000000003', 1, md5('rv-d') || md5('rv2-d'), now() + interval '6 hours', 'review', 2);
 \echo Claude 채점 제출표 테스트 완료
+

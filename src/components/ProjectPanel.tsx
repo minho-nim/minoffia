@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Shortcut } from '../domain/shortcuts';
 import { BASE_RULES } from '../domain/baseRules';
 import { useState } from 'react';
 import type { Project, ProjectRule, Task } from '../domain/types';
@@ -27,13 +28,16 @@ interface Props {
   onRemoveRule?: (rule: ProjectRule) => void;
   /** 프로젝트 '한 일 기록'(v0.4.74): 펼쳤을 때만 그린다 */
   renderHistory?: (project: Project) => ReactNode;
+  /** 미뤄 둔 일(개발 AI가 남긴 shortcut 주석, v0.4.97) */
+  shortcutsOf?: (projectId: string) => Shortcut[];
+  onOpenTask?: (taskId: string) => void;
 }
 
 /**
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], onAddRule, onRemoveRule, renderHistory }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], onAddRule, onRemoveRule, renderHistory, shortcutsOf, onOpenTask }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
@@ -229,6 +233,39 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   {historyOpen[p.id] && renderHistory(p)}
                 </details>
               )}
+              {(() => {
+                const debts = shortcutsOf?.(p.id) ?? [];
+                if (!debts.length) return null;
+                return (
+                  <details className="project-rules project-debt">
+                    <summary>
+                      미뤄 둔 일 <span className="num num-count">{debts.length}</span>
+                    </summary>
+                    <p className="muted small">개발 AI가 알고 일부러 줄인 곳이에요(코드의 shortcut 주석). 때가 되면 업무로 만들어 고치세요.</p>
+                    <ul>
+                      {debts.map((d, i) => (
+                        <li key={`${d.taskId}-${i}`}>
+                          <span>
+                            {d.text}
+                            {d.noTrigger && <span className="pill pill-warn"> 언제 고칠지 없음</span>}
+                            <br />
+                            <span className="muted small">
+                              {d.file} ·{' '}
+                              {onOpenTask ? (
+                                <button type="button" className="link-btn small" onClick={() => onOpenTask(d.taskId)}>
+                                  {d.taskTitle}
+                                </button>
+                              ) : (
+                                d.taskTitle
+                              )}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                );
+              })()}
               {(
                 <details className="project-rules">
                   <summary>

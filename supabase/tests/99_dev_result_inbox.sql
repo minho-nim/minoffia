@@ -43,6 +43,8 @@ insert into dev_result_inbox (owner_id, task_id, assignment_id, summary, diff)
 select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
 select pg_temp.expect_fail($q$insert into dev_result_inbox (owner_id, task_id, assignment_id) values ('11111111-1111-4111-8111-111111111111', 'c9c9c9c9-0000-4000-8000-000000000001', 'c8c8c8c8-0000-4000-8000-000000000001')$q$, 'row-level security');
 select pg_temp.expect_fail($q$update dev_result_inbox set diff = 'x'$q$, 'only status and note');
+select pg_temp.expect_fail($q$update dev_result_inbox set screenshots = '[{"path":"x"}]'$q$, 'only status and note');
+select pg_temp.expect_fail($q$update dev_result_inbox set preview_url = 'https://evil.example'$q$, 'only status and note');
 update dev_result_inbox set status = 'imported';
 select pg_temp.expect_fail($q$update dev_result_inbox set status = 'invalid'$q$, 'already handled');
 insert into result_packages (task_id, revision, plan_revision, work_item_id, source, summary) values ('c9c9c9c9-0000-4000-8000-000000000001', 1, 1, 'W1', 'claude_session_auto', '자동');
