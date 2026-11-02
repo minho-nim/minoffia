@@ -1,3 +1,5 @@
+import { redoFeedback, ruleCheck, verdictOf } from '../domain/review';
+import type { ResultReview } from '../domain/workflow-types';
 import { startBlocker } from '../domain/concurrency';
 import { attachmentBlocker, attachmentsOf, MAX_TOTAL_BYTES, totalBytes } from '../domain/attachments';
 import { linkBlocker, MAX_CLARIFICATIONS } from '../domain/requestContext';
@@ -202,6 +204,36 @@ export function createLocalStore(): OfficeStore {
       const check = canRequestRevision(deriveWorkflow(task, state.workflow));
       if (!check.ok) throw new Error(check.reason);
       commit({ ...state, workflow: { ...state.workflow, revisionRequests: [...state.workflow.revisionRequests, request] } });
+    },
+    async reviewResult(taskId, resultRevision) {
+      // 로컬 데모: Gemini를 부를 수 없어 규칙 검사만 하고, 막히지 않으면 사장님 확인으로 둔다.
+      const done = (state.workflow.reviews ?? []).find((r) => r.taskId === taskId && r.resultRevision === resultRevision);
+      if (done) return done;
+      const result = state.workflow.results.find((r) => r.taskId === taskId && r.revision === resultRevision);
+      if (!result) throw new Error('결과 패키지를 찾을 수 없습니다.');
+      const spec = [...state.workflow.specs].filter((s) => s.taskId === taskId).sort((a, b) => b.revision - a.revision)[0];
+      const gates = ruleCheck({ diff: result.diff, testLog: result.testLog, changeScope: spec?.changeScope ?? '' });
+      const redos = (state.workflow.reviews ?? []).filter((r) => r.taskId === taskId && r.verdict === 'redo').length;
+      const v = verdictOf(gates, null, redos);
+      const blocked = gates.some((g) => g.blocking && !g.ok);
+      const review: ResultReview = {
+        id: newId(),
+        taskId,
+        resultRevision,
+        workItemId: result.workItemId,
+        assignee: state.workflow.assignments.find((a) => a.taskId === taskId && a.workItemId === result.workItemId)?.assignee ?? '',
+        gates,
+        score: null,
+        total: null,
+        verdict: v.verdict,
+        reasons: blocked ? v.reasons : ['로컬 데모는 규칙 검사만 해요(AI 점수 없음).'],
+        feedback: v.verdict === 'pass' ? '' : redoFeedback(gates, null, v.reasons),
+        autoRedo: redos,
+        judge: '규칙(데모)',
+        createdAt: new Date().toISOString(),
+      };
+      commit({ ...state, workflow: { ...state.workflow, reviews: [...(state.workflow.reviews ?? []), review] } });
+      return review;
     },
     async addAttachment(att, file) {
       const task = state.tasks.find((t) => t.id === att.taskId);

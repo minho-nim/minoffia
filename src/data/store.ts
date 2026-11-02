@@ -5,7 +5,7 @@ import type { Attachment, ImageAnalysis } from '../domain/attachments';
 import type { ChatEntry } from '../domain/devlog';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Snapshot, Task, UsageRun } from '../domain/types';
-import type { AgentAssignment, Approval, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec } from '../domain/workflow-types';
+import type { AgentAssignment, Approval, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec, ResultReview } from '../domain/workflow-types';
 
 export type StoreMode = 'local' | 'supabase';
 
@@ -35,6 +35,8 @@ export interface OfficeStore {
   addResult(result: ResultPackage): Promise<void>;
   /** 결과 검토 → Claude PM 수정 요청 */
   addRevisionRequest(request: RevisionRequest): Promise<void>;
+  /** 결과 점수 평가(v0.4.64): 규칙 검사 → Gemini 채점 → 판정. 같은 결과 버전은 한 번만(이미 있으면 그것을 돌려줌) */
+  reviewResult(taskId: string, resultRevision: number): Promise<ResultReview>;
   /**
    * 이미지 첨부. 파일을 비공개 저장소에 올린 뒤 기록을 남긴다. 같은 업무의 같은 파일(sha256)은 한 번만 저장한다.
    * `storagePath`는 저장소가 정한다.

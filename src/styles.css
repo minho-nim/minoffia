@@ -3308,3 +3308,96 @@ a {
   width: auto;
   opacity: 0.85;
 }
+
+/* 결과 점수표(v0.4.64) */
+.review-card {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--muted);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.review-card.is-pass {
+  border-left-color: var(--ok);
+}
+
+.review-card.is-redo {
+  border-left-color: var(--accent);
+}
+
+.review-card.is-owner {
+  border-left-color: var(--danger);
+}
+
+.review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 0 6px;
+}
+
+.review-verdict {
+  padding: 1px 8px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+}
+
+.review-verdict.is-pass {
+  color: var(--ok);
+}
+
+.review-verdict.is-redo {
+  color: var(--accent);
+}
+
+.review-verdict.is-owner {
+  color: var(--danger);
+}
+
+.review-parts {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.review-parts li {
+  display: grid;
+  grid-template-columns: minmax(0, 9em) 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.review-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.review-criteria,
+.review-gates {
+  margin: 4px 0;
+  padding-left: 1.1em;
+}
+
+.review-criteria .is-unmet b,
+.review-gates .is-block {
+  color: var(--danger);
+}
+
+.review-criteria .is-met b {
+  color: var(--ok);
+}

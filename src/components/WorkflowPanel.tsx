@@ -1,3 +1,5 @@
+import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
+import type { ResultReview } from '../domain/workflow-types';
 import { AGENT_BY_ID } from '../domain/agents';
 import { useState } from 'react';
 import { attachmentBlocker, attachmentsOf, MAX_PROTOTYPE_FILES, MAX_REQUEST_FILES, MAX_RESULT_FILES, ROLES_FOR, type Attachment, type AttachmentKind, type ImageAnalysis } from '../domain/attachments';
@@ -92,6 +94,8 @@ interface Props {
   clarifications: Clarification[];
   /** 이 프로젝트에서 지켜야 할 것(Codex 지시서에 넣는다, v0.4.57) */
   projectRules?: string[];
+  /** 이 업무 결과의 점수 평가(v0.4.64) */
+  reviews?: ResultReview[];
   /** 링크 읽기는 Supabase 연결 때만 */
   canReadLinks: boolean;
   /** null이면 PM 전송 가능 */
@@ -123,7 +127,7 @@ function stepIndex(view: WorkflowView): number {
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
 
-export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
@@ -723,6 +727,7 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   </p>
                 );
               })()}
+              <ReviewCard review={reviews.find((r) => r.resultRevision === view.result!.revision) ?? null} />
               {view.result.previewUrl && (
                 <p className="small">
                   <a className="preview-link" href={view.result.previewUrl} target="_blank" rel="noreferrer">
@@ -765,7 +770,10 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
                   disabled={busy || !bCheck.ok}
                   onClick={() => void run(() => actions.decide(task, 'B', view.result!.revision, 'approved', '', { result_sha256: view.result!.sha256 }))}
                 >
-                  올리기 승인(GitHub) (결과 v{view.result.revision})
+                  {(() => {
+                    const rv = reviews.find((r) => r.resultRevision === view.result!.revision);
+                    return rv && rv.verdict !== 'pass' ? `점수 미달이지만 올리기 승인 (결과 v${view.result.revision})` : `올리기 승인(GitHub) (결과 v${view.result.revision})`;
+                  })()}
                 </button>
               )}
             </div>
@@ -1005,6 +1013,67 @@ export function WorkflowPanel({ task, project, view, attachments, analyses, allA
             </>
           )}
         </section>
+      )}
+    </div>
+  );
+}
+
+const MARK: Record<'met' | 'partial' | 'unmet', string> = { met: '✓', partial: '△', unmet: '✗' };
+
+/** 결과 점수표(v0.4.64): 규칙 검사·AI 점수·판정. 올리기 승인은 늘 사람이 한다. */
+function ReviewCard({ review }: { review: ResultReview | null }) {
+  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Gemini 채점)</p>;
+  const bad = review.gates.filter((g) => !g.ok);
+  return (
+    <div className={`review-card is-${review.verdict}`}>
+      <p className="review-head">
+        <b>AI 평가{review.total === null ? '' : ` ${review.total}점`}</b>
+        <span className={`review-verdict is-${review.verdict}`}>{VERDICT_LABEL[review.verdict]}</span>
+        <span className="muted small">{review.judge}</span>
+      </p>
+      {review.score && (
+        <ul className="review-parts">
+          {(Object.keys(WEIGHTS) as Part[]).map((k) => (
+            <li key={k}>
+              <span>{PART_LABEL[k]}</span>
+              <span className="review-bar" aria-hidden="true">
+                <span style={{ width: `${(100 * review.score!.parts[k]) / WEIGHTS[k]}%` }} />
+              </span>
+              <span className="mono small">
+                {review.score!.parts[k]}/{WEIGHTS[k]}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {review.score?.summary && <p className="small">{review.score.summary}</p>}
+      {review.score && review.score.criteria.length > 0 && (
+        <details>
+          <summary className="small">완료 기준 {review.score.criteria.filter((c) => c.status === 'met').length}/{review.score.criteria.length} 충족</summary>
+          <ul className="review-criteria small">
+            {review.score.criteria.map((c, i) => (
+              <li key={i} className={`is-${c.status}`}>
+                <b>{MARK[c.status]}</b> {c.text}
+                {c.evidence && <span className="muted"> — {c.evidence}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {bad.length > 0 && (
+        <ul className="review-gates small">
+          {bad.map((g) => (
+            <li key={g.id} className={g.blocking ? 'is-block' : ''}>
+              {g.blocking ? '막힘' : '참고'} · {g.label}: {g.detail}
+            </li>
+          ))}
+        </ul>
+      )}
+      {review.verdict !== 'pass' && review.reasons.length > 0 && (
+        <p className="small">
+          {review.verdict === 'redo' ? '자동으로 다시 개발을 보냈어요: ' : '사장님이 정해 주세요: '}
+          {review.reasons.join(' / ')}
+        </p>
       )}
     </div>
   );

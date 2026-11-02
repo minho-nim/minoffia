@@ -288,6 +288,14 @@ export function App() {
     return () => window.clearInterval(id);
   }, []);
 
+  // 결과 점수 평가(v0.4.64): 훅은 아래 이른 반환보다 위에 두고, 실제 처리(reviewTick)는 아래에서 매 렌더 새로 정한다.
+  const reviewing = useRef(new Set<string>());
+  const autoRedoSent = useRef(new Set<string>());
+  const reviewTick = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    reviewTick.current();
+  }, [snap]);
+
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
@@ -1155,6 +1163,38 @@ export function App() {
       }),
   };
 
+  // 결과 점수 평가(v0.4.64): 새 결과가 오면 서버가 규칙 검사 → Gemini 채점을 한 번 하고,
+  // '다시 개발'이면 고칠 점만 적어 기존 수정 요청 길(PM 재계획 → 실행 승인)로 자동으로 보낸다(최대 2번, 그다음은 사장님).
+  reviewTick.current = () => {
+    if (store.mode === 'supabase' && !client) return;
+    for (const t of snap.tasks) {
+      const view = deriveWorkflow(t, snap.workflow);
+      const r = view.result;
+      if (!r || view.bApproved || view.resultRevised) continue;
+      const key = `${t.id}:${r.revision}`;
+      const review = (snap.workflow.reviews ?? []).find((x) => x.taskId === t.id && x.resultRevision === r.revision);
+      if (review) {
+        if (review.verdict === 'redo' && review.feedback && !autoRedoSent.current.has(key)) {
+          autoRedoSent.current.add(key);
+          void workflowActions.requestRevision(t, review.feedback);
+        }
+        continue;
+      }
+      if (reviewing.current.has(key)) continue;
+      reviewing.current.add(key);
+      void store
+        .reviewResult(t.id, r.revision)
+        .then(async (rv) => {
+          setSnap(await store.load());
+          const score = rv.total === null ? '' : ` ${rv.total}점`;
+          if (rv.verdict === 'pass') say('ok', `'${t.title}' 결과 v${r.revision} 평가${score}: 검토 통과. 확인하고 올리기 승인하세요.`);
+          else if (rv.verdict === 'redo') say('ok', `'${t.title}' 결과 v${r.revision} 평가${score}: 고칠 점이 있어 다시 개발을 보내요(자동 ${rv.autoRedo + 1}/2).`);
+          else say('error', `'${t.title}' 결과 v${r.revision} 평가${score}: 사장님 확인이 필요해요. 업무 카드의 점수표를 보세요.`);
+        })
+        .catch((e) => say('error', `'${t.title}' 결과를 평가하지 못했어요: ${(e as Error).message}`));
+    }
+  };
+
   const dispatch = async (task: Task, ack: boolean) => {
     if (!client) return;
     const res = await dispatchClaude(client, task.id, ack);
@@ -1475,6 +1515,7 @@ export function App() {
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}
                         projectRules={(snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule)}
+                        reviews={(snap.workflow.reviews ?? []).filter((r) => r.taskId === t.id)}
                         canReadLinks={store.mode === 'supabase'}
                         dispatchBlocker={dispatchBlocker(t)}
                         actions={workflowActions}
