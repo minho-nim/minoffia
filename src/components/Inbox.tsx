@@ -4,6 +4,7 @@ import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questio
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
 import { takeQueued } from '../domain/chatQueue';
+import { needsResearch, type Source } from '../domain/research';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction } from '../domain/stageNotice';
 import { deriveWorkflow } from '../domain/workflow';
@@ -29,6 +30,8 @@ interface Msg {
   taskId?: string;
   stage?: string;
   actions?: NoticeAction[];
+  /** 조사 답의 출처(v0.4.61) */
+  sources?: Source[];
   /** 업무 접수 확인 카드(v0.4.58): 한 메시지에 업무가 여럿이어도 카드마다 따로 접수·취소한다 */
   offer?: Offer;
 }
@@ -81,7 +84,7 @@ interface Props {
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
     opts?: AskOptions,
-  ) => Promise<{ answer: string; keySlot: number }>;
+  ) => Promise<{ answer: string; keySlot: number; sources?: Source[] }>;
   /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
   geminiAway?: boolean;
   /** Codex(OpenAI·ChatGPT 계정)가 휴가면 GPT로 넘기는 링크를 숨긴다(v0.4.44) */
@@ -630,7 +633,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     }
     else if (canAskGemini) {
       // v0.4.29(소유자 2026-11-01): 그 밖의 말은 AI가 먼저 판단한다(질문·업무·애매 + 프로젝트). 질문이면 같은 한 번에 답한다.
-      askGemini(text, questionProject(text, snap.projects)?.name, { prior });
+      askGemini(text, questionProject(text, snap.projects)?.name, { prior }, { research: needsResearch(text) });
     }
     else ruleRoute(text, prior);
   };
@@ -782,7 +785,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     // handle은 매 렌더 새로 만들어지므로 의존성에서 뺀다(지금 화면 상태로 처리).
   }, [busy, queue]);
 
-  const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }) => {
+  const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }, extra: { research?: boolean } = {}) => {
+    // 조사(v0.4.61): 웹에서 찾아야 하는 질문은 Gemini Google 검색 연결로 답하고 출처를 붙인다(규칙으로 고름, 실패하면 검색 없이 다시).
+    const research = extra.research ?? needsResearch(text);
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
@@ -816,12 +821,23 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         const opts: AskOptions = {
           ...(currentProject ? { project: projectContext(currentProject, snap.tasks) } : {}),
           ...(route ? { route: { projects: snap.projects.map((p) => p.name) } } : {}),
+          ...(research ? { research: true } : {}),
         };
         try {
-          const got = await onAskGemini(text, history.slice(-6), encoded, put, opts);
+          let got: Awaited<ReturnType<typeof onAskGemini>>;
+          try {
+            got = await onAskGemini(text, history.slice(-6), encoded, put, opts);
+          } catch (e) {
+            if (!research) throw e;
+            // 검색 연결이 안 되면(무료 검색 한도 등) 검색 없이 한 번 더 묻는다.
+            set('');
+            got = await onAskGemini(text, history.slice(-6), encoded, put, { ...opts, research: false });
+            say('office', `웹 검색은 안 돼서 Gemini가 아는 범위로만 답했어요(${(e as Error).message})`);
+          }
           const raw = got.answer;
-          const via = VIA_OF_SLOT[got.keySlot];
-          if (via) setLog((l) => l.map((m) => (m.id === id ? { ...m, via } : m)));
+          const sources = got.sources ?? [];
+          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', 'Gemini 검색 ·') : VIA_OF_SLOT[got.keySlot]) : undefined;
+          if (via || sources.length) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {
             // 한 메시지에 여러 개: 질문은 위 말풍선에 모아 답하고, 업무는 카드마다 따로 접수 확인한다.
@@ -907,6 +923,17 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                   <span />
                   <span />
                 </p>
+              )}
+              {m.sources && m.sources.length > 0 && (
+                <ul className="inbox-sources" aria-label="출처">
+                  {m.sources.map((src) => (
+                    <li key={src.uri}>
+                      <a href={src.uri} target="_blank" rel="noreferrer noopener">
+                        {src.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
               )}
               {!m.actions && m.taskId && onShowTask && snap.tasks.some((t) => t.id === m.taskId) && (
                 <button type="button" className="link-btn inbox-tasklink" onClick={() => onShowTask(m.taskId!)}>
@@ -1043,6 +1070,22 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
               <button type="button" className="link-btn" onClick={() => askProject(pending.text, { question: pending.text, answer: pending.answer })}>
                 업무로 만들기
               </button>
+              {canAskGemini && !log.some((m) => m.from === 'gemini' && m.text === pending.answer && m.sources?.length) && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="link-btn"
+                    title="Gemini가 Google 검색으로 찾아보고 출처를 붙여 답합니다(무료 검색 한도 안)."
+                    onClick={() => {
+                      say('me', `웹에서 찾아봐 줘: ${pending.text.length > 40 ? `${pending.text.slice(0, 39)}…` : pending.text}`);
+                      askGemini(pending.text, pending.projectName, undefined, { research: true });
+                    }}
+                  >
+                    웹에서 찾아보기
+                  </button>
+                </>
+              )}
             </span>
           )}
           {pending.kind === 'question' && (
