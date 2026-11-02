@@ -11,6 +11,12 @@ export function PushToggle({ store }: { store: OfficeStore }) {
   useEffect(() => {
     pushState().then(setState, () => setState('unsupported'));
   }, []);
+  // 안내 글은 잠깐만 보이고 사라진다(아이콘만 남게)
+  useEffect(() => {
+    if (!note) return;
+    const t = window.setTimeout(() => setNote(''), 4000);
+    return () => window.clearTimeout(t);
+  }, [note]);
 
   if (!state || state === 'unsupported') return null;
 
@@ -28,22 +34,37 @@ export function PushToggle({ store }: { store: OfficeStore }) {
     }
   };
 
+  const on = state === 'on';
+  const blocked = state === 'ios-install' || state === 'denied';
+  const why = state === 'ios-install' ? '알림: 공유 → 홈 화면에 추가한 뒤 그 앱에서 켜요' : state === 'denied' ? '알림이 막혀 있어요(브라우저 설정에서 허용)' : '';
+  const label = on ? '휴대폰 알림 켜짐 — 눌러서 끄기' : blocked ? why : '휴대폰 알림 꺼짐 — 눌러서 켜기';
+
+  // 글자 대신 종 아이콘 하나(v0.4.87, 소유자): 켜짐 = 채운 종, 꺼짐·막힘 = 빗금 친 종. 이름·설명은 화면 읽기·길게 누르기용으로 남긴다.
   return (
     <span className="push-toggle">
-      {state === 'ios-install' && <span className="push-note">알림: 공유 → 홈 화면에 추가 뒤 그 앱에서 켜요</span>}
-      {state === 'denied' && <span className="push-note">알림이 막혀 있어요(브라우저 설정에서 허용)</span>}
-      {state === 'off' && (
-        <button type="button" className="link-btn" disabled={busy} onClick={() => void run(() => enablePush(store), '알림을 켰어요')}>
-          휴대폰 알림 켜기
-        </button>
+      <button
+        type="button"
+        className={`push-icon${on ? ' is-on' : ''}${blocked ? ' is-blocked' : ''}`}
+        disabled={busy}
+        aria-label={label}
+        aria-pressed={on}
+        title={label}
+        onClick={() => {
+          if (blocked) return setNote(why);
+          void (on ? run(() => disablePush(store), '알림을 껐어요') : run(() => enablePush(store), '알림을 켰어요'));
+        }}
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          {!on && <path d="M3 3l18 18" />}
+        </svg>
+      </button>
+      {note && (
+        <span className="push-note" role="status">
+          {note}
+        </span>
       )}
-      {/* 켜져 있으면 빨간 '알림 끄기'만(소유자 2026-10-31) */}
-      {state === 'on' && (
-        <button type="button" className="link-btn push-off" disabled={busy} onClick={() => void run(() => disablePush(store), '알림을 껐어요')}>
-          알림 끄기
-        </button>
-      )}
-      {note && <span className="push-note" role="status">{note}</span>}
     </span>
   );
 }
