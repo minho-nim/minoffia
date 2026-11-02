@@ -1,3 +1,4 @@
+import { projectShortcuts } from './domain/shortcuts';
 import { withBaseRules } from './domain/baseRules';
 import { TeamPanel } from './components/TeamPanel';
 import { TurnMenu } from './components/TurnMenu';
@@ -721,10 +722,11 @@ export function App() {
           const ok = await step(
             task.id,
             async () => {
+              const revision = nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision);
               await store.addResult({
                 id: newId(),
                 taskId: task.id,
-                revision: nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision),
+                revision,
                 planRevision: a.planRevision,
                 workItemId: a.workItemId,
                 source: fromGemini ? 'gemini_actions_auto' : 'claude_session_auto',
@@ -736,6 +738,8 @@ export function App() {
                 previewUrl: item.previewUrl,
                 createdAt: new Date().toISOString(),
               });
+              // 자동 개발이 찍어 보낸 데스크톱·휴대폰 화면을 결과 스크린샷으로 붙인다(v0.4.97, 실패해도 결과는 그대로)
+              if (item.screenshots.length) await store.linkResultShots(task.id, revision, item.screenshots).catch(() => undefined);
               await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result', lastVerifiedAt: new Date().toISOString() });
             },
             `Claude가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 올리기 승인(B)하거나 수정 요청하세요.`,
@@ -1695,6 +1699,8 @@ export function App() {
               onRemoveRule={(r) => void mutate(() => store.removeProjectRule(r.id), '지켜야 할 것에서 지웠어요.')}
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
               onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
+              shortcutsOf={(id) => projectShortcuts(id, snap.tasks, snap.workflow.results)}
+              onOpenTask={(id) => showTask(id)}
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
           )}

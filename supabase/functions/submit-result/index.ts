@@ -8,6 +8,11 @@ import { previewUrl, saveRules } from './projectRules.ts';
 const MAX_USES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIMITS = { summary: 4000, diff: 500_000, test_log: 100_000, remaining_issues: 4000, branch: 200, changed_files: 20_000 };
+// 결과 화면 증거(v0.4.97): 데스크톱·휴대폰 스크린샷 최대 2장, 장마다 1.5MB(JPEG·PNG만)
+const MAX_SHOTS = 2;
+const MAX_SHOT_BYTES = 1_500_000;
+const SHOT_EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png' };
+type Shot = { path: string; sha256: string; size: number; mime: string; name: string };
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 
@@ -60,6 +65,26 @@ Deno.serve(async (req) => {
     const { data: t } = await admin.from('tasks').select('projects(preview_host)').eq('id', ticket.task_id).maybeSingle();
     preview = previewUrl((t?.projects as unknown as { preview_host: string | null } | null)?.preview_host, branch);
   }
+  // 화면 증거: 비공개 버킷 attachments의 <소유자>/<업무>/<sha>.<확장자>에 올린다(앱이 결과 스크린샷으로 붙임). 실패해도 결과 저장은 막지 않는다.
+  const shots: Shot[] = [];
+  for (const s of (Array.isArray(r.screenshots) ? r.screenshots : []).slice(0, MAX_SHOTS) as Record<string, unknown>[]) {
+    const mime = String(s?.mime ?? '');
+    if (!SHOT_EXT[mime] || typeof s?.data !== 'string' || s.data.length > MAX_SHOT_BYTES * 1.4) continue;
+    let bytes: Uint8Array<ArrayBuffer>;
+    try {
+      bytes = Uint8Array.from(atob(s.data), (c) => c.charCodeAt(0));
+    } catch {
+      continue;
+    }
+    const pngOk = mime === 'image/png' && bytes[0] === 0x89 && bytes[1] === 0x50;
+    const jpgOk = mime === 'image/jpeg' && bytes[0] === 0xff && bytes[1] === 0xd8;
+    if (!bytes.length || bytes.length > MAX_SHOT_BYTES || !(pngOk || jpgOk)) continue;
+    const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const path = `${ticket.owner_id}/${ticket.task_id}/${sha}.${SHOT_EXT[mime]}`;
+    const up = await admin.storage.from('attachments').upload(path, bytes, { contentType: mime, upsert: true });
+    if (!up.error) shots.push({ path, sha256: sha, size: bytes.length, mime, name: text(s.name, 80) || `화면-${shots.length + 1}.${SHOT_EXT[mime]}` });
+  }
+
   // 앞으로도 지켜야 할 것(AI가 적어 보냄)은 프로젝트에 쌓는다. 실패해도 결과 저장은 막지 않는다.
   await saveRules(admin, ticket.owner_id, ticket.task_id, 'result', r.project_rules);
 
@@ -74,6 +99,7 @@ Deno.serve(async (req) => {
     remaining_issues: text(r.remaining_issues, LIMITS.remaining_issues),
     branch,
     preview_url: preview,
+    screenshots: shots,
   });
   if (error) return reply(500, { ok: false, error: 'could not save result' });
   return reply(200, { ok: true, message: 'AI Office에 결과를 보냈습니다. 사용자가 올리기 승인(B)을 할 때까지 GitHub에 올리지 않습니다.' });

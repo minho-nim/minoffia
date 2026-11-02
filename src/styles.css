@@ -3932,3 +3932,11 @@ a {
   gap: 6px;
   margin-top: 4px;
 }
+/* 미뤄 둔 일(v0.4.97) */
+.pill.pill-warn {
+  color: var(--warn);
+  margin-left: 4px;
+}
+.project-debt li span {
+  overflow-wrap: anywhere;
+}
