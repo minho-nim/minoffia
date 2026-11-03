@@ -4019,6 +4019,8 @@ a {
 .inbox-cap {
   position: relative;
   z-index: 5;
+  /* 상자 안쪽 여백처럼 위 띠는 바탕색으로(글이 윗선에 바로 붙어 보이지 않게) */
+  background: var(--surface);
   flex: none;
   height: var(--inbox-r);
   margin: calc(-1 * (var(--inbox-pad) + 1px)) calc(-1 * (var(--inbox-pad) + 1px)) calc(1px + var(--inbox-pad) - var(--inbox-r) - var(--inbox-gap));
@@ -4048,6 +4050,11 @@ a {
     position: sticky;
     top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px) + var(--chips-h, 0px));
   }
+}
+
+/* 대화 탭 칩 줄은 아래 선 없이: 바로 밑 대화 상자 윗선과 두 줄로 겹쳐 보이던 것(v0.5.10 소유자) */
+.project-chips.chat-chips {
+  border-bottom-color: transparent !important;
 }
 
 /* 휴대폰 대화 탭: 입력창 아래 여백은 8px만, 패널 아래 테두리·여백은 없앤다(v0.5.7) */
