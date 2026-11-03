@@ -2127,14 +2127,10 @@ a {
   line-height: 1.2;
 }
 
-/* 대화 지우기 줄: 입력창 바로 아래에 붙이고 아래 여백을 줄인다(v0.4.36) */
-.inbox > .link-btn:last-child {
-  align-self: flex-start;
-  /* 입력창 아래 틈 덮개(그림자)가 이 줄을 반쯤 가리지 않게 위로(v0.5.7) */
-  position: relative;
-  z-index: 5;
-  margin-top: -6px;
-  margin-bottom: -6px;
+/* 화면 지우기: 입력창 안 첨부 버튼 옆(v0.5.9, 늘 보이게) */
+.inbox-tools .inbox-clear {
+  margin-right: auto;
+  margin-left: 10px;
 }
 
 /* ---------- 로그인/부팅 ---------- */
@@ -2600,10 +2596,12 @@ a {
 
 /* ---------- 입력창(묻기·요청): Claude 대화창처럼 크고 간단하게(v0.4.13) ---------- */
 .inbox {
+  --inbox-pad: 14px;
+  --inbox-gap: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--inbox-gap);
+  padding: var(--inbox-pad);
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
@@ -3334,8 +3332,8 @@ a {
     letter-spacing: 0;
   }
   .inbox {
-    padding: 10px;
-    gap: 8px;
+    --inbox-pad: 10px;
+    --inbox-gap: 8px;
   }
   .inbox-log {
     gap: 14px;
@@ -3975,33 +3973,90 @@ a {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* 입력창 둘레는 덮지 않고 대화가 비쳐 보이게 둔다(v0.5.6 소유자 "뒤의 대화가 보이게"). 입력창 바로 아래 틈만 바탕색으로.
-   */
+/* 대화 상자(둥근 테두리)가 스크롤 중에도 화면에 보이는 만큼 위아래가 둥글게 닫혀 보이게(v0.5.9 소유자
+   "원래대로 두고 스크롤할 때 보이는 화면에서 잘리는 것만"). 입력창 둘레는 덮지 않아 뒤 대화가 보인다(v0.5.6).
+   - 아래: 입력창(아래에 붙음) 밑에 상자 아래 모서리를 그린다. 대화가 짧아 제자리면 진짜 테두리와 꼭 겹친다.
+   - 위: 칩 줄 바로 아래에 붙는 .inbox-cap이 상자 위 모서리를 그린다. 내리기 전에는 진짜 테두리와 겹친다.
+   양옆 띠(테두리+안쪽 여백 폭)만 바탕색으로 칠해 진짜 세로 테두리를 가리고, 가운데는 비워 둔다. */
 .inbox {
-  overflow: clip;
+  --inbox-r: 14px;
+  --inbox-low: max(8px, env(safe-area-inset-bottom));
+  padding-bottom: var(--inbox-low);
 }
 .inbox > .inbox-form {
-  box-shadow:
-    0 2px 10px -6px rgba(0, 0, 0, 0.3),
-    0 max(8px, env(safe-area-inset-bottom)) 0 0 var(--surface);
+  bottom: calc(var(--inbox-low) + 1px);
+}
+.inbox > .inbox-form::before,
+.inbox > .inbox-form::after,
+.inbox-cap::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * (var(--inbox-pad) + 2px));
+  right: calc(-1 * (var(--inbox-pad) + 2px));
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.inbox > .inbox-form::after {
+  top: calc(100% + 1px);
+  height: calc(var(--inbox-low) + 1px);
+  background: var(--surface);
+}
+.inbox > .inbox-form::before {
+  top: calc(100% + 1px - var(--inbox-r));
+  height: calc(var(--inbox-r) + var(--inbox-low) + 1px);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--inbox-r) var(--inbox-r);
+  background:
+    linear-gradient(var(--surface), var(--surface)) left / calc(var(--inbox-pad) + 1px) 100% no-repeat,
+    linear-gradient(var(--surface), var(--surface)) right / calc(var(--inbox-pad) + 1px) 100% no-repeat;
+  background-origin: border-box;
+  z-index: 1;
+}
+.inbox > .inbox-form::after {
+  z-index: 0;
+}
+.inbox-cap {
+  position: relative;
+  z-index: 5;
+  flex: none;
+  height: var(--inbox-r);
+  margin: calc(-1 * (var(--inbox-pad) + 1px)) calc(-1 * (var(--inbox-pad) + 1px)) calc(1px + var(--inbox-pad) - var(--inbox-r) - var(--inbox-gap));
+  pointer-events: none;
+}
+.inbox-cap::before {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: var(--inbox-r) var(--inbox-r) 0 0;
+  background:
+    linear-gradient(var(--surface), var(--surface)) left / calc(var(--inbox-pad) + 1px) 100% no-repeat,
+    linear-gradient(var(--surface), var(--surface)) right / calc(var(--inbox-pad) + 1px) 100% no-repeat;
+  background-origin: border-box;
+}
+@media (min-width: 1040px) {
+  .inbox-cap {
+    position: sticky;
+    top: calc(var(--tabs-h, 42px) + var(--chips-h, 0px));
+  }
+}
+@media (max-width: 1039px) and (min-height: 620px) {
+  .layout.is-mini .inbox-cap {
+    position: sticky;
+    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px) + var(--chips-h, 0px));
+  }
 }
 
-/* 휴대폰 대화 탭 아래 여백 줄이기·가로 테두리 깜빡임(v0.5.7 소유자): 입력창 아래 여백은 8px만,
-   패널 아래 테두리는 없앤다(스크롤 끝에 닿을 때마다 가로줄이 나타났다 사라지던 것) */
+/* 휴대폰 대화 탭: 입력창 아래 여백은 8px만, 패널 아래 테두리·여백은 없앤다(v0.5.7) */
 @media (max-width: 1039px) {
   .panel {
     border-bottom: 0;
   }
   .panel:has(> .chat-tab:not([hidden])) {
     padding-bottom: 0;
-  }
-  /* 대화 상자 테두리는 두되(v0.5.8 소유자 "있는 게 좋아") 아래 가로줄만 없애 화면 아래까지 이어지게:
-     스크롤 끝에 닿을 때마다 가로줄이 나타났다 사라지지 않는다 */
-  .chat-tab > .inbox {
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
-    border-bottom-color: transparent;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
   }
 }
 
