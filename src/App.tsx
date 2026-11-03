@@ -338,8 +338,8 @@ export function App() {
       setTiny(t);
       if (!t) setPeek(false);
     };
-    // 얇은 머리는 큰 머리가 화면 밖으로 나가면 늘 따라온다(작은 사무실과 따로, v0.4.45).
-    const bar = top.getBoundingClientRect().bottom < 36;
+    // 얇은 머리: 내리기 시작하는 순간 그 자리에서 큰 머리가 얇은 머리로 바뀐다(머리가 화면과 같이 올라가 보이지 않게, v0.5.32 소유자).
+    const bar = window.scrollY > 2;
     setBarOn(bar);
     if (!bar) setUsageOpen(false);
     const now = stageRef.current;
