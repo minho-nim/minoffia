@@ -4019,10 +4019,7 @@ a {
 .inbox-cap {
   position: relative;
   z-index: 5;
-  /* 상자 안쪽 여백처럼 위 띠는 바탕색으로(글이 윗선에 바로 붙어 보이지 않게) */
-  background: var(--surface);
-  /* 칩 줄과 상자 윗선 사이에 기기마다 몇 px 틈이 생겨 글이 비치던 것(v0.5.11): 위로 10px(패널 칸 사이 간격만큼) 더 덮는다 */
-  box-shadow: 0 -10px 0 0 var(--surface);
+
   flex: none;
   height: var(--inbox-r);
   margin: calc(-1 * (var(--inbox-pad) + 1px)) calc(-1 * (var(--inbox-pad) + 1px)) calc(1px + var(--inbox-pad) - var(--inbox-r) - var(--inbox-gap));
@@ -4040,6 +4037,17 @@ a {
     linear-gradient(var(--surface), var(--surface)) left / calc(var(--inbox-pad) + 1px) 100% no-repeat,
     linear-gradient(var(--surface), var(--surface)) right / calc(var(--inbox-pad) + 1px) 100% no-repeat;
   background-origin: border-box;
+}
+/* 글은 상자 윗선에서 바로 잘린다(v0.5.12 소유자). 윗선 위(칩 줄과의 틈, 기기마다 몇 px)는 10px 바탕색으로 덮는다(v0.5.11) */
+.inbox-cap::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+  background: var(--surface);
+  pointer-events: none;
 }
 @media (min-width: 1040px) {
   .inbox-cap {
