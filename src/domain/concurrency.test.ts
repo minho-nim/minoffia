@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { startBlocker } from './concurrency';
+import { startBlocker, waitingOn } from './concurrency';
 import type { AgentAssignment, PmPlan } from './workflow-types';
 
 const a = (id: string, assignee: AgentAssignment['assignee'], dispatchStatus: AgentAssignment['dispatchStatus'] = 'ready'): AgentAssignment => ({
@@ -36,5 +36,15 @@ describe('startBlocker', () => {
     expect(startBlocker(all[1], all, plan)).toContain('앞 작업(W1)');
     const done = [a('W1', 'codex', 'completed'), a('W3', 'claude')];
     expect(startBlocker(done[1], done, plan)).toBeNull();
+  });
+});
+
+describe('waitingOn(누가 누구를 기다리나, v0.5.22)', () => {
+  it('안 끝난 앞 작업과 그 담당 AI, 끝나면 빈 목록', () => {
+    const all = [a('W1', 'codex', 'started'), a('W3', 'claude')];
+    expect(waitingOn(all[1], all, plan)).toEqual([{ workItemId: 'W1', agent: 'Codex (Linear)' }]);
+    expect(waitingOn(all[0], all, plan)).toEqual([]);
+    const done = [a('W1', 'codex', 'completed'), a('W3', 'claude')];
+    expect(waitingOn(done[1], done, plan)).toEqual([]);
   });
 });

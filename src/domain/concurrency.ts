@@ -27,10 +27,22 @@ export function startBlocker(target: AgentAssignment, all: AgentAssignment[], pl
   if (busy.length >= cap) {
     return `${agentName(target)}가 이미 ${busy.length}개 작업(${busy.map((b) => b.workItemId).join(', ')})을 하고 있습니다(동시 상한 ${cap}개). 하나를 끝내거나 중단하거나, 에이전트 탭에서 상한을 올리세요.`;
   }
-  const item = plan?.plan.work_items.find((w) => w.id === target.workItemId);
-  const waiting = (item?.dependencies ?? []).filter(
-    (dep) => !all.some((a) => a.taskId === target.taskId && a.planRevision === target.planRevision && a.workItemId === dep && a.dispatchStatus === 'completed'),
-  );
+  const waiting = waitingOn(target, all, plan).map((w) => w.workItemId);
   if (waiting.length) return `앞 작업(${waiting.join(', ')})이 끝나야 시작할 수 있습니다.`;
   return null;
+}
+
+/**
+ * 아직 안 끝난 앞 작업(v0.5.22 소유자 "누가 누구를 기다리나", pixel-office 아이디어). 계획의 dependencies로만 정한다.
+ * 업무 카드에 "⏳ W2(Codex) 결과 대기"로 보이고, 시작 규칙(startBlocker)도 같은 판단을 쓴다.
+ */
+export function waitingOn(target: AgentAssignment, all: AgentAssignment[], plan: PmPlan | null): { workItemId: string; agent: string }[] {
+  const item = plan?.plan.work_items.find((w) => w.id === target.workItemId);
+  const same = (a: AgentAssignment) => a.taskId === target.taskId && a.planRevision === target.planRevision;
+  return (item?.dependencies ?? [])
+    .filter((dep) => !all.some((a) => same(a) && a.workItemId === dep && a.dispatchStatus === 'completed'))
+    .map((dep) => {
+      const a = all.find((x) => same(x) && x.workItemId === dep);
+      return { workItemId: dep, agent: a ? agentName(a) : '' };
+    });
 }

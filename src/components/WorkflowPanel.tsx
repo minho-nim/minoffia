@@ -9,7 +9,7 @@ import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
-import { startBlocker } from '../domain/concurrency';
+import { startBlocker, waitingOn } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
 import { mergeDanger } from '../domain/mergeDanger';
 import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
@@ -687,7 +687,15 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     <span className="pill">{DISPATCH_STATUS_LABEL[a.dispatchStatus]}</span>
                   </div>
                   {item?.goal && <p className="small">{item.goal}</p>}
-                  {item && item.dependencies.length > 0 && <p className="muted small">먼저 끝나야 할 작업: {item.dependencies.join(', ')}</p>}
+                  {item && item.dependencies.length > 0 && (() => {
+                    // 누가 누구를 기다리나(v0.5.22): 안 끝난 앞 작업만 "⏳ W2(Codex) 결과 대기", 다 끝났으면 ✓
+                    const w = waitingOn(a, allAssignments, view.plan);
+                    return w.length ? (
+                      <p className="small wf-waiting">⏳ {w.map((x) => `${x.workItemId}${x.agent ? `(${x.agent})` : ''}`).join(' · ')} 결과 대기</p>
+                    ) : (
+                      <p className="muted small">✓ 먼저 끝나야 할 작업({item.dependencies.join(', ')}) 끝남</p>
+                    );
+                  })()}
 
                   {/* 자동 실행: 검증된 경로만 버튼이 켜진다 */}
                   {auto ? (
