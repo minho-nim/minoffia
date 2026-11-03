@@ -99,11 +99,12 @@ function heightWatcher(name: string) {
   return (el: HTMLElement | null) => {
     observer?.disconnect();
     observer = null;
-    const set = () => document.documentElement.style.setProperty(name, `${el ? el.offsetHeight : 0}px`);
+    // 소수점 높이를 올림한다(정수로 내림하면 그 밑에 붙는 줄이 1~2px 가려짐, v0.5.10)
+    const set = () => document.documentElement.style.setProperty(name, `${el ? Math.ceil(el.getBoundingClientRect().height) : 0}px`);
     set();
     if (!el || typeof ResizeObserver === 'undefined') return;
     observer = new ResizeObserver(set);
-    observer.observe(el);
+    observer.observe(el, { box: 'border-box' });
   };
 }
 const watchTabsHeight = heightWatcher('--tabs-h');
@@ -1537,7 +1538,7 @@ export function App() {
 
           {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
           {tab === 'chat' && snap.projects.length > 0 && (
-            <div className="filters project-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
+            <div className="filters project-chips chat-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
               {/* 기본 대화창(일반 대화, v0.4.88 소유자): 늘 맨 앞에, 프로젝트를 안 고르면 이 창 */}
               <button
                 type="button"
