@@ -4018,10 +4018,15 @@ a {
   pointer-events: none;
   box-sizing: border-box;
 }
+/* 곡선 바깥 칠하기는 둥글게 잘리지 않는 네모 칸에서 한다(v0.5.19 소유자 "모서리에 삐져나온 줄 없애"):
+   둥근 테두리 칸의 바탕은 곡선 안쪽만 칠해져, 곡선 바깥으로 진짜 세로 테두리가 삐져나와 보였다. */
 .inbox > .inbox-form::after {
-  top: calc(100% + 1px);
-  height: calc(var(--inbox-low) + 1px);
-  background: var(--surface);
+  top: calc(100% + 1px - var(--inbox-r));
+  height: calc(var(--inbox-r) + var(--inbox-low) + 1px);
+  background:
+    linear-gradient(var(--surface), var(--surface)) left / calc(var(--inbox-pad) + 1px) 100% no-repeat,
+    linear-gradient(var(--surface), var(--surface)) right / calc(var(--inbox-pad) + 1px) 100% no-repeat,
+    linear-gradient(var(--surface), var(--surface)) bottom / 100% calc(var(--inbox-low) + 1px) no-repeat;
 }
 .inbox > .inbox-form::before {
   top: calc(100% + 1px - var(--inbox-r));
@@ -4029,10 +4034,6 @@ a {
   border: 1px solid var(--line);
   border-top: 0;
   border-radius: 0 0 var(--inbox-r) var(--inbox-r);
-  background:
-    linear-gradient(var(--surface), var(--surface)) left / calc(var(--inbox-pad) + 1px) 100% no-repeat,
-    linear-gradient(var(--surface), var(--surface)) right / calc(var(--inbox-pad) + 1px) 100% no-repeat;
-  background-origin: border-box;
   z-index: 1;
 }
 .inbox > .inbox-form::after {
@@ -4041,6 +4042,9 @@ a {
 .inbox-cap {
   position: relative;
   z-index: 5;
+  background:
+    linear-gradient(var(--surface), var(--surface)) left / calc(var(--inbox-pad) + 1px) 100% no-repeat,
+    linear-gradient(var(--surface), var(--surface)) right / calc(var(--inbox-pad) + 1px) 100% no-repeat;
 
   flex: none;
   height: var(--inbox-r);
@@ -4055,10 +4059,6 @@ a {
   border: 1px solid var(--line);
   border-bottom: 0;
   border-radius: var(--inbox-r) var(--inbox-r) 0 0;
-  background:
-    linear-gradient(var(--surface), var(--surface)) left / calc(var(--inbox-pad) + 1px) 100% no-repeat,
-    linear-gradient(var(--surface), var(--surface)) right / calc(var(--inbox-pad) + 1px) 100% no-repeat;
-  background-origin: border-box;
 }
 /* 글은 상자 윗선에서 바로 잘린다(v0.5.12 소유자). 윗선 위(칩 줄과의 틈, 기기마다 몇 px)는 10px 바탕색으로 덮는다(v0.5.11) */
 .inbox-cap::after {
