@@ -58,6 +58,12 @@ select pg_temp.check((select reason from claim_codex_linear('e5e5e5e5-0000-4000-
 select pg_temp.check((select reason from claim_codex_linear('e5e5e5e5-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', false)) = 'not_claimable', '두 번 맡기지 않음');
 select pg_temp.check((select count(*) from usage_runs where agent = 'codex' and task_id = 'e6e6e6e6-0000-4000-8000-000000000001') = 1, '사용 기록 1건');
 
+-- v0.5.3 웹훅 서버는 알림 줄을 넣을 수 있고, 사용자는 못 넣는다(0036)
+select push_enqueue('11111111-1111-4111-8111-111111111111', 'e6e6e6e6-0000-4000-8000-000000000001', 'blocked', 'Codex가 시작하지 못했어요');
+select pg_temp.check((select count(*) from push_outbox where task_id = 'e6e6e6e6-0000-4000-8000-000000000001' and kind = 'blocked') = 1, '서버가 알림 줄 넣음');
+select pg_temp.as_user();
+select pg_temp.expect_fail($q$select push_enqueue('11111111-1111-4111-8111-111111111111', 'e6e6e6e6-0000-4000-8000-000000000001', 'result', 'x')$q$, 'permission denied');
+
 reset role;
 \o
 \echo 'Codex Linear 예약 테스트 완료'
