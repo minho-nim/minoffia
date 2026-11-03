@@ -314,11 +314,25 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    // 키보드 높이(--kb, v0.5.13 소유자 "키패드 위로 채팅창 붙어서"): 아이폰은 키보드가 떠도 화면(레이아웃) 높이가 그대로라
+    // 아래에 붙은 입력창이 키보드 뒤로 숨는다. 보이는 화면 아래 끝과의 차이만큼 입력창을 올린다(안드로이드는 보통 0).
+    const root = document.documentElement;
+    const setKb = () => {
+      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      root.style.setProperty('--kb', `${kb > 40 ? kb : 0}px`);
+    };
     const onResize = () => {
+      setKb();
       if (document.activeElement === inputRef.current) revealEnd();
     };
+    setKb();
     vv.addEventListener('resize', onResize);
-    return () => vv.removeEventListener('resize', onResize);
+    vv.addEventListener('scroll', setKb);
+    return () => {
+      vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', setKb);
+      root.style.removeProperty('--kb');
+    };
   }, []);
   const fileInput = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1054,12 +1068,14 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       {/* 스크롤 중에도 상자 위 모서리가 칩 줄 바로 아래에 보이게(v0.5.9, 그림만) */}
       <div className="inbox-cap" aria-hidden="true" />
       {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
-      {/* 인사말은 기본 대화창에만. 프로젝트 대화창은 빈 채로 둔다(v0.5.10 소유자) */}
-      {shown.length === 0 && !currentProject && (
+      {/* 빈 대화창 인사말: 기본·프로젝트 대화창 모두(v0.5.13 소유자 "프로젝트별 빈 채팅에도 있는 게 맞다") */}
+      {shown.length === 0 && (
         <div className="inbox-empty">
           <p className="inbox-hello">무엇을 도와드릴까요?</p>
           <p className="muted small inbox-note">
-            예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.
+            {currentProject
+              ? `이 창에서 한 질문은 ${currentProject.name} 기준으로 답하고, 요청은 ${currentProject.name} 업무로 접수 카드를 만듭니다.`
+              : '예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.'}
           </p>
         </div>
       )}
@@ -1420,6 +1436,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             }
           }}
         />
+        {/* 입력창 위로 뒤 대화가 흐려지며 내려간다(v0.5.13 소유자 "클로드 채팅창처럼", 그림만) */}
+        <div className="inbox-fade" aria-hidden="true" />
         <div className="inbox-tools">
         <button type="button" className="inbox-attach" aria-label="사진·문서 첨부" title="사진·문서 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
           {/* 이모지는 기기 글꼴마다 다르게 깨져 보여서 도트 그림 아이콘을 쓴다 */}
