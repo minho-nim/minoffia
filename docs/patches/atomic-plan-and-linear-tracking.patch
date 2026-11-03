@@ -1,3 +1,40 @@
+diff --git a/.github/workflows/verify.yml b/.github/workflows/verify.yml
+index 4b70c88..99303c6 100644
+--- a/.github/workflows/verify.yml
++++ b/.github/workflows/verify.yml
+@@ -21,3 +21,32 @@ jobs:
+       - run: npm run typecheck
+       - run: npm test
+       - run: npm run build
++
++  verify-db:
++    runs-on: ubuntu-latest
++    timeout-minutes: 10
++    services:
++      postgres:
++        image: postgres:17
++        env:
++          POSTGRES_USER: postgres
++          POSTGRES_DB: postgres
++          POSTGRES_HOST_AUTH_METHOD: trust
++        ports:
++          - 5432:5432
++        options: >-
++          --health-cmd "pg_isready -U postgres"
++          --health-interval 5s
++          --health-timeout 5s
++          --health-retries 10
++    env:
++      PGHOST: 127.0.0.1
++      PGPORT: 5432
++      PGUSER: postgres
++      PGDATABASE: postgres
++    steps:
++      - uses: actions/checkout@v4
++      - name: PostgreSQL 클라이언트 확인
++        run: psql --version
++      - name: 마이그레이션·승인·RLS·동시 예약 검증
++        run: bash scripts/test-db.sh
 diff --git a/scripts/test-db.sh b/scripts/test-db.sh
 index fe82ff8..deb1034 100755
 --- a/scripts/test-db.sh
@@ -293,6 +330,86 @@ index 162629d..7d52f2d 100644
      ...(p.labelId ? { labelIds: [p.labelId] } : {}),
      title: p.title.slice(0, 250),
      description: p.description,
+diff --git a/supabase/functions/codex-linear/trackedDispatch.test.ts b/supabase/functions/codex-linear/trackedDispatch.test.ts
+new file mode 100644
+index 0000000..3f2d14b
+--- /dev/null
++++ b/supabase/functions/codex-linear/trackedDispatch.test.ts
+@@ -0,0 +1,41 @@
++import { describe, expect, it, vi } from 'vitest';
++import { dispatchTrackedIssue } from './trackedDispatch';
++
++const issue = { id: 'reserved-id', identifier: 'MIN-123', url: 'https://linear.app/test/issue/MIN-123' };
++function params() {
++  return { issueId: issue.id, create: vi.fn().mockResolvedValue(issue), read: vi.fn().mockResolvedValue(null), save: vi.fn().mockResolvedValue(undefined) };
++}
++describe('예약한 Linear 식별자로 추적 유지', () => {
++  it('DB 저장 실패를 성공으로 응답하지 않고 생성된 이슈 주소를 알려준다', async () => {
++    const p = params(); p.save.mockRejectedValueOnce(new Error('DB disconnected'));
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow(issue.url);
++    expect(p.create).toHaveBeenCalledExactlyOnceWith(issue.id);
++  });
++  it('생성 응답이 유실돼도 같은 UUID로 조회하고 새 이슈를 만들지 않는다', async () => {
++    const p = params();
++    p.create.mockRejectedValueOnce(new Error('timeout'));
++    p.read.mockResolvedValue(issue);
++    await expect(dispatchTrackedIssue(p)).resolves.toEqual(issue);
++    expect(p.read).toHaveBeenCalledExactlyOnceWith(issue.id);
++    expect(p.create).toHaveBeenCalledTimes(1);
++    expect(p.save).toHaveBeenCalledExactlyOnceWith(issue);
++  });
++  it('생성·조회 모두 불확실하면 성공 처리나 멘션을 하지 않는다', async () => {
++    const p = { ...params(), mention: vi.fn() };
++    p.create.mockRejectedValueOnce(new Error('timeout'));
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow('timeout');
++    expect(p.save).not.toHaveBeenCalled();
++    expect(p.mention).not.toHaveBeenCalled();
++  });
++  it('다른 식별자의 응답으로 연결을 바꿔 붙이지 않는다', async () => {
++    const p = params(); p.create.mockResolvedValue({ ...issue, id: 'different' });
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow('예약한 식별자와 다른');
++    expect(p.save).not.toHaveBeenCalled();
++  });
++  it('멘션 실패도 성공 처리하지 않는다', async () => {
++    const p = { ...params(), mention: vi.fn().mockRejectedValue(new Error('comment failed')) };
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow('comment failed');
++    expect(p.save).not.toHaveBeenCalled();
++    expect(p.mention).toHaveBeenCalledWith(issue.id);
++  });
++});
+diff --git a/supabase/functions/codex-linear/trackedDispatch.ts b/supabase/functions/codex-linear/trackedDispatch.ts
+new file mode 100644
+index 0000000..036b659
+--- /dev/null
++++ b/supabase/functions/codex-linear/trackedDispatch.ts
+@@ -0,0 +1,27 @@
++/** DB에 먼저 예약한 UUID로 생성한다. 재전송/응답 유실 뒤에도 같은 이슈를 조회한다. */
++export type LinearIssue = { id: string; identifier: string; url: string };
++export async function dispatchTrackedIssue(p: {
++  issueId: string;
++  create: (id: string) => Promise<LinearIssue>;
++  read: (id: string) => Promise<LinearIssue | null>;
++  mention?: (id: string) => Promise<void>;
++  save: (issue: LinearIssue) => Promise<void>;
++}): Promise<LinearIssue> {
++  let issue: LinearIssue;
++  try {
++    issue = await p.create(p.issueId);
++  } catch (e) {
++    // 중복 UUID 또는 응답 유실일 수 있으므로 새 이슈를 만들지 않고 기존 UUID를 확인한다.
++    const existing = await p.read(p.issueId).catch(() => null);
++    if (!existing) throw e;
++    issue = existing;
++  }
++  if (issue.id !== p.issueId) throw new Error(`예약한 식별자와 다른 Linear 이슈입니다: ${issue.url}`);
++  await p.mention?.(issue.id);
++  try {
++    await p.save(issue);
++  } catch {
++    throw new Error(`Linear 이슈는 생성됐지만 상태 저장을 확인하지 못했어요. '소식 다시 읽기'로 확인하세요: ${issue.url}`);
++  }
++  return issue;
++}
 diff --git a/supabase/functions/linear-webhook/index.ts b/supabase/functions/linear-webhook/index.ts
 index f994e32..5115d35 100644
 --- a/supabase/functions/linear-webhook/index.ts
@@ -358,86 +475,6 @@ index 162629d..7d52f2d 100644
      ...(p.labelId ? { labelIds: [p.labelId] } : {}),
      title: p.title.slice(0, 250),
      description: p.description,
-diff --git a/supabase/functions/codex-linear/trackedDispatch.ts b/supabase/functions/codex-linear/trackedDispatch.ts
-new file mode 100644
-index 0000000..036b659
---- /dev/null
-+++ b/supabase/functions/codex-linear/trackedDispatch.ts
-@@ -0,0 +1,27 @@
-+/** DB에 먼저 예약한 UUID로 생성한다. 재전송/응답 유실 뒤에도 같은 이슈를 조회한다. */
-+export type LinearIssue = { id: string; identifier: string; url: string };
-+export async function dispatchTrackedIssue(p: {
-+  issueId: string;
-+  create: (id: string) => Promise<LinearIssue>;
-+  read: (id: string) => Promise<LinearIssue | null>;
-+  mention?: (id: string) => Promise<void>;
-+  save: (issue: LinearIssue) => Promise<void>;
-+}): Promise<LinearIssue> {
-+  let issue: LinearIssue;
-+  try {
-+    issue = await p.create(p.issueId);
-+  } catch (e) {
-+    // 중복 UUID 또는 응답 유실일 수 있으므로 새 이슈를 만들지 않고 기존 UUID를 확인한다.
-+    const existing = await p.read(p.issueId).catch(() => null);
-+    if (!existing) throw e;
-+    issue = existing;
-+  }
-+  if (issue.id !== p.issueId) throw new Error(`예약한 식별자와 다른 Linear 이슈입니다: ${issue.url}`);
-+  await p.mention?.(issue.id);
-+  try {
-+    await p.save(issue);
-+  } catch {
-+    throw new Error(`Linear 이슈는 생성됐지만 상태 저장을 확인하지 못했어요. '소식 다시 읽기'로 확인하세요: ${issue.url}`);
-+  }
-+  return issue;
-+}
-diff --git a/supabase/functions/codex-linear/trackedDispatch.test.ts b/supabase/functions/codex-linear/trackedDispatch.test.ts
-new file mode 100644
-index 0000000..3f2d14b
---- /dev/null
-+++ b/supabase/functions/codex-linear/trackedDispatch.test.ts
-@@ -0,0 +1,41 @@
-+import { describe, expect, it, vi } from 'vitest';
-+import { dispatchTrackedIssue } from './trackedDispatch';
-+
-+const issue = { id: 'reserved-id', identifier: 'MIN-123', url: 'https://linear.app/test/issue/MIN-123' };
-+function params() {
-+  return { issueId: issue.id, create: vi.fn().mockResolvedValue(issue), read: vi.fn().mockResolvedValue(null), save: vi.fn().mockResolvedValue(undefined) };
-+}
-+describe('예약한 Linear 식별자로 추적 유지', () => {
-+  it('DB 저장 실패를 성공으로 응답하지 않고 생성된 이슈 주소를 알려준다', async () => {
-+    const p = params(); p.save.mockRejectedValueOnce(new Error('DB disconnected'));
-+    await expect(dispatchTrackedIssue(p)).rejects.toThrow(issue.url);
-+    expect(p.create).toHaveBeenCalledExactlyOnceWith(issue.id);
-+  });
-+  it('생성 응답이 유실돼도 같은 UUID로 조회하고 새 이슈를 만들지 않는다', async () => {
-+    const p = params();
-+    p.create.mockRejectedValueOnce(new Error('timeout'));
-+    p.read.mockResolvedValue(issue);
-+    await expect(dispatchTrackedIssue(p)).resolves.toEqual(issue);
-+    expect(p.read).toHaveBeenCalledExactlyOnceWith(issue.id);
-+    expect(p.create).toHaveBeenCalledTimes(1);
-+    expect(p.save).toHaveBeenCalledExactlyOnceWith(issue);
-+  });
-+  it('생성·조회 모두 불확실하면 성공 처리나 멘션을 하지 않는다', async () => {
-+    const p = { ...params(), mention: vi.fn() };
-+    p.create.mockRejectedValueOnce(new Error('timeout'));
-+    await expect(dispatchTrackedIssue(p)).rejects.toThrow('timeout');
-+    expect(p.save).not.toHaveBeenCalled();
-+    expect(p.mention).not.toHaveBeenCalled();
-+  });
-+  it('다른 식별자의 응답으로 연결을 바꿔 붙이지 않는다', async () => {
-+    const p = params(); p.create.mockResolvedValue({ ...issue, id: 'different' });
-+    await expect(dispatchTrackedIssue(p)).rejects.toThrow('예약한 식별자와 다른');
-+    expect(p.save).not.toHaveBeenCalled();
-+  });
-+  it('멘션 실패도 성공 처리하지 않는다', async () => {
-+    const p = { ...params(), mention: vi.fn().mockRejectedValue(new Error('comment failed')) };
-+    await expect(dispatchTrackedIssue(p)).rejects.toThrow('comment failed');
-+    expect(p.save).not.toHaveBeenCalled();
-+    expect(p.mention).toHaveBeenCalledWith(issue.id);
-+  });
-+});
 diff --git a/supabase/migrations/0039_atomic_plan_and_linear_tracking.sql b/supabase/migrations/0039_atomic_plan_and_linear_tracking.sql
 new file mode 100644
 index 0000000..f4f363c
@@ -533,10 +570,10 @@ index 0000000..f4f363c
 +grant execute on function public.claim_codex_linear(uuid, uuid, boolean) to service_role;
 diff --git a/supabase/tests/99_atomic_plan_and_linear_tracking.sql b/supabase/tests/99_atomic_plan_and_linear_tracking.sql
 new file mode 100644
-index 0000000..9628641
+index 0000000..a852dfe
 --- /dev/null
 +++ b/supabase/tests/99_atomic_plan_and_linear_tracking.sql
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,68 @@
 +\set ON_ERROR_STOP on
 +begin;
 +create function pg_temp.check(ok boolean, label text) returns void language plpgsql as $$
@@ -588,6 +625,10 @@ index 0000000..9628641
 +select pg_temp.check((select reason='not_approved' from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'Linear E required');
 +set local role authenticated;
 +insert into approvals(task_id,gate,decision,approved_revision,work_item_id) values ('b0390000-0000-4000-8000-000000000001','E','approved',1,'W1');
++set local role service_role;
++select pg_temp.check((select reason='not_claimable' from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'E alone does not mark work ready');
++set local role authenticated;
++update agent_assignments set dispatch_status='ready' where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1';
 +set local role service_role;
 +select pg_temp.check((select ok from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'Linear reserved');
 +create temp table saved_linear_id as select provider_execution_id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1';

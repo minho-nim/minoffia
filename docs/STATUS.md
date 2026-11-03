@@ -4,7 +4,7 @@
 
 ## GitHub 추가 수정
 
-- 계획·배정 원자적 저장, Linear 추적 정보 보존, 지정 팀 오류 시 전송 중단을 수정했다. 타입 검사·303개 시험·빌드·서버 함수 타입 검사는 통과했으며 0039 DB 시험은 아직 실행 완료하지 못했다. [Claude 인수인계](CLAUDE_HANDOFF.md) 참조. Supabase·이번 앱 배포는 Claude에서 진행한다.
+- 계획·배정 원자적 저장, Linear 추적 정보 보존, 지정 팀 오류 시 전송 중단을 수정했다. 타입 검사·303개 시험·빌드·서버 함수 타입 검사 및 GitHub 임시 PostgreSQL 17의 전체 DB 시험이 통과했다. [Claude 인수인계](CLAUDE_HANDOFF.md) 참조. Supabase·이번 앱 배포는 Claude에서 진행한다.
 
 ## 운영 반영 대기
 
