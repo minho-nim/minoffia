@@ -148,20 +148,24 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
   const [qaReply, setQaReply] = useState('');
   const [pmReply, setPmReply] = useState('');
-  const toggle = (key: string) =>
-    setUnfolded((cur) => {
+  // 지금 단계(와 그 뒤)도 소유자가 접을 수 있다(v0.5.23). 지난 단계는 기본으로 접혀 있고 누르면 편다.
+  const [closed, setClosed] = useState<Set<string>>(() => new Set());
+  const flip = (set: (f: (cur: Set<string>) => Set<string>) => void, key: string) =>
+    set((cur) => {
       const next = new Set(cur);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  const folded = (key: string, idx: number) => idx < current && !unfolded.has(key);
+  const toggle = (key: string, idx: number) => flip(idx < current ? setUnfolded : setClosed, key);
+  const folded = (key: string, idx: number) => (idx < current ? !unfolded.has(key) : closed.has(key));
   // 바로 가기: 그 칸을 펼치고(지난 단계로 접혀 있어도) 화면에 보이게 내린다. 확인 질문(qa)은 기획 칸 안에 있다.
   useEffect(() => {
     if (!jump) return;
     // 확인 질문은 기획 칸 또는 PM 칸(PM이 계획을 보류하고 물은 경우) 안에 있다
     const keys = jump.step === 'qa' ? ['plan', 'pm'] : [jump.step];
     setUnfolded((cur) => new Set([...cur, ...keys]));
+    setClosed((cur) => new Set([...cur].filter((k) => !keys.includes(k))));
     const t = window.setTimeout(() => {
       const el = document.getElementById(`wf-${task.id}-${jump.step}`);
       // 업무 카드의 '진행 단계'가 접혀 있으면 먼저 편다
@@ -174,16 +178,14 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   }, [jump?.n]);
   const fold = {
     cls: (key: string, idx: number) => `wf-section${idx < current ? ' is-past' : ''}${folded(key, idx) ? ' is-folded' : ''}`,
-    head: (key: string, idx: number, title: ReactNode) =>
-      idx < current ? (
-        <h4>
-          <button type="button" className="wf-fold" aria-expanded={!folded(key, idx)} onClick={() => toggle(key)}>
-            <span aria-hidden="true">{folded(key, idx) ? '▸' : '▾'}</span> {title} <span className="wf-fold-done">지난 단계 ✓</span>
-          </button>
-        </h4>
-      ) : (
-        <h4>{title}</h4>
-      ),
+    head: (key: string, idx: number, title: ReactNode) => (
+      <h4>
+        <button type="button" className="wf-fold" aria-expanded={!folded(key, idx)} onClick={() => toggle(key, idx)}>
+          <span aria-hidden="true">{folded(key, idx) ? '▸' : '▾'}</span> {title}
+          {idx < current ? <span className="wf-fold-done">지난 단계 ✓</span> : idx === current ? <span className="wf-fold-done wf-fold-now">지금 단계</span> : null}
+        </button>
+      </h4>
+    ),
   };
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<SpecFields>(EMPTY_SPEC);
