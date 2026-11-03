@@ -4091,8 +4091,9 @@ a {
 
 /* 휴대폰 대화 탭: 입력창 아래 여백은 8px만, 패널 아래 테두리·여백은 없앤다(v0.5.7) */
 @media (max-width: 1039px) {
+  /* 패널 테두리와 대화 상자 테두리가 양옆에 두 줄로 겹쳐 보이던 것(v0.5.17 소유자 "좌우측 이상"): 패널 테두리는 뺀다 */
   .panel {
-    border-bottom: 0;
+    border-color: transparent;
   }
   .panel:has(> .chat-tab:not([hidden])) {
     padding-bottom: 0;
