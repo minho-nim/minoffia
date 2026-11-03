@@ -137,6 +137,22 @@ export function App() {
       // 저장이 막힌 브라우저: 이번 화면에서만
     }
   };
+  // 프로젝트 칩 접기(v0.5.5 소유자 "너무 많다"): 대화·업무 탭 같이. 접으면 고른 칩만 남는다. 이 기기에 기억.
+  const [chipsFolded, setChipsFoldedState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('minlab-ai-office:chips-folded:v1') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setChipsFolded = (v: boolean) => {
+    setChipsFoldedState(v);
+    try {
+      localStorage.setItem('minlab-ai-office:chips-folded:v1', v ? '1' : '0');
+    } catch {
+      // 저장이 막힌 브라우저: 이번 화면에서만
+    }
+  };
   const [selected, setSelected] = useState<AgentId | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [handoff, setHandoff] = useState<string | null>(null);
@@ -1400,6 +1416,19 @@ export function App() {
     const pid = snap.tasks.find((t) => t.id === it.taskId)?.projectId;
     if (pid) turnsByProject.set(pid, (turnsByProject.get(pid) ?? 0) + 1);
   }
+  // 프로젝트가 4개 이상일 때만 접기 버튼. 접힌 칩의 내 차례 수는 버튼에 모아 보인다.
+  const fold = snap.projects.length > 3;
+  const foldChip = (picked: string | null) => {
+    if (!fold) return null;
+    const hidden = snap.projects.filter((p) => p.id !== picked);
+    const waiting = hidden.reduce((sum, p) => sum + (turnsByProject.get(p.id) ?? 0), 0);
+    return (
+      <button type="button" className="chip chip-fold" aria-expanded={!chipsFolded} onClick={() => setChipsFolded(!chipsFolded)}>
+        {chipsFolded ? `프로젝트 ${hidden.length}개 ▾` : '접기 ▴'}
+        {chipsFolded && waiting > 0 && <span className="num num-turn">{waiting}</span>}
+      </button>
+    );
+  };
 
   return (
     <div className="app">
@@ -1519,7 +1548,7 @@ export function App() {
               >
                 기본
               </button>
-              {snap.projects.map((p) => {
+              {snap.projects.filter((p) => !(fold && chipsFolded) || chatProjectId === p.id).map((p) => {
                 const n = turnsByProject.get(p.id) ?? 0;
                 const on = chatProjectId === p.id;
                 return (
@@ -1537,13 +1566,14 @@ export function App() {
                   </button>
                 );
               })}
+              {foldChip(chatProjectId)}
             </div>
           )}
 
           {/* 업무 탭 프로젝트 칩(v0.4.18~). 고르면 내 차례·업무가 그 프로젝트 기준 */}
           {tab === 'tasks' && snap.projects.length > 1 && (
             <div className="filters project-chips" role="group" aria-label="프로젝트" ref={watchChipsHeight}>
-              {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects].map((p) => {
+              {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects.filter((p) => !(fold && chipsFolded) || pf === p.id)].map((p) => {
                 const n = p.id === 'all' ? turns.length : (turnsByProject.get(p.id) ?? 0);
                 return (
                   <button key={p.id} type="button" className="chip chip-project" aria-pressed={pf === p.id} onClick={() => setProjectFilter(p.id)}>
@@ -1552,6 +1582,7 @@ export function App() {
                   </button>
                 );
               })}
+              {foldChip(pf === 'all' ? null : pf)}
             </div>
           )}
 
