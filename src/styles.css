@@ -3988,19 +3988,22 @@ a {
 .inbox > .inbox-form {
   bottom: calc(var(--inbox-low) + 1px + var(--kb, 0px));
 }
-/* 입력창 바로 위: 뒤로 내려가는 대화가 흐려지며 사라진다(v0.5.13 소유자 "클로드 채팅창처럼") */
+/* 입력창 뒤: 대화가 입력창 윗선에서부터 뒤로 들어가며 흐려진다(v0.5.14 소유자 "가려지는 뒤쪽이 약간 흐려지면서",
+   "입력창이 시작되는 데부터"). 입력창 폭이 아니라 상자 안쪽 폭 전체를 덮어 입력창 모서리 옆으로 글이 삐져나오지 않는다. */
+.inbox > .inbox-form {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
 .inbox-fade {
-  position: absolute;
-  left: calc(-1 * var(--inbox-pad) - 1px);
-  right: calc(-1 * var(--inbox-pad) - 1px);
-  bottom: calc(100% + 1px);
-  height: 26px;
+  position: sticky;
+  z-index: 3;
+  bottom: calc(1px + var(--kb, 0px));
+  flex: none;
+  height: calc(var(--inbox-form-h, 110px) + var(--inbox-low));
+  margin: 0 calc(-1 * var(--inbox-pad)) calc(-1 * (var(--inbox-form-h, 110px) + var(--inbox-low)) - var(--inbox-gap));
   pointer-events: none;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 0%, transparent), var(--surface) 92%);
-  -webkit-backdrop-filter: blur(1.5px);
-  backdrop-filter: blur(1.5px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 70%);
-  mask-image: linear-gradient(to bottom, transparent, #000 70%);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
 }
 .inbox > .inbox-form::before,
 .inbox > .inbox-form::after,
