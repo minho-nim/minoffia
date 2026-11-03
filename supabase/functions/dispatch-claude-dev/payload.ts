@@ -2,7 +2,7 @@
 // v0.4.57(소유자 2026-11-01): 시험 뒤 작업 브랜치를 미리보기용으로 push한다(소유자가 데모를 눈으로 보고 승인). PR·병합·배포는 올리기 승인 뒤.
 // 앞선 업무에서 AI가 적어 둔 "이 프로젝트에서 지켜야 할 것"을 함께 넣고, 새로 알게 된 것은 결과와 함께 적어 보내게 한다.
 import { rulesAsk, rulesSection } from './projectRules.ts';
-import { DEV_HABITS, repoMapStep } from './devHabits.ts';
+import { bugSteps, DEV_HABITS, repoMapStep } from './devHabits.ts';
 
 /** CLAUDE.md를 알아서 만들거나 맞춘다(v0.4.75). 앱 src/domain/handoffV2.ts의 CLAUDE_MD_SYNC와 같은 문장(시험이 확인) */
 export const CLAUDE_MD_SYNC =
@@ -75,6 +75,7 @@ export function buildDevPayload(p: DevPayloadInput): string {
     '',
     '## 개발 습관(토큰·범위 아끼기)',
     ...DEV_HABITS.map((x) => `- ${x}`),
+    ...bugSteps([p.item.title, p.item.goal, p.finalPrompt].join('\n')),
     '',
     '## 규칙',
     '- 최신 main에서 위 작업 브랜치를 만들어 그 안에서만 작업한다. 지시 범위 밖 파일은 바꾸지 않는다.',
