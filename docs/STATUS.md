@@ -6,9 +6,10 @@
 
 - 계획·배정 원자적 저장, Linear 추적 정보 보존, 지정 팀 오류 시 전송 중단을 수정했다. 타입 검사·303개 시험·빌드·서버 함수 타입 검사 및 GitHub 임시 PostgreSQL 17의 전체 DB 시험이 통과했다. [Claude 인수인계](CLAUDE_HANDOFF.md) 참조. Supabase·이번 앱 배포는 Claude에서 진행한다.
 
-## 운영 반영 대기
+## 운영 반영 상태
 
-- 기획서 버전 확인·Gemini 계획 중복 예약 방지·채점 재시도 수정: `0038_gemini_pm_claim.sql` 적용 → `draft-plan` 함수 배포가 필요하다. PR #199 앱은 release에 배포 성공을 확인했으나 DB·함수는 미반영이다. 운영 반영은 별도 소유자 요청 뒤에 한다. 계획은 서버 전용 캐시를 재사용하며 일일 상한에는 실패·작성 중 예약도 포함한다.
+- 2026-11-03 운영 Supabase에 `0038_gemini_pm_claim`·`0039_atomic_plan_and_linear_tracking` 적용, `draft-plan`(v2)·`codex-linear`(v2)·`linear-webhook`(v2, JWT 끔·서명 확인) 배포를 마쳤다. 확인: 새 표·함수·고유 색인 존재, `gemini_pm_drafts`는 RLS 켜짐·로그인 사용자 접근 없음(서버 전용), `save_pm_plan`은 SECURITY INVOKER·로그인 사용자만 실행, `claim_gemini_pm`·`claim_codex_linear`는 서버만 실행. 보안 점검에 새 경고 없음(서버 전용 표의 '정책 없음' 안내만).
+- **남은 것**: 이 앱 버전(save_pm_plan 사용)의 release 배포는 소유자가 따로 한다. Linear의 이슈 id 입력 지원(`canSetId`)·예약 UUID 조회는 실제 맡기기 때 처음 확인된다(읽기 전용 확인은 아직 안 함).
 
 ## 구현된 경로와 남은 확인
 
