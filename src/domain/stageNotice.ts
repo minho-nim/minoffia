@@ -29,8 +29,8 @@ const NEXT: Partial<Record<Stage, string>> = {
   development_approval_pending: '기획서를 보고 기획 승인하거나 수정 요청하세요.',
   pm_queued: '업무 카드에서 Claude PM에 보내세요.',
   dispatching: 'Claude PM이 계획을 만들고 있어요. 계획이 오면 알려 드릴게요.',
-  agent_handoff_pending: 'PM 계획이 왔어요. 업무 카드에서 계획을 보고 작업별로 실행 승인하세요.',
-  executing: 'AI가 개발 중이에요. 결과가 나오면 결과 패키지를 등록하세요.',
+  agent_handoff_pending: '작업 계획이 정해졌어요. 업무 카드에서 계획을 보고 작업별로 실행 승인하세요.',
+  executing: 'AI가 개발 중이에요. 결과가 오면 알려 드릴게요.',
   validation: '검증 중이에요.',
   result_review: '결과를 보고 올리기 승인(GitHub)하거나 수정 요청하세요.',
   github_approval_pending: '결과를 보고 올리기 승인(GitHub)하세요.',
@@ -45,8 +45,24 @@ const NEXT: Partial<Record<Stage, string>> = {
   failed: '실패했어요. 업무 카드에서 이유를 확인하세요.',
 };
 
-/** 입력창에 알리는 단계: 확인 질문(답을 입력창에 씀)과 막힘 */
-export const NOTICE_STAGES: ReadonlySet<Stage> = new Set<Stage>(['needs_clarification', 'failed', 'integration_blocked', 'rate_limited']);
+/**
+ * 입력창에 알리는 단계: 확인 질문·막힘 + 손댈 일이 생기는 주요 단계(v0.5.26 소유자 "단계가 대화에 업데이트가 안돼").
+ * 잠깐 지나가는 단계(기획 중·PM 전송 중·검증 중·배포 중)는 알리지 않는다.
+ */
+export const NOTICE_STAGES: ReadonlySet<Stage> = new Set<Stage>([
+  'needs_clarification',
+  'failed',
+  'integration_blocked',
+  'rate_limited',
+  'spec_ready',
+  'development_approval_pending',
+  'agent_handoff_pending',
+  'executing',
+  'result_review',
+  'github_approval_pending',
+  'deployment_approval_pending',
+  'completed',
+]);
 
 /** 단계와 버전을 묶은 표식. 이것이 바뀌면 알린다. */
 export function stageSignature(task: Task, all: WorkflowData): string {
