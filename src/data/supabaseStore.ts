@@ -414,33 +414,17 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       );
     },
     async addPlan(p, assignments) {
-      check(
-        await client.from('pm_plans').insert({
-          id: p.id,
-          task_id: p.taskId,
-          plan_revision: p.planRevision,
-          approved_spec_revision: p.approvedSpecRevision,
-          target_base_revision: p.targetBaseRevision,
-          source: p.source,
-          plan: p.plan,
-        }),
-      );
-      if (assignments.length) {
-        check(
-          await client.from('agent_assignments').insert(
-            assignments.map((a) => ({
-              id: a.id,
-              task_id: a.taskId,
-              plan_revision: a.planRevision,
-              work_item_id: a.workItemId,
-              title: a.title,
-              assignee: a.assignee,
-              execution_mode: a.executionMode,
-              dispatch_status: a.dispatchStatus,
-            })),
-          ),
-        );
-      }
+      check(await client.rpc('save_pm_plan', {
+        p_plan: {
+          id: p.id, task_id: p.taskId, plan_revision: p.planRevision,
+          approved_spec_revision: p.approvedSpecRevision, target_base_revision: p.targetBaseRevision,
+          source: p.source, plan: p.plan,
+        },
+        p_assignments: assignments.map((a) => ({
+          id: a.id, work_item_id: a.workItemId, title: a.title,
+          assignee: a.assignee, execution_mode: a.executionMode,
+        })),
+      }));
     },
     async updateAssignment(a) {
       check(

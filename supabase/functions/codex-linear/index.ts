@@ -4,6 +4,7 @@
 // action 'status': 그 이슈의 Codex 댓글만 읽어 진행 소식·작업 주소·시작 실패(한도·환경 없음)를 배정 기록에 남긴다(완료 판정은 사람이).
 // 비밀값: LINEAR_API_KEY(소유자 계정 개인 키)는 secrets에만. 이슈 생성은 소유자 이름으로 된다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { dispatchTrackedIssue, type LinearIssue } from './trackedDispatch.ts';
 import { CREATE_COMMENT, CREATE_ISSUE, issueInput, LOOKUP_QUERY, readLookup, readNews, STATUS_QUERY } from './linear.ts';
 
 const MAX_TEXT = 60_000;
@@ -24,7 +25,7 @@ async function linear(key: string, query: string, variables: Record<string, unkn
     signal: AbortSignal.timeout(15_000),
   });
   const body = (await res.json().catch(() => ({}))) as { data?: Record<string, unknown>; errors?: { message?: string }[] };
-  if (!res.ok || !body.data) throw new Error(`Linear 응답 오류(HTTP ${res.status}) ${body.errors?.[0]?.message ?? ''}`.trim());
+  if (!res.ok || !body.data || body.errors?.length) throw new Error(`Linear 응답 오류(HTTP ${res.status}) ${body.errors?.[0]?.message ?? ''}`.trim());
   return body.data;
 }
 
@@ -61,11 +62,16 @@ Deno.serve(async (req) => {
   if (body.action === 'status') {
     if (!a.provider_execution_id || !String(a.actual_provider_status ?? '').startsWith('linear')) return reply(409, { ok: false, error: 'Linear로 맡긴 작업이 아닙니다.' });
     try {
-      const news = readNews((await linear(key, STATUS_QUERY, { id: a.provider_execution_id })) as Parameters<typeof readNews>[0]);
+      const data = await linear(key, STATUS_QUERY, { id: a.provider_execution_id });
+      if (!data.issue) return reply(409, { ok: false, error: '아직 Linear 이슈 생성을 확인하지 못했습니다. 새 이슈를 만들지 않고 기존 식별자를 유지합니다.' });
+      const remoteIssue = data.issue as Partial<LinearIssue>;
+      if (remoteIssue.id !== a.provider_execution_id || !remoteIssue.url) throw new Error('예약한 이슈의 주소를 확인하지 못했습니다.');
+      const news = readNews(data as Parameters<typeof readNews>[0]);
       const note = news.kind === 'none' ? 'linear: Codex 소식 아직 없음' : `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`;
-      const patch: Record<string, unknown> = { actual_provider_status: note.slice(0, 300), last_verified_at: new Date().toISOString() };
-      if (news.kind === 'error' && a.dispatch_status === 'started') patch.dispatch_status = 'failed';
-      await admin.from('agent_assignments').update(patch).eq('id', a.id);
+      const patch: Record<string, unknown> = { actual_provider_status: note.slice(0, 300), provider_task_url: remoteIssue.url, status_source: 'server_verified', last_verified_at: new Date().toISOString() };
+      if (a.dispatch_status === 'starting' || a.dispatch_status === 'started') patch.dispatch_status = news.kind === 'error' ? 'failed' : 'started';
+      const { data: saved, error: saveError } = await admin.from('agent_assignments').update(patch).eq('id', a.id).eq('provider_execution_id', a.provider_execution_id).eq('dispatch_status', a.dispatch_status).select('id').maybeSingle();
+      if (saveError || !saved) return reply(503, { ok: false, error: 'Linear 소식은 읽었지만 저장하지 못했습니다. 다시 확인하세요.' });
       return reply(200, { ok: true, ...news });
     } catch (e) {
       return reply(502, { ok: false, error: (e as Error).message });
@@ -89,6 +95,7 @@ Deno.serve(async (req) => {
     return reply(502, { ok: false, error: (e as Error).message });
   }
   if (!look.teamId) return reply(409, { ok: false, error: 'Linear 팀을 찾지 못했어요.' });
+  if (!look.canSetId) return reply(409, { ok: false, error: 'Linear가 이슈 식별자 예약을 지원하지 않아 추적 정보를 보존할 수 없습니다. 전송하지 않았습니다.' });
   if (!look.codexId) return reply(409, { ok: false, error: 'Linear에서 Codex를 찾지 못했어요. Codex for Linear 설치와 팀 추가를 확인하세요.' });
 
   const { data: claim, error: claimError } = await admin.rpc('claim_codex_linear', { p_assignment: a.id, p_owner: user.id, p_allow_retry: Boolean(body.acknowledgeRetry) });
@@ -103,34 +110,44 @@ Deno.serve(async (req) => {
     };
     return reply(409, { ok: false, error: why[row?.reason] ?? '맡길 수 없습니다.' });
   }
-  const fail = async (message: string, status: number) => {
-    await admin.from('agent_assignments').update({ dispatch_status: 'failed', actual_provider_status: message.slice(0, 300) }).eq('id', a.id);
-    return reply(status, { ok: false, error: message });
-  };
-
+  // 외부 요청 전에 식별자가 DB에 예약됐는지 확인한다.
+  const { data: reserved, error: reservedError } = await admin.from('agent_assignments')
+    .select('provider_execution_id').eq('id', a.id).eq('dispatch_status', 'starting').maybeSingle();
+  if (reservedError || !reserved?.provider_execution_id) return reply(503, { ok: false, error: '추적 정보 예약을 확인하지 못해 Linear에 전송하지 않았습니다.' });
+  const issueId = String(reserved.provider_execution_id);
   const mention = env('CODEX_LINEAR_TRIGGER') === 'mention';
   const description = [`저장소: ${project.repo}`, `AI Office 업무 ${a.task_id} · 작업 ${a.work_item_id} · 계획 v${a.plan_revision}`, '', text].join('\n');
-  let issue: { id: string; identifier: string; url: string };
   try {
-    const created = (await linear(key, CREATE_ISSUE, {
-      input: issueInput({ teamId: look.teamId, labelId: look.labelId, codexId: mention ? null : look.codexId, canDelegate: look.canDelegate, title: `[AI Office] ${task.title} · ${a.work_item_id}`, description }),
-    })) as { issueCreate?: { success?: boolean; issue?: { id: string; identifier: string; url: string } } };
-    if (!created.issueCreate?.success || !created.issueCreate.issue) throw new Error('Linear 이슈를 만들지 못했습니다.');
-    issue = created.issueCreate.issue;
-    if (mention) await linear(key, CREATE_COMMENT, { input: { issueId: issue.id, body: '@codex 이 이슈의 지시서대로 진행해 줘. PR은 만들지 말고 작업만 해 줘.' } });
+    const issue = await dispatchTrackedIssue({
+      issueId,
+      create: async (id) => {
+        const data = await linear(key, CREATE_ISSUE, {
+          input: issueInput({ issueId: id, teamId: look.teamId!, labelId: look.labelId, codexId: mention ? null : look.codexId, canDelegate: look.canDelegate, title: `[AI Office] ${task.title} · ${a.work_item_id}`, description }),
+        }) as { issueCreate?: { success?: boolean; issue?: LinearIssue } };
+        if (!data.issueCreate?.success || !data.issueCreate.issue) throw new Error('Linear 이슈 생성을 확인하지 못했습니다.');
+        return data.issueCreate.issue;
+      },
+      read: async (id) => {
+        const data = await linear(key, STATUS_QUERY, { id }) as { issue?: LinearIssue | null };
+        return data.issue ?? null;
+      },
+      mention: mention ? async (id) => {
+        const data = await linear(key, CREATE_COMMENT, { input: { issueId: id, body: '@codex 이 이슈의 지시서대로 진행해 줘. PR은 만들지 말고 작업만 해 줘.' } }) as { commentCreate?: { success?: boolean } };
+        if (!data.commentCreate?.success) throw new Error('Codex 멘션 전송을 확인하지 못했습니다.');
+      } : undefined,
+      save: async (issue) => {
+        const { data: saved, error: saveError } = await admin.from('agent_assignments').update({
+          dispatch_status: 'started', status_source: 'server_verified',
+          provider_task_url: issue.url,
+          actual_provider_status: `linear: ${issue.identifier} 맡김(Codex 소식 기다리는 중)`,
+          last_verified_at: new Date().toISOString(),
+        }).eq('id', a.id).eq('provider_execution_id', issueId).eq('dispatch_status', 'starting').select('id').maybeSingle();
+        if (saveError || !saved) throw new Error(saveError?.message ?? '배정 상태가 바뀌었습니다.');
+      },
+    });
+    return reply(200, { ok: true, issueUrl: issue.url, identifier: issue.identifier });
   } catch (e) {
-    return fail(`Codex(Linear)에 맡기지 못했습니다: ${(e as Error).message}`, 502);
+    // 응답 유실일 때 실패로 확정하거나 새 이슈를 만들지 않는다. 예약 ID로 상태를 다시 확인한다.
+    return reply(502, { ok: false, issueId, error: `${(e as Error).message} (예약 식별자 ${issueId}). 소식을 다시 읽거나 Linear에서 확인 후 중단·재시도하세요.` });
   }
-  await admin
-    .from('agent_assignments')
-    .update({
-      dispatch_status: 'started',
-      status_source: 'server_verified',
-      provider_execution_id: issue.id,
-      provider_task_url: issue.url,
-      actual_provider_status: `linear: ${issue.identifier} 맡김(Codex 소식 기다리는 중)`,
-      last_verified_at: new Date().toISOString(),
-    })
-    .eq('id', a.id);
-  return reply(200, { ok: true, issueUrl: issue.url, identifier: issue.identifier });
 });

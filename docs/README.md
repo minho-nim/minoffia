@@ -5,6 +5,7 @@
 | 문서 | 용도 |
 |---|---|
 | [CLAUDE.md](../CLAUDE.md) | 작업·검증·보안 규칙 |
+| [Claude 인수인계](CLAUDE_HANDOFF.md) | 추가 수정·검증 상태·Supabase 반영 순서(필요할 때만) |
 | [STATUS.md](STATUS.md) | 현재 미완료·미검증·소유자 취향 |
 | [FLOW.md](FLOW.md) | 현재 승인·업무 흐름 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 구조·관련 소스 위치 |
