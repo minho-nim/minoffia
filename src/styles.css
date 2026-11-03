@@ -4077,6 +4077,14 @@ a {
     top: calc(var(--tabs-h, 42px) + var(--chips-h, 0px));
   }
 }
+/* 휴대폰: 사무실이 작아지기 전에도 위 모서리가 화면 맨 위 얇은 머리 줄 아래에 붙어 늘 둥글게(v0.5.18 소유자
+   "굽어졌다가 다시 세로로 일자가 되는 현상 없애고 라운드만") */
+@media (max-width: 1039px) {
+  .inbox-cap {
+    position: sticky;
+    top: calc(36px + env(safe-area-inset-top, 0px));
+  }
+}
 @media (max-width: 1039px) and (min-height: 620px) {
   .layout.is-mini .inbox-cap {
     position: sticky;
