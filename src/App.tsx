@@ -271,7 +271,6 @@ export function App() {
   const planInboxRef = useRef<(() => void) | null>(null);
   /** 업무별 마지막 자동 PR·CI 확인 시각(너무 자주 묻지 않게) */
   const autoPrAt = useRef(new Map<string, number>());
-  const codexNewsAt = useRef(new Map<string, number>());
   /** 배포 승인 뒤 main 시험(CI)을 기다리는 업무(v0.4.20). 1분마다 다시 배포를 시도한다 */
   const deployWait = useRef(new Set<string>());
   const deployAt = useRef(new Map<string, number>());
@@ -761,19 +760,6 @@ export function App() {
           prototypeTried.current.add(key);
           await makePrototype(t.id);
         }
-        // Codex(Linear)에 맡긴 작업의 소식을 2분마다 읽는다(v0.5.2, 읽기만). 시작 못 함(한도·환경 없음)이면 알린다.
-        for (const a of snap.workflow.assignments) {
-          if (a.assignee !== 'codex' || a.dispatchStatus !== 'started' || !a.actualProviderStatus?.startsWith('linear')) continue;
-          if (Date.now() - (codexNewsAt.current.get(a.id) ?? 0) < 120_000) continue;
-          codexNewsAt.current.set(a.id, Date.now());
-          try {
-            const n = await store.codexLinearStatus(a.id);
-            if (n.kind === 'error') say('error', `Codex가 시작하지 못했어요: ${n.last} — 한도가 풀리면 다시 맡기거나 지시서 복사로 진행하세요.`);
-            if (n.kind !== 'none') setSnap(await store.load());
-          } catch {
-            // 다음 확인 때 다시 읽는다.
-          }
-        }
         // 올리기 승인(B) 뒤 PR·CI를 자동으로 확인한다(v0.4.5). 결과가 정해지면(성공·실패·닫힘) 멈춘다. 손으로 다시 확인하는 버튼은 그대로.
         let checked = false;
         for (const t of snap.tasks) {
@@ -1226,6 +1212,20 @@ export function App() {
             } catch (e) {
               say('error', `Codex(Linear)에 맡기지 못했어요: ${(e as Error).message} — 지시서 복사로 진행할 수 있어요.`);
               return false;
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
+    // Codex 소식은 Linear 웹훅이 서버로 바로 보낸다(v0.5.3). 웹훅이 안 오면 손으로 다시 읽는다(읽기만).
+    refreshCodex:
+      store.mode === 'supabase'
+        ? async (a) => {
+            try {
+              const n = await store.codexLinearStatus(a.id);
+              say(n.kind === 'error' ? 'error' : 'ok', n.kind === 'none' ? '아직 Codex 소식이 없어요.' : `Codex 소식: ${n.last}`);
+            } catch (e) {
+              say('error', `Codex 소식을 읽지 못했어요: ${(e as Error).message}`);
             } finally {
               setSnap(await store.load());
             }

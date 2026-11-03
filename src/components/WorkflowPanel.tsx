@@ -47,6 +47,8 @@ export interface WorkflowActions {
   startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** Codex를 Linear로 맡기기(v0.5.2): 지시서는 패널이 만들어 넘긴다 */
   startCodexLinear?: (assignment: AgentAssignment, acknowledgeRetry: boolean, text: string) => Promise<boolean>;
+  /** Codex 소식 손으로 다시 읽기(웹훅이 안 올 때, v0.5.3) */
+  refreshCodex?: (assignment: AgentAssignment) => Promise<void>;
   /** 견본 먼저: 견본 승인 + 견본 작업 끝냄 */
   approvePrototype: (task: Task) => Promise<boolean>;
   /** 두 견본 중 하나 고르기(나머지 지우고 P 승인, v0.4.94) */
@@ -706,6 +708,14 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                               <a href={a.providerTaskUrl} target="_blank" rel="noreferrer">
                                 Linear 이슈
                               </a>
+                            </>
+                          )}
+                          {actions.refreshCodex && (
+                            <>
+                              {' '}
+                              <button type="button" className="link-btn small" disabled={busy} onClick={() => void run(() => actions.refreshCodex!(a))}>
+                                소식 다시 읽기
+                              </button>
                             </>
                           )}
                         </p>
