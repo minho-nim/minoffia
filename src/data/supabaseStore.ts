@@ -621,6 +621,14 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('dispatch-claude-dev', { assignmentId, acknowledgeRetry });
       return { sessionUrl: (data.sessionUrl as string | null) ?? null };
     },
+    async startCodexLinear(assignmentId, acknowledgeRetry, text) {
+      const data = await invoke('codex-linear', { action: 'start', assignmentId, acknowledgeRetry, text });
+      return { issueUrl: String(data.issueUrl ?? ''), identifier: String(data.identifier ?? '') };
+    },
+    async codexLinearStatus(assignmentId) {
+      const data = await invoke('codex-linear', { action: 'status', assignmentId });
+      return { kind: (data.kind as 'error' | 'working' | 'none') ?? 'none', last: String(data.last ?? ''), taskUrl: (data.taskUrl as string | null) ?? null };
+    },
     async startGeminiDev(assignmentId, acknowledgeRetry) {
       const data = await invoke('dispatch-gemini-dev', { assignmentId, acknowledgeRetry });
       return { runUrl: (data.runUrl as string | null) ?? null, key: String(data.key ?? '') };

@@ -300,6 +300,12 @@ export function createLocalStore(): OfficeStore {
     async startGeminiDev() {
       throw new Error('로컬 데모에서는 Gemini 개발을 시작할 수 없습니다.');
     },
+    async startCodexLinear() {
+      throw new Error('로컬 데모에서는 Codex(Linear)에 맡길 수 없습니다.');
+    },
+    async codexLinearStatus() {
+      return { kind: 'none' as const, last: '', taskUrl: null };
+    },
     async deployRelease() {
       throw new Error('로컬 데모에서는 운영 배포를 할 수 없습니다.');
     },
