@@ -1,5 +1,5 @@
 // Linear 연결 확인(v0.4.11, 읽기만): 소유자가 버튼을 누르면 Linear 공식 GraphQL로 연결 상태만 읽는다.
-// 이슈·댓글·위임을 만들지 않고, 키(LINEAR_API_KEY)는 secrets에만 둔다. 결정 문서 docs/CODEX_LINEAR_DECISION_2026-10-30.md 4-1단계.
+// 이슈·댓글·위임을 만들지 않고, 키(LINEAR_API_KEY)는 secrets에만 둔다. 결정 문서 docs/archive/CODEX_LINEAR_DECISION_2026-10-30.md 4-1단계.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { PROBE_QUERY, readProbe } from './probe.ts';
 

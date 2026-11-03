@@ -1,5 +1,105 @@
 # 변경 기록
 
+## 기획서·AI 실행 안정성 개선 — 2026-11-03
+
+- Gemini 응답의 기획서 버전을 검증해 이전 계획이 새 기획서에 연결되지 않게 함.
+- Gemini 계획 생성은 DB 예약·서버 전용 결과 재사용으로 여러 기기의 중복 호출을 막음. 실패·작성 중 예약도 일일 상한에 포함.
+- 결과 채점 실패 후 30초부터 최대 5분까지 대기 시간을 늘려 재시도. Claude 대기도 주기적으로 확인해 만료 뒤 대체 채점 가능.
+- 계획 저장 준비·계획/결과 수신·채점 처리를 src/workflow로 분리. 실행 승인은 기존대로 유지.
+- 운영 반영 필요: 마이그레이션 0038 → draft-plan 함수 → 앱.
+
+## 인수인계에서 옮긴 후속 기록 (2026-11-01~03)
+
+아래는 당시 기록이며 운영 반영 여부는 각 항목의 표현을 따른다. 최신 미확인은 docs/STATUS.md 참조.
+
+- v0.4.23: Gemini 질문 빨리 받기(Gemini 3 계열 `thinkingLevel: minimal` 먼저, 입력창 누르면 `ask-gemini` 미리 깨우기, 로그 `thinking`·`head_ms`). `ask-gemini` v10 운영 배포, 앱 운영 배포 완료. 바꾸기 전 실측: 깨어나기 2.2초 + 첫 글자 7.6초.
+- v0.4.24: PC·태블릿 너비(700~1039px)에서 스크롤하면 사무실과 탭 사이 빈칸 → 사무실 절반 축소·고정은 700px 미만에서만. 대화 탭 프로젝트 칩 분리(위 4번).
+- 보조 개발 실측: 10/31 실행 승인 → 루틴 시작은 됐지만 루틴에 저장소가 없어 clone 실패. 소유자가 루틴에 저장소를 연결했고(확인됨), 루틴 안내문에 "payload 없으면 알림 없이 기다림"을 넣음. W1은 `failed`(user_reported)로 바꿔 둠 → 소유자가 앱에서 "세션 기록 확인함" 체크 후 다시 시작하면 이어서 확인.
+- ChatGPT 계정 막힘(소유자, 보류): Codex도 같은 계정이라 함께 멈춤. "ChatGPT·Codex 쉬는 중" 스위치 제안만 해 둠.
+
+- v0.4.25~0.4.28: 캐릭터가 위 머리를 덮던 문제(isolation), 작은 PC 창도 휴대폰처럼 작은 사무실(빈칸 없앰), 다크 모드 버튼(자동·밝게·어둡게), 숫자 배지 둥근 네모로 통일.
+- v0.4.29: 대화창 AI 먼저 판단(소유자 "AI가 자체 판단을 먼저"). 앱 상태·새 프로젝트만 규칙, 나머지는 Gemini가 첫 줄에 `@@질문`/`@@업무 <프로젝트>`/`@@애매`를 쓰고 질문이면 바로 답. 업무면 AI가 고른 프로젝트로 "맞아요?" 확인 뒤 접수. 대화에서 프로젝트를 골랐으면 그 프로젝트 정보(설명·저장소·열린 업무)를 Gemini에 함께 보내 그 프로젝트 질문으로 답함. `ask-gemini` 재배포 필요(옛 서버는 route를 무시해서 그냥 질문 답으로 동작).
+- v0.4.30: 다크 = 차콜(조금 더 어둡게, 소유자 고름). 머리의 내 차례 숫자를 큰 머리·얇은 머리 모두 버전 옆 같은 모양으로 두고 누르면 내 차례 목록 → 업무 카드로. 업무를 접수해도 대화는 그대로 이어가고, 그 프로젝트만 대화 칩에 연결(소유자: "연결은 프로젝트만"). 미니엉은 메모 보드 위로(대기열 가림), 아래층 방끼리는 가로 복도를 찍지 않고 바로 걷는다.
+- v0.4.31~0.4.35: 다크를 원래 갈색 쪽으로 따뜻하게, 캐릭터 그림 흰 테두리 지움, 대기열 펼치기, 머리 숫자 위치 통일·밝기 버튼(글자만, 얇은 머리에도), 에이전트 카드는 사무실 말풍선과 같은 표시 하나만(! > ? > … > 휴식, `src/office/marks.ts`), 짧은 페이지는 작은 사무실로 안 바꿈(아래 빈 공간 없앰).
+- v0.4.36~0.4.38: 대화창·초기화 줄 여백 줄임, Gemini 질문 앞 기다림 줄이기(앱 열 때 미리 깨움, OPTIONS 하루 기억, 토큰에서 사용자 읽기 — ask-gemini 재배포 필요).
+- v0.4.39: AI 휴가(위 CLAUDE.md). 0026 마이그레이션과 dispatch-claude 재배포가 운영에 필요.
+- v0.4.39~0.4.44: AI 휴가·팀 관리 탭(근무·휴가 좌우, 체크·끌기·전체 선택, 대신 맡을 AI 없음 안내), 캐릭터 하나 = 계정 하나(CLAUDE.md). Codex와 ChatGPT는 같은 OpenAI 계정(소유자 확인). Gemini 키 A·B가 실제로 Studio A·B 계정 키인지는 소유자가 AI Studio 사용량으로 확인 중.
+- 운영 반영 대기: 0026 마이그레이션 + ask-gemini·analyze-image·draft-spec·draft-prototype·dispatch-claude 재배포 + 앱 배포.
+
+- v0.4.45~0.4.56: 팀 관리 작은 사무실·탭 한 줄, 다크 사무실 불 끄기, 휴가 보내면 열린 업무 넘김, 새 저장소에 CLAUDE.md, 기획에서 ChatGPT 뺌, Codex (Linear), Grok 기본 휴가. 모두 운영 배포됨(v0.4.56).
+- v0.4.57(소유자 2026-11-01 "1 ㅇㅇ / 2 AI가 알아서"):
+  - **미리보기 push 허용**: Claude 보조 개발 세션이 시험 뒤 작업 브랜치(`ai/claude/…`)만 `--force-with-lease`로 push한다. PR·병합·배포는 여전히 올리기 승인(B) 뒤. 프로젝트에 미리보기 주소(`projects.preview_host`, 예 `minlab-ai-office.pages.dev`)가 있으면 서버(submit-result)가 Cloudflare 브랜치 주소를 계산해 결과에 "미리보기 열기"를 붙인다. B 뒤 PR 지시는 main에서 승인된 diff로 브랜치를 다시 만들어 덮어쓴다(PR = 승인한 내용).
+  - Cloudflare Pages가 `ai/*` 브랜치를 빌드하려면 소유자가 Cloudflare 화면에서 미리보기 브랜치를 켜야 한다(Settings → Builds → Branch control → Preview branches에 `ai/*`). 미리보기 환경 변수(Supabase)를 비워 두면 미리보기는 로컬 데모 모드로 열린다(운영 DB 안 건드림, 권장).
+  - **프로젝트에서 지켜야 할 것**(`project_rules`, 0027): Gemini 기획서 초안(`project_rules`), PM 계획 JSON 최상위 `project_rules`, 보조 개발 결과 `project_rules`로 AI가 적어 보내면 서버가 쌓는다(한 번 5개, 프로젝트당 40개). PM·보조 개발·기획서 초안·Codex 지시서에 함께 들어가고, 보조 개발은 저장소 CLAUDE.md의 같은 절도 맞춘다. 소유자는 프로젝트 탭에서 지우거나 직접 더하기만.
+  - 함수 공통 코드 `projectRules.ts`는 5곳에 복사(같은지 시험이 확인): draft-spec·dispatch-claude·dispatch-claude-dev·submit-plan·submit-result.
+
+- v0.4.58(소유자 "한 대화에 여러 질문, 답 오기 전에 여러 번 질문, 나눠서 전달·승인"): 대화창 접수 확인을 카드로 바꿈(카드마다 따로 접수·다른 프로젝트·질문이었어요·빼기, 대화가 이어져도 남음). Gemini가 한 메시지를 최대 5개로 나눔(ask-gemini 안내문 + `parseRoutedAll`, 답 길이 2048). 처리 중에 보낸 말은 줄 세워 차례로. **ask-gemini 재배포 필요**(안 하면 옛 서버는 나누지 않고 하나로 판단 — 카드·줄 세우기는 그대로 동작).
+
+- v0.4.57·0.4.58 운영 배포 완료(0027 적용, 함수 8개, 보조 개발 루틴 지시문 갱신, 앱). 확인 남음: 실제 메시지 나누기, 루틴 세션이 `ai/claude/…` 브랜치로 push 가능한지(루틴 outcome 브랜치가 `claude/peaceful-galileo`로 잡혀 있음), 소유자의 Cloudflare 미리보기 브랜치(`ai/*`) 설정.
+- v0.4.59(소유자 "클로드처럼"): 처리 중에 여러 번 보낸 말은 끝난 뒤 하나로 합쳐 Gemini 한 번에 보냄(`chatQueue.ts`, 짧은 대답은 따로). 앱만 바뀜. `replyIntent`의 "어"가 "어떻게…"까지 대답으로 잡던 문제도 고침.
+
+- v0.4.59 운영 배포 완료. 소유자가 Cloudflare 미리보기 브랜치(`ai/*`)·Supabase 설정 변경 완료(2026-11-01).
+- v0.4.60: 이미 있는 AI Office 저장소에 CLAUDE.md 넣기(프로젝트 탭 → 지켜야 할 것 → 버튼, 없을 때만). 대상은 managed_repos뿐(지금은 minho-nim/TestRepo). create-repo 재배포 필요.
+
+- v0.4.61(2026-11-02): 조사 = Gemini Google 검색 연결(출처 링크, 하루 20회 따로, 0028). 운영 반영: 0028 + ask-gemini + 앱.
+- 결정(2026-11-02): 결과 검토는 나중에 **AI가 평가·점수 매기고 기준 미달 항목만 이유와 함께 재개발 보냄**(재시도 상한, 최종 확인·B는 소유자). 아직 안 만듦.
+- 소유자 승인(2026-11-02): 시험 업무 '자동 시험'(350ff0d5…) 삭제, pg_net을 extensions 스키마로 옮기기. SQL 실행 때 서버 확인 창에 소유자가 답해야 진행됨.
+
+- 2026-11-02 운영: 시험 업무 '자동 시험' 삭제 완료, pg_net을 extensions로 옮김(0029, 보안 경고 사라짐, net.http_post 동작 확인).
+- v0.4.62: 미배정 캐릭터 3명(`src/assets/office/unassigned/` planner·nightdev·lead, Gemini 이미지 생성 → 배경·글자 지우고 비율·키 152px 맞춤). 팀 관리 탭 아래에만 보이고 사무실에는 안 나옴. 새 AI를 연결할 때 characters/<id>로 옮겨 씀. 예비 캐릭터 첫 시도(chore/spare-characters 브랜치)는 소유자가 별로라 버림 — GitHub 브랜치는 프록시가 삭제를 막아 소유자가 지워야 함.
+- Gemini 캐릭터 프롬프트 요령: 글자·설명 넣지 말 것, 배경 흰색, 머리가 키의 절반 가까운 치비 비율, 몸통 통통하게, 사무실 직원 옷차림.
+
+- v0.4.63: 넓은 화면 탭 왼쪽 정렬. 운영 배포 완료(0028·ask-gemini v15·앱).
+- v0.4.64: 결과 점수 평가(위 CLAUDE.md). MCP 참고(MCP as a Judge·CodeView·codex-mcp·MCP-Bench·Manager). 운영 반영: 0030 + review-result 새 함수(verify_jwt true) + 앱. 다음 후보: 스크린샷도 같이 채점, 성적으로 배정 순서, 역할별 1순위·예비 AI 표(cli-orchestrator 참고).
+
+- v0.4.65~66(2026-11-02): 입력창 화면 아래 고정, 미배정 캐릭터 작게, 끝까지 내리면 패널이 화면 아래까지(휴대폰 바닥 여백 0·PC 오른쪽 패널 화면 높이), 에이전트 카드 상태 표시 누르면 그 업무 카드, 미니엉은 '접수 데스크의 업무', 프로젝트별 대화창(CLAUDE.md), 에이전트 탭 맨 위 '결과 평가' 기록(점수·판정, 누르면 업무 카드).
+
+- v0.4.67~70: 빈 대화는 입력창 먼저, 칩 줄 고정(휴대폰·PC 모두 탭과 한 덩어리). v0.4.69까지 운영 배포 완료(0030·review-result v1·앱).
+- v0.4.71: 난이도 기반 배정(CLAUDE.md). 운영 반영: dispatch-claude 재배포 + 앱. (Jules는 소유자 계정에서 쓸 수 없어 붙이지 않기로 함, 2026-11-02.)
+- v0.4.72: 접수 카드로 받으면 남은 선택 버튼 접기, 같은 프로젝트 대화창이면 '대화창에도 올렸어요' 생략. 좁은 화면: 프로젝트 칩 여러 줄, 팀 관리 위아래 쌓기, 프로젝트 카드 칸 안. 업무 카드의 난이도 표시·'Codex가 더 싸요' 안내 뺌(배정은 PM이 알아서). 운영 반영: 앱만.
+- v0.4.73: 기본 규칙 10줄(`src/domain/baseRules.ts`)을 모든 프로젝트에 늘 적용. 프로젝트 탭 '지켜야 할 것' 안에 접힌 '기본 규칙'. 운영 반영: 규칙 쓰는 함수 6개(draft-spec·dispatch-claude·dispatch-claude-dev·submit-plan·submit-result·review-result) + 앱.
+- v0.4.74: 프로젝트 카드 '한 일 기록'(업무 기록 + 프로젝트 대화, 날짜별 최근 것부터, 업무 이름 누르면 업무 카드). 운영 반영: 앱만.
+- v0.4.75: 휴대폰 칩 줄은 탭이 고정될 때(세로 620px 이상)만 고정, '사실은 업무 요청이에요' 누르면 질문 버튼 접기, 한 일 기록 업무별(단계 이름표·대화는 켜야 보임), CLAUDE.md 알아서 맞추기(개발 지시서 + 버튼은 다르면 절만 맞춤). 운영 DB: 테스트 프로젝트 중복 규칙 7줄 지움. 운영 반영 대기: 앱 + dispatch-claude-dev·create-repo 재배포.
+- v0.4.76: 업무 카드 지나간 진행 단계 접기, 조사 업무는 Grok 휴가면 Gemini(Studio A·B)가 먼저(Claude는 마지막), 한 일 기록 '대화보기'. 운영 반영: 앱만.
+- 2026-11-02 소유자 결정: Jules는 쓸 수 없어 추가 AI 후보에서 뺀다. 남은 무료·보안 후보는 Cloudflare Workers AI(Gemini 한도 보조)뿐.
+- v0.4.77: Gemini 개발 시험 워크플로(`gemini-dev.yml`). 소유자가 secrets(GEMINI_API_KEY·TARGET_REPO_TOKEN)를 넣고 테스트Repo로 한 건 돌려 본 뒤 앱 배정에 붙인다. Groq(무료 등급)는 Gemini 한도 보조 후보로 소유자 OK(아직 미연결).
+- v0.4.78: 대화창 마지막 말이 입력창·키보드에 가리지 않게, 빈 대화 입력창 아래·인사말 위, 업무 제목 줄 고정, 사무실 말풍선 작게(상태만), 업무 제목 자동 생성(draft-spec이 기획서 초안과 같은 호출로 title). 운영 반영: 앱 + draft-spec 재배포.
+- v0.4.79: 빈 대화 인사말을 채팅창 맨 위로(입력창은 아래). 운영 반영: 앱만.
+- v0.4.80: 휴대폰 얇은 머리 — 아주 좁으면(380px 이하) 이름·버전 왼쪽 맞춤 두 줄, 바 밖으로 넘쳐 작은 사무실을 가리던 문제 수정. 운영 DB: 기존 업무 제목 2개를 짧은 제목으로. Gemini 개발 시험: GEMINI_API_KEY는 있음, TARGET_REPO_TOKEN 없음(소유자가 넣어야 함). 운영 반영: 앱만.
+- v0.4.81: Gemini 개발 시험 워크플로가 키 A·B 둘 다 씀(A 실패 시 되돌리고 B, 입력 key로 먼저 쓸 키 선택). 첫 시험 성공: 테스트Repo `ai/gemini/try-1`에 README 한 줄(24초, flash-lite). 다음: 앱 연결(쉬움 → Gemini), 서버가 워크플로를 시작하려면 Actions 실행 권한 토큰이 Supabase secrets에 필요.
+- v0.4.82: Gemini 개발을 앱에 연결(쉬움 → gemini_dev, E 승인 → dispatch-gemini-dev → gemini-dev.yml → submit-result → 결과 패키지·채점, B 뒤 PR은 링크로). 운영 반영: 0031 마이그레이션 + dispatch-gemini-dev(새)·dispatch-claude·pr-status 배포 + 앱. 소유자 할 일: Supabase secret GITHUB_ACTIONS_TOKEN(MinLab-AI-Office Actions 읽기·쓰기만), TARGET_REPO_TOKEN에 실제 프로젝트 저장소 추가.
+- v0.4.83: Gemini 키 나눠 쓰기 — 개발은 키 B 먼저(사무실도 Studio B), 대화·기획·채점은 키 A 먼저. 막히거나 휴가면 다른 키. 운영 반영: dispatch-gemini-dev와 함께.
+- v0.4.84: 휴대폰 대화 목록이 제 상자 안에서 스크롤되며 아래 입력창 밑으로 숨던 문제 — 휴대폰에서는 목록 높이 제한을 빼고 페이지와 함께 내린다. 운영 반영: 앱만.
+- v0.4.85: 알림 뒤 반영이 느리던 문제 — 앱이 다시 보이면·알림이 오면 곧바로 다시 읽는다(전에는 휴대폰 뒤로 간 사이 실시간이 끊겨 최대 2분 기다림). 운영 반영: 앱만.
+- v0.4.86: 내 차례 '보기'·업무 카드의 ?표시 → 그 일을 하는 칸(확인 질문·기획 승인·실행·결과·배포·견본)으로 바로 내려감. 운영 반영: 앱만.
+- v0.4.87: 휴대폰 알림 켜기·끄기를 종 아이콘 하나로(켜짐 채운 종·노란색, 꺼짐 빗금 종, 막힘은 흐리게·누르면 이유). 운영 반영: 앱만.
+- v0.4.88: 대화 칩 줄 맨 앞에 '기본'(일반 대화창, 처음엔 이것), 보낼 첨부는 입력창 안 위쪽(전엔 대화 영역 위에 떠 있었음), 빈 대화에서 첨부하면 예시 줄 숨김. 운영 반영: 앱만.
+- v0.4.89: 첨부 미리보기 누르면 크게(입력창·보낸 말 아래), 확인 질문 알림은 기본창+프로젝트창 둘 다에 [프로젝트], 알림 종 아이콘을 밝기 옆으로. 운영 관찰(2026-11-02 09:15): Gemini 3.5 flash-lite 503(과부하)·타임아웃으로 접수→확인 질문까지 약 2.5분, 업무 카드 '담당 Claude'는 규칙 배정 표시일 뿐 Claude 실행은 없었음. 다음 후보: 503이면 다른 모델로 한 번 더. 운영 반영: 앱만.
+- v0.4.90: 업무 카드 확인 질문 아래 바로 답하기(→ 기록·Gemini 다시 쓰기·대화창 기본+프로젝트에 문답), 대화창에서 한 답도 두 창에, '질문' 바로 가기는 질문+답 칸으로, 위에 붙은 업무 제목은 두 줄까지. 운영 반영: 앱만.
+- v0.4.91: 업무 카드 첨부 사진(요청 자료·결과·견본, 올리기 전 고른 것 포함)도 새 탭 대신 팝업으로 크게(공통 `src/components/ImageZoom.tsx`). 운영 반영: 앱만.
+- v0.4.92: 개발일지 날짜 칸이 휴대폰에서 옆으로 빠지던 문제(아이폰 date 입력 최소 너비). 운영 반영: 앱만.
+- v0.4.93: PM이 계획을 멈추고 물으면(status needs_clarification, 작업 0개) 업무 카드 PM 칸에서 바로 답하고 같은 기획서 버전으로 PM에 다시 보낸다(`0032_pm_answer_redispatch.sql`: 마지막 전송 뒤 확인 질문·답이 있으면 한 번 재전송). 그동안 견본 만들기 버튼은 숨기고 "PM 질문에 먼저 답해 주세요". 원인: 소유자 "견본 만들기 안 됨"(TestRepo 업무 c6851b73, PM 질문 3개). 운영 반영: 앱 + 마이그레이션 0032(배포 때 적용).
+- v0.4.94(소유자 "그림은 내가 보고 두 개 중 고르기, 코딩 작업은 클로드가 보고 채점"): ① 견본은 Studio A·B가 하나씩 동시에(draft-prototype `drafts`), 업무 카드 4-1의 "Studio A 견본으로 고르기"가 나머지를 지우고 P 승인. ② 결과 채점 2단계를 Claude로: review-result가 보조 개발 루틴에 "MinLab AI Office 채점" payload(쓰기·push 금지, 결과 브랜치가 있으면 읽고 시험 가능)를 보내고 세션이 `submit-review`(verify_jwt false, 1회용 표 kind review)로 점수 JSON을 보낸다. 판정은 서버가 같은 rubric으로. Claude 휴가·상한·미연결·6시간 무응답이면 Gemini. 운영 반영: 앱 + 0033 + 함수 draft-prototype·review-result·submit-review(새, verify_jwt false) + 보조 개발 루틴 저장 프롬프트에 "C. 채점" 종류 추가.
+- v0.4.95: 서로 바꿔 채점(소유자): Claude가 만든 결과는 Gemini, Gemini·Codex 결과는 Claude. 소유자 바람은 "Claude 결과는 GPT(Codex) 먼저, 안 되면 Gemini" → Codex for Linear(위임 → Linear 댓글로 점수)가 확인되면 붙인다. 먼저 소유자 PC 설정(Linear 가입·Codex for Linear·`LINEAR_API_KEY`)과 `linear-probe`·위임 실측이 필요. 운영 반영: review-result.
+- v0.4.96: 개발 습관·저장소 지도(소유자 "토큰 아껴야 돼"). 플러그인 설치 대신 Ponytail(가장 작은 변경·저장소 지도)·Agent Skills(planning·incremental·debugging·TDD·security·frontend·code-review)·The Agency(AI 코드 보안 감사: VITE_ 비밀키·USING(true)·user_metadata, 현실 점검: 후한 점수 금지, 화면 마감 검토)의 문장만 골라 지시서에 넣음. 지시서당 약 +800자(규칙)·+1,100자(지도 스크립트), 지도 출력은 약 2,500자 이하. 운영 반영: dispatch-claude·dispatch-claude-dev·dispatch-gemini-dev·review-result·submit-review·draft-prototype·draft-spec 재배포(워크플로는 main 병합으로 바로 적용).
+- v0.4.97(소유자 "MCP 아이디어 적용"): ① 화면 증거 — Gemini 개발 워크플로가 dist·build·out의 index.html을 데스크톱 1400·휴대폰 400으로 찍고(Playwright 1.49.1) 콘솔 오류·가로 넘침을 시험 로그에, 사진은 submit-result → 비공개 버킷 → 앱이 결과 스크린샷(role after)으로 붙임(0034). ② Graphify 0.9.100을 워크플로에 넣고 Gemini에 `graphify explain` 안내. ③ Claude 채점에 Ponytail review 순서·호출부 확인. ④ `shortcut:` 주석 → 프로젝트 탭 "미뤄 둔 일". ⑤ PM 확인 지점(작업 4개 이상이면 2~3개마다). ⑥ 채점 기준에 화면 확인 감점. 헤드룸 실측: diff·로그 0% → 안 씀. Claude 보조 개발 루틴에 Graphify를 넣으려면 소유자가 루틴 환경 셋업 스크립트에 `pip install graphifyy==0.9.100` 한 줄. 운영 반영: 앱 + 0034 + submit-result·review-result·dispatch-claude·dispatch-claude-dev·dispatch-gemini-dev·submit-review 재배포.
+- v0.4.98: 진행 단계 버튼이 없는 칸(작업 0개라 실행 칸 없음)을 누르면 견본 칸·바로 앞 칸으로 가게, 첨부 칸 안내 글 줄바꿈, 아래 붙은 입력창 둘레·아래로 대화 글이 비치지 않게(바탕색 그림자 + .inbox overflow clip). 운영 반영: 앱만.
+- v0.4.99: 업무 카드를 펼쳐 내릴 때 위에 붙는 제목 줄이 오른쪽이 짧던 문제(width 100% + 음수 여백 → calc(100% + 28px)). 운영 반영: 앱만.
+- v0.5.0(소유자 "업무 진행상황에서 탭이 고정되게"): 업무 카드를 펼쳐 내리면 제목 줄 아래에 진행 단계 줄(기획서~배포)도 붙는다. 붙는 높이는 `--task-sticky-top`(화면별), 제목·단계 높이는 TaskCard가 재서 `--task-title-h`·`--task-steps-h`로 넣고, 바로 가기 칸은 그만큼 띄워 멈춘다. 운영 반영: 앱만.
+- v0.5.1(소유자 "업무에서 대화로 묻기 후 답변이 그냥 기본 답변"): 업무 카드 '대화로 묻기'가 그 업무의 프로젝트 대화창으로 가고, 그 초안으로 보낸 질문에는 업무 상태(단계·기획서·PM 질문·계획 작업·결과·채점, `src/domain/taskContext.ts`)를 참고로 붙여 Gemini에 보낸다(화면에는 안 보임, 서버 변경 없음). 운영 반영: 앱만.
+- v0.5.2(소유자 2026-11-03 "ㄱㄱ"): Codex를 Linear로 맡기기. 소유자가 Linear 가입·Codex for Linear 설치·Codex를 MIN 팀에 추가·Codex 환경(chatgpt.com/codex) 만들기·`LINEAR_API_KEY`까지 끝냄. 손 시험: @Codex 멘션에 Codex가 반응했고 "환경 없음" → 환경 만든 뒤 "사용 한도"로 멈춤(약 4시간 뒤 다시). 새 서버 함수 `codex-linear`(start: 앱이 만든 Codex 지시서로 이슈 생성 + delegateId 위임, `CODEX_LINEAR_TRIGGER=mention`이면 @codex 댓글; status: Codex 댓글만 읽어 소식·작업 주소·시작 실패 기록), 예약 `claim_codex_linear`(0035). 앱: 실행 승인하면 바로 맡기고 2분마다 소식 읽기. 미검증: API 위임으로 Codex가 실제 시작하는지, 완료 때 무엇을 남기는지(그에 따라 결과 자동 등록을 붙임). 운영 반영: 앱 + 0035 + 함수 codex-linear(verify_jwt true).
+- v0.5.3(소유자 "웹훅으로 바꿔줘"): Codex 소식을 2분 확인 대신 Linear 웹훅으로. 새 함수 `linear-webhook`(verify_jwt false, `linear-signature` HMAC + 1분 안 요청만, 댓글 생성·우리가 맡긴 이슈만, 본문 글은 믿지 않고 Linear API로 Codex 댓글을 다시 읽음) → 배정 소식 갱신(실시간으로 앱에 보임) + 휴대폰 알림(`push_enqueue` service_role 허용, 0036). 카드에 '소식 다시 읽기'. 소유자 설정: Linear 설정 → API → Webhooks → 새로 만들기(주소 `https://kmmicksimbredbyvdmvx.supabase.co/functions/v1/linear-webhook`, 이벤트 Comments, 팀 MIN) → 서명 비밀값을 Supabase secret `LINEAR_WEBHOOK_SECRET`로. 운영 반영: 앱 + 0035·0036 + 함수 codex-linear·linear-webhook.
+- v0.5.4(소유자 "팀은 Mino, 라벨은 ai office"): `codex-linear`가 만드는 이슈에 라벨 `ai office`를 붙인다(대소문자·공백 무시, 그 팀 또는 공통 라벨, 없으면 라벨 없이). 팀은 키(MIN)나 이름(Mino)으로 고를 수 있다(`LINEAR_TEAM_KEY`, 없으면 첫 팀). 운영 반영: 함수 codex-linear·linear-webhook(같은 linear.ts).
+- v0.5.5(소유자 "프로젝트가 너무 많다", "웹에서 물어보니 한도래"): 대화·업무 탭 프로젝트 칩 줄에 접기 버튼(프로젝트 4개 이상, 접으면 고른 칩만, 접힌 칩의 내 차례 수는 버튼에, 이 기기에 기억). 웹 조사는 기본 모델(gemini-3.5-flash-lite)에 검색 연결 무료 한도가 없어 늘 429였으므로 검색 무료 한도가 있는 `GEMINI_RESEARCH_MODEL`(기본 gemini-2.5-flash)로 먼저 묻고 안 되면 기본 모델. 운영 반영: 함수 ask-gemini.
+- v0.5.6~0.5.7(소유자 화면 다듬기): 입력창 둘레 바탕색 덮개 제거(아래 틈만 덮음), 대화 탭 대화 상자 겉 테두리 제거, 입력칸 기본 한 줄(안내 문구 짧게), 휴대폰 대화 탭 입력창 아래 여백 8px·패널 아래 테두리 제거(스크롤 끝 가로줄 깜빡임). 입력창 반투명은 소유자가 취소. v0.5.8: 대화 상자 겉 테두리는 되살리고(소유자 "있는 게 좋아") 휴대폰에서 아래 가로줄만 없애 화면 아래까지 이어지게.
+- v0.5.9(소유자 "라운드는 그대로, 스크롤할 때 보이는 화면에서 잘리는 것만"): 대화 상자 둥근 테두리 원래대로, 스크롤 중에도 칩 줄 아래(.inbox-cap)·입력창 아래(입력창 ::before/::after)에 상자 위아래 둥근 모서리를 그려 보이는 부분이 늘 닫힌 상자로 보임. 화면 지우기(이 대화창 화면만, 업무·개발일지 기록은 그대로) 버튼을 입력창 안 첨부 옆으로. 기다리는 선택 버튼(ChatGPT로 복사 등)은 만든 대화창에만(다른 창으로 옮기면 접음). 프로젝트 대화창에는 인사말 없음(v0.5.10 소유자). v0.5.10~0.5.11: 대화 탭 칩 줄 아래 선·맨 아래 줄 위 선 제거(상자 선과 두 줄 겹침), 칩 줄 높이 소수점 올림, 상자 위 띠가 칩 줄과의 틈(10px)까지 덮음. v0.5.12: 글은 상자 윗선에서 바로 잘림(윗선 아래 띠는 비움). v0.5.13: 프로젝트 빈 대화창에도 "무엇을 도와드릴까요?"(소유자 다시 결정), 입력창 뒤 흐림(v0.5.14: .inbox-fade는 입력창 바로 뒤에 붙는 sticky 칸, 상자 안쪽 폭 전체·입력창 윗선부터 반투명+blur, 입력창 바탕도 반투명), 키보드 높이 --kb(visualViewport)만큼 입력창을 올려 키보드 위에 붙임, 입력칸 최대 6줄 뒤 스크롤. v0.5.15: --kb는 입력칸에 쓰는 중일 때만(확대·미리보기 창에서 입력창이 떠서 아래로 대화가 비치던 것). v0.5.16 흐림 12px·입력창 그림자 뺌, v0.5.17 휴대폰 패널 테두리 뺌(양옆 두 줄), v0.5.18 휴대폰은 사무실이 작아지기 전에도 상자 위 모서리가 얇은 머리 아래에 붙음(둥근 모서리가 곧은 줄로 바뀌던 것). v0.5.19: 곡선 바깥 칠하기를 둥글게 잘리지 않는 네모 칸(.inbox-cap 자체·입력창 ::after)으로 옮겨 모서리 위아래로 곧은 줄이 삐져나오지 않음.
+- v0.5.20(소유자 "Claude 한도가 차도 업무가 안 멈추게", pixel-office 아이디어): 작은 일 바로 배정(smallTask.ts, 기획서 size_hint), Claude PM 안 되면 Gemini 대신 분배(draft-plan), 한도로 멈추면 다음 날 재시도. 운영 반영 필요: 마이그레이션 0037, 함수 draft-spec·draft-plan(새, verify_jwt true), 앱.
+- v0.5.21(소유자 "mattpocock·archify 내 환경에 맞게"): Gemini 개발 워크플로가 바뀐 파일로 Archify(Apache-2.0, 커밋 a406594 고정, 토큰 0) "바뀐 곳" 구조도를 그려 결과 스크린샷 3번째로 보냄(scripts/change-tree.mjs, submit-result MAX_SHOTS 3). 결과 카드에 "되돌리기 쉬움/어려움·파일·영역"(src/domain/mergeDanger.ts, pr 스킬). PM_HABITS에 막히는 관계만 dependencies·"바꾸기 쉽게 먼저"(to-tickets). Gemini 대신 분배에 앞 결과 인계 요약(handoff). 운영 반영 필요: 함수 dispatch-claude·dispatch-claude-dev·dispatch-gemini-dev·draft-plan(devHabits)·submit-result, 앱.
+- v0.5.22(소유자): 업무 카드 배정 작업에 "⏳ W2(Codex) 결과 대기"/"✓ 앞 작업 끝남"(concurrency.ts waitingOn, 사무실 그림에는 넣지 않음 — 소유자). 버그 업무일 때만 개발 지시서(Codex·Claude·Gemini)에 버그 진단 순서(devHabits.ts BUG_DIAGNOSIS, mattpocock diagnosing-bugs MIT 4ae2317 한국어 축약, docs/THIRD_PARTY_NOTICES.md). 운영 반영 필요: 함수 dispatch-claude-dev·dispatch-gemini-dev(·devHabits 복사본 쓰는 dispatch-claude·draft-plan), 앱.
+- v0.5.23~0.5.24(소유자): 업무 카드 진행 단계 지금 단계도 접기. 배정된 작업 칸 위에 기다림 그림(WaitMap: 캐릭터+말풍선+점선, 사무실 그림에는 넣지 않음). 프로젝트 카드 '구조도'(저장소 전체 경로 = 새 함수 repo-tree(GITHUB_REPO_TOKEN) + 열린 업무 최신 결과 diff로 바뀐 파일 강조, fileTree.ts), 결과 카드 '바뀐 곳 구조도'(Codex·Claude·Gemini 모두 diff로). 버그 판단: 기획서 초안 size_hint.bug(같은 호출) 우선, 없으면 말로(오류 메시지·에러 화면 같은 표현은 뺌). 업무 탭 칩 줄이 붙어 있을 때 아래 12px 흐려짐.
+- v0.5.25~0.5.29(소유자): 대화·패널 글자 한 단계 작게, A 승인 때 기획서 펼침, 주요 단계를 대화에 알림, Gemini 개발 정적 사이트 화면 사진·요약 오류 줄 대신 바뀐 파일. v0.5.29: 결과 카드 바뀐 코드(diff)는 접어 둠. 휴대폰 사무실 2단계 줄이기(머리가 나가면 절반 → 사무실 절반 높이만큼 더 내리면 접힘, 탭이 얇은 머리 바로 아래로; `--stage-h`), 접혔을 때 얇은 머리 '사무실 ▾' 버튼으로 사무실을 원래 크기로 띄워 봄(바깥·Esc·업무 카드 열기로 닫힘). 페이지가 짧으면 접지 않음(App.tsx checkMini). v0.5.31(소유자, v0.5.30 늘 고정은 되돌림): 큰 머리 → 내리면 얇은 머리(고정). 얇은 머리의 '사용량 보기'를 누르면 큰 머리 내용(연결·알림·사용량)이 바로 아래에 펼쳐짐(바깥 누름·맨 위로 가면 닫힘, `usageList` 같이 씀). v0.5.32: 내리기 시작하는 순간(scrollY>2) 그 자리에서 얇은 머리로 바뀜(미끄러짐 없음), 머리가 화면과 같이 올라가 보이지 않음.
+
+
 ## 0.4.22 — 2026-11-01
 
 ### 바뀜 (소유자 요청)
@@ -279,7 +379,7 @@
 
 ## 0.3.0 — 2026-10-30
 
-소유자가 준 새 업무 플로우(12단계, **PC 없이 모바일만으로 요청 → 승인 → Codex 실행 → 결과 확인**)를 기준으로 삼는다. 비교·충돌·남은 결정은 `docs/FLOW_v0.3_2026-10-30.md`.
+소유자가 준 새 업무 플로우(12단계, **PC 없이 모바일만으로 요청 → 승인 → Codex 실행 → 결과 확인**)를 기준으로 삼는다. 비교·충돌·남은 결정은 `docs/FLOW.md`.
 
 ### 추가
 - **입력창 대화를 계정에 저장**: 집 PC·회사 PC·모바일 어디서 열어도 같은 대화와 미나의 선택 대기가 이어진다(`inbox_state`, 15초마다·화면을 다시 볼 때 받아 옴, 마지막에 바꾼 쪽이 이김). '대화 지우기'는 모든 기기의 화면을 비운다.
@@ -379,7 +479,7 @@
   - 대화는 이 기기에만 남는다(최근 40개). 기존 접수 폼은 "직접 입력"으로 접어 두었다(이미지·유형·우선순위 지정).
 - 머리글에 Gemini 오늘 질문 횟수.
 - 모바일·좁은 화면에서 **오피스를 위에 고정**(세로 620px 이상일 때), 아래 패널만 스크롤.
-- 지시서 충돌 점검 `docs/SPEC_CONFLICTS_2026-10-29.md`, 마이그레이션 `0006_ai_calls.sql`, 시험 `50_ai_calls.sql`, 분류 규칙 시험 `triage.test.ts`.
+- 지시서 충돌 점검 `docs/archive/SPEC_CONFLICTS_2026-10-29.md`, 마이그레이션 `0006_ai_calls.sql`, 시험 `50_ai_calls.sql`, 분류 규칙 시험 `triage.test.ts`.
 
 ## 0.2.4 — 2026-10-29
 
@@ -432,7 +532,7 @@ v0.2.0 지시서와 v0.2.1 수정 지시서를 현재 저장소(v0.1 + 10월 29�
 - 실행 경로 연결 상태 표시(`src/domain/adapters.ts`): Claude PM 검증됨, Codex 자동 실행 미검증(수동 인계), GPT 수동, Gemini·Grok 미연결.
 - 오피스 캐릭터가 배정 기록을 따른다(E 전 대기, 사용자가 시작 기록 → 작업 중).
 - DB 시험(`scripts/test-db.sh`): 로컬 Postgres에서 승인 게이트·RLS·중복 방지·v0.1 데이터 보존 확인.
-- 문서: `docs/CLOUD_CODEX_DISPATCH_VERIFICATION_2026-10-29.md`, `docs/CLOUD_FEASIBILITY_2026-10-29.md`.
+- 문서: `docs/archive/CLOUD_CODEX_DISPATCH_VERIFICATION_2026-10-29.md`, `docs/archive/CLOUD_FEASIBILITY_2026-10-29.md`.
 
 ### 바뀜
 - Claude 루틴: 코드 작성·PR 생성 → **PM 전용**(계획 JSON만, 저장소 쓰기 금지).
