@@ -6,7 +6,7 @@ import { REPO_MAP_SCRIPT, repoMapStep } from '../../../src/domain/devHabits';
 describe('개발 습관·저장소 지도(v0.4.96)', () => {
   it('서버 함수 3곳은 같은 파일을 쓴다', () => {
     const app = readFileSync('src/domain/devHabits.ts', 'utf8');
-    for (const f of ['dispatch-claude', 'dispatch-claude-dev', 'dispatch-gemini-dev']) expect(readFileSync(`supabase/functions/${f}/devHabits.ts`, 'utf8')).toBe(app);
+    for (const f of ['dispatch-claude', 'dispatch-claude-dev', 'dispatch-gemini-dev', 'draft-plan']) expect(readFileSync(`supabase/functions/${f}/devHabits.ts`, 'utf8')).toBe(app);
   });
   it('지도 스크립트는 scripts/repo-map.mjs와 같다', () => {
     expect(REPO_MAP_SCRIPT).toBe(readFileSync('scripts/repo-map.mjs', 'utf8').trim());

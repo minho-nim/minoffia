@@ -362,6 +362,9 @@ export function createLocalStore(): OfficeStore {
     async linearProbe() {
       return { connected: false, reason: '로컬 데모에서는 Linear를 확인할 수 없습니다.' };
     },
+    async draftPlan() {
+      throw new Error('로컬 데모에서는 Gemini가 계획을 대신 쓸 수 없습니다.');
+    },
     async draftPrototype() {
       throw new Error('로컬 데모에서는 Gemini 견본을 만들 수 없습니다. AI Studio 견본 지시서로 진행하세요.');
     },
