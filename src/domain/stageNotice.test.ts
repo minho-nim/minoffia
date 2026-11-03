@@ -25,14 +25,15 @@ describe('단계 알림(v0.3.9)', () => {
     expect(r.seen.t1).toBeTruthy();
   });
 
-  it('기획서가 와도 입력창에는 알리지 않는다(내 차례·말풍선이 보여 줌), 기억은 바뀐다', () => {
+  it('기획서가 오면 대화에도 A 버튼과 함께 알린다(v0.5.26 소유자), 기억은 바뀐다', () => {
     const { seen } = stageNotices([task], data({}), {});
     const r = stageNotices([task], data({ specs: [spec(1)] }), seen);
-    expect(r.notices).toHaveLength(0);
+    expect(r.notices).toHaveLength(1);
+    expect(r.notices[0].actions).toEqual(['A', 'open']);
     expect(r.seen.t1).not.toBe(seen.t1);
   });
 
-  it('A 승인 뒤 단계 변화도 알리지 않는다', () => {
+  it('A 승인 뒤 PM 대기처럼 잠깐 지나가는 단계는 알리지 않는다', () => {
     const { seen } = stageNotices([task], data({ specs: [spec(1)] }), {});
     expect(stageNotices([task], data({ specs: [spec(1)], approvals: [approvalA] }), seen).notices).toHaveLength(0);
   });

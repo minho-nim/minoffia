@@ -2638,7 +2638,7 @@ a {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 16px;
+  font-size: 14.5px; /* v0.5.26 소유자 "대화창 텍스트가 너무 크다" */
   line-height: 1.65;
   color: var(--ink);
 }
