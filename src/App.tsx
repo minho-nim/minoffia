@@ -309,6 +309,10 @@ export function App() {
   // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
   // 휴대폰: 위 머리(이름·사용량)가 화면 밖으로 나가면 맨 위에 얇은 한 줄 머리를 고정한다(v0.4.14).
   const [mini, setMini] = useState(false);
+  /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
+  const [tiny, setTiny] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const stageRef = useRef({ mini: false, tiny: false });
   /** 얇은 머리 보이기(큰 머리가 화면 밖일 때) */
   const [barOn, setBarOn] = useState(false);
   /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
@@ -328,13 +332,35 @@ export function App() {
     if (!top) return;
     // 얇은 머리는 큰 머리가 화면 밖으로 나가면 늘 따라온다(작은 사무실과 따로, v0.4.45).
     setBarOn(top.getBoundingClientRect().bottom < 36);
-    if (window.scrollY <= 2) return setMini(false);
+    const set = (m: boolean, t: boolean) => {
+      stageRef.current = { mini: m, tiny: t };
+      setMini(m);
+      setTiny(t);
+      if (!t) setPeek(false);
+    };
+    const now = stageRef.current;
+    if (window.scrollY <= 2) return set(false, false);
     if (top.getBoundingClientRect().bottom >= 36) return;
     const office = document.querySelector<HTMLElement>('.stage .office');
-    const shrink = office ? office.offsetHeight / 2 : 0;
-    const room = document.documentElement.scrollHeight - window.innerHeight - shrink;
-    if (room > top.offsetHeight) setMini(true);
+    const h = office ? office.offsetHeight : 0;
+    const room = document.documentElement.scrollHeight - window.innerHeight;
+    if (!now.mini) {
+      if (room - h / 2 > top.offsetHeight) set(true, false);
+      return;
+    }
+    // 2단계: 작은 사무실에서 사무실 절반 높이만큼 더 내리면 접는다. 접으면 글이 그만큼 올라오므로
+    // 페이지가 충분히 길 때만 접고(바닥에서 깜빡이지 않게), 다시 올릴 때는 그보다 위에서 편다.
+    const enter = top.offsetHeight + h * 0.6;
+    const sticky = office?.parentElement && getComputedStyle(office.parentElement).position === 'sticky';
+    if (!now.tiny && sticky && window.scrollY > enter && room - h / 2 > enter + 40) set(true, true);
+    else if (now.tiny && window.scrollY < enter - h / 2) set(true, false);
   }, []);
+  useEffect(() => {
+    if (!peek) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPeek(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [peek]);
   const topRef = useCallback((el: HTMLElement | null) => {
     topEl.current = el;
   }, []);
@@ -1567,13 +1593,31 @@ export function App() {
           const id = tab === 'chat' ? chatProjectId : pf === 'all' ? null : pf;
           return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
         })()}
+        {/* 사무실을 접었을 때만: 눌러서 사무실을 잠깐 띄워 본다(v0.5.29) */}
+        {tiny && (
+          <button type="button" className={`office-peek-btn${peek ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={peek} onClick={() => setPeek((v) => !v)}>
+            사무실 {peek ? '▴' : '▾'}
+          </button>
+        )}
         {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
         <ThemeToggle tabbable={barOn} />
       </div>
 
-      <main className={`layout${mini ? ' is-mini' : ''}`}>
-        <section className={`stage${mini ? ' is-mini' : ''}`} aria-label="오피스">
-          <OfficeView tasks={snap.tasks} assignments={snap.workflow.assignments} workflow={snap.workflow} selected={selected} onSelect={selectAgent} onOpenTask={showTask} leave={snap.leave ?? []} />
+      {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
+      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}`}>
+        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`} aria-label="오피스">
+          <OfficeView
+            tasks={snap.tasks}
+            assignments={snap.workflow.assignments}
+            workflow={snap.workflow}
+            selected={selected}
+            onSelect={selectAgent}
+            onOpenTask={(id) => {
+              setPeek(false);
+              showTask(id);
+            }}
+            leave={snap.leave ?? []}
+          />
           <p className="stage-note">
             캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.
           </p>

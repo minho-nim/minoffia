@@ -986,7 +986,13 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               <p className="muted small mono">
                 sha256 {view.result.sha256.slice(0, 16)}… · diff {view.result.diff.length.toLocaleString()}자 · 스크린샷 {resultShots.length}장{view.result.previewUrl ? '' : ' · 미리보기 없음'}
               </p>
-              {view.result.diff && <pre className="diff-view">{view.result.diff}</pre>}
+              {/* 코드는 길어서 접어 둔다(v0.5.29 소유자 "코드 접기 버튼") */}
+              {view.result.diff && (
+                <details>
+                  <summary className="small">바뀐 코드 ({view.result.diff.split('\n').length.toLocaleString()}줄)</summary>
+                  <pre className="diff-view">{view.result.diff}</pre>
+                </details>
+              )}
               {view.result.testLog && (
                 <details>
                   <summary className="small">테스트 로그</summary>
