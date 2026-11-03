@@ -50,6 +50,10 @@ select pg_temp.check((select reason='not_approved' from claim_codex_linear((sele
 set local role authenticated;
 insert into approvals(task_id,gate,decision,approved_revision,work_item_id) values ('b0390000-0000-4000-8000-000000000001','E','approved',1,'W1');
 set local role service_role;
+select pg_temp.check((select reason='not_claimable' from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'E alone does not mark work ready');
+set local role authenticated;
+update agent_assignments set dispatch_status='ready' where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1';
+set local role service_role;
 select pg_temp.check((select ok from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'Linear reserved');
 create temp table saved_linear_id as select provider_execution_id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1';
 select pg_temp.check((select provider_execution_id::uuid is not null from saved_linear_id),'issue UUID is persisted before any external request');
