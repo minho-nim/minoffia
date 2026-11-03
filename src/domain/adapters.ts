@@ -16,7 +16,7 @@ export interface AdapterInfo {
   checkedAt: string;
 }
 
-/** 2026-10-29 확인 결과. 근거는 docs/CLOUD_CODEX_DISPATCH_VERIFICATION_2026-10-29.md */
+/** 2026-10-29 확인 결과. 근거는 docs/archive/CLOUD_CODEX_DISPATCH_VERIFICATION_2026-10-29.md */
 export const ADAPTERS: AdapterInfo[] = [
   {
     agent: 'claude',

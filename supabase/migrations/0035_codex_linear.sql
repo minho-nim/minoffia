@@ -1,4 +1,4 @@
--- MinLab AI Office v0.5.2 Codex를 Linear로 맡기기(소유자 2026-11-03 "ㄱㄱ", 결정 docs/CODEX_LINEAR_DECISION_2026-10-30.md).
+-- MinLab AI Office v0.5.2 Codex를 Linear로 맡기기(소유자 2026-11-03 "ㄱㄱ", 결정 docs/archive/CODEX_LINEAR_DECISION_2026-10-30.md).
 -- 실행 승인(E)된 Codex 작업을 서버(codex-linear)가 Linear 이슈로 만들고 Codex에게 맡긴다. 같은 작업을 두 번 맡기지 않게 원자적으로 예약한다.
 -- Codex 사용 한도는 OpenAI가 관리하므로 여기서는 세지 않는다(실패 메시지는 업무 카드에 보인다).
 create or replace function public.claim_codex_linear(

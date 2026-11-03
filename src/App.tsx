@@ -29,12 +29,14 @@ import { canTransition } from './domain/status';
 import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/types';
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
-import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
+import { receiveWorkflowInbox } from './workflow/receiveInbox';
+import { preparePlanImport } from './workflow/planImport';
+import { createResultReviewer } from './workflow/resultReview';
 import { RepoStructure } from './components/FileTreeView';
 import { projectChanges } from './domain/fileTree';
 import { checkSmallTask, smallPlanText } from './domain/smallTask';
 import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
-import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
+import type { Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
 import { getSupabase } from './lib/supabase';
@@ -394,10 +396,8 @@ export function App() {
   }, []);
 
   // 결과 점수 평가(v0.4.64): 훅은 아래 이른 반환보다 위에 두고, 실제 처리(reviewTick)는 아래에서 매 렌더 새로 정한다.
-  const reviewing = useRef(new Set<string>());
-  // Claude 채점을 기다리는 결과(점수가 들어오면 한 번 알린다, v0.4.94)
-  const claudeWaiting = useRef(new Set<string>());
-  const autoRedoSent = useRef(new Set<string>());
+  const resultReviewer = useRef(createResultReviewer());
+  useEffect(() => { resultReviewer.current = createResultReviewer(); }, [store]);
   const reviewTick = useRef<() => void>(() => undefined);
   useEffect(() => {
     reviewTick.current();
@@ -692,41 +692,12 @@ export function App() {
   };
 
   /** PM 계획 글을 검증해 계획·배정으로 저장한다. 손으로 붙여넣기와 PM 세션 자동 전송이 같은 규칙을 쓴다. 문제가 있으면 이유 목록. */
-  const importPlanText = async (task: Task, text: string, source: PmPlan['source'], data: Snapshot): Promise<string[] | null> => {
-    const view = deriveWorkflow(task, data.workflow);
-    const parsed = parsePmPlan(text, task.id);
-    if (!parsed.ok) return parsed.errors;
-    if (!view.spec || !view.aApproved) return ['최신 기획서의 기획 승인이 먼저 필요합니다.'];
-    const planRevision = nextRevision(data.workflow.plans, task.id, (x: { planRevision: number }) => x.planRevision);
-    const plan: PmPlan = {
-      id: newId(),
-      taskId: task.id,
-      planRevision,
-      approvedSpecRevision: view.spec.revision,
-      targetBaseRevision: parsed.plan.target_base_revision,
-      source,
-      plan: { ...parsed.plan, plan_revision: planRevision },
-      createdAt: new Date().toISOString(),
-    };
-    const assignments: AgentAssignment[] = parsed.plan.work_items.map((w) => ({
-      id: newId(),
-      taskId: task.id,
-      planRevision,
-      workItemId: w.id,
-      title: w.title,
-      assignee: PREF_AGENT[w.assignee_preference],
-      // 자동 실행 경로가 검증되기 전까지는 계획이 codex_cloud라고 해도 수동 인계로 둔다.
-      // Gemini 개발(gemini_dev)은 실행 승인 뒤 서버가 GitHub Actions 워크플로로 시작한다(v0.4.82).
-      executionMode: w.assignee_preference === 'gemini_dev' ? 'gemini_actions' : 'manual_handoff',
-      dispatchStatus: 'awaiting_user_execution_approval',
-      statusSource: 'none',
-      providerExecutionId: null,
-      providerTaskUrl: null,
-      actualProviderStatus: 'unknown',
-      startedAt: null,
-      lastVerifiedAt: null,
-      updatedAt: new Date().toISOString(),
-    }));
+  const importPlanText = async (task: Task, text: string, source: PmPlan['source'], data: Snapshot, expectedSpecRevision?: number): Promise<string[] | null> => {
+    const prepared = preparePlanImport(task, text, source, data, expectedSpecRevision);
+    if (prepared.errors) return prepared.errors;
+    if (prepared.existing) return null;
+    const { plan, assignments } = prepared;
+    const planRevision = plan.planRevision;
     const saved = await step(task.id, () => store.addPlan(plan, assignments), `PM 계획 v${planRevision}을 저장했습니다.`);
     return saved ? null : ['저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.'];
   };
@@ -761,101 +732,7 @@ export function App() {
     importingInbox.current = true;
     void (async () => {
       try {
-        for (const item of await store.loadPlanInbox()) {
-          const task = snap.tasks.find((t) => t.id === item.taskId);
-          if (!task) continue;
-          const view = deriveWorkflow(task, snap.workflow);
-          const errors =
-            !view.spec || view.spec.revision !== item.specRevision
-              ? [`기획서 v${item.specRevision}의 계획인데 지금 기획서는 v${view.spec?.revision ?? 0}입니다.`]
-              : view.plan && view.plan.approvedSpecRevision === item.specRevision && !view.pendingRevision
-                ? ['이 기획서 버전의 계획이 이미 있습니다.']
-                : null;
-          const parsed = parsePmPlan(item.planText, task.id);
-          const parsedErrors = errors ?? (parsed.ok ? null : parsed.errors);
-          if (parsedErrors) {
-            if (await store.markPlanInbox(item.id, 'invalid', parsedErrors.join(' / '))) say('error', `PM이 보낸 계획을 쓰지 못했습니다(${task.title}): ${parsedErrors.join(' / ')}`);
-            continue;
-          }
-          // v0.4.20: 먼저 저장하고, 저장에 성공했을 때만 "받음"으로 표시한다(실패하면 다음 확인 때 다시 시도).
-          const failed = await importPlanText(task, item.planText, 'routine_session_auto', snap);
-          if (failed) {
-            // 다른 기기가 먼저 저장했으면(같은 버전 계획이 이미 있음) 받음으로만 표시한다.
-            const fresh = await store.load();
-            const again = deriveWorkflow(task, fresh.workflow);
-            if (again.plan && again.plan.approvedSpecRevision === item.specRevision && !again.pendingRevision) await store.markPlanInbox(item.id, 'imported', '');
-            else if (!inboxReported.current.has(item.id)) {
-              inboxReported.current.add(item.id);
-              say('error', `PM 계획 자동 저장 실패(${task.title}): ${failed.join(' / ')} — 1분 뒤 다시 시도해요. 계속 안 되면 PM 세션의 JSON을 업무 카드에 붙여넣으세요.`);
-            }
-            continue;
-          }
-          await store.markPlanInbox(item.id, 'imported', '');
-        }
-        // Claude 보조 개발 세션이 보낸 결과(dev_result_inbox)를 결과 패키지로 옮긴다(v0.4.3). GitHub에는 올리지 않는다.
-        for (const item of await store.loadResultInbox()) {
-          const task = snap.tasks.find((t) => t.id === item.taskId);
-          const a = snap.workflow.assignments.find((x) => x.id === item.assignmentId);
-          if (!task || !a) continue;
-          // 다른 기기가 이미 같은 결과를 저장했으면 받음으로만 표시한다.
-          const itemSha = await sha256Hex(`${item.diff}\n---\n${item.testLog}`);
-          if (snap.workflow.results.some((r) => r.taskId === task.id && r.sha256 === itemSha)) {
-            await store.markResultInbox(item.id, 'imported', '');
-            continue;
-          }
-          const view = deriveWorkflow(task, snap.workflow);
-          const fromGemini = a.assignee === 'gemini' && a.executionMode === 'gemini_actions';
-          const why =
-            a.assignee !== 'claude' && !fromGemini
-              ? '자동 개발(Claude·Gemini) 작업이 아닙니다.'
-              : !view.plan || a.planRevision !== view.plan.planRevision
-                ? '지금 계획의 작업이 아닙니다(계획이 바뀌었음).'
-                : a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting'
-                  ? '시작된 작업이 아닙니다(중단·완료됨).'
-                  : view.bApproved
-                    ? '이미 올리기 승인(B)한 결과가 있습니다.'
-                    : null;
-          if (why) {
-            if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `${fromGemini ? 'Gemini' : 'Claude'}가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
-            continue;
-          }
-          const summary = [
-            item.summary,
-            item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
-            item.branch ? `\n작업 브랜치: ${item.branch} (${item.previewUrl ? '미리보기용으로 올림, PR은 올리기 승인 뒤' : fromGemini ? 'Gemini가 올림, PR은 올리기 승인 뒤' : 'PR은 올리기 승인 뒤'})` : '',
-          ].join('\n');
-          const ok = await step(
-            task.id,
-            async () => {
-              const revision = nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision);
-              await store.addResult({
-                id: newId(),
-                taskId: task.id,
-                revision,
-                planRevision: a.planRevision,
-                workItemId: a.workItemId,
-                source: fromGemini ? 'gemini_actions_auto' : 'claude_session_auto',
-                summary: summary.slice(0, 4000),
-                diff: item.diff,
-                testLog: item.testLog,
-                remainingIssues: item.remainingIssues,
-                sha256: await sha256Hex(`${item.diff}\n---\n${item.testLog}`),
-                previewUrl: item.previewUrl,
-                createdAt: new Date().toISOString(),
-              });
-              // 자동 개발이 찍어 보낸 데스크톱·휴대폰 화면을 결과 스크린샷으로 붙인다(v0.4.97, 실패해도 결과는 그대로)
-              if (item.screenshots.length) await store.linkResultShots(task.id, revision, item.screenshots).catch(() => undefined);
-              await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result', lastVerifiedAt: new Date().toISOString() });
-            },
-            `Claude가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 올리기 승인(B)하거나 수정 요청하세요.`,
-          );
-          // v0.4.20: 저장에 성공했을 때만 "받음"으로 표시한다(실패하면 다음 확인 때 다시 시도).
-          if (ok) await store.markResultInbox(item.id, 'imported', '');
-          else if (!inboxReported.current.has(item.id)) {
-            inboxReported.current.add(item.id);
-            say('error', `결과 자동 저장 실패(${task.title}) — 1분 뒤 다시 시도해요. 계속 안 되면 Claude 세션의 마지막 메시지를 결과 패키지에 붙여넣으세요.`);
-          }
-        }
+        await receiveWorkflowInbox({ store, snap, reported: inboxReported.current, importPlanText, step, say });
         // 견본 먼저 계획이 들어왔는데 견본이 없으면 Gemini가 한 번 만든다(계획 버전마다 한 번, v0.4.7).
         for (const t of snap.tasks) {
           const v = deriveWorkflow(t, snap.workflow);
@@ -1400,48 +1277,10 @@ export function App() {
       }),
   };
 
-  // 결과 점수 평가(v0.4.64): 새 결과가 오면 서버가 규칙 검사 → Claude 채점(v0.4.94, 안 되면 Gemini)을 한 번 하고,
-  // '다시 개발'이면 고칠 점만 적어 기존 수정 요청 길(PM 재계획 → 실행 승인)로 자동으로 보낸다(최대 2번, 그다음은 사장님).
+  // 채점의 중복 방지·대기·오류 재시도는 별도 처리에서 관리한다.
   reviewTick.current = () => {
     if (store.mode === 'supabase' && !client) return;
-    for (const t of snap.tasks) {
-      const view = deriveWorkflow(t, snap.workflow);
-      const r = view.result;
-      if (!r || view.bApproved || view.resultRevised) continue;
-      const key = `${t.id}:${r.revision}`;
-      const review = (snap.workflow.reviews ?? []).find((x) => x.taskId === t.id && x.resultRevision === r.revision);
-      if (review) {
-        if (claudeWaiting.current.delete(key)) {
-          const score = review.total === null ? '' : ` ${review.total}점`;
-          if (review.verdict === 'pass') say('ok', `'${t.title}' 결과 v${r.revision} Claude 채점${score}: 검토 통과. 확인하고 올리기 승인하세요.`);
-          else if (review.verdict === 'redo') say('ok', `'${t.title}' 결과 v${r.revision} Claude 채점${score}: 고칠 점이 있어 다시 개발을 보내요(자동 ${review.autoRedo + 1}/2).`);
-          else say('error', `'${t.title}' 결과 v${r.revision} Claude 채점${score}: 사장님 확인이 필요해요. 업무 카드의 점수표를 보세요.`);
-        }
-        if (review.verdict === 'redo' && review.feedback && !autoRedoSent.current.has(key)) {
-          autoRedoSent.current.add(key);
-          void workflowActions.requestRevision(t, review.feedback);
-        }
-        continue;
-      }
-      if (reviewing.current.has(key)) continue;
-      reviewing.current.add(key);
-      void store
-        .reviewResult(t.id, r.revision)
-        .then(async (rv) => {
-          // v0.4.94: 코딩 결과는 Claude가 채점한다. 점수는 세션이 보내면 실시간으로 들어오고, 그때 위에서 다시 개발을 보낸다.
-          if (rv === 'started') say('ok', `'${t.title}' 결과 v${r.revision}을 Claude가 채점하고 있어요. 점수가 오면 알려 드려요.`);
-          if (typeof rv === 'string') {
-            claudeWaiting.current.add(key);
-            return;
-          }
-          setSnap(await store.load());
-          const score = rv.total === null ? '' : ` ${rv.total}점`;
-          if (rv.verdict === 'pass') say('ok', `'${t.title}' 결과 v${r.revision} 평가${score}: 검토 통과. 확인하고 올리기 승인하세요.`);
-          else if (rv.verdict === 'redo') say('ok', `'${t.title}' 결과 v${r.revision} 평가${score}: 고칠 점이 있어 다시 개발을 보내요(자동 ${rv.autoRedo + 1}/2).`);
-          else say('error', `'${t.title}' 결과 v${r.revision} 평가${score}: 사장님 확인이 필요해요. 업무 카드의 점수표를 보세요.`);
-        })
-        .catch((e) => say('error', `'${t.title}' 결과를 평가하지 못했어요: ${(e as Error).message}`));
-    }
+    resultReviewer.current.tick({ store, snap, setSnap, say, requestRevision: workflowActions.requestRevision });
   };
 
   const dispatch = async (task: Task, ack: boolean): Promise<boolean> => {
@@ -1458,7 +1297,7 @@ export function App() {
     try {
       const r = await store.draftPlan(task.id);
       const fresh = await store.load();
-      const failed = await importPlanText(task, r.plan, 'gemini_fallback', fresh);
+      const failed = await importPlanText(task, r.plan, 'gemini_fallback', fresh, r.specRevision);
       if (failed) return say('error', `Gemini가 쓴 계획을 쓰지 못했어요(${task.title}): ${failed.join(' / ')}`);
       const cur = fresh.tasks.find((t) => t.id === task.id);
       if (cur?.status === 'blocked') await store.saveTask({ ...cur, status: 'in_progress' });
