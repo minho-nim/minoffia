@@ -256,6 +256,17 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   logRef.current = log;
   const [input, setInput] = useState('');
   const [pending, setPending] = useState<Pending | null>(readPending);
+  // 기다리는 요청(선택 버튼)은 만든 대화창에만 속한다(v0.5.9 소유자 "왜 연결되어 있음"): 다른 대화창으로 옮기면 접는다.
+  const pendingThread = useRef(thread);
+  useEffect(() => {
+    if (pending) pendingThread.current = thread;
+  }, [pending]);
+  useEffect(() => {
+    if (pendingThread.current !== thread) {
+      pendingThread.current = thread;
+      setPending(null);
+    }
+  }, [thread]);
   const [busy, setBusy] = useState(false);
   // 계정 대화를 처음 받아 온 뒤에 단계 알림을 넣는다(받아 온 대화에 덮이지 않게).
   const [syncReady, setSyncReady] = useState(!sync);
@@ -487,7 +498,6 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       ].slice(-KEEP),
     );
     archive({ role: 'me', text: echo.text, projectId: echo.projectId, taskId: echo.taskId });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echo?.n]);
 
   // 다른 탭에서 넘어온 초안을 입력칸에 채우고 바로 쓸 수 있게 한다.
@@ -1041,12 +1051,17 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
 
   return (
     <section className={`inbox${shown.length === 0 ? ' is-empty' : ''}`} aria-label="묻기·요청 입력창">
+      {/* 스크롤 중에도 상자 위 모서리가 칩 줄 바로 아래에 보이게(v0.5.9, 그림만) */}
+      <div className="inbox-cap" aria-hidden="true" />
       {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
       {shown.length === 0 && (
         <div className="inbox-empty">
-          <p className="inbox-hello">무엇을 도와드릴까요?</p>
+          {/* 프로젝트 대화창은 그 프로젝트 인사말(v0.5.9 소유자 "프로젝트별로") */}
+          <p className="inbox-hello">{currentProject ? `${currentProject.name}, 무엇을 도와드릴까요?` : '무엇을 도와드릴까요?'}</p>
           <p className="muted small inbox-note">
-            예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.
+            {currentProject
+              ? `이 창에서 한 질문은 ${currentProject.name} 기준으로 답하고, 요청은 ${currentProject.name} 업무로 접수 카드를 만듭니다.`
+              : '예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.'}
           </p>
         </div>
       )}
@@ -1415,6 +1430,30 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             <path fill="currentColor" d="M10 5h2v2h-2zM3 11h1v-1h1V9h1V8h1v1h1v1h1V9h1V8h1v1h1v1h1v1h1v1H3z" opacity=".75" />
           </svg>
         </button>
+      {shown.length > 0 && (
+          <button
+            type="button"
+            className="link-btn small inbox-clear"
+            title="이 대화창 화면에서만 지웁니다(접수된 업무·개발일지 기록은 그대로)"
+            onClick={() => {
+              // 대화를 지우면 미니엉이 기다리던 요청(접수 확인·프로젝트 이름·저장소 만들기)도 취소한다.
+              // 이미 접수된 업무는 기록이라 지우지 않는다(업무 카드에서 삭제).
+              const hadPending = pending !== null;
+              photoStore.held = [];
+              setPending(null);
+              setShowOther(false);
+              setQueue([]);
+              setOtherFor(null);
+              // v0.4.66: 지금 보고 있는 대화창의 말만 지운다(다른 프로젝트 대화창은 그대로).
+              setLog((l) => [
+                ...l.filter((m) => !inThread(m)),
+                ...(hadPending ? [{ id: mid(), from: 'office' as From, text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).', home: thread }] : []),
+              ]);
+            }}
+          >
+            {pending ? '화면 지우기 · 요청 취소' : '화면 지우기'}
+          </button>
+        )}
           <button type="submit" className="inbox-send" aria-label="보내기" title="보내기" disabled={busy || !input.trim()}>
             <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
               <path fill="currentColor" d="M7 3h2v11H7zM5 5h2v2H5zM9 5h2v2H9zM3 7h2v2H3zM11 7h2v2h-2z" />
@@ -1422,29 +1461,6 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           </button>
         </div>
       </form>
-      {shown.length > 0 && (
-        <button
-          type="button"
-          className="link-btn small"
-          onClick={() => {
-            // 대화를 지우면 미니엉이 기다리던 요청(접수 확인·프로젝트 이름·저장소 만들기)도 취소한다.
-            // 이미 접수된 업무는 기록이라 지우지 않는다(업무 카드에서 삭제).
-            const hadPending = pending !== null;
-            photoStore.held = [];
-            setPending(null);
-            setShowOther(false);
-            setQueue([]);
-            setOtherFor(null);
-            // v0.4.66: 지금 보고 있는 대화창의 말만 지운다(다른 프로젝트 대화창은 그대로).
-            setLog((l) => [
-              ...l.filter((m) => !inThread(m)),
-              ...(hadPending ? [{ id: mid(), from: 'office' as From, text: '진행 중이던 요청을 취소했어요. 이미 접수된 업무는 그대로 있어요(지우려면 업무 카드에서 삭제).', home: thread }] : []),
-            ]);
-          }}
-        >
-          {pending ? '대화 지우기 · 진행 중인 요청 취소' : sync ? '대화 지우기(모든 기기)' : '대화 지우기(이 기기)'}
-        </button>
-      )}
     </section>
   );
 }

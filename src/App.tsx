@@ -1537,7 +1537,7 @@ export function App() {
 
           {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
           {tab === 'chat' && snap.projects.length > 0 && (
-            <div className="filters project-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)">
+            <div className="filters project-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
               {/* 기본 대화창(일반 대화, v0.4.88 소유자): 늘 맨 앞에, 프로젝트를 안 고르면 이 창 */}
               <button
                 type="button"
