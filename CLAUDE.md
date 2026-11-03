@@ -8,7 +8,7 @@
 - AI는 사용자의 행동(접수 확인·승인·수정 요청·버튼)이 있을 때만 쓴다. 같은 일을 두 번 시키지 않는다(같은 이미지·같은 기획서 버전은 다시 보내지 않음).
   접수 확인 → Gemini 기획서 초안 자동, A 승인 → Claude PM 전송 자동, Gemini 초안에 수정 요청 → Gemini 재작성 자동(v0.4.0).
   PM 계획은 PM 세션이 1회용 제출표로 `submit-plan`에 보내고 앱이 `parsePmPlan` 검증 뒤 저장(v0.4.2, `0020_pm_plan_inbox.sql`). PM이 계획을 멈추고 물으면 업무 카드 PM 칸에서 답하고 같은 버전으로 다시 보낸다(v0.4.93, `0032`).
-  Claude 보조 개발 결과도 세션이 `submit-result`로 보내고 앱이 결과 패키지로 저장(v0.4.3, `0021_dev_result_inbox.sql`). verify_jwt false는 `submit-plan`·`submit-result`·`submit-review`(제출표로 확인)와 `push`(flush는 입력 없이 DB 알림 줄만 보냄, 나머지 동작은 함수 안에서 소유자 확인)뿐.
+  Claude 보조 개발 결과도 세션이 `submit-result`로 보내고 앱이 결과 패키지로 저장(v0.4.3, `0021_dev_result_inbox.sql`). verify_jwt false는 `submit-plan`·`submit-result`·`submit-review`(제출표로 확인), `linear-webhook`(Linear 서명 `LINEAR_WEBHOOK_SECRET`으로 확인)과 `push`(flush는 입력 없이 DB 알림 줄만 보냄, 나머지 동작은 함수 안에서 소유자 확인)뿐.
 - 싼 길부터: 규칙 → 무료(Gemini, 기획서 초안 포함) → 구독 안 수동 인계(ChatGPT는 어렵거나 중요한 기획만·Codex) → 구독 자동(Claude PM·보조 개발). 유료 API는 쓰지 않는다.
 - 하루 상한과 실제 사용 기록을 화면에 보여 준다. 공급자의 남은 토큰은 알 수 없으므로 횟수로 관리한다.
 
@@ -39,7 +39,7 @@
 
 기준 문서: `docs/FLOW_v0.3_2026-10-30.md`(12단계, 모바일만으로 요청~결과 확인). 아래 v0.2.1 규칙은 그대로 유지하고, 바뀐 점은 그 문서의 '이전 결정과 바뀐 것'을 따른다.
 
-사용자 요청 → Gemini 기획서 초안(자동, 중요한 업무만 ChatGPT 수동) → **A 기획 승인** → Claude PM 계획(자동 시작·자동 제출, 저장소 쓰기 금지, 개발 방식 `prototype_first`/`direct` 제안) → (견본 먼저면: Gemini HTML 견본 자동 또는 AI Studio Build 수동 → 미리보기 → **P 견본 승인**) → **E 실행 승인**(Claude 작업은 자동 시작) → Codex 주 개발(v0.5.2: 실행 승인하면 서버 `codex-linear`가 Linear 이슈를 만들어 Codex에게 위임하고 Codex 댓글 소식·시작 실패(한도·환경 없음)를 업무 카드에 보인다, 예약 `claim_codex_linear` 0035. 완료·결과 등록은 아직 사람이, diff는 B 뒤 PR에서. 안 되면 지시서 복사. 결정 `docs/CODEX_LINEAR_DECISION_2026-10-30.md`) → 결과 패키지 검토 → **B 승인** 후 GitHub 업로드·PR → **C 승인** 후 운영 배포.
+사용자 요청 → Gemini 기획서 초안(자동, 중요한 업무만 ChatGPT 수동) → **A 기획 승인** → Claude PM 계획(자동 시작·자동 제출, 저장소 쓰기 금지, 개발 방식 `prototype_first`/`direct` 제안) → (견본 먼저면: Gemini HTML 견본 자동 또는 AI Studio Build 수동 → 미리보기 → **P 견본 승인**) → **E 실행 승인**(Claude 작업은 자동 시작) → Codex 주 개발(v0.5.2: 실행 승인하면 서버 `codex-linear`가 Linear 이슈를 만들어 Codex에게 위임하고 Codex 댓글 소식·시작 실패(한도·환경 없음)를 업무 카드에 보인다, 예약 `claim_codex_linear` 0035. 소식은 Linear 웹훅(`linear-webhook`, v0.5.3)이 바로 보내고 휴대폰 알림도 간다(`push_enqueue` 0036), 안 오면 카드의 '소식 다시 읽기'. 완료·결과 등록은 아직 사람이, diff는 B 뒤 PR에서. 안 되면 지시서 복사. 결정 `docs/CODEX_LINEAR_DECISION_2026-10-30.md`) → 결과 패키지 검토 → **B 승인** 후 GitHub 업로드·PR → **C 승인** 후 운영 배포.
 - 견본 먼저 계획에서 Codex 작업의 E는 P 뒤에만(`0014_prototype_first.sql`). P를 하면 견본 작업(gemini)은 끝난 것으로 기록되고 Codex 지시서에 승인된 견본이 들어간다.
 - Claude 보조 개발: PM이 Claude(`claude_support`)에 배정한 작업은 E 승인 뒤 서버(`supabase/functions/dispatch-claude-dev`, 예약 `claim_claude_dev` 0016)가 두 번째 루틴으로 시작한다. B 승인 전 PR 금지(시험 뒤 작업 브랜치만 미리보기용 push 허용, 소유자 2026-11-01 v0.4.57; 프로젝트 `preview_host`가 있으면 결과에 '미리보기 열기'), 세션 시작은 '시작됨'까지만, 결과는 세션이 `submit-result`로 보낸다(안 되면 사용자가 옮김). 루틴·secrets는 `docs/CLAUDE_ROUTINE.md`.
 - 수정 루프: A에서 수정 요청 → ChatGPT 재기획. 결과 검토에서 수정 요청 → Claude PM 재계획(같은 기획서 버전, 새 계획은 E 재승인). 보조 AI(Claude·Gemini·Grok)도 E 승인을 받는다(소유자 결정, 2026-10-29).
@@ -106,7 +106,7 @@
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase(여러 기기 실시간 반영은 Supabase Realtime, 표 목록은 `0015_realtime.sql`·`0020`과 `supabaseStore.ts`의 `REALTIME_TABLES`가 같아야 함)
-- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release · push · review-result · submit-review · codex-linear (전체 그림은 `docs/ARCHITECTURE.md`)
+- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release · push · review-result · submit-review · codex-linear · linear-webhook (전체 그림은 `docs/ARCHITECTURE.md`)
 - `src/domain/myTurn.ts`·`stall.ts`·`src/components/MyTurn.tsx` 내 차례·멈춤 감지, `src/office/speech.ts` 사무실 말풍선
 - `src/domain/devlog.ts`·`src/components/DevlogPanel.tsx` 개발일지(대화 + 업무 기록 → 프로젝트별·날짜별 Markdown)
 
