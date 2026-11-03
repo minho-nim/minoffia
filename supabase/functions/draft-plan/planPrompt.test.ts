@@ -9,6 +9,7 @@ const input = {
   spec: { revision: 2, user_original_text: '원문', final_prompt: '다크 모드', change_scope: '설정 화면', preserve_constraints: '', test_criteria: '400px 넘침 없음' },
   qa: [{ question: '어느 화면?', answer: '설정' }],
   revisionFeedback: '',
+  previous: '',
   away: { codex: false, claude: false, gemini: false },
   geminiDevOk: true,
   rules: ['결제 없음'],
@@ -26,6 +27,8 @@ describe('Gemini 대신 분배(v0.5.20)', () => {
     const t = buildPlanText(input);
     for (const s of ['다크 모드', 'A1. 설정', '- 결제 없음', 'src/App.tsx', '승인된 기획서 v2']) expect(t).toContain(s);
     expect(PLAN_SYSTEM).toContain('"work_items"');
+    expect(t).not.toContain('넘겨받은 것');
+    expect(buildPlanText({ ...input, previous: '한 일: 버튼 추가\n남은 문제: 다크 모드 색' })).toContain('남은 문제: 다크 모드 색');
   });
 
   it('코드 파일만, 의존·빌드 폴더 빼고', () => {

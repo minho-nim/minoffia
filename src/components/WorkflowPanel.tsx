@@ -11,6 +11,7 @@ import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '.
 import type { Project, Task } from '../domain/types';
 import { startBlocker } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
+import { mergeDanger } from '../domain/mergeDanger';
 import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
 import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
 
@@ -915,6 +916,16 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               <p className="small">
                 {view.result.source === 'claude_session_auto' ? '보낸 곳: Claude 세션이 직접 보냄(자동)' : '보낸 곳: 사람이 등록(붙여넣기)'}
               </p>
+              {(() => {
+                // 되돌리기 쉬운가(v0.5.21, pr 스킬의 merge danger): 규칙만, 승인을 막지 않는 안내
+                const m = mergeDanger(view.result.diff);
+                if (!m.files) return null;
+                return (
+                  <p className={`small ${m.oneWay ? 'task-error' : 'muted'}`}>
+                    {m.oneWay ? `되돌리기 어려움(${m.reasons.join('·')})` : '되돌리기 쉬움'} · 파일 {m.files}개 · 영역 {m.areas}곳
+                  </p>
+                );
+              })()}
               {(() => {
                 // 이 결과를 낸 실행(계획 버전 + 작업)을 함께 보여 준다. 실행 기록 없이 등록된 결과는 그렇다고 알린다.
                 const r = view.result!;
