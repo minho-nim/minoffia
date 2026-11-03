@@ -45,6 +45,8 @@ export interface WorkflowActions {
   startClaudeDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** Gemini 개발: 실행 승인한 Gemini 개발 작업을 서버가 GitHub Actions 워크플로로 시작(Supabase 모드만, v0.4.82) */
   startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
+  /** Codex를 Linear로 맡기기(v0.5.2): 지시서는 패널이 만들어 넘긴다 */
+  startCodexLinear?: (assignment: AgentAssignment, acknowledgeRetry: boolean, text: string) => Promise<boolean>;
   /** 견본 먼저: 견본 승인 + 견본 작업 끝냄 */
   approvePrototype: (task: Task) => Promise<boolean>;
   /** 두 견본 중 하나 고르기(나머지 지우고 P 승인, v0.4.94) */
@@ -646,7 +648,15 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                   ? { start: actions.startClaudeDev, label: 'Claude 보조 개발 시작(자동)', ack: 'Routines 기록에서 실제로 시작되지 않았음을 확인했습니다', note: '실행 승인하면 Claude가 클라우드에서 바로 개발을 시작합니다(PM과 함께 하루 상한).' }
                   : a.executionMode === 'gemini_actions' && actions.startGeminiDev
                     ? { start: actions.startGeminiDev, label: 'Gemini 개발 시작(자동)', ack: 'GitHub Actions 기록에서 실제로 돌지 않았음을 확인했습니다', note: '실행 승인하면 Gemini(무료 키)가 GitHub Actions에서 바로 개발을 시작합니다.' }
-                    : null;
+                    : a.assignee === 'codex' && actions.startCodexLinear && item
+                      ? {
+                          start: (x: AgentAssignment, ack: boolean) =>
+                            actions.startCodexLinear!(x, ack, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules)),
+                          label: 'Codex에 맡기기(Linear, 자동)',
+                          ack: 'Linear 이슈에서 Codex가 실제로 시작하지 않았음을 확인했습니다',
+                          note: '실행 승인하면 Linear 이슈를 만들어 Codex에게 맡깁니다(ChatGPT 구독 한도 안). 한도에 걸리면 여기에 알려요.',
+                        }
+                      : null;
               const eOk = view.eApproved(a.workItemId);
               const eCheck = canApprove(view, 'E', a.workItemId);
               return (
@@ -685,7 +695,21 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                       ) : (
                         !eOk && <p className="muted small">{auto.note}</p>
                       )}
-                      {a.dispatchStatus === 'failed' && a.actualProviderStatus && a.actualProviderStatus !== 'unknown' && <p className="task-error small">{a.actualProviderStatus}</p>}
+                      {a.dispatchStatus === 'failed' && a.actualProviderStatus && a.actualProviderStatus !== 'unknown' && <p className="task-error small">{a.actualProviderStatus.replace(/^linear: /, 'Codex: ')}</p>}
+                      {a.assignee === 'codex' && a.dispatchStatus === 'started' && a.actualProviderStatus?.startsWith('linear') && (
+                        <p className="small">
+                          Codex 소식: {a.actualProviderStatus.replace(/^linear: /, '')}
+                          {a.providerTaskUrl && (
+                            <>
+                              {' '}
+                              ·{' '}
+                              <a href={a.providerTaskUrl} target="_blank" rel="noreferrer">
+                                Linear 이슈
+                              </a>
+                            </>
+                          )}
+                        </p>
+                      )}
                       <p className="muted small">{adapter.reason}</p>
                     </div>
                   ) : (
@@ -708,14 +732,17 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                         className="btn btn-small btn-ghost"
                         disabled={busy || !eCheck.ok}
                         onClick={() =>
-                          void run(() =>
-                            actions.decide(task, 'E', view.plan!.planRevision, 'approved', a.workItemId, {
+                          void run(async () => {
+                            const ok = await actions.decide(task, 'E', view.plan!.planRevision, 'approved', a.workItemId, {
                               assignee: a.assignee,
                               mode: 'manual_handoff',
                               plan_revision: view.plan!.planRevision,
                               spec_revision: view.spec!.revision,
-                            }),
-                          )
+                            });
+                            // Codex는 실행 승인하면 바로 Linear로 맡긴다(v0.5.2, Claude·Gemini 자동 시작과 같게). 안 되면 지시서 복사로.
+                            if (ok && a.assignee === 'codex' && auto) await auto.start({ ...a, dispatchStatus: 'ready' }, false);
+                            return ok;
+                          })
                         }
                       >
                         실행 승인: 수동 인계로 진행
