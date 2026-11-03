@@ -313,8 +313,8 @@ export function App() {
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
   const stageRef = useRef({ mini: false, tiny: false });
-  /** 얇은 머리 보이기(큰 머리가 화면 밖일 때) */
-  const [barOn, setBarOn] = useState(false);
+  // 얇은 머리는 휴대폰에서 늘 맨 위에 고정(v0.5.30 소유자 "머리 고정"). PC에서는 CSS로 숨는다.
+  const barOn = true;
   /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
   const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   /** 업무 카드의 어느 칸으로 갈지(내 차례 '보기'·카드의 ?표시, v0.4.86) */
@@ -330,8 +330,6 @@ export function App() {
   const checkMini = useCallback(() => {
     const top = topEl.current;
     if (!top) return;
-    // 얇은 머리는 큰 머리가 화면 밖으로 나가면 늘 따라온다(작은 사무실과 따로, v0.4.45).
-    setBarOn(top.getBoundingClientRect().bottom < 36);
     const set = (m: boolean, t: boolean) => {
       stageRef.current = { mini: m, tiny: t };
       setMini(m);
