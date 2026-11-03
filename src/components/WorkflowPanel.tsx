@@ -160,8 +160,10 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
       else next.add(key);
       return next;
     });
-  const toggle = (key: string, idx: number) => flip(idx < current ? setUnfolded : setClosed, key);
-  const folded = (key: string, idx: number) => (idx < current ? !unfolded.has(key) : closed.has(key));
+  // 기획 승인(A)을 기다릴 때는 바로 앞 기획서 칸을 펼쳐 둔다(v0.5.26 소유자 "기획 승인 내용이 안 보이네": 승인할 내용이 접혀 있었음)
+  const past = (key: string, idx: number) => idx < current && !(key === 'plan' && current === 1);
+  const toggle = (key: string, idx: number) => flip(past(key, idx) ? setUnfolded : setClosed, key);
+  const folded = (key: string, idx: number) => (past(key, idx) ? !unfolded.has(key) : closed.has(key));
   // 바로 가기: 그 칸을 펼치고(지난 단계로 접혀 있어도) 화면에 보이게 내린다. 확인 질문(qa)은 기획 칸 안에 있다.
   useEffect(() => {
     if (!jump) return;
@@ -180,12 +182,12 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jump?.n]);
   const fold = {
-    cls: (key: string, idx: number) => `wf-section${idx < current ? ' is-past' : ''}${folded(key, idx) ? ' is-folded' : ''}`,
+    cls: (key: string, idx: number) => `wf-section${past(key, idx) ? ' is-past' : ''}${folded(key, idx) ? ' is-folded' : ''}`,
     head: (key: string, idx: number, title: ReactNode) => (
       <h4>
         <button type="button" className="wf-fold" aria-expanded={!folded(key, idx)} onClick={() => toggle(key, idx)}>
           <span aria-hidden="true">{folded(key, idx) ? '▸' : '▾'}</span> {title}
-          {idx < current ? <span className="wf-fold-done">지난 단계 ✓</span> : idx === current ? <span className="wf-fold-done wf-fold-now">지금 단계</span> : null}
+          {past(key, idx) ? <span className="wf-fold-done">지난 단계 ✓</span> : idx === current ? <span className="wf-fold-done wf-fold-now">지금 단계</span> : null}
         </button>
       </h4>
     ),

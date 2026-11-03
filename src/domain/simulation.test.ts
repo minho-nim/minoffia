@@ -148,7 +148,7 @@ describe('시뮬레이션 1: Claude 혼자 하는 업무(끝까지)', () => {
     let r = s.snap('Gemini 기획서 v1');
     expect(r.v.stage).toBe('development_approval_pending');
     expect(r.turns).toEqual(['기획?(A)']);
-    expect(r.notices).toEqual([]); // 승인 차례는 입력창에 알리지 않음(v0.4.12)
+    expect(r.notices).toEqual(['development_approval_pending']); // v0.5.26: 주요 단계는 대화에도 알림(A 버튼과 함께)
     s.approve('A', 1);
     expect(s.snap('기획 승인').v.stage).toBe('pm_queued');
     s.dispatchPm();
