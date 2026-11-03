@@ -2120,7 +2120,7 @@ a {
 }
 
 .panel-foot {
-  border-top: 1px solid var(--line);
+  /* 위 선은 없앤다: 대화 상자 아랫선과 두 줄로 겹쳐 보이던 것(v0.5.11) */
   padding-top: 6px;
   margin-top: -6px;
   margin-bottom: -6px;
@@ -4021,6 +4021,8 @@ a {
   z-index: 5;
   /* 상자 안쪽 여백처럼 위 띠는 바탕색으로(글이 윗선에 바로 붙어 보이지 않게) */
   background: var(--surface);
+  /* 칩 줄과 상자 윗선 사이에 기기마다 몇 px 틈이 생겨 글이 비치던 것(v0.5.11): 위로 10px(패널 칸 사이 간격만큼) 더 덮는다 */
+  box-shadow: 0 -10px 0 0 var(--surface);
   flex: none;
   height: var(--inbox-r);
   margin: calc(-1 * (var(--inbox-pad) + 1px)) calc(-1 * (var(--inbox-pad) + 1px)) calc(1px + var(--inbox-pad) - var(--inbox-r) - var(--inbox-gap));
