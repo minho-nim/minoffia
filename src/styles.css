@@ -906,10 +906,71 @@ a {
     position: relative;
     top: auto;
   }
+  /* 위에 고정된 사무실 높이(작은 사무실 = 절반, 접힌 사무실 = 0). 탭·칩·업무 제목 줄이 이 아래에 붙는다 */
+  .layout {
+    --stage-h: calc((100vw - 32px) * 0.747 * 0.5 + 10px);
+  }
+  .layout.is-tiny {
+    --stage-h: 0px;
+  }
+  /* 2단계(v0.5.29 소유자 "두 번 작아지는 연출"): 더 내리면 작은 사무실이 한 번 더 작아지며 사라지고, 탭이 얇은 머리 바로 아래로 올라온다 */
+  .stage::before {
+    transition: height 0.18s ease, opacity 0.18s ease;
+  }
+  .stage .office {
+    transition: transform 0.18s ease, opacity 0.18s ease, visibility 0.18s;
+  }
+  .stage.is-tiny {
+    margin-bottom: calc(-1 * ((100vw - 32px) * 0.747 + 10px));
+  }
+  .stage.is-tiny::before {
+    height: 0;
+    opacity: 0;
+  }
+  .stage.is-tiny .office {
+    transform: scale(0.2);
+    opacity: 0;
+    visibility: hidden;
+  }
+  /* 얇은 머리의 '사무실' 버튼을 누르면 접힌 사무실을 원래 크기로 띄워 본다(팝업, 바깥을 누르면 닫힘) */
+  .stage.is-peek {
+    z-index: 58;
+  }
+  .stage.is-peek::before {
+    height: calc((100vw - 32px) * 0.747 + 12px);
+    opacity: 1;
+  }
+  .stage.is-peek .office {
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+  }
+  .office-peek-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 57;
+    background: rgba(20, 14, 8, 0.45);
+  }
+  .topbar-mini .office-peek-btn {
+    flex: none;
+    margin-left: auto;
+    padding: 3px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+  .topbar-mini .office-peek-btn + .theme-toggle {
+    margin-left: 0;
+  }
+  .topbar-mini .office-peek-btn.is-on {
+    background: rgba(255, 255, 255, 0.18);
+  }
   /* 탭은 줄어든 사무실 바로 아래에 고정(v0.4.16). 내리기 전에는 제자리에 있다. */
   .tabs {
     position: sticky;
-    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px);
+    top: calc(36px + env(safe-area-inset-top, 0px) + var(--stage-h));
     z-index: 45;
     margin: -10px -10px 0;
     padding: 4px 10px 0;
@@ -3580,7 +3641,7 @@ a {
     box-shadow: 0 -4px 0 0 var(--surface);
     border-bottom: 1px solid var(--line);
     /* 탭 고정 위치 + 탭 높이(탭이 두 줄이면 잰 높이) */
-    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px));
+    top: calc(36px + env(safe-area-inset-top, 0px) + var(--stage-h) + var(--tabs-h, 43px));
   }
 }
 
@@ -3784,7 +3845,7 @@ a {
 }
 @media (max-width: 1039px) and (min-height: 620px) {
   .layout.is-mini .task-card {
-    --task-sticky-top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px) + var(--chips-h, 0px));
+    --task-sticky-top: calc(36px + env(safe-area-inset-top, 0px) + var(--stage-h) + var(--tabs-h, 43px) + var(--chips-h, 0px));
   }
 }
 /* 업무별 진행 단계 줄도 제목 줄 바로 아래에 붙는다(v0.5.0, 소유자 "업무 진행상황에서 탭이 고정되게").
@@ -4091,7 +4152,7 @@ a {
 @media (max-width: 1039px) and (min-height: 620px) {
   .layout.is-mini .inbox-cap {
     position: sticky;
-    top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px) + var(--chips-h, 0px));
+    top: calc(36px + env(safe-area-inset-top, 0px) + var(--stage-h) + var(--tabs-h, 43px) + var(--chips-h, 0px));
   }
 }
 
