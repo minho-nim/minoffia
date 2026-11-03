@@ -4255,3 +4255,30 @@ a {
 .ft-del {
   color: #c0503a;
 }
+
+/* 아래 패널(대화·업무·프로젝트·에이전트·팀 관리) 글자·버튼 한 단계 작게(v0.5.27 소유자 "전체 텍스트·버튼이 커서 불편").
+   입력칸(textarea)은 아이폰 확대 방지로 16px 그대로. */
+.panel {
+  font-size: 14px;
+}
+.panel .btn {
+  font-size: 13px;
+  padding: 6px 12px;
+}
+.panel .btn-small {
+  font-size: 12px;
+  padding: 3px 9px;
+}
+.panel .chip {
+  font-size: 12px;
+  padding: 2px 9px;
+}
+.panel .task-title {
+  font-size: 14px;
+}
+.panel .wf-section > h4 {
+  font-size: 13px;
+}
+.panel .tabs button {
+  font-size: 13px;
+}
