@@ -4113,3 +4113,9 @@ a {
   border-style: dashed;
   color: var(--muted, inherit);
 }
+
+/* 누가 누구를 기다리나(v0.5.22): 안 끝난 앞 작업 */
+.wf-waiting {
+  color: var(--accent);
+  font-weight: 600;
+}
