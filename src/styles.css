@@ -2795,8 +2795,9 @@ a {
   resize: none;
   font-size: 16px;
   line-height: 1.55;
-  /* 글을 쓰면 늘어난다(Inbox에서 높이 조절). 너무 길면 안에서 스크롤 */
-  max-height: 40svh;
+  /* 글을 쓰면 늘어난다(Inbox에서 높이 조절). 6줄까지, 그 이상은 안에서 스크롤(v0.5.13 소유자) */
+  max-height: calc(16px * 1.55 * 6 + 4px);
+  overflow-y: auto;
 }
 
 .inbox-tools {
@@ -3981,10 +3982,25 @@ a {
 .inbox {
   --inbox-r: 14px;
   --inbox-low: max(8px, env(safe-area-inset-bottom));
-  padding-bottom: var(--inbox-low);
+  /* 키보드가 뜨면(--kb) 그만큼 아래 여백을 늘려, 끝까지 내려도 마지막 말이 키보드 위 입력창 위로 올라온다 */
+  padding-bottom: calc(var(--inbox-low) + var(--kb, 0px));
 }
 .inbox > .inbox-form {
-  bottom: calc(var(--inbox-low) + 1px);
+  bottom: calc(var(--inbox-low) + 1px + var(--kb, 0px));
+}
+/* 입력창 바로 위: 뒤로 내려가는 대화가 흐려지며 사라진다(v0.5.13 소유자 "클로드 채팅창처럼") */
+.inbox-fade {
+  position: absolute;
+  left: calc(-1 * var(--inbox-pad) - 1px);
+  right: calc(-1 * var(--inbox-pad) - 1px);
+  bottom: calc(100% + 1px);
+  height: 26px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 0%, transparent), var(--surface) 92%);
+  -webkit-backdrop-filter: blur(1.5px);
+  backdrop-filter: blur(1.5px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 70%);
+  mask-image: linear-gradient(to bottom, transparent, #000 70%);
 }
 .inbox > .inbox-form::before,
 .inbox > .inbox-form::after,
