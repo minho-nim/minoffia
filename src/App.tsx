@@ -313,8 +313,10 @@ export function App() {
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
   const stageRef = useRef({ mini: false, tiny: false });
-  // 얇은 머리는 휴대폰에서 늘 맨 위에 고정(v0.5.30 소유자 "머리 고정"). PC에서는 CSS로 숨는다.
-  const barOn = true;
+  /** 얇은 머리 보이기(큰 머리가 화면 밖일 때) */
+  const [barOn, setBarOn] = useState(false);
+  /** 얇은 머리의 '사용량 보기'로 큰 머리 내용을 펼쳐 본다(v0.5.31 소유자) */
+  const [usageOpen, setUsageOpen] = useState(false);
   /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
   const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   /** 업무 카드의 어느 칸으로 갈지(내 차례 '보기'·카드의 ?표시, v0.4.86) */
@@ -336,6 +338,10 @@ export function App() {
       setTiny(t);
       if (!t) setPeek(false);
     };
+    // 얇은 머리는 큰 머리가 화면 밖으로 나가면 늘 따라온다(작은 사무실과 따로, v0.4.45).
+    const bar = top.getBoundingClientRect().bottom < 36;
+    setBarOn(bar);
+    if (!bar) setUsageOpen(false);
     const now = stageRef.current;
     if (window.scrollY <= 2) return set(false, false);
     if (top.getBoundingClientRect().bottom >= 36) return;
@@ -400,6 +406,33 @@ export function App() {
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
+
+  // 오늘 사용량(큰 머리와 얇은 머리의 '사용량 보기'가 같이 쓴다)
+  const usageList = (
+    <ul className="usage" aria-label="오늘 등록된 실행 횟수">
+      {AGENTS.filter((a) => a.dailyCap !== null).map((a) => {
+        const used = runsToday(snap.usage, a.id);
+        const cap = a.dailyCap ?? 0;
+        return (
+          <li key={a.id} className={used >= cap ? 'is-full' : ''}>
+            <span>{a.name}</span>
+            <span className="meter" aria-hidden="true">
+              <span style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} />
+            </span>
+            <span className="num">
+              {used}/{cap}
+            </span>
+          </li>
+        );
+      })}
+      {store.mode === 'supabase' && (
+        <li title="입력창 일반 질문을 Gemini 무료 API에 보낸 횟수(오늘, 성공만). 하루 상한은 서버가 관리합니다.">
+          <span>Gemini</span>
+          <span className="num">{(snap.aiCalls ?? []).filter((c) => c.ok && kstDay(new Date(c.createdAt)) === kstDay()).length}회</span>
+        </li>
+      )}
+    </ul>
+  );
 
   const mutate = async (fn: () => Promise<void>, ok?: string): Promise<boolean> => {
     try {
@@ -1556,29 +1589,7 @@ export function App() {
           {store.mode === 'supabase' && <PushToggle store={store} />}
           <ThemeToggle />
         </div>
-        <ul className="usage" aria-label="오늘 등록된 실행 횟수">
-          {AGENTS.filter((a) => a.dailyCap !== null).map((a) => {
-            const used = runsToday(snap.usage, a.id);
-            const cap = a.dailyCap ?? 0;
-            return (
-              <li key={a.id} className={used >= cap ? 'is-full' : ''}>
-                <span>{a.name}</span>
-                <span className="meter" aria-hidden="true">
-                  <span style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} />
-                </span>
-                <span className="num">
-                  {used}/{cap}
-                </span>
-              </li>
-            );
-          })}
-          {store.mode === 'supabase' && (
-            <li title="입력창 일반 질문을 Gemini 무료 API에 보낸 횟수(오늘, 성공만). 하루 상한은 서버가 관리합니다.">
-              <span>Gemini</span>
-              <span className="num">{(snap.aiCalls ?? []).filter((c) => c.ok && kstDay(new Date(c.createdAt)) === kstDay()).length}회</span>
-            </li>
-          )}
-        </ul>
+        {usageList}
       </header>
 
       <div className={`topbar-mini${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
@@ -1593,13 +1604,36 @@ export function App() {
         })()}
         {/* 사무실을 접었을 때만: 눌러서 사무실을 잠깐 띄워 본다(v0.5.29) */}
         {tiny && (
-          <button type="button" className={`office-peek-btn${peek ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={peek} onClick={() => setPeek((v) => !v)}>
+          <button type="button" className={`bar-btn${peek ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={peek} onClick={() => setPeek((v) => !v)}>
             사무실 {peek ? '▴' : '▾'}
           </button>
         )}
+        {/* 큰 머리 내용(연결·알림·사용량)을 펼쳐 본다(v0.5.31) */}
+        <button type="button" className={`bar-btn${usageOpen ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={usageOpen} onClick={() => setUsageOpen((v) => !v)}>
+          사용량 보기
+        </button>
         {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
         <ThemeToggle tabbable={barOn} />
       </div>
+      {usageOpen && barOn && (
+        <>
+          <div className="usage-pop-backdrop" onClick={() => setUsageOpen(false)} aria-hidden="true" />
+          <div className="usage-pop" role="dialog" aria-label="오늘 사용량">
+            {store.mode === 'local' ? (
+              <span className="mode mode-local">로컬 데모 · 이 기기에만 저장</span>
+            ) : (
+              <span className="mode mode-cloud">
+                Supabase 동기화 · {session?.user.email}
+                <button type="button" className="link-btn" onClick={() => void client?.auth.signOut()}>
+                  로그아웃
+                </button>
+              </span>
+            )}
+            {store.mode === 'supabase' && <PushToggle store={store} />}
+            {usageList}
+          </div>
+        </>
+      )}
 
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}`}>
