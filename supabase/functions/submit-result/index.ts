@@ -9,7 +9,8 @@ const MAX_USES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIMITS = { summary: 4000, diff: 500_000, test_log: 100_000, remaining_issues: 4000, branch: 200, changed_files: 20_000 };
 // 결과 화면 증거(v0.4.97): 데스크톱·휴대폰 스크린샷 최대 2장, 장마다 1.5MB(JPEG·PNG만)
-const MAX_SHOTS = 2;
+// 화면 2장(데스크톱·휴대폰) + 바뀐 곳 구조도 1장(v0.5.21)
+const MAX_SHOTS = 3;
 const MAX_SHOT_BYTES = 1_500_000;
 const SHOT_EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png' };
 type Shot = { path: string; sha256: string; size: number; mime: string; name: string };

@@ -89,11 +89,13 @@ jobs:
         with:
           node-version: '22'
 
-      - name: 저장소 지도 스크립트 받기(이 저장소의 scripts/repo-map.mjs만)
+      - name: 저장소 지도 스크립트 받기(이 저장소의 scripts/repo-map.mjs·change-tree.mjs만)
         uses: actions/checkout@v4
         with:
           path: office
-          sparse-checkout: scripts/repo-map.mjs
+          sparse-checkout: |
+            scripts/repo-map.mjs
+            scripts/change-tree.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -233,6 +235,32 @@ jobs:
         env:
           INSTRUCTIONS_HEAD: ${{ inputs.instructions }}
 
+      - name: 바뀐 곳 구조도(Archify, 토큰 0)
+        # v0.5.21(소유자 "archify를 내 환경에 맞게"): 바뀐 파일 목록을 Archify(Apache-2.0, 고정 커밋) tree로 그리고 사진으로 찍어
+        # 결과 스크린샷과 함께 보낸다. 모델 호출 없음. 실패해도 계속.
+        if: steps.commit.outputs.changed == 'true'
+        continue-on-error: true
+        working-directory: work
+        run: |
+          base=$(cat /tmp/base.sha 2>/dev/null || git rev-parse HEAD~1)
+          git diff --numstat "$base" HEAD | node ../office/scripts/change-tree.mjs "$REPO" > /tmp/change-tree.json
+          git clone -q --filter=blob:none https://github.com/tt-a1i/archify.git /tmp/archify
+          git -C /tmp/archify checkout -q a4065941f12be7967436261d9934784e381d423c
+          node /tmp/archify/archify/bin/archify.mjs render tree /tmp/change-tree.json /tmp/change-tree.html
+          mkdir -p /tmp/shot && cd /tmp/shot
+          [ -d node_modules/playwright ] || { npm init -y >/dev/null 2>&1; npm i -s --no-audit --no-fund playwright@1.49.1 >/dev/null 2>&1; npx -y playwright@1.49.1 install --with-deps chromium >/dev/null 2>&1; }
+          cat > tree.js <<'JS'
+          const { chromium } = require('playwright');
+          (async () => {
+            const b = await chromium.launch();
+            const p = await b.newPage({ viewport: { width: 1200, height: 900 } });
+            await p.goto('file:///tmp/change-tree.html'); await p.waitForTimeout(1500);
+            await p.screenshot({ path: '/tmp/shot/구조도-바뀐곳.jpg', type: 'jpeg', quality: 75, fullPage: true });
+            await b.close();
+          })();
+          JS
+          node tree.js && echo "바뀐 곳 구조도를 찍었습니다."
+
       - name: 작업 브랜치만 올리기
         if: steps.commit.outputs.changed == 'true'
         working-directory: work
@@ -288,7 +316,7 @@ jobs:
           def shots():
               import base64, glob
               out = []
-              for f in sorted(glob.glob('/tmp/shot/화면-*.jpg'))[:2]:
+              for f in sorted(glob.glob('/tmp/shot/화면-*.jpg'))[:2] + glob.glob('/tmp/shot/구조도-*.jpg')[:1]:
                   b = open(f, 'rb').read()
                   if 0 < len(b) <= 1_500_000:
                       out.append({'name': os.path.basename(f), 'mime': 'image/jpeg', 'data': base64.b64encode(b).decode()})
