@@ -1355,6 +1355,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       {queue.length > 0 && <p className="muted small inbox-note">앞 일이 끝나면 기다리는 말 {queue.length}개를 한 번에 읽고 답할게요.</p>}
       <div ref={endRef} />
 
+      {/* 입력창 뒤 흐림 칸(v0.5.14 소유자): 대화가 입력창 윗선부터 뒤로 들어가며 흐려진다(그림만) */}
+      <div className="inbox-fade" aria-hidden="true" />
       <form
         ref={formRef}
         className="inbox-form"
@@ -1436,8 +1438,6 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             }
           }}
         />
-        {/* 입력창 위로 뒤 대화가 흐려지며 내려간다(v0.5.13 소유자 "클로드 채팅창처럼", 그림만) */}
-        <div className="inbox-fade" aria-hidden="true" />
         <div className="inbox-tools">
         <button type="button" className="inbox-attach" aria-label="사진·문서 첨부" title="사진·문서 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
           {/* 이모지는 기기 글꼴마다 다르게 깨져 보여서 도트 그림 아이콘을 쓴다 */}
