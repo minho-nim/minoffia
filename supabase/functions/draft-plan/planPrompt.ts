@@ -28,6 +28,8 @@ export interface PlanInput {
   spec: { revision: number; user_original_text: string; final_prompt: string; change_scope: string; preserve_constraints: string; test_criteria: string };
   qa: { question: string; answer: string }[];
   revisionFeedback: string;
+  /** 인계 요약(v0.5.21, mattpocock handoff): 앞 결과에서 한 것·남은 문제. 처음 계획이면 빈 문자열 */
+  previous: string;
   /** 휴가 중(codex·claude·studio 둘 다 = gemini) */
   away: { codex: boolean; claude: boolean; gemini: boolean };
   /** 이 저장소에 Gemini 개발을 써도 되는지(AI Office 저장소면 안 됨) */
@@ -63,6 +65,7 @@ export function buildPlanText(i: PlanInput): string {
     s.test_criteria ? `테스트 기준: ${s.test_criteria}` : '',
     ...(i.qa.length ? ['', '## 확인 질문·답변', ...i.qa.flatMap((c, n) => [`Q${n + 1}. ${c.question}`, `A${n + 1}. ${c.answer}`])] : []),
     ...(i.revisionFeedback ? ['', '## 결과 검토 뒤 사용자 수정 요청(새 계획 필요)', i.revisionFeedback] : []),
+    ...(i.previous ? ['', '## 앞 결과에서 넘겨받은 것(이미 한 일은 다시 시키지 말고, 남은 문제만 작업으로)', i.previous] : []),
     '',
     assignLine(i.away, i.geminiDevOk),
     ...(i.rules.length ? ['', '## 이 프로젝트에서 지켜야 할 것(각 작업의 preserve_constraints에 해당하는 것을 넣는다)', ...i.rules.map((r) => `- ${r}`)] : []),

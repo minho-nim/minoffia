@@ -111,12 +111,17 @@ Deno.serve(async (req) => {
   const { data: qa } = await userClient.from('clarifications').select('question, answer').eq('task_id', task.id).order('created_at');
   const { data: revision } = await userClient
     .from('revision_requests')
-    .select('feedback')
+    .select('feedback, result_revision')
     .eq('task_id', task.id)
     .eq('spec_revision', spec.revision)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  // 인계 요약(v0.5.21): 수정 요청이 가리키는 결과에서 한 일·남은 문제만(diff·로그는 넣지 않음)
+  const { data: prev } = revision
+    ? await userClient.from('result_packages').select('summary, remaining_issues').eq('task_id', task.id).eq('revision', revision.result_revision).maybeSingle()
+    : { data: null };
+  const previous = prev ? [prev.summary && `한 일: ${String(prev.summary).slice(0, 1500)}`, prev.remaining_issues && `남은 문제: ${String(prev.remaining_issues).slice(0, 1500)}`].filter(Boolean).join('\n') : '';
   const repo = project.repo;
   const text = buildPlanText({
     taskId: task.id,
@@ -125,6 +130,7 @@ Deno.serve(async (req) => {
     spec,
     qa: (qa ?? []) as { question: string; answer: string }[],
     revisionFeedback: revision?.feedback ?? '',
+    previous,
     away: { codex: away.has('codex'), claude: away.has('claude'), gemini: away.has('studioA') && away.has('studioB') },
     geminiDevOk: repo.toLowerCase() !== OFFICE_REPO,
     rules: await loadRules(userClient, task.project_id),
