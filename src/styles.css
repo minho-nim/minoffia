@@ -3566,6 +3566,7 @@ a {
     top: var(--tabs-h, 42px);
     z-index: 44;
     background: var(--surface);
+    box-shadow: 0 -4px 0 0 var(--surface);
     border-bottom: 1px solid var(--line);
   }
 }
@@ -3575,6 +3576,8 @@ a {
     position: sticky;
     z-index: 44;
     background: var(--surface);
+    /* 탭 줄과의 1px 미만 틈으로 뒤 카드가 깜빡이던 것(v0.5.25): 위로 4px 더 바탕색(탭 줄이 위에 그려져 탭은 안 가림) */
+    box-shadow: 0 -4px 0 0 var(--surface);
     border-bottom: 1px solid var(--line);
     /* 탭 고정 위치 + 탭 높이(탭이 두 줄이면 잰 높이) */
     top: calc(36px + env(safe-area-inset-top, 0px) + (100vw - 32px) * 0.747 * 0.5 + 10px + var(--tabs-h, 43px));
