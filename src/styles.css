@@ -4119,3 +4119,8 @@ a {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* 지금 단계도 접기(v0.5.23) */
+.wf-fold-done.wf-fold-now {
+  color: var(--accent);
+}
