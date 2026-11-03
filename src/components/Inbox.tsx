@@ -317,10 +317,14 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     // 키보드 높이(--kb, v0.5.13 소유자 "키패드 위로 채팅창 붙어서"): 아이폰은 키보드가 떠도 화면(레이아웃) 높이가 그대로라
     // 아래에 붙은 입력창이 키보드 뒤로 숨는다. 보이는 화면 아래 끝과의 차이만큼 입력창을 올린다(안드로이드는 보통 0).
     const root = document.documentElement;
+    // 입력칸에 글을 쓰는 중일 때만 잰다(v0.5.15): 화면 확대·Claude 미리보기 창처럼 키보드 없이도 보이는 화면이 작아지면
+    // 입력창이 공중에 떠서 그 아래로 대화가 비치던 것.
     const setKb = () => {
-      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      const typing = document.activeElement === inputRef.current;
+      const kb = typing ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
       root.style.setProperty('--kb', `${kb > 40 ? kb : 0}px`);
     };
+    const onFocusChange = () => window.setTimeout(setKb, 0);
     const onResize = () => {
       setKb();
       if (document.activeElement === inputRef.current) revealEnd();
@@ -328,7 +332,11 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     setKb();
     vv.addEventListener('resize', onResize);
     vv.addEventListener('scroll', setKb);
+    document.addEventListener('focusin', onFocusChange);
+    document.addEventListener('focusout', onFocusChange);
     return () => {
+      document.removeEventListener('focusin', onFocusChange);
+      document.removeEventListener('focusout', onFocusChange);
       vv.removeEventListener('resize', onResize);
       vv.removeEventListener('scroll', setKb);
       root.style.removeProperty('--kb');
