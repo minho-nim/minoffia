@@ -1391,7 +1391,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           rows={1}
           value={input}
           maxLength={4000}
-          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일을 적으세요` : canAskGemini ? '묻거나 시킬 일을 적으세요 · 질문은 Gemini가 바로 답해요' : '묻거나 시킬 일을 적으세요'}
+          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일` : '묻거나 시킬 일을 적으세요'}
           aria-label="묻기·요청"
           onFocus={() => {
             if (canAskGemini) onWarmGemini?.();

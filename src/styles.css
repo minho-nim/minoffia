@@ -2130,6 +2130,9 @@ a {
 /* 대화 지우기 줄: 입력창 바로 아래에 붙이고 아래 여백을 줄인다(v0.4.36) */
 .inbox > .link-btn:last-child {
   align-self: flex-start;
+  /* 입력창 아래 틈 덮개(그림자)가 이 줄을 반쯤 가리지 않게 위로(v0.5.7) */
+  position: relative;
+  z-index: 5;
   margin-top: -6px;
   margin-bottom: -6px;
 }
@@ -2784,8 +2787,9 @@ a {
 .inbox-form textarea {
   width: 100%;
   min-width: 0;
-  min-height: 48px;
-  padding: 4px 2px;
+  /* 처음엔 한 줄(v0.5.7 소유자 "기본 두 줄 → 한 줄"), 쓰면 늘어난다 */
+  min-height: 30px;
+  padding: 2px 2px;
   border: 0;
   outline: none;
   background: transparent;
@@ -3985,6 +3989,20 @@ a {
   border-color: transparent;
   border-radius: 0;
   padding-inline: 2px;
+}
+
+/* 휴대폰 대화 탭 아래 여백 줄이기·가로 테두리 깜빡임(v0.5.7 소유자): 입력창 아래 여백은 8px만,
+   패널 아래 테두리는 없앤다(스크롤 끝에 닿을 때마다 가로줄이 나타났다 사라지던 것) */
+@media (max-width: 1039px) {
+  .panel {
+    border-bottom: 0;
+  }
+  .panel:has(> .chat-tab:not([hidden])) {
+    padding-bottom: 0;
+  }
+  .chat-tab > .inbox {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
 }
 
 /* 프로젝트 칩 접기(v0.5.5) */
