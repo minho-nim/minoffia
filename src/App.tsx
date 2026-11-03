@@ -30,6 +30,8 @@ import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/type
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
 import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
+import { RepoStructure } from './components/FileTreeView';
+import { projectChanges } from './domain/fileTree';
 import { checkSmallTask, smallPlanText } from './domain/smallTask';
 import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
 import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
@@ -1837,6 +1839,7 @@ export function App() {
               onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
               shortcutsOf={(id) => projectShortcuts(id, snap.tasks, snap.workflow.results)}
               onOpenTask={(id) => showTask(id)}
+              renderStructure={(p) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />}
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
           )}

@@ -362,6 +362,9 @@ export function createLocalStore(): OfficeStore {
     async linearProbe() {
       return { connected: false, reason: '로컬 데모에서는 Linear를 확인할 수 없습니다.' };
     },
+    async repoTree() {
+      throw new Error('로컬 데모에서는 저장소를 읽을 수 없어요');
+    },
     async draftPlan() {
       throw new Error('로컬 데모에서는 Gemini가 계획을 대신 쓸 수 없습니다.');
     },

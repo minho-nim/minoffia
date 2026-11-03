@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   const project = task?.projects as unknown as { name: string; repo: string | null } | null;
   const { data: spec } = await userClient
     .from('task_specs')
-    .select('revision, final_prompt, change_scope, preserve_constraints, test_criteria')
+    .select('revision, final_prompt, change_scope, preserve_constraints, test_criteria, size_hint')
     .eq('task_id', a.task_id)
     .order('revision', { ascending: false })
     .limit(1)
@@ -139,6 +139,7 @@ Deno.serve(async (req) => {
     preserve: [String(spec.preserve_constraints ?? ''), ...strings(item.preserve_constraints)].filter(Boolean),
     acceptance: [...strings(item.acceptance_tests), String(spec.test_criteria ?? '')].filter(Boolean),
     projectRules: await loadRules(userClient, task.project_id),
+    bug: (spec.size_hint as { bug?: boolean } | null)?.bug,
   });
   const branch = geminiBranch(a.task_id, String(item.id));
 

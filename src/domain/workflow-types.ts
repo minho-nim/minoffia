@@ -30,7 +30,7 @@ export interface TaskSpec {
   /** 단순 질문일 때 GPT 답변 */
   answer: string;
   /** Gemini 초안이 매긴 크기(v0.5.20, 작은 일 바로 배정에 씀). 없으면 PM이 나눈다 */
-  sizeHint?: { difficulty: number; single_task: boolean; needs_design: boolean } | null;
+  sizeHint?: { difficulty: number; single_task: boolean; needs_design: boolean; bug?: boolean } | null;
   createdAt: string;
 }
 
