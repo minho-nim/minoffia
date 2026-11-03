@@ -2,7 +2,7 @@
 
 현재 규칙이 아니다. 기본 컨텍스트에 넣지 말고 특정 결정·검증 근거가 필요할 때만 해당 파일을 읽는다. 원문은 2026-11-03 문서 정리 시 보존했다.
 
-- CLAUDE.md·README.md·ARCHITECTURE.md: 축소 전 문서.
+- CLAUDE.md·PROJECT_README_2026-11-03.md·ARCHITECTURE.md: 축소 전 문서.
 - HANDOFF_2026-11-01.md: 이전 인수인계 전체(버전별 변경·취향·당시 운영 기록). 상단 상태와 뒤쪽 변경 기록이 다를 수 있다.
 - FLOW_v0.3_2026-10-30.md: 12단계 원안과 이후 결정.
 - REQUIREMENTS.md: v0.1 최초 요구사항.
