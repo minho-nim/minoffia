@@ -35,6 +35,7 @@ run supabase/tests/99_project_rules.sql
 run supabase/tests/99_result_reviews.sql
 run supabase/tests/99_gemini_dev.sql
 run supabase/tests/99_claude_review.sql
+run supabase/tests/99_codex_linear.sql
 
 # 기존 v0.1 데이터가 0003 적용 후에도 남는지
 psql -q -c "drop database if exists ${DB}_mig" -c "create database ${DB}_mig"
