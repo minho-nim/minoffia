@@ -3981,6 +3981,12 @@ a {
     0 2px 10px -6px rgba(0, 0, 0, 0.3),
     0 max(8px, env(safe-area-inset-bottom)) 0 0 var(--surface);
 }
+/* 대화 입력창 자체도 반쯤 비쳐 뒤로 지나가는 대화가 보이게(v0.5.7 소유자 "입력하는 창 뒤 대화가 보이게") */
+.inbox > .inbox-form {
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: blur(1.5px);
+  backdrop-filter: blur(1.5px);
+}
 .chat-tab > .inbox {
   border-color: transparent;
   border-radius: 0;
