@@ -3982,3 +3982,9 @@ a {
     0 0 0 14px var(--surface),
     0 max(8px, env(safe-area-inset-bottom)) 0 14px var(--surface);
 }
+
+/* 프로젝트 칩 접기(v0.5.5) */
+.project-chips .chip-fold {
+  border-style: dashed;
+  color: var(--muted, inherit);
+}

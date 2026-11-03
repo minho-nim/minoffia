@@ -19,6 +19,8 @@ const TIMEOUT_MS = 25_000;
 /** 조사(Google 검색 연결, v0.4.61) 하루 상한: 기본 20, 코드 최대 50(GEMINI_RESEARCH_DAILY_CAP). 질문과 따로 센다. */
 const RESEARCH_HARD_CAP = 50;
 const RESEARCH_DEFAULT_CAP = 20;
+/** 검색 연결 무료 한도가 있는 모델(GEMINI_RESEARCH_MODEL로 바꿈) */
+const RESEARCH_MODEL = 'gemini-2.5-flash';
 
 /** 검색 연결 답의 출처(groundingMetadata.groundingChunks[].web) */
 function sourcesOf(data: unknown, into: Map<string, string>) {
@@ -222,7 +224,11 @@ Deno.serve(async (req) => {
     return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   }
 
-  const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
+  const baseModel = env('GEMINI_MODEL') || DEFAULT_MODEL;
+  // 조사(v0.5.5): 기본 모델은 Google 검색 연결 무료 한도가 없어 늘 429였다(일반 질문은 같은 키로 바로 됨, 2026-11-03 기록).
+  // 검색은 무료 검색 한도가 있는 모델(GEMINI_RESEARCH_MODEL, 기본 gemini-2.5-flash)로 먼저 묻고, 안 되면 기본 모델로 한 번 더.
+  const models = research ? [...new Set([env('GEMINI_RESEARCH_MODEL') || RESEARCH_MODEL, baseModel])] : [baseModel];
+  let model = baseModel;
   const stream = body.stream === true;
   const routeProjects = Array.isArray(body.route?.projects) ? body.route!.projects!.filter((p) => typeof p === 'string').slice(0, 50).map((p) => p.slice(0, 60)) : null;
   const project = body.project && typeof body.project.name === 'string' ? body.project : null;
@@ -240,77 +246,82 @@ Deno.serve(async (req) => {
   if (away.has('studioA')) keys[0] = '';
   if (away.has('studioB')) keys[1] = '';
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
-  for (const [i, key] of keys.entries()) {
-    if (!key) continue;
-    const slot = i + 1;
-    let res: Response;
-    let mode: ThinkingMode;
-    let headMs = 0;
-    try {
-      ({ res, mode } = await openGemini(key, model, question, history, images, stream, system, research));
-      headMs = Date.now() - started;
-    } catch (e) {
-      last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
-      continue;
-    }
-    if (res.status === 200 && stream && res.body) {
-      // 받은 조각을 바로 앱에 넘긴다(한 줄에 JSON 하나: {"d":"글"} … {"done":true}). 다 보내면 횟수·길이만 기록한다.
-      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-      const enc = new TextEncoder();
-      const out = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          let buf = '';
-          let total = 0;
-          let first = 0;
-          const found = new Map<string, string>();
-          try {
-            for (;;) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              buf += value;
-              let nl: number;
-              while ((nl = buf.indexOf('\n')) >= 0) {
-                const line = buf.slice(0, nl).trim();
-                buf = buf.slice(nl + 1);
-                if (!line.startsWith('data:')) continue;
-                const chunk = JSON.parse(line.slice(5).trim() || '{}');
-                if (research) sourcesOf(chunk, found);
-                const text = partsText(chunk);
-                if (!text) continue;
-                if (!first) first = Date.now() - started;
-                total += text.length;
-                controller.enqueue(enc.encode(JSON.stringify({ d: text }) + '\n'));
+  for (const tryModel of models) {
+    model = tryModel;
+    for (const [i, key] of keys.entries()) {
+      if (!key) continue;
+      const slot = i + 1;
+      let res: Response;
+      let mode: ThinkingMode;
+      let headMs = 0;
+      try {
+        ({ res, mode } = await openGemini(key, model, question, history, images, stream, system, research));
+        headMs = Date.now() - started;
+      } catch (e) {
+        last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
+        continue;
+      }
+      if (res.status === 200 && stream && res.body) {
+        // 받은 조각을 바로 앱에 넘긴다(한 줄에 JSON 하나: {"d":"글"} … {"done":true}). 다 보내면 횟수·길이만 기록한다.
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        const enc = new TextEncoder();
+        const out = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            let buf = '';
+            let total = 0;
+            let first = 0;
+            const found = new Map<string, string>();
+            try {
+              for (;;) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += value;
+                let nl: number;
+                while ((nl = buf.indexOf('\n')) >= 0) {
+                  const line = buf.slice(0, nl).trim();
+                  buf = buf.slice(nl + 1);
+                  if (!line.startsWith('data:')) continue;
+                  const chunk = JSON.parse(line.slice(5).trim() || '{}');
+                  if (research) sourcesOf(chunk, found);
+                  const text = partsText(chunk);
+                  if (!text) continue;
+                  if (!first) first = Date.now() - started;
+                  total += text.length;
+                  controller.enqueue(enc.encode(JSON.stringify({ d: text }) + '\n'));
+                }
               }
+              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
+            } catch (e) {
+              controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
+            } finally {
+              controller.close();
+              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
+              await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
             }
-            controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
-          } catch (e) {
-            controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
-          } finally {
-            controller.close();
-            console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
-            await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
-          }
-        },
-      });
-      return new Response(out, { status: 200, headers: { ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
+          },
+        });
+        return new Response(out, { status: 200, headers: { ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
+      }
+      const data = await res.json().catch(() => ({}));
+      const text = res.status === 200 ? partsText(data).trim() : '';
+      if (text) {
+        console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length });
+        const found = new Map<string, string>();
+        if (research) sourcesOf(data, found);
+        return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
+      }
+      last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
+      // 요청 자체가 잘못된 경우(400·404)는 B로 넘겨도 같으므로 멈춘다. 한도(429)·인증·서버 오류만 B를 쓴다.
+      if (res.status === 400 || res.status === 404) break;
     }
-    const data = await res.json().catch(() => ({}));
-    const text = res.status === 200 ? partsText(data).trim() : '';
-    if (text) {
-      console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length });
-      const found = new Map<string, string>();
-      if (research) sourcesOf(data, found);
-      return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
-    }
-    last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
-    // 요청 자체가 잘못된 경우(400·404)는 B로 넘겨도 같으므로 멈춘다. 한도(429)·인증·서버 오류만 B를 쓴다.
-    if (res.status === 400 || res.status === 404) break;
   }
   await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
   const hint =
     last.status === 429
-      ? 'Gemini 무료 한도에 걸렸습니다.'
+      ? research
+        ? 'Gemini 웹 검색 무료 한도에 걸렸습니다.'
+        : 'Gemini 무료 한도에 걸렸습니다.'
       : last.status === 401 || last.status === 403
         ? 'Gemini 키가 틀렸거나 권한이 없습니다.'
         : last.status === 404
