@@ -64,6 +64,15 @@ select pg_temp.check((select count(*) from push_outbox where task_id = 'e6e6e6e6
 select pg_temp.as_user();
 select pg_temp.expect_fail($q$select push_enqueue('11111111-1111-4111-8111-111111111111', 'e6e6e6e6-0000-4000-8000-000000000001', 'result', 'x')$q$, 'permission denied');
 
+-- v0.5.20 작은 일 바로 배정·Gemini 대신 분배(0037)
+insert into task_specs (task_id, revision, intent, user_original_text, final_prompt, size_hint) values ('e6e6e6e6-0000-4000-8000-000000000001', 2, 'change_request', '원문', '프롬프트', '{"difficulty":2,"single_task":true,"needs_design":false}');
+insert into approvals (task_id, gate, decision, approved_revision) values ('e6e6e6e6-0000-4000-8000-000000000001', 'A', 'approved', 2);
+insert into pm_plans (task_id, plan_revision, approved_spec_revision, source, plan) values ('e6e6e6e6-0000-4000-8000-000000000001', 2, 2, 'rule_small', '{"work_items":[]}');
+insert into pm_plans (task_id, plan_revision, approved_spec_revision, source, plan) values ('e6e6e6e6-0000-4000-8000-000000000001', 3, 2, 'gemini_fallback', '{"work_items":[]}');
+select pg_temp.expect_fail($q$insert into pm_plans (task_id, plan_revision, approved_spec_revision, source, plan) values ('e6e6e6e6-0000-4000-8000-000000000001', 4, 2, 'grok', '{}')$q$, 'pm_plans_source_check');
+select pg_temp.as_service();
+insert into ai_calls (owner_id, provider, purpose, ok) values ('11111111-1111-4111-8111-111111111111', 'gemini', 'pm', true);
+
 reset role;
 \o
 \echo 'Codex Linear 예약 테스트 완료'

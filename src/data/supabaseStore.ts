@@ -57,6 +57,7 @@ const toSpec = (r: Row): TaskSpec => ({
   preserveConstraints: r.preserve_constraints as string,
   testCriteria: r.test_criteria as string,
   answer: r.answer as string,
+  sizeHint: (r.size_hint as TaskSpec['sizeHint']) ?? null,
   createdAt: r.created_at as string,
 });
 
@@ -601,6 +602,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async linearProbe() {
       const data = await invoke('linear-probe', {});
       return data as unknown as import('./store').LinearProbe;
+    },
+    async draftPlan(taskId) {
+      const data = await invoke('draft-plan', { taskId });
+      return { plan: String(data.plan ?? ''), specRevision: Number(data.specRevision) };
     },
     async draftPrototype(taskId, text) {
       const data = await invoke('draft-prototype', { taskId, text });

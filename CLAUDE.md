@@ -7,7 +7,8 @@
 - **최종 목표(소유자 2026-10-30)**: 사용자가 하는 일은 질문(요청), 승인, 결과 검토·수정 요청뿐이다. 나머지 손작업(복사·붙여넣기·전달 버튼)은 무료·구독 안에서 하나씩 자동으로 바꾼다.
 - AI는 사용자의 행동(접수 확인·승인·수정 요청·버튼)이 있을 때만 쓴다. 같은 일을 두 번 시키지 않는다(같은 이미지·같은 기획서 버전은 다시 보내지 않음).
   접수 확인 → Gemini 기획서 초안 자동, A 승인 → Claude PM 전송 자동, Gemini 초안에 수정 요청 → Gemini 재작성 자동(v0.4.0).
-  PM 계획은 PM 세션이 1회용 제출표로 `submit-plan`에 보내고 앱이 `parsePmPlan` 검증 뒤 저장(v0.4.2, `0020_pm_plan_inbox.sql`). PM이 계획을 멈추고 물으면 업무 카드 PM 칸에서 답하고 같은 버전으로 다시 보낸다(v0.4.93, `0032`).
+  PM 계획은 PM 세션이 1회용 제출표로 `submit-plan`에 보내고 앱이 `parsePmPlan` 검증 뒤 저장(v0.4.2, `0020_pm_plan_inbox.sql`).
+  분배가 안 멈추게(v0.5.20, 소유자 2026-11-03, pixel-office '교체하고 계속'): 작은 일(Gemini 초안 크기 힌트 난이도 1~5·작업 하나·새 디자인 아님 + 규칙 검사 `src/domain/smallTask.ts`, 위험한 말·긴 범위면 PM)은 PM 없이 바로 배정(출처 `rule_small`, 카드에서 'PM에게 나눠 맡기기'), 평소엔 Claude PM, Claude가 휴가·전송 실패·3시간 무응답이면 Gemini 무료가 같은 형식으로 분배(`draft-plan`, 출처 `gemini_fallback`, ai_calls purpose `pm`, 0037), 한도로 멈춘 업무는 다음 날 PM에 한 번 다시 보낸다. 실행 승인(E)은 늘 소유자. PM이 계획을 멈추고 물으면 업무 카드 PM 칸에서 답하고 같은 버전으로 다시 보낸다(v0.4.93, `0032`).
   Claude 보조 개발 결과도 세션이 `submit-result`로 보내고 앱이 결과 패키지로 저장(v0.4.3, `0021_dev_result_inbox.sql`). verify_jwt false는 `submit-plan`·`submit-result`·`submit-review`(제출표로 확인), `linear-webhook`(Linear 서명 `LINEAR_WEBHOOK_SECRET`으로 확인)과 `push`(flush는 입력 없이 DB 알림 줄만 보냄, 나머지 동작은 함수 안에서 소유자 확인)뿐.
 - 싼 길부터: 규칙 → 무료(Gemini, 기획서 초안 포함) → 구독 안 수동 인계(ChatGPT는 어렵거나 중요한 기획만·Codex) → 구독 자동(Claude PM·보조 개발). 유료 API는 쓰지 않는다.
 - 하루 상한과 실제 사용 기록을 화면에 보여 준다. 공급자의 남은 토큰은 알 수 없으므로 횟수로 관리한다.
@@ -106,7 +107,7 @@
 - `src/office` 오피스: `layout.ts`(좌표, 논리 300×224), `scene.ts`(업무 → 위치), `draw.ts`, `sprites.ts`, `assets.ts`
 - `src/assets/office` 배경(`background.webp`)과 캐릭터(`characters/<id>-stand|walk.png`)
 - `src/data` 저장소: localStorage 데모 / Supabase(여러 기기 실시간 반영은 Supabase Realtime, 표 목록은 `0015_realtime.sql`·`0020`과 `supabaseStore.ts`의 `REALTIME_TABLES`가 같아야 함)
-- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release · push · review-result · submit-review · codex-linear · linear-webhook (전체 그림은 `docs/ARCHITECTURE.md`)
+- `supabase/migrations`, `supabase/functions/`: dispatch-claude · submit-plan · dispatch-claude-dev · submit-result · dispatch-claude-pr · draft-spec · draft-prototype · ask-gemini · analyze-image · fetch-link · create-repo · pr-status · deploy-release · push · review-result · submit-review · codex-linear · linear-webhook · draft-plan (전체 그림은 `docs/ARCHITECTURE.md`)
 - `src/domain/myTurn.ts`·`stall.ts`·`src/components/MyTurn.tsx` 내 차례·멈춤 감지, `src/office/speech.ts` 사무실 말풍선
 - `src/domain/devlog.ts`·`src/components/DevlogPanel.tsx` 개발일지(대화 + 업무 기록 → 프로젝트별·날짜별 Markdown)
 

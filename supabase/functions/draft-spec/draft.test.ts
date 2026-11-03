@@ -16,6 +16,15 @@ describe('Gemini 기획서 초안 해석(v0.4.0)', () => {
     expect(parseDraft('그냥 글')).toBeNull();
   });
 
+  it('크기 힌트(v0.5.20): 개발 요청에서 셋 다 맞을 때만 받는다', () => {
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x","difficulty":2,"single_task":true,"needs_design":false}')?.sizeHint).toEqual({ difficulty: 2, single_task: true, needs_design: false });
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x","difficulty":"3","single_task":false,"needs_design":true}')?.sizeHint).toEqual({ difficulty: 3, single_task: false, needs_design: true });
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x","difficulty":11,"single_task":true,"needs_design":false}')?.sizeHint).toBeNull();
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x","difficulty":2,"single_task":"yes","needs_design":false}')?.sizeHint).toBeNull();
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x"}')?.sizeHint).toBeNull();
+    expect(parseDraft('{"intent":"asset_request","final_prompt":"x","difficulty":2,"single_task":true,"needs_design":false}')?.sizeHint).toBeNull();
+  });
+
   it('불분명하면 확인 질문을 answer에', () => {
     expect(parseDraft('{"intent":"ambiguous","answer":"1. 어느 화면인가요?"}')?.answer).toContain('어느 화면');
   });
