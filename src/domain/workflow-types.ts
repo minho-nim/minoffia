@@ -77,6 +77,8 @@ export const DEVELOPMENT_MODE_LABEL: Record<DevelopmentMode, string> = {
 };
 
 export interface PlanBody {
+  /** 서버에서 발급한 Gemini 생성 식별자(캐시 응답 중복 저장 방지) */
+  generation_id?: string;
   /** 없으면 direct(이전 계획 호환) */
   development_mode?: DevelopmentMode;
   /** PM이 방식을 고른 이유 한 줄 */

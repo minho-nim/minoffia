@@ -1,6 +1,6 @@
 // Gemini 대신 분배(v0.5.20, 소유자 2026-11-03): Claude PM이 한도·휴가·실패·무응답이면 Gemini 무료가 작업 분배 계획을 쓴다.
 // 계획 글만 돌려주고 저장은 앱이 parsePmPlan으로 검증한 뒤 한다(출처 gemini_fallback). 실행 승인(E)은 그대로 소유자가 한다.
-// 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만. 글은 저장하지 않고 횟수만 ai_calls(purpose pm).
+// 키는 secrets에만. 계획은 서버 전용 gemini_pm_drafts에 보관하고 사용량은 ai_calls(purpose pm)에 예약한다.
 // 저장소 파일 목록(경로만)은 GITHUB_REPO_TOKEN으로 읽는다(없거나 실패하면 목록 없이).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { cleanPlanJson, codePaths, buildPlanText, PLAN_SYSTEM } from './planPrompt.ts';
@@ -98,64 +98,82 @@ Deno.serve(async (req) => {
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_PM_DAILY_CAP')) || DEFAULT_DAILY_CAP);
-  const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'pm').eq('ok', true).gte('created_at', kstMidnight);
-  if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Gemini 대신 분배 ${cap}회를 모두 썼습니다.` });
-
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (away.has('studioA')) keys[0] = '';
   if (away.has('studioB')) keys[1] = '';
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요.' });
 
-  const { data: qa } = await userClient.from('clarifications').select('question, answer').eq('task_id', task.id).order('created_at');
-  const { data: revision } = await userClient
-    .from('revision_requests')
-    .select('feedback, result_revision')
-    .eq('task_id', task.id)
-    .eq('spec_revision', spec.revision)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  // 인계 요약(v0.5.21): 수정 요청이 가리키는 결과에서 한 일·남은 문제만(diff·로그는 넣지 않음)
-  const { data: prev } = revision
-    ? await userClient.from('result_packages').select('summary, remaining_issues').eq('task_id', task.id).eq('revision', revision.result_revision).maybeSingle()
-    : { data: null };
-  const previous = prev ? [prev.summary && `한 일: ${String(prev.summary).slice(0, 1500)}`, prev.remaining_issues && `남은 문제: ${String(prev.remaining_issues).slice(0, 1500)}`].filter(Boolean).join('\n') : '';
-  const repo = project.repo;
-  const text = buildPlanText({
-    taskId: task.id,
-    repo,
-    projectName: project.name,
-    spec,
-    qa: (qa ?? []) as { question: string; answer: string }[],
-    revisionFeedback: revision?.feedback ?? '',
-    previous,
-    away: { codex: away.has('codex'), claude: away.has('claude'), gemini: away.has('studioA') && away.has('studioB') },
-    geminiDevOk: repo.toLowerCase() !== OFFICE_REPO,
-    rules: await loadRules(userClient, task.project_id),
-    files: await repoFiles(repo),
+  const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
+  const { data: claim, error: claimError } = await admin.rpc('claim_gemini_pm', {
+    p_task: task.id, p_owner: user.id, p_spec: spec.revision, p_cap: cap, p_model: model,
+  });
+  if (claimError) return reply(500, { ok: false, error: `계획 예약 실패: ${claimError.message}` });
+  const reservation = Array.isArray(claim) ? claim[0] : claim;
+  if (reservation?.state === 'cached') return reply(200, { ok: true, plan: reservation.plan_text, specRevision: spec.revision, cached: true });
+  if (reservation?.state === 'busy') return reply(409, { ok: false, error: '다른 기기에서 같은 계획을 작성 중입니다. 잠시 뒤 다시 확인하세요.' });
+  if (reservation?.state !== 'claimed') return reply(reservation?.reason === 'daily_cap' ? 429 : 409, {
+    ok: false, error: reservation?.reason === 'daily_cap' ? `오늘 Gemini 대신 분배 ${cap}회를 모두 썼습니다(실패·작성 중 포함).` : '기획서 또는 승인이 바뀌었습니다. 새로고침 후 다시 시도하세요.',
   });
 
-  const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
-  let last = { status: 0, message: '' };
-  for (const [i, key] of keys.entries()) {
-    if (!key) continue;
-    let r: { status: number; text: string; message: string };
-    try {
-      r = await callGemini(key, model, text);
-    } catch (e) {
-      last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
-      continue;
+  try {
+    const { data: qa } = await userClient.from('clarifications').select('question, answer').eq('task_id', task.id).order('created_at');
+    const { data: revision } = await userClient
+      .from('revision_requests')
+      .select('feedback, result_revision')
+      .eq('task_id', task.id)
+      .eq('spec_revision', spec.revision)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    // 인계 요약(v0.5.21): 수정 요청이 가리키는 결과에서 한 일·남은 문제만(diff·로그는 넣지 않음)
+    const { data: prev } = revision
+      ? await userClient.from('result_packages').select('summary, remaining_issues').eq('task_id', task.id).eq('revision', revision.result_revision).maybeSingle()
+      : { data: null };
+    const previous = prev ? [prev.summary && `한 일: ${String(prev.summary).slice(0, 1500)}`, prev.remaining_issues && `남은 문제: ${String(prev.remaining_issues).slice(0, 1500)}`].filter(Boolean).join('\n') : '';
+    const repo = project.repo;
+    const text = buildPlanText({
+      taskId: task.id,
+      repo,
+      projectName: project.name,
+      spec,
+      qa: (qa ?? []) as { question: string; answer: string }[],
+      revisionFeedback: revision?.feedback ?? '',
+      previous,
+      away: { codex: away.has('codex'), claude: away.has('claude'), gemini: away.has('studioA') && away.has('studioB') },
+      geminiDevOk: repo.toLowerCase() !== OFFICE_REPO,
+      rules: await loadRules(userClient, task.project_id),
+      files: await repoFiles(repo),
+    });
+
+    let last = { status: 0, message: '' };
+    for (const [i, key] of keys.entries()) {
+      if (!key) continue;
+      let r: { status: number; text: string; message: string };
+      try {
+        r = await callGemini(key, model, text);
+      } catch (e) {
+        last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
+        continue;
+      }
+      const cleaned = r.status === 200 ? cleanPlanJson(r.text, task.id, repo) : null;
+      if (cleaned) {
+        const plan = JSON.stringify({ ...JSON.parse(cleaned), generation_id: reservation.draft_id });
+        // 같은 예약의 응답만 저장한다. 만료 뒤 새 작업자가 예약했다면 이전 응답은 버린다.
+        const { data: saved, error: saveError } = await admin.from('gemini_pm_drafts')
+          .update({ state: 'completed', plan_text: plan }).eq('id', reservation.draft_id).eq('call_id', reservation.call_id).eq('state', 'running').select('id').maybeSingle();
+        if (saveError || !saved) return reply(503, { ok: false, error: '계획 보관을 확인하지 못했습니다. 잠시 뒤 다시 확인하세요.' });
+        await admin.from('ai_calls').update({ key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: plan.length }).eq('id', reservation.call_id);
+        return reply(200, { ok: true, plan, specRevision: spec.revision, keySlot: i + 1, model });
+      }
+      last = { status: r.status, message: r.status === 200 ? '계획 형식이 아닙니다.' : r.message };
+      if (r.status === 400 || r.status === 404) break;
     }
-    const plan = r.status === 200 ? cleanPlanJson(r.text, task.id, repo) : null;
-    if (plan) {
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'pm', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: plan.length });
-      return reply(200, { ok: true, plan, specRevision: spec.revision, keySlot: i + 1, model });
-    }
-    last = { status: r.status, message: r.status === 200 ? '계획 형식이 아닙니다.' : r.message };
-    if (r.status === 400 || r.status === 404) break;
+    await admin.from('ai_calls').update({ key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: text.length, error: last.message.slice(0, 300) }).eq('id', reservation.call_id);
+    await admin.from('gemini_pm_drafts').update({ state: 'failed' }).eq('id', reservation.draft_id).eq('call_id', reservation.call_id).eq('state', 'running');
+    return reply(502, { ok: false, error: last.status === 429 ? 'Gemini 무료 한도에 걸렸습니다.' : `Gemini가 계획을 쓰지 못했습니다(${last.message || last.status}).` });
+  } catch (e) {
+    await admin.from('gemini_pm_drafts').update({ state: 'failed' }).eq('id', reservation.draft_id).eq('call_id', reservation.call_id).eq('state', 'running');
+    return reply(502, { ok: false, error: `계획 작성 중 오류: ${(e as Error).message}` });
   }
-  await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'pm', key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: text.length, error: last.message.slice(0, 300) });
-  return reply(502, { ok: false, error: last.status === 429 ? 'Gemini 무료 한도에 걸렸습니다.' : `Gemini가 계획을 쓰지 못했습니다(${last.message || last.status}).` });
 });

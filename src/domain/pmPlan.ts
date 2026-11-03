@@ -92,6 +92,7 @@ export function parsePmPlan(text: string, expectedTaskId: string): ParseResult {
   return {
     ok: true,
     plan: {
+      ...(typeof o.generation_id === 'string' && /^[0-9a-f-]{36}$/i.test(o.generation_id) ? { generation_id: o.generation_id } : {}),
       development_mode: mode as DevelopmentMode,
       mode_reason: typeof o.mode_reason === 'string' ? o.mode_reason.slice(0, 300) : '',
       task_id: String(o.task_id),
