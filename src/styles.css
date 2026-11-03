@@ -3991,7 +3991,9 @@ a {
 /* 입력창 뒤: 대화가 입력창 윗선에서부터 뒤로 들어가며 흐려진다(v0.5.14 소유자 "가려지는 뒤쪽이 약간 흐려지면서",
    "입력창이 시작되는 데부터"). 입력창 폭이 아니라 상자 안쪽 폭 전체를 덮어 입력창 모서리 옆으로 글이 삐져나오지 않는다. */
 .inbox > .inbox-form {
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  /* 입력창 밑 그림자가 흐린 바탕 위에서 모서리 밑 곡선처럼 보여 뺀다(v0.5.16) */
+  box-shadow: none;
 }
 .inbox-fade {
   position: sticky;
@@ -4001,9 +4003,10 @@ a {
   height: calc(var(--inbox-form-h, 110px) + var(--inbox-low));
   margin: 0 calc(-1 * var(--inbox-pad)) calc(-1 * (var(--inbox-form-h, 110px) + var(--inbox-low)) - var(--inbox-gap));
   pointer-events: none;
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
-  -webkit-backdrop-filter: blur(5px);
-  backdrop-filter: blur(5px);
+  /* 뒤 글·말풍선 테두리가 또렷하게 비치지 않을 만큼 흐리게(v0.5.16 소유자 "좌측 하단 이상") */
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 .inbox > .inbox-form::before,
 .inbox > .inbox-form::after,
