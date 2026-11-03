@@ -603,6 +603,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('linear-probe', {});
       return data as unknown as import('./store').LinearProbe;
     },
+    async repoTree(projectId) {
+      const data = await invoke('repo-tree', { projectId });
+      return Array.isArray(data.paths) ? (data.paths as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+    },
     async draftPlan(taskId) {
       const data = await invoke('draft-plan', { taskId });
       return { plan: String(data.plan ?? ''), specRevision: Number(data.specRevision) };

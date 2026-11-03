@@ -4124,3 +4124,131 @@ a {
 .wf-fold-done.wf-fold-now {
   color: var(--accent);
 }
+
+/* 누가 누구를 기다리나 그림(v0.5.24, 업무 카드에만) */
+.wait-map {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.wait-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.wait-who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 42%;
+}
+.wait-who img {
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+.wait-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.wait-bubble {
+  padding: 1px 7px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.wait-bubble.is-wait {
+  border-color: var(--accent);
+}
+.wait-name {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.wait-line {
+  flex: 1;
+  min-width: 16px;
+  margin-bottom: 30px;
+  border-top: 2px dashed var(--line);
+}
+
+/* 업무 탭 칩 줄 아래로 지나가는 카드가 뚝 잘려 보이지 않게, 칩 줄이 붙어 있을 때만 그 밑에 짧은 흐려짐(v0.5.24 소유자 "자연스럽게") */
+@media (min-width: 1040px) {
+  .project-chips:not(.chat-chips)::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 12px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, var(--surface), color-mix(in srgb, var(--surface) 0%, transparent));
+  }
+}
+@media (max-width: 1039px) and (min-height: 620px) {
+  .layout.is-mini .project-chips:not(.chat-chips)::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 12px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, var(--surface), color-mix(in srgb, var(--surface) 0%, transparent));
+  }
+}
+
+/* 구조도(v0.5.24) */
+.file-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 14px;
+}
+.file-tree > ul {
+  padding-left: 0;
+}
+.file-tree li {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.file-tree summary {
+  cursor: pointer;
+}
+.file-tree .ft-file {
+  display: flex;
+  gap: 6px;
+  color: var(--muted);
+}
+.file-tree .ft-file.is-changed {
+  color: var(--ink);
+  font-weight: 700;
+}
+.ft-diff {
+  margin-left: auto;
+  white-space: nowrap;
+  font-weight: 400;
+}
+.ft-add {
+  color: var(--ok);
+}
+.ft-del {
+  color: #c0503a;
+}

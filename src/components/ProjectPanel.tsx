@@ -28,6 +28,8 @@ interface Props {
   onRemoveRule?: (rule: ProjectRule) => void;
   /** 프로젝트 '한 일 기록'(v0.4.74): 펼쳤을 때만 그린다 */
   renderHistory?: (project: Project) => ReactNode;
+  /** 구조도(v0.5.24): 펼쳤을 때만 그린다 */
+  renderStructure?: (project: Project) => ReactNode;
   /** 미뤄 둔 일(개발 AI가 남긴 shortcut 주석, v0.4.97) */
   shortcutsOf?: (projectId: string) => Shortcut[];
   onOpenTask?: (taskId: string) => void;
@@ -37,8 +39,9 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], onAddRule, onRemoveRule, renderHistory, shortcutsOf, onOpenTask }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], onAddRule, onRemoveRule, renderHistory, renderStructure, shortcutsOf, onOpenTask }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
+  const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
@@ -231,6 +234,12 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 <details className="project-rules project-history-box" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHistoryOpen((o) => ({ ...o, [p.id]: open })); }}>
                   <summary>한 일 기록</summary>
                   {historyOpen[p.id] && renderHistory(p)}
+                </details>
+              )}
+              {renderStructure && (
+                <details className="project-rules project-structure" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setStructureOpen((o) => ({ ...o, [p.id]: open })); }}>
+                  <summary>구조도</summary>
+                  {structureOpen[p.id] && renderStructure(p)}
                 </details>
               )}
               {(() => {

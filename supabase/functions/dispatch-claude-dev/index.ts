@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   const project = task?.projects as unknown as { name: string; repo: string | null; preview_host: string | null } | null;
   const { data: spec } = await userClient
     .from('task_specs')
-    .select('revision, final_prompt, change_scope, preserve_constraints, test_criteria')
+    .select('revision, final_prompt, change_scope, preserve_constraints, test_criteria, size_hint')
     .eq('task_id', a.task_id)
     .order('revision', { ascending: false })
     .limit(1)
@@ -137,6 +137,7 @@ Deno.serve(async (req) => {
   });
 
   const text = buildDevPayload({
+    bug: (spec.size_hint as { bug?: boolean } | null)?.bug,
     taskId: a.task_id,
     repo: project.repo,
     projectName: project.name,

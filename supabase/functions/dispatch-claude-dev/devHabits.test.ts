@@ -28,6 +28,12 @@ describe('버그 진단 순서(v0.5.22, mattpocock diagnosing-bugs)', () => {
     for (const t of ['다크 모드 추가', 'README에 설치 방법']) expect(isBugWork(t)).toBe(false);
     expect(bugSteps('다크 모드 추가')).toEqual([]);
     expect(bugSteps('저장이 안 됨').join('\n')).toContain('빨갛게 실패하는 확인 명령');
+    // v0.5.24: 버그가 아닌 표현은 빼고, 기획서 초안의 판단이 있으면 그것을 따른다
+    expect(isBugWork('오류 메시지 문구를 바꿔줘')).toBe(false);
+    expect(isBugWork('에러 화면 디자인 다듬기')).toBe(false);
+    expect(isBugWork('저장하면 오류가 나요')).toBe(true);
+    expect(isBugWork('저장하면 오류가 나요', false)).toBe(false);
+    expect(isBugWork('색 바꾸기', true)).toBe(true);
   });
   it('Gemini 개발 지시서에도 버그일 때만', () => {
     const base = { title: '저장 버튼', goal: '', finalPrompt: '', changeScope: '', preserve: [], acceptance: [], projectRules: [] };

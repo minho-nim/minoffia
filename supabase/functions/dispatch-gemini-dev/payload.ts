@@ -18,6 +18,8 @@ export interface GeminiTaskInput {
   preserve: string[];
   acceptance: string[];
   projectRules: string[];
+  /** 기획서 초안의 버그 판단(v0.5.24, 없으면 말로) */
+  bug?: boolean;
 }
 
 /** ai/gemini/<업무 앞 8자>-<작업> (앱 codexBranch(task, item, 'gemini')·pr-status와 같은 규칙) */
@@ -48,7 +50,7 @@ export function buildGeminiTask(p: GeminiTaskInput): string {
     // 저장소 지도는 워크플로가 만들어 앞에 붙인다(v0.4.96)
     '### 개발 습관(토큰·범위 아끼기)',
     ...DEV_HABITS.map((x) => `- ${x}`),
-    ...bugSteps([p.title, p.goal, p.finalPrompt].join('\n')).map((l) => l.replace(/^## /, '### ')),
+    ...bugSteps([p.title, p.goal, p.finalPrompt].join('\n'), p.bug).map((l) => l.replace(/^## /, '### ')),
   ];
   const text = lines.filter((l, i, all) => !(l === '' && (i === 0 || all[i - 1] === ''))).join('\n').trim();
   return text.length > MAX_INSTRUCTIONS ? `${text.slice(0, MAX_INSTRUCTIONS - 20)}\n…(길어서 잘림)` : text;

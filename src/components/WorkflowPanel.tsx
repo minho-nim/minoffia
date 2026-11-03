@@ -11,6 +11,9 @@ import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '.
 import type { Project, Task } from '../domain/types';
 import { startBlocker, waitingOn } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
+import { WaitMap } from './WaitMap';
+import { FileTreeView } from './FileTreeView';
+import { diffStats } from '../domain/fileTree';
 import { mergeDanger } from '../domain/mergeDanger';
 import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
 import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
@@ -657,6 +660,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
       {view.planCurrent && view.assignments.length > 0 && (
         <section className={fold.cls('E', 3)} id={`wf-${task.id}-E`}>
           {fold.head('E', 3, <>4. 배정된 작업 — {GATE_LABEL.E}</>)}
+          <WaitMap assignments={view.assignments} all={allAssignments} plan={view.plan} />
           <ul className="wf-items">
             {view.assignments.map((a) => {
               const item = view.plan!.plan.work_items.find((w) => w.id === a.workItemId);
@@ -936,6 +940,17 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                   </p>
                 );
               })()}
+              {view.result.diff && (
+                // 바뀐 곳 구조도(v0.5.24): Codex·Claude·Gemini 결과 모두 diff로 그린다(토큰 0)
+                <details className="wf-change-tree">
+                  <summary className="small">바뀐 곳 구조도</summary>
+                  <FileTreeView
+                    paths={[]}
+                    changes={new Map(diffStats(view.result.diff).map((f) => [f.path, { add: f.add, del: f.del, tasks: [task.title] }]))}
+                    emptyText="diff에서 바뀐 파일을 찾지 못했어요."
+                  />
+                </details>
+              )}
               {(() => {
                 // 이 결과를 낸 실행(계획 버전 + 작업)을 함께 보여 준다. 실행 기록 없이 등록된 결과는 그렇다고 알린다.
                 const r = view.result!;

@@ -19,6 +19,8 @@ export interface DevPayloadInput {
   preserveConstraints: string;
   testCriteria: string;
   item: { id: string; title: string; goal: string; acceptance_tests: string[]; preserve_constraints: string[] };
+  /** 기획서 초안의 버그 판단(v0.5.24, 없으면 말로) */
+  bug?: boolean;
   /** 요청 자료(이름·역할·설명만) */
   attachments: string[];
   /** 승인된 견본(P) 목록 */
@@ -75,7 +77,7 @@ export function buildDevPayload(p: DevPayloadInput): string {
     '',
     '## 개발 습관(토큰·범위 아끼기)',
     ...DEV_HABITS.map((x) => `- ${x}`),
-    ...bugSteps([p.item.title, p.item.goal, p.finalPrompt].join('\n')),
+    ...bugSteps([p.item.title, p.item.goal, p.finalPrompt].join('\n'), p.bug),
     '',
     '## 규칙',
     '- 최신 main에서 위 작업 브랜치를 만들어 그 안에서만 작업한다. 지시 범위 밖 파일은 바꾸지 않는다.',

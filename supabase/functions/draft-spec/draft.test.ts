@@ -22,6 +22,7 @@ describe('Gemini 기획서 초안 해석(v0.4.0)', () => {
     expect(parseDraft('{"intent":"change_request","final_prompt":"x","difficulty":11,"single_task":true,"needs_design":false}')?.sizeHint).toBeNull();
     expect(parseDraft('{"intent":"change_request","final_prompt":"x","difficulty":2,"single_task":"yes","needs_design":false}')?.sizeHint).toBeNull();
     expect(parseDraft('{"intent":"change_request","final_prompt":"x"}')?.sizeHint).toBeNull();
+    expect(parseDraft('{"intent":"change_request","final_prompt":"x","difficulty":4,"single_task":true,"needs_design":false,"bug":true}')?.sizeHint).toEqual({ difficulty: 4, single_task: true, needs_design: false, bug: true });
     expect(parseDraft('{"intent":"asset_request","final_prompt":"x","difficulty":2,"single_task":true,"needs_design":false}')?.sizeHint).toBeNull();
   });
 
