@@ -1054,14 +1054,12 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       {/* 스크롤 중에도 상자 위 모서리가 칩 줄 바로 아래에 보이게(v0.5.9, 그림만) */}
       <div className="inbox-cap" aria-hidden="true" />
       {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
-      {shown.length === 0 && (
+      {/* 인사말은 기본 대화창에만. 프로젝트 대화창은 빈 채로 둔다(v0.5.10 소유자) */}
+      {shown.length === 0 && !currentProject && (
         <div className="inbox-empty">
-          {/* 프로젝트 대화창은 그 프로젝트 인사말(v0.5.9 소유자 "프로젝트별로") */}
-          <p className="inbox-hello">{currentProject ? `${currentProject.name}, 무엇을 도와드릴까요?` : '무엇을 도와드릴까요?'}</p>
+          <p className="inbox-hello">무엇을 도와드릴까요?</p>
           <p className="muted small inbox-note">
-            {currentProject
-              ? `이 창에서 한 질문은 ${currentProject.name} 기준으로 답하고, 요청은 ${currentProject.name} 업무로 접수 카드를 만듭니다.`
-              : '예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.'}
+            예: "MuscleMap에 다크 모드 추가해줘", "Claude 오늘 몇 번 남았어?", "useEffect가 뭐야?" — 업무로 만들기 전에 프로젝트를 꼭 확인합니다.
           </p>
         </div>
       )}
