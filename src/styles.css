@@ -4380,3 +4380,10 @@ a {
     flex-basis: 100%;
   }
 }
+
+/* 머리가 스크롤과 같이 움직여 보이지 않게(v0.5.32 소유자): 얇은 머리는 미끄러져 내려오지 않고 그 자리에 바로 나타난다 */
+@media (max-width: 1039px) {
+  .topbar-mini {
+    transition: none;
+  }
+}
