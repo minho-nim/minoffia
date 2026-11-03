@@ -72,5 +72,6 @@ runm supabase/migrations/0027_preview_and_project_rules.sql
 runm supabase/migrations/0028_research_ai_calls.sql
 runm supabase/migrations/0029_pg_net_extensions_schema.sql
 runm supabase/migrations/0030_result_reviews.sql
+runm supabase/migrations/0037_pm_fallback_small.sql
 runm supabase/tests/21_migration_check.sql
 echo "DB 테스트 통과"

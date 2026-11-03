@@ -41,6 +41,8 @@ export interface WorkflowActions {
   makePrototype: (task: Task) => Promise<boolean>;
   decide: (task: Task, gate: Gate, revision: number, decision: 'approved' | 'rejected', workItemId?: string, scope?: Record<string, unknown>) => Promise<boolean>;
   dispatchPm: (task: Task, acknowledgeRetry: boolean) => Promise<void>;
+  /** 작은 일로 바로 배정한 것을 PM에게 다시 나눠 맡기기(v0.5.20). Claude가 안 되면 Gemini가 대신 */
+  replanByPm?: (task: Task) => Promise<void>;
   /** Claude 보조 개발: 실행 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
   startClaudeDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** Gemini 개발: 실행 승인한 Gemini 개발 작업을 서버가 GitHub Actions 워크플로로 시작(Supabase 모드만, v0.4.82) */
@@ -586,6 +588,18 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 <span className={`pill ${view.prototypeFirst ? 'pill-mode-proto' : ''}`}>개발 방식: {DEVELOPMENT_MODE_LABEL[view.plan.plan.development_mode ?? 'direct']}</span>{' '}
                 {view.plan.plan.mode_reason && <span className="muted">{view.plan.plan.mode_reason}</span>}
               </p>
+              {/* 누가 나눴는지(v0.5.20): 작은 일 규칙·Gemini 대신. 작은 일은 실행 승인 전이면 PM에게 다시 맡길 수 있다 */}
+              {view.plan.source === 'gemini_fallback' && <p className="small muted">Claude PM 대신 Gemini가 나눴어요(무료). 확인하고 실행 승인하세요.</p>}
+              {view.plan.source === 'rule_small' && (
+                <p className="small muted">
+                  작은 일이라 PM 없이 규칙이 바로 배정했어요.{' '}
+                  {actions.replanByPm && !view.assignments.some((a) => a.dispatchStatus !== 'awaiting_user_execution_approval') && (
+                    <button type="button" className="link-btn" disabled={busy} onClick={() => void run(() => actions.replanByPm!(task))}>
+                      PM에게 나눠 맡기기
+                    </button>
+                  )}
+                </p>
+              )}
             </>
           )}
           {view.plan?.plan.status === 'needs_clarification' && view.planCurrent && (

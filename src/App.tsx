@@ -30,6 +30,7 @@ import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/type
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
 import { PREF_AGENT, parsePmPlan } from './domain/pmPlan';
+import { checkSmallTask, smallPlanText } from './domain/smallTask';
 import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
 import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
@@ -295,8 +296,12 @@ export function App() {
   const inboxReported = useRef(new Set<string>());
   /** 이 기기에서 Gemini 견본을 이미 시도한 계획(업무:계획 버전) */
   const prototypeTried = useRef(new Set<string>());
+  /** 분배를 이미 다시 시도한 업무:기획서 버전(Gemini 대신·다음 날 재시도, v0.5.20). 한 번만 */
+  const planRetried = useRef(new Set<string>());
+  const planWatchRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     planInboxRef.current?.();
+    planWatchRef.current?.();
   }, [snap]);
   // 기록이 바뀌지 않아도 PR·CI 진행은 1분마다 다시 본다(화면이 보일 때만).
   // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
@@ -351,6 +356,7 @@ export function App() {
       if (document.visibilityState !== 'visible') return;
       setMinuteTick((n) => n + 1);
       planInboxRef.current?.();
+      planWatchRef.current?.();
     }, 60_000);
     return () => window.clearInterval(id);
   }, []);
@@ -664,6 +670,29 @@ export function App() {
     }));
     const saved = await step(task.id, () => store.addPlan(plan, assignments), `PM 계획 v${planRevision}을 저장했습니다.`);
     return saved ? null : ['저장하지 못했습니다. 위쪽 알림의 이유를 확인하세요.'];
+  };
+
+  // 분배가 멈춘 업무 살리기(v0.5.20): Claude PM에 보냈는데 3시간 넘게 계획이 없으면 Gemini가 대신 나누고,
+  // 하루 한도로 못 보낸 업무는 다음 날(한국 시간) PM에 한 번 다시 보낸다. 업무·기획서 버전마다 한 번만.
+  planWatchRef.current = () => {
+    if (store.mode !== 'supabase') return;
+    const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+    const today = kstDay(new Date().toISOString());
+    for (const task of snap.tasks) {
+      if (task.status === 'done' || !task.dispatch.at) continue;
+      const view = deriveWorkflow(task, snap.workflow);
+      if (!view.spec || !view.aApproved || snap.workflow.plans.some((p) => p.taskId === task.id && p.approvedSpecRevision === view.spec!.revision)) continue;
+      const key = `${task.id}:${view.spec.revision}`;
+      if (planRetried.current.has(key)) continue;
+      const age = Date.now() - new Date(task.dispatch.at).getTime();
+      if (task.dispatch.state === 'dispatched' && age > 3 * 3600_000) {
+        planRetried.current.add(key);
+        void geminiPlan(task, 'Claude PM이 3시간 넘게 계획을 안 보내서');
+      } else if (task.dispatch.state === 'failed' && /모두 썼습니다|HTTP 429|한도/.test(task.dispatch.error ?? '') && kstDay(task.dispatch.at) < today) {
+        planRetried.current.add(key);
+        void planTask(task, true, { skipSmall: true });
+      }
+    }
   };
 
   // PM 세션이 보낸 계획(pm_plan_inbox)을 자동으로 옮긴다(v0.4.2). 먼저 처리함으로 표시한 기기만 저장한다(중복 방지).
@@ -989,7 +1018,7 @@ export function App() {
       // 소유자 결정(2026-10-30): 기획 승인 한 번이면 PM 전송까지, Gemini 초안에 수정 요청하면 Gemini가 다시 쓴다.
       if (ok && gate === 'A' && store.mode === 'supabase') {
         const spec = snap.workflow.specs.find((x) => x.taskId === task.id && x.revision === revision);
-        if (decision === 'approved' && projectById.get(task.projectId)?.repo) await dispatch(task, false);
+        if (decision === 'approved' && projectById.get(task.projectId)?.repo) await planTask(task, false);
         if (decision === 'rejected' && spec?.planner === 'gemini_draft') await draftSpec(task.id);
       }
       return ok;
@@ -1022,7 +1051,10 @@ export function App() {
         },
         '견본 승인을 기록했습니다. 이제 Codex 작업을 실행 승인하세요. Codex 지시서에 승인된 견본이 들어갑니다.',
       ),
-    dispatchPm: (task, ack) => dispatch(task, ack),
+    dispatchPm: async (task, ack) => {
+      await dispatch(task, ack);
+    },
+    replanByPm: (task) => planTask(task, false, { skipSmall: true }),
     importPlan: (task, text) => importPlanText(task, text, task.dispatch.sessionUrl ? 'routine_session_manual_import' : 'manual', snap),
     recordStart: (a, url) =>
       step(
@@ -1304,7 +1336,7 @@ export function App() {
         '수정 요청을 기록했습니다. Claude PM에 다시 보내 새 계획을 받아요.',
       ).then(async (ok) => {
         // v0.4.20: 결과 수정 요청 → PM 재계획을 자동으로(최종 목표: 사용자는 수정 요청만)
-        if (ok && store.mode === 'supabase' && projectById.get(task.projectId)?.repo) await dispatch(task, false);
+        if (ok && store.mode === 'supabase' && projectById.get(task.projectId)?.repo) await planTask(task, false, { skipSmall: true });
         return ok;
       }),
   };
@@ -1353,12 +1385,53 @@ export function App() {
     }
   };
 
-  const dispatch = async (task: Task, ack: boolean) => {
-    if (!client) return;
+  const dispatch = async (task: Task, ack: boolean): Promise<boolean> => {
+    if (!client) return false;
     const res = await dispatchClaude(client, task.id, ack);
     await reload();
     if (res.ok) say('ok', 'Claude Cloud 세션을 시작했습니다. 세션 링크에서 진행 상황을 확인하세요.');
     else say('error', `실행하지 못했습니다: ${res.error ?? '알 수 없는 오류'}`);
+    return res.ok;
+  };
+
+  /** Gemini가 대신 분배(v0.5.20): 계획 글을 받아 같은 검증(parsePmPlan)으로 저장한다 */
+  const geminiPlan = async (task: Task, why: string) => {
+    try {
+      const r = await store.draftPlan(task.id);
+      const fresh = await store.load();
+      const failed = await importPlanText(task, r.plan, 'gemini_fallback', fresh);
+      if (failed) return say('error', `Gemini가 쓴 계획을 쓰지 못했어요(${task.title}): ${failed.join(' / ')}`);
+      const cur = fresh.tasks.find((t) => t.id === task.id);
+      if (cur?.status === 'blocked') await store.saveTask({ ...cur, status: 'in_progress' });
+      setSnap(await store.load());
+      say('ok', `${why}라 Gemini가 대신 작업을 나눴어요(${task.title}). 확인하고 실행 승인하세요.`);
+    } catch (e) {
+      say('error', `Gemini도 계획을 쓰지 못했어요(${task.title}): ${(e as Error).message} Claude 한도가 풀리면 다시 보내요.`);
+    }
+  };
+
+  /**
+   * 분배(v0.5.20, 소유자 "Claude 한도가 차도 업무가 안 멈추게"): 작은 일 → 규칙이 바로 배정(토큰 0),
+   * 평소 → Claude PM, Claude가 휴가거나 보내지 못하면 → Gemini 무료가 대신. 실행 승인(E)은 늘 소유자.
+   */
+  const planTask = async (task: Task, ack: boolean, opts: { skipSmall?: boolean } = {}) => {
+    const data = await store.load();
+    const view = deriveWorkflow(task, data.workflow);
+    const repo = projectById.get(task.projectId)?.repo ?? null;
+    const away = new Set(data.leave ?? []);
+    const firstPlan = view.spec && !data.workflow.plans.some((p) => p.taskId === task.id && p.approvedSpecRevision === view.spec!.revision);
+    if (!opts.skipSmall && view.spec && firstPlan && repo) {
+      const check = checkSmallTask(view.spec, repo, { codex: away.has('codex'), gemini: away.has('studioA') && away.has('studioB') });
+      if (check.ok) {
+        const failed = await importPlanText(task, smallPlanText(task.id, repo, view.spec, check), 'rule_small', data);
+        if (!failed) {
+          say('ok', `작은 일이라 PM 없이 ${check.preference === 'gemini_dev' ? 'Gemini 개발' : 'Codex'}에 바로 배정했어요(${task.title}). 실행 승인하면 시작해요.`);
+          return;
+        }
+      }
+    }
+    if (!away.has('claude') && (await dispatch(task, ack))) return;
+    await geminiPlan(task, away.has('claude') ? 'Claude가 휴가' : 'Claude PM에 보내지 못해서');
   };
 
   const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string; previewHost?: string | null }): Promise<Project | null> => {

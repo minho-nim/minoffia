@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
         preserve_constraints: draft.preserveConstraints,
         test_criteria: draft.testCriteria,
         answer: draft.answer,
+        size_hint: draft.sizeHint,
       });
       if (error) return reply(409, { ok: false, error: `초안을 저장하지 못했습니다: ${error.message}` });
       if (draft.intent === 'change_request' || draft.intent === 'asset_request') await saveRules(admin, user.id, task.id, 'spec', draft.projectRules);

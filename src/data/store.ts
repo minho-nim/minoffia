@@ -113,6 +113,8 @@ export interface OfficeStore {
   linearProbe(): Promise<LinearProbe>;
   /** Gemini 무료가 견본 지시서로 HTML 견본 한 장을 만든다(서버, 저장은 앱이 견본으로 올림, v0.4.7) */
   /** v0.4.94: 근무 중인 Studio A·B가 하나씩(최대 두 장) */
+  /** Claude PM 대신 Gemini가 쓴 분배 계획 글(v0.5.20). 저장은 앱이 검증한 뒤 */
+  draftPlan(taskId: string): Promise<{ plan: string; specRevision: number }>;
   draftPrototype(taskId: string, text: string): Promise<{ drafts: { slot: 'A' | 'B'; html: string }[]; planRevision: number }>;
   /** Gemini 무료가 기획 요청 문서로 기획서 초안을 써서 새 버전으로 저장한다(서버). */
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;

@@ -29,6 +29,8 @@ export interface TaskSpec {
   testCriteria: string;
   /** 단순 질문일 때 GPT 답변 */
   answer: string;
+  /** Gemini 초안이 매긴 크기(v0.5.20, 작은 일 바로 배정에 씀). 없으면 PM이 나눈다 */
+  sizeHint?: { difficulty: number; single_task: boolean; needs_design: boolean } | null;
   createdAt: string;
 }
 
@@ -94,8 +96,9 @@ export interface PmPlan {
   planRevision: number;
   approvedSpecRevision: number;
   targetBaseRevision: string;
-  /** routine_session_auto = PM 세션이 submit-plan으로 보낸 계획(v0.4.2) */
-  source: 'routine_session_manual_import' | 'routine_session_auto' | 'manual';
+  /** routine_session_auto = PM 세션이 submit-plan으로 보낸 계획(v0.4.2).
+   *  rule_small = 작은 일이라 규칙이 바로 배정, gemini_fallback = Claude PM이 안 돼 Gemini가 대신 나눔(v0.5.20) */
+  source: 'routine_session_manual_import' | 'routine_session_auto' | 'manual' | 'rule_small' | 'gemini_fallback';
   plan: PlanBody;
   createdAt: string;
 }
