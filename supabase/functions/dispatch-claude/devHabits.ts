@@ -45,14 +45,19 @@ export const BUG_DIAGNOSIS: readonly string[] = [
   '확인 명령을 끝내 못 만들면 멈추고 무엇을 해 봤는지와 필요한 것(재현 환경·로그)을 보고한다.',
 ];
 
-/** 버그 업무인지(요청·기획서·작업 글에 버그를 뜻하는 말이 있으면). 규칙만 */
-export function isBugWork(text: string): boolean {
-  return /버그|오류|에러|안 ?됨|안 ?돼|안 ?되|깨짐|깨져|고장|실패|튕김|멈춤|느림|느려|crash|error|bug|exception|broken/i.test(text);
+/**
+ * 버그 업무인지. 기획서 초안의 판단(hint, v0.5.24 Gemini가 같은 호출로)이 있으면 그것을 따르고,
+ * 없으면 말로 판단한다. "오류 메시지 문구·에러 화면 디자인"처럼 버그가 아닌 표현은 빼고 본다. 규칙만(토큰 0).
+ */
+export function isBugWork(text: string, hint?: boolean): boolean {
+  if (typeof hint === 'boolean') return hint;
+  const t = text.replace(/(오류|에러|error)\s*(메시지|문구|안내|화면|페이지|표시|디자인|코드|message|page)/gi, '');
+  return /버그|오류|에러|안 ?됨|안 ?돼|안 ?되|깨짐|깨져|고장|실패|튕김|멈춤|느림|느려|crash|error|bug|exception|broken/i.test(t);
 }
 
 /** 버그 업무일 때만 넣을 절(아니면 빈 목록) */
-export function bugSteps(text: string): string[] {
-  return isBugWork(text) ? ['', '## 버그 진단 순서(이 일은 버그라서 넣음)', ...BUG_DIAGNOSIS.map((x) => `- ${x}`)] : [];
+export function bugSteps(text: string, hint?: boolean): string[] {
+  return isBugWork(text, hint) ? ['', '## 버그 진단 순서(이 일은 버그라서 넣음)', ...BUG_DIAGNOSIS.map((x) => `- ${x}`)] : [];
 }
 
 /** 작업 전에 돌리는 저장소 지도 만들기(이미 있는 함수·컴포넌트 목록, 모델 호출 없음). scripts/repo-map.mjs와 같다. */

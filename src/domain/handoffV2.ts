@@ -116,7 +116,7 @@ export function buildCodexHandoff(
     '',
     '## 개발 습관(토큰·범위 아끼기)',
     ...DEV_HABITS.map((x) => `- ${x}`),
-    ...bugSteps([spec.userOriginalText, spec.finalPrompt, item.title, item.goal].join('\n')),
+    ...bugSteps([spec.userOriginalText, spec.finalPrompt, item.title, item.goal].join('\n'), spec.sizeHint?.bug),
     '',
     '## 규칙',
     '- 작업 전에 최신 기본 브랜치(main)를 받아 그 위에서 작업한다. 계획 당시 기준 커밋 이후 이 작업이 고칠 파일이 바뀌어 지시와 맞지 않으면 고치지 말고 멈춰서 보고한다.',
