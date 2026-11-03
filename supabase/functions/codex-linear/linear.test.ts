@@ -6,10 +6,16 @@ describe('Codex Linear(v0.5.2)', () => {
     teams: { nodes: [{ id: 't1', key: 'MIN', name: 'MinLab' }, { id: 't2', key: 'X', name: 'X' }] },
     users: { nodes: [{ id: 'u1', name: 'minonim', displayName: 'minonim' }, { id: 'u2', name: 'Codex', displayName: 'codex' }] },
     issueInput: { inputFields: [{ name: 'teamId' }, { name: 'delegateId' }] },
+    issueLabels: { nodes: [{ id: 'l0', name: 'ai office', team: { id: 't2' } }, { id: 'l1', name: 'AI  Office', team: { id: 't1' } }] },
   };
-  it('팀·Codex·위임 칸을 찾는다', () => {
-    expect(readLookup(lookup)).toEqual({ teamId: 't1', codexId: 'u2', canDelegate: true });
+  it('팀·Codex·위임 칸·라벨을 찾는다', () => {
+    expect(readLookup(lookup)).toEqual({ teamId: 't1', codexId: 'u2', canDelegate: true, labelId: 'l1' });
     expect(readLookup(lookup, 'x').teamId).toBe('t2');
+    expect(readLookup({ ...lookup, teams: { nodes: [{ id: 't1', key: 'MIN', name: 'Mino' }] } }, 'mino').teamId).toBe('t1');
+    expect(readLookup(lookup, '', '없는 라벨').labelId).toBeNull();
+  });
+  it('라벨이 있으면 붙인다', () => {
+    expect(issueInput({ teamId: 't1', codexId: null, canDelegate: true, title: 'a', description: 'b', labelId: 'l1' })).toMatchObject({ labelIds: ['l1'] });
   });
   it('위임 칸이 있으면 위임, 없으면 담당자', () => {
     expect(issueInput({ teamId: 't1', codexId: 'u2', canDelegate: true, title: 'a', description: 'b' })).toMatchObject({ delegateId: 'u2' });

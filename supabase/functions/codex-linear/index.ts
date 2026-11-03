@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
 
   let look: ReturnType<typeof readLookup>;
   try {
-    look = readLookup((await linear(key, LOOKUP_QUERY)) as Parameters<typeof readLookup>[0], env('LINEAR_TEAM_KEY'));
+    look = readLookup((await linear(key, LOOKUP_QUERY)) as Parameters<typeof readLookup>[0], env('LINEAR_TEAM_KEY'), env('LINEAR_LABEL') || 'ai office');
   } catch (e) {
     return reply(502, { ok: false, error: (e as Error).message });
   }
@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
   let issue: { id: string; identifier: string; url: string };
   try {
     const created = (await linear(key, CREATE_ISSUE, {
-      input: issueInput({ teamId: look.teamId, codexId: mention ? null : look.codexId, canDelegate: look.canDelegate, title: `[AI Office] ${task.title} · ${a.work_item_id}`, description }),
+      input: issueInput({ teamId: look.teamId, labelId: look.labelId, codexId: mention ? null : look.codexId, canDelegate: look.canDelegate, title: `[AI Office] ${task.title} · ${a.work_item_id}`, description }),
     })) as { issueCreate?: { success?: boolean; issue?: { id: string; identifier: string; url: string } } };
     if (!created.issueCreate?.success || !created.issueCreate.issue) throw new Error('Linear 이슈를 만들지 못했습니다.');
     issue = created.issueCreate.issue;

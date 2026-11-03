@@ -4,6 +4,7 @@ export const LOOKUP_QUERY = `query MinLabCodexLookup {
   teams(first: 20) { nodes { id key name } }
   users(first: 250, includeDisabled: false) { nodes { id name displayName } }
   issueInput: __type(name: "IssueCreateInput") { inputFields { name } }
+  issueLabels(first: 250) { nodes { id name team { id } } }
 }`;
 
 export const CREATE_ISSUE = `mutation MinLabCodexIssue($input: IssueCreateInput!) {
@@ -26,25 +27,32 @@ type Lookup = {
   teams?: { nodes?: { id?: string; key?: string; name?: string }[] };
   users?: { nodes?: { id?: string; name?: string; displayName?: string }[] };
   issueInput?: { inputFields?: { name?: string }[] } | null;
+  issueLabels?: { nodes?: { id?: string; name?: string; team?: { id?: string } | null }[] };
 };
 
-/** 팀(키를 정했으면 그 팀, 아니면 첫 팀), Codex 앱 사용자, 위임 칸 여부 */
-export function readLookup(data: Lookup, teamKey = ''): { teamId: string | null; codexId: string | null; canDelegate: boolean } {
+/** 팀(키·이름을 정했으면 그 팀, 아니면 첫 팀), Codex 앱 사용자, 위임 칸 여부, AI Office 라벨(v0.5.4 소유자: 라벨 이름 "ai office") */
+export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'): { teamId: string | null; codexId: string | null; canDelegate: boolean; labelId: string | null } {
   const teams = data.teams?.nodes ?? [];
-  const team = (teamKey ? teams.find((t) => (t.key ?? '').toLowerCase() === teamKey.toLowerCase()) : null) ?? teams[0];
+  const want = teamKey.toLowerCase();
+  const team = (want ? teams.find((t) => (t.key ?? '').toLowerCase() === want || (t.name ?? '').toLowerCase() === want) : null) ?? teams[0];
+  // 라벨은 그 팀 라벨이나 워크스페이스 공통 라벨(team 없음)만, 이름은 대소문자·공백 무시
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const label = (data.issueLabels?.nodes ?? []).find((l) => norm(l.name ?? '') === norm(labelName) && (!l.team?.id || l.team.id === team?.id));
   const codex = (data.users?.nodes ?? []).find((u) => /^codex$/i.test((u.displayName ?? '').trim()) || /^codex$/i.test((u.name ?? '').trim())) ??
     (data.users?.nodes ?? []).find((u) => /codex/i.test(`${u.name ?? ''} ${u.displayName ?? ''}`));
   return {
     teamId: team?.id ?? null,
     codexId: codex?.id ?? null,
     canDelegate: (data.issueInput?.inputFields ?? []).some((f) => f.name === 'delegateId'),
+    labelId: label?.id ?? null,
   };
 }
 
 /** 이슈 입력: 위임 칸이 있으면 Codex에게 위임, 없으면 담당자로 */
-export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string }): Record<string, unknown> {
+export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string; labelId?: string | null }): Record<string, unknown> {
   return {
     teamId: p.teamId,
+    ...(p.labelId ? { labelIds: [p.labelId] } : {}),
     title: p.title.slice(0, 250),
     description: p.description,
     ...(p.codexId ? (p.canDelegate ? { delegateId: p.codexId } : { assigneeId: p.codexId }) : {}),
