@@ -1,9 +1,9 @@
-# 구조 (v0.4)
+# 구조
 
 ```
 휴대폰·PC 브라우저 (Cloudflare Pages: release 브랜치)
  ├─ src/domain   규칙: 배정 router · 단계 workflow · 알림 stageNotice · 내 차례 myTurn · 멈춤 stall · 지시서 handoffV2 · 계획 검증 pmPlan
- ├─ src/office   도트 사무실: 업무 → 위치(scene) · 말풍선 종류[상태](speech) · 그리기
+ ├─ src/office   도트 사무실: 업무 → 위치(scene) · 말풍선 상태(speech) · 그리기
  ├─ src/data     localStore(데모) / supabaseStore(Supabase + Realtime)
  └─ src/components  입력창 Inbox · 내 차례 · 업무 카드 WorkflowPanel · 첨부 · 개발일지
         │ 로그인 JWT (소유자만)
@@ -21,11 +21,15 @@ Supabase (서울)
      ├─ dispatch-claude-pr   올리기 승인 → 승인된 diff로 PR 세션(병합 없음)
      ├─ pr-status            PR·CI 확인(PR 주소가 없으면 작업 브랜치로 찾음)
      ├─ deploy-release       배포 승인 → 확인한 커밋 squash 병합 → release fast-forward
+     ├─ draft-plan            Claude PM 불가 시 Gemini 분배
+     ├─ dispatch-gemini-dev   쉬운 개발 → GitHub Actions
+     ├─ review-result · submit-review  결과 검사·교차 채점
+     ├─ codex-linear · linear-webhook  Codex 위임·소식
      └─ fetch-link · create-repo
         │
         ▼
 Claude Code 루틴(Pro 구독): PM("업무 실행") · 보조 개발("보조 개발": 개발 / 올리기 두 종류)
-Codex Cloud(Plus 구독): 지금은 수동 인계, Linear 연동 예정
+Codex Cloud(Plus 구독): codex-linear 위임·댓글 읽기 / linear-webhook 소식 수신, 결과 등록은 수동
 GitHub: PR → Actions(verify) → 서버 병합 → release → Cloudflare 배포
 ```
 

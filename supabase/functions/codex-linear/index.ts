@@ -1,4 +1,4 @@
-// Codex를 Linear로 맡기기(v0.5.2, 소유자 2026-11-03 "ㄱㄱ", 결정 docs/CODEX_LINEAR_DECISION_2026-10-30.md).
+// Codex를 Linear로 맡기기(v0.5.2, 소유자 2026-11-03 "ㄱㄱ", 결정 docs/archive/CODEX_LINEAR_DECISION_2026-10-30.md).
 // action 'start': 실행 승인(E)된 Codex 작업을 Linear 이슈(지시서 = 앱이 만든 Codex 지시서)로 만들고 Codex에게 맡긴다.
 //   기본은 위임(delegateId, Linear 공식 에이전트 방식). CODEX_LINEAR_TRIGGER=mention이면 대신 @codex 멘션 댓글로 시작한다.
 // action 'status': 그 이슈의 Codex 댓글만 읽어 진행 소식·작업 주소·시작 실패(한도·환경 없음)를 배정 기록에 남긴다(완료 판정은 사람이).

@@ -62,7 +62,7 @@ const KIND_OF: Partial<Record<AgentId, AgentKind>> = { codex: 'codex', claude: '
 /** 오피스 캐릭터 → 실행 경로(어댑터) */
 const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision' };
 
-/** Codex for Linear 연결 확인(읽기만). 결정 문서 docs/CODEX_LINEAR_DECISION_2026-10-30.md 4-1단계 */
+/** Codex for Linear 연결 확인(읽기만). 결정 문서 docs/archive/CODEX_LINEAR_DECISION_2026-10-30.md 4-1단계 */
 function LinearCheck({ onProbe }: { onProbe: () => Promise<LinearProbe> }) {
   const [busy, setBusy] = useState(false);
   const [r, setR] = useState<LinearProbe | null>(null);
