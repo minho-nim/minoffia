@@ -3971,16 +3971,20 @@ a {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* 아래에 붙은 입력창 둘레·아래로 대화 글이 비치지 않게 같은 바탕색으로 덮는다(v0.4.98).
-   대화가 짧아 제자리에 있을 때는 대화 상자 밖으로 덮개가 나가지 않게 자른다(clip은 sticky를 깨지 않음) */
+/* 입력창 둘레는 덮지 않고 대화가 비쳐 보이게 둔다(v0.5.6 소유자 "뒤의 대화가 보이게"). 입력창 바로 아래 틈만 바탕색으로.
+   대화 탭의 대화 상자는 겉 테두리 없이(스크롤하면 위가 잘린 네모로 보이던 문제, v0.5.6) */
 .inbox {
   overflow: clip;
 }
 .inbox > .inbox-form {
   box-shadow:
     0 2px 10px -6px rgba(0, 0, 0, 0.3),
-    0 0 0 14px var(--surface),
-    0 max(8px, env(safe-area-inset-bottom)) 0 14px var(--surface);
+    0 max(8px, env(safe-area-inset-bottom)) 0 0 var(--surface);
+}
+.chat-tab > .inbox {
+  border-color: transparent;
+  border-radius: 0;
+  padding-inline: 2px;
 }
 
 /* 프로젝트 칩 접기(v0.5.5) */
