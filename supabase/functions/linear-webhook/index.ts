@@ -48,11 +48,12 @@ Deno.serve(async (req) => {
 
   const note = `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`.slice(0, 300);
   if (note === a.actual_provider_status) return reply(200, { ok: true, same: true });
-  const failed = news.kind === 'error' && a.dispatch_status === 'started';
-  await admin
+  const failed = news.kind === 'error' && (a.dispatch_status === 'starting' || a.dispatch_status === 'started');
+  const { data: saved, error: saveError } = await admin
     .from('agent_assignments')
     .update({ actual_provider_status: note, last_verified_at: new Date().toISOString(), ...(failed ? { dispatch_status: 'failed' } : {}) })
-    .eq('id', a.id);
+    .eq('id', a.id).eq('provider_execution_id', issueId).eq('dispatch_status', a.dispatch_status).select('id').maybeSingle();
+  if (saveError || !saved) return reply(502, { ok: false });
   await admin.rpc('push_enqueue', {
     p_owner: a.owner_id,
     p_task: a.task_id,

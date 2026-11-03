@@ -37,3 +37,33 @@ describe('실시간 구독(v0.3.7)', () => {
     expect(removed).toBe(true);
   });
 });
+
+describe('계획과 배정의 원자적 저장', () => {
+  it('두 번의 INSERT 대신 한 RPC로 전체 배정을 보낸다', async () => {
+    const { vi } = await import('vitest');
+    const { preparePlanImport } = await import('../workflow/planImport');
+    const { task, planText, snapshot } = await import('../workflow/fixtures.test-helper');
+    const p = preparePlanImport(task, planText, 'gemini_fallback', snapshot(), 1);
+    if (!('plan' in p)) throw new Error('계획 준비 실패');
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn();
+    const store = createSupabaseStore({ rpc, from } as unknown as SupabaseClient);
+    await store.addPlan(p.plan, p.assignments);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('save_pm_plan', expect.objectContaining({
+      p_plan: expect.objectContaining({ task_id: task.id, approved_spec_revision: 1 }),
+      p_assignments: [expect.objectContaining({ work_item_id: 'W1', assignee: 'codex' })],
+    }));
+    expect(from).not.toHaveBeenCalled();
+  });
+  it('RPC가 실패하면 저장 성공으로 처리하지 않는다', async () => {
+    const { vi } = await import('vitest');
+    const { preparePlanImport } = await import('../workflow/planImport');
+    const { task, planText, snapshot } = await import('../workflow/fixtures.test-helper');
+    const p = preparePlanImport(task, planText, 'gemini_fallback', snapshot(), 1);
+    if (!('plan' in p)) throw new Error('계획 준비 실패');
+    const rpc = vi.fn().mockResolvedValue({ error: { message: '배정 저장 실패' } });
+    const store = createSupabaseStore({ rpc } as unknown as SupabaseClient);
+    await expect(store.addPlan(p.plan, p.assignments)).rejects.toThrow('배정 저장 실패');
+  });
+});

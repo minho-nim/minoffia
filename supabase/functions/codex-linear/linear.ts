@@ -17,7 +17,7 @@ export const CREATE_COMMENT = `mutation MinLabCodexComment($input: CommentCreate
 
 export const STATUS_QUERY = `query MinLabCodexStatus($id: String!) {
   issue(id: $id) {
-    identifier url
+    id identifier url
     state { name type }
     comments(last: 20) { nodes { body createdAt user { name displayName } botActor { name } } }
   }
@@ -31,10 +31,10 @@ type Lookup = {
 };
 
 /** 팀(키·이름을 정했으면 그 팀, 아니면 첫 팀), Codex 앱 사용자, 위임 칸 여부, AI Office 라벨(v0.5.4 소유자: 라벨 이름 "ai office") */
-export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'): { teamId: string | null; codexId: string | null; canDelegate: boolean; labelId: string | null } {
+export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'): { teamId: string | null; codexId: string | null; canDelegate: boolean; canSetId: boolean; labelId: string | null } {
   const teams = data.teams?.nodes ?? [];
-  const want = teamKey.toLowerCase();
-  const team = (want ? teams.find((t) => (t.key ?? '').toLowerCase() === want || (t.name ?? '').toLowerCase() === want) : null) ?? teams[0];
+  const want = teamKey.trim().toLowerCase();
+  const team = want ? teams.find((t) => (t.key ?? '').toLowerCase() === want || (t.name ?? '').toLowerCase() === want) : teams[0];
   // 라벨은 그 팀 라벨이나 워크스페이스 공통 라벨(team 없음)만, 이름은 대소문자·공백 무시
   const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
   const label = (data.issueLabels?.nodes ?? []).find((l) => norm(l.name ?? '') === norm(labelName) && (!l.team?.id || l.team.id === team?.id));
@@ -44,14 +44,16 @@ export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'):
     teamId: team?.id ?? null,
     codexId: codex?.id ?? null,
     canDelegate: (data.issueInput?.inputFields ?? []).some((f) => f.name === 'delegateId'),
+    canSetId: (data.issueInput?.inputFields ?? []).some((f) => f.name === 'id'),
     labelId: label?.id ?? null,
   };
 }
 
 /** 이슈 입력: 위임 칸이 있으면 Codex에게 위임, 없으면 담당자로 */
-export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string; labelId?: string | null }): Record<string, unknown> {
+export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string; labelId?: string | null; issueId?: string }): Record<string, unknown> {
   return {
     teamId: p.teamId,
+    ...(p.issueId ? { id: p.issueId } : {}),
     ...(p.labelId ? { labelIds: [p.labelId] } : {}),
     title: p.title.slice(0, 250),
     description: p.description,

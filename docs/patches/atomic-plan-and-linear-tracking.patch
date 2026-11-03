@@ -1,0 +1,644 @@
+diff --git a/.github/workflows/verify.yml b/.github/workflows/verify.yml
+index 4b70c88..99303c6 100644
+--- a/.github/workflows/verify.yml
++++ b/.github/workflows/verify.yml
+@@ -21,3 +21,32 @@ jobs:
+       - run: npm run typecheck
+       - run: npm test
+       - run: npm run build
++
++  verify-db:
++    runs-on: ubuntu-latest
++    timeout-minutes: 10
++    services:
++      postgres:
++        image: postgres:17
++        env:
++          POSTGRES_USER: postgres
++          POSTGRES_DB: postgres
++          POSTGRES_HOST_AUTH_METHOD: trust
++        ports:
++          - 5432:5432
++        options: >-
++          --health-cmd "pg_isready -U postgres"
++          --health-interval 5s
++          --health-timeout 5s
++          --health-retries 10
++    env:
++      PGHOST: 127.0.0.1
++      PGPORT: 5432
++      PGUSER: postgres
++      PGDATABASE: postgres
++    steps:
++      - uses: actions/checkout@v4
++      - name: PostgreSQL 클라이언트 확인
++        run: psql --version
++      - name: 마이그레이션·승인·RLS·동시 예약 검증
++        run: bash scripts/test-db.sh
+diff --git a/scripts/test-db.sh b/scripts/test-db.sh
+index fe82ff8..deb1034 100755
+--- a/scripts/test-db.sh
++++ b/scripts/test-db.sh
+@@ -37,6 +37,7 @@ run supabase/tests/99_gemini_dev.sql
+ run supabase/tests/99_claude_review.sql
+ run supabase/tests/99_codex_linear.sql
+ run supabase/tests/99_gemini_pm_claim.sql
++run supabase/tests/99_atomic_plan_and_linear_tracking.sql
+ python3 supabase/tests/check_pm_concurrency.py
+ 
+ # 기존 v0.1 데이터가 0003 적용 후에도 남는지
+diff --git a/src/data/supabaseStore.test.ts b/src/data/supabaseStore.test.ts
+index c7f46c8..2dc6910 100644
+--- a/src/data/supabaseStore.test.ts
++++ b/src/data/supabaseStore.test.ts
+@@ -37,3 +37,33 @@ describe('실시간 구독(v0.3.7)', () => {
+     expect(removed).toBe(true);
+   });
+ });
++
++describe('계획과 배정의 원자적 저장', () => {
++  it('두 번의 INSERT 대신 한 RPC로 전체 배정을 보낸다', async () => {
++    const { vi } = await import('vitest');
++    const { preparePlanImport } = await import('../workflow/planImport');
++    const { task, planText, snapshot } = await import('../workflow/fixtures.test-helper');
++    const p = preparePlanImport(task, planText, 'gemini_fallback', snapshot(), 1);
++    if (!('plan' in p)) throw new Error('계획 준비 실패');
++    const rpc = vi.fn().mockResolvedValue({ error: null });
++    const from = vi.fn();
++    const store = createSupabaseStore({ rpc, from } as unknown as SupabaseClient);
++    await store.addPlan(p.plan, p.assignments);
++    expect(rpc).toHaveBeenCalledTimes(1);
++    expect(rpc).toHaveBeenCalledWith('save_pm_plan', expect.objectContaining({
++      p_plan: expect.objectContaining({ task_id: task.id, approved_spec_revision: 1 }),
++      p_assignments: [expect.objectContaining({ work_item_id: 'W1', assignee: 'codex' })],
++    }));
++    expect(from).not.toHaveBeenCalled();
++  });
++  it('RPC가 실패하면 저장 성공으로 처리하지 않는다', async () => {
++    const { vi } = await import('vitest');
++    const { preparePlanImport } = await import('../workflow/planImport');
++    const { task, planText, snapshot } = await import('../workflow/fixtures.test-helper');
++    const p = preparePlanImport(task, planText, 'gemini_fallback', snapshot(), 1);
++    if (!('plan' in p)) throw new Error('계획 준비 실패');
++    const rpc = vi.fn().mockResolvedValue({ error: { message: '배정 저장 실패' } });
++    const store = createSupabaseStore({ rpc } as unknown as SupabaseClient);
++    await expect(store.addPlan(p.plan, p.assignments)).rejects.toThrow('배정 저장 실패');
++  });
++});
+diff --git a/src/data/supabaseStore.ts b/src/data/supabaseStore.ts
+index 53e0821..bc6437a 100644
+--- a/src/data/supabaseStore.ts
++++ b/src/data/supabaseStore.ts
+@@ -414,33 +414,17 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
+       );
+     },
+     async addPlan(p, assignments) {
+-      check(
+-        await client.from('pm_plans').insert({
+-          id: p.id,
+-          task_id: p.taskId,
+-          plan_revision: p.planRevision,
+-          approved_spec_revision: p.approvedSpecRevision,
+-          target_base_revision: p.targetBaseRevision,
+-          source: p.source,
+-          plan: p.plan,
+-        }),
+-      );
+-      if (assignments.length) {
+-        check(
+-          await client.from('agent_assignments').insert(
+-            assignments.map((a) => ({
+-              id: a.id,
+-              task_id: a.taskId,
+-              plan_revision: a.planRevision,
+-              work_item_id: a.workItemId,
+-              title: a.title,
+-              assignee: a.assignee,
+-              execution_mode: a.executionMode,
+-              dispatch_status: a.dispatchStatus,
+-            })),
+-          ),
+-        );
+-      }
++      check(await client.rpc('save_pm_plan', {
++        p_plan: {
++          id: p.id, task_id: p.taskId, plan_revision: p.planRevision,
++          approved_spec_revision: p.approvedSpecRevision, target_base_revision: p.targetBaseRevision,
++          source: p.source, plan: p.plan,
++        },
++        p_assignments: assignments.map((a) => ({
++          id: a.id, work_item_id: a.workItemId, title: a.title,
++          assignee: a.assignee, execution_mode: a.executionMode,
++        })),
++      }));
+     },
+     async updateAssignment(a) {
+       check(
+diff --git a/supabase/functions/codex-linear/index.ts b/supabase/functions/codex-linear/index.ts
+index 2d9dc8a..9c1c596 100644
+--- a/supabase/functions/codex-linear/index.ts
++++ b/supabase/functions/codex-linear/index.ts
+@@ -4,6 +4,7 @@
+ // action 'status': 그 이슈의 Codex 댓글만 읽어 진행 소식·작업 주소·시작 실패(한도·환경 없음)를 배정 기록에 남긴다(완료 판정은 사람이).
+ // 비밀값: LINEAR_API_KEY(소유자 계정 개인 키)는 secrets에만. 이슈 생성은 소유자 이름으로 된다.
+ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
++import { dispatchTrackedIssue, type LinearIssue } from './trackedDispatch.ts';
+ import { CREATE_COMMENT, CREATE_ISSUE, issueInput, LOOKUP_QUERY, readLookup, readNews, STATUS_QUERY } from './linear.ts';
+ 
+ const MAX_TEXT = 60_000;
+@@ -24,7 +25,7 @@ async function linear(key: string, query: string, variables: Record<string, unkn
+     signal: AbortSignal.timeout(15_000),
+   });
+   const body = (await res.json().catch(() => ({}))) as { data?: Record<string, unknown>; errors?: { message?: string }[] };
+-  if (!res.ok || !body.data) throw new Error(`Linear 응답 오류(HTTP ${res.status}) ${body.errors?.[0]?.message ?? ''}`.trim());
++  if (!res.ok || !body.data || body.errors?.length) throw new Error(`Linear 응답 오류(HTTP ${res.status}) ${body.errors?.[0]?.message ?? ''}`.trim());
+   return body.data;
+ }
+ 
+@@ -61,11 +62,16 @@ Deno.serve(async (req) => {
+   if (body.action === 'status') {
+     if (!a.provider_execution_id || !String(a.actual_provider_status ?? '').startsWith('linear')) return reply(409, { ok: false, error: 'Linear로 맡긴 작업이 아닙니다.' });
+     try {
+-      const news = readNews((await linear(key, STATUS_QUERY, { id: a.provider_execution_id })) as Parameters<typeof readNews>[0]);
++      const data = await linear(key, STATUS_QUERY, { id: a.provider_execution_id });
++      if (!data.issue) return reply(409, { ok: false, error: '아직 Linear 이슈 생성을 확인하지 못했습니다. 새 이슈를 만들지 않고 기존 식별자를 유지합니다.' });
++      const remoteIssue = data.issue as Partial<LinearIssue>;
++      if (remoteIssue.id !== a.provider_execution_id || !remoteIssue.url) throw new Error('예약한 이슈의 주소를 확인하지 못했습니다.');
++      const news = readNews(data as Parameters<typeof readNews>[0]);
+       const note = news.kind === 'none' ? 'linear: Codex 소식 아직 없음' : `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`;
+-      const patch: Record<string, unknown> = { actual_provider_status: note.slice(0, 300), last_verified_at: new Date().toISOString() };
+-      if (news.kind === 'error' && a.dispatch_status === 'started') patch.dispatch_status = 'failed';
+-      await admin.from('agent_assignments').update(patch).eq('id', a.id);
++      const patch: Record<string, unknown> = { actual_provider_status: note.slice(0, 300), provider_task_url: remoteIssue.url, status_source: 'server_verified', last_verified_at: new Date().toISOString() };
++      if (a.dispatch_status === 'starting' || a.dispatch_status === 'started') patch.dispatch_status = news.kind === 'error' ? 'failed' : 'started';
++      const { data: saved, error: saveError } = await admin.from('agent_assignments').update(patch).eq('id', a.id).eq('provider_execution_id', a.provider_execution_id).eq('dispatch_status', a.dispatch_status).select('id').maybeSingle();
++      if (saveError || !saved) return reply(503, { ok: false, error: 'Linear 소식은 읽었지만 저장하지 못했습니다. 다시 확인하세요.' });
+       return reply(200, { ok: true, ...news });
+     } catch (e) {
+       return reply(502, { ok: false, error: (e as Error).message });
+@@ -89,6 +95,7 @@ Deno.serve(async (req) => {
+     return reply(502, { ok: false, error: (e as Error).message });
+   }
+   if (!look.teamId) return reply(409, { ok: false, error: 'Linear 팀을 찾지 못했어요.' });
++  if (!look.canSetId) return reply(409, { ok: false, error: 'Linear가 이슈 식별자 예약을 지원하지 않아 추적 정보를 보존할 수 없습니다. 전송하지 않았습니다.' });
+   if (!look.codexId) return reply(409, { ok: false, error: 'Linear에서 Codex를 찾지 못했어요. Codex for Linear 설치와 팀 추가를 확인하세요.' });
+ 
+   const { data: claim, error: claimError } = await admin.rpc('claim_codex_linear', { p_assignment: a.id, p_owner: user.id, p_allow_retry: Boolean(body.acknowledgeRetry) });
+@@ -103,34 +110,44 @@ Deno.serve(async (req) => {
+     };
+     return reply(409, { ok: false, error: why[row?.reason] ?? '맡길 수 없습니다.' });
+   }
+-  const fail = async (message: string, status: number) => {
+-    await admin.from('agent_assignments').update({ dispatch_status: 'failed', actual_provider_status: message.slice(0, 300) }).eq('id', a.id);
+-    return reply(status, { ok: false, error: message });
+-  };
+-
++  // 외부 요청 전에 식별자가 DB에 예약됐는지 확인한다.
++  const { data: reserved, error: reservedError } = await admin.from('agent_assignments')
++    .select('provider_execution_id').eq('id', a.id).eq('dispatch_status', 'starting').maybeSingle();
++  if (reservedError || !reserved?.provider_execution_id) return reply(503, { ok: false, error: '추적 정보 예약을 확인하지 못해 Linear에 전송하지 않았습니다.' });
++  const issueId = String(reserved.provider_execution_id);
+   const mention = env('CODEX_LINEAR_TRIGGER') === 'mention';
+   const description = [`저장소: ${project.repo}`, `AI Office 업무 ${a.task_id} · 작업 ${a.work_item_id} · 계획 v${a.plan_revision}`, '', text].join('\n');
+-  let issue: { id: string; identifier: string; url: string };
+   try {
+-    const created = (await linear(key, CREATE_ISSUE, {
+-      input: issueInput({ teamId: look.teamId, labelId: look.labelId, codexId: mention ? null : look.codexId, canDelegate: look.canDelegate, title: `[AI Office] ${task.title} · ${a.work_item_id}`, description }),
+-    })) as { issueCreate?: { success?: boolean; issue?: { id: string; identifier: string; url: string } } };
+-    if (!created.issueCreate?.success || !created.issueCreate.issue) throw new Error('Linear 이슈를 만들지 못했습니다.');
+-    issue = created.issueCreate.issue;
+-    if (mention) await linear(key, CREATE_COMMENT, { input: { issueId: issue.id, body: '@codex 이 이슈의 지시서대로 진행해 줘. PR은 만들지 말고 작업만 해 줘.' } });
++    const issue = await dispatchTrackedIssue({
++      issueId,
++      create: async (id) => {
++        const data = await linear(key, CREATE_ISSUE, {
++          input: issueInput({ issueId: id, teamId: look.teamId!, labelId: look.labelId, codexId: mention ? null : look.codexId, canDelegate: look.canDelegate, title: `[AI Office] ${task.title} · ${a.work_item_id}`, description }),
++        }) as { issueCreate?: { success?: boolean; issue?: LinearIssue } };
++        if (!data.issueCreate?.success || !data.issueCreate.issue) throw new Error('Linear 이슈 생성을 확인하지 못했습니다.');
++        return data.issueCreate.issue;
++      },
++      read: async (id) => {
++        const data = await linear(key, STATUS_QUERY, { id }) as { issue?: LinearIssue | null };
++        return data.issue ?? null;
++      },
++      mention: mention ? async (id) => {
++        const data = await linear(key, CREATE_COMMENT, { input: { issueId: id, body: '@codex 이 이슈의 지시서대로 진행해 줘. PR은 만들지 말고 작업만 해 줘.' } }) as { commentCreate?: { success?: boolean } };
++        if (!data.commentCreate?.success) throw new Error('Codex 멘션 전송을 확인하지 못했습니다.');
++      } : undefined,
++      save: async (issue) => {
++        const { data: saved, error: saveError } = await admin.from('agent_assignments').update({
++          dispatch_status: 'started', status_source: 'server_verified',
++          provider_task_url: issue.url,
++          actual_provider_status: `linear: ${issue.identifier} 맡김(Codex 소식 기다리는 중)`,
++          last_verified_at: new Date().toISOString(),
++        }).eq('id', a.id).eq('provider_execution_id', issueId).eq('dispatch_status', 'starting').select('id').maybeSingle();
++        if (saveError || !saved) throw new Error(saveError?.message ?? '배정 상태가 바뀌었습니다.');
++      },
++    });
++    return reply(200, { ok: true, issueUrl: issue.url, identifier: issue.identifier });
+   } catch (e) {
+-    return fail(`Codex(Linear)에 맡기지 못했습니다: ${(e as Error).message}`, 502);
++    // 응답 유실일 때 실패로 확정하거나 새 이슈를 만들지 않는다. 예약 ID로 상태를 다시 확인한다.
++    return reply(502, { ok: false, issueId, error: `${(e as Error).message} (예약 식별자 ${issueId}). 소식을 다시 읽거나 Linear에서 확인 후 중단·재시도하세요.` });
+   }
+-  await admin
+-    .from('agent_assignments')
+-    .update({
+-      dispatch_status: 'started',
+-      status_source: 'server_verified',
+-      provider_execution_id: issue.id,
+-      provider_task_url: issue.url,
+-      actual_provider_status: `linear: ${issue.identifier} 맡김(Codex 소식 기다리는 중)`,
+-      last_verified_at: new Date().toISOString(),
+-    })
+-    .eq('id', a.id);
+-  return reply(200, { ok: true, issueUrl: issue.url, identifier: issue.identifier });
+ });
+diff --git a/supabase/functions/codex-linear/linear.test.ts b/supabase/functions/codex-linear/linear.test.ts
+index b5a5bb4..9a9afba 100644
+--- a/supabase/functions/codex-linear/linear.test.ts
++++ b/supabase/functions/codex-linear/linear.test.ts
+@@ -5,15 +5,24 @@ describe('Codex Linear(v0.5.2)', () => {
+   const lookup = {
+     teams: { nodes: [{ id: 't1', key: 'MIN', name: 'MinLab' }, { id: 't2', key: 'X', name: 'X' }] },
+     users: { nodes: [{ id: 'u1', name: 'minonim', displayName: 'minonim' }, { id: 'u2', name: 'Codex', displayName: 'codex' }] },
+-    issueInput: { inputFields: [{ name: 'teamId' }, { name: 'delegateId' }] },
++    issueInput: { inputFields: [{ name: 'teamId' }, { name: 'delegateId' }, { name: 'id' }] },
+     issueLabels: { nodes: [{ id: 'l0', name: 'ai office', team: { id: 't2' } }, { id: 'l1', name: 'AI  Office', team: { id: 't1' } }] },
+   };
+   it('팀·Codex·위임 칸·라벨을 찾는다', () => {
+-    expect(readLookup(lookup)).toEqual({ teamId: 't1', codexId: 'u2', canDelegate: true, labelId: 'l1' });
++    expect(readLookup(lookup)).toEqual({ teamId: 't1', codexId: 'u2', canDelegate: true, canSetId: true, labelId: 'l1' });
+     expect(readLookup(lookup, 'x').teamId).toBe('t2');
+     expect(readLookup({ ...lookup, teams: { nodes: [{ id: 't1', key: 'MIN', name: 'Mino' }] } }, 'mino').teamId).toBe('t1');
+     expect(readLookup(lookup, '', '없는 라벨').labelId).toBeNull();
+   });
++  it('명시한 팀이 없으면 첫 팀으로 대체하지 않는다', () => {
++    expect(readLookup(lookup, '없는 팀').teamId).toBeNull();
++    expect(readLookup(lookup, '  MIN  ').teamId).toBe('t1');
++    expect(readLookup(lookup, '').teamId).toBe('t1');
++  });
++  it('서버가 예약한 이슈 식별자를 생성 요청에 넣는다', () => {
++    expect(issueInput({ teamId: 't1', codexId: 'u2', canDelegate: true, title: 'a', description: 'b', issueId: 'reserved-id' })).toMatchObject({ id: 'reserved-id' });
++    expect(readLookup({ ...lookup, issueInput: null }).canSetId).toBe(false);
++  });
+   it('라벨이 있으면 붙인다', () => {
+     expect(issueInput({ teamId: 't1', codexId: null, canDelegate: true, title: 'a', description: 'b', labelId: 'l1' })).toMatchObject({ labelIds: ['l1'] });
+   });
+diff --git a/supabase/functions/codex-linear/linear.ts b/supabase/functions/codex-linear/linear.ts
+index 162629d..7d52f2d 100644
+--- a/supabase/functions/codex-linear/linear.ts
++++ b/supabase/functions/codex-linear/linear.ts
+@@ -17,7 +17,7 @@ export const CREATE_COMMENT = `mutation MinLabCodexComment($input: CommentCreate
+ 
+ export const STATUS_QUERY = `query MinLabCodexStatus($id: String!) {
+   issue(id: $id) {
+-    identifier url
++    id identifier url
+     state { name type }
+     comments(last: 20) { nodes { body createdAt user { name displayName } botActor { name } } }
+   }
+@@ -31,10 +31,10 @@ type Lookup = {
+ };
+ 
+ /** 팀(키·이름을 정했으면 그 팀, 아니면 첫 팀), Codex 앱 사용자, 위임 칸 여부, AI Office 라벨(v0.5.4 소유자: 라벨 이름 "ai office") */
+-export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'): { teamId: string | null; codexId: string | null; canDelegate: boolean; labelId: string | null } {
++export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'): { teamId: string | null; codexId: string | null; canDelegate: boolean; canSetId: boolean; labelId: string | null } {
+   const teams = data.teams?.nodes ?? [];
+-  const want = teamKey.toLowerCase();
+-  const team = (want ? teams.find((t) => (t.key ?? '').toLowerCase() === want || (t.name ?? '').toLowerCase() === want) : null) ?? teams[0];
++  const want = teamKey.trim().toLowerCase();
++  const team = want ? teams.find((t) => (t.key ?? '').toLowerCase() === want || (t.name ?? '').toLowerCase() === want) : teams[0];
+   // 라벨은 그 팀 라벨이나 워크스페이스 공통 라벨(team 없음)만, 이름은 대소문자·공백 무시
+   const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+   const label = (data.issueLabels?.nodes ?? []).find((l) => norm(l.name ?? '') === norm(labelName) && (!l.team?.id || l.team.id === team?.id));
+@@ -44,14 +44,16 @@ export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'):
+     teamId: team?.id ?? null,
+     codexId: codex?.id ?? null,
+     canDelegate: (data.issueInput?.inputFields ?? []).some((f) => f.name === 'delegateId'),
++    canSetId: (data.issueInput?.inputFields ?? []).some((f) => f.name === 'id'),
+     labelId: label?.id ?? null,
+   };
+ }
+ 
+ /** 이슈 입력: 위임 칸이 있으면 Codex에게 위임, 없으면 담당자로 */
+-export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string; labelId?: string | null }): Record<string, unknown> {
++export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string; labelId?: string | null; issueId?: string }): Record<string, unknown> {
+   return {
+     teamId: p.teamId,
++    ...(p.issueId ? { id: p.issueId } : {}),
+     ...(p.labelId ? { labelIds: [p.labelId] } : {}),
+     title: p.title.slice(0, 250),
+     description: p.description,
+diff --git a/supabase/functions/codex-linear/trackedDispatch.test.ts b/supabase/functions/codex-linear/trackedDispatch.test.ts
+new file mode 100644
+index 0000000..3f2d14b
+--- /dev/null
++++ b/supabase/functions/codex-linear/trackedDispatch.test.ts
+@@ -0,0 +1,41 @@
++import { describe, expect, it, vi } from 'vitest';
++import { dispatchTrackedIssue } from './trackedDispatch';
++
++const issue = { id: 'reserved-id', identifier: 'MIN-123', url: 'https://linear.app/test/issue/MIN-123' };
++function params() {
++  return { issueId: issue.id, create: vi.fn().mockResolvedValue(issue), read: vi.fn().mockResolvedValue(null), save: vi.fn().mockResolvedValue(undefined) };
++}
++describe('예약한 Linear 식별자로 추적 유지', () => {
++  it('DB 저장 실패를 성공으로 응답하지 않고 생성된 이슈 주소를 알려준다', async () => {
++    const p = params(); p.save.mockRejectedValueOnce(new Error('DB disconnected'));
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow(issue.url);
++    expect(p.create).toHaveBeenCalledExactlyOnceWith(issue.id);
++  });
++  it('생성 응답이 유실돼도 같은 UUID로 조회하고 새 이슈를 만들지 않는다', async () => {
++    const p = params();
++    p.create.mockRejectedValueOnce(new Error('timeout'));
++    p.read.mockResolvedValue(issue);
++    await expect(dispatchTrackedIssue(p)).resolves.toEqual(issue);
++    expect(p.read).toHaveBeenCalledExactlyOnceWith(issue.id);
++    expect(p.create).toHaveBeenCalledTimes(1);
++    expect(p.save).toHaveBeenCalledExactlyOnceWith(issue);
++  });
++  it('생성·조회 모두 불확실하면 성공 처리나 멘션을 하지 않는다', async () => {
++    const p = { ...params(), mention: vi.fn() };
++    p.create.mockRejectedValueOnce(new Error('timeout'));
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow('timeout');
++    expect(p.save).not.toHaveBeenCalled();
++    expect(p.mention).not.toHaveBeenCalled();
++  });
++  it('다른 식별자의 응답으로 연결을 바꿔 붙이지 않는다', async () => {
++    const p = params(); p.create.mockResolvedValue({ ...issue, id: 'different' });
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow('예약한 식별자와 다른');
++    expect(p.save).not.toHaveBeenCalled();
++  });
++  it('멘션 실패도 성공 처리하지 않는다', async () => {
++    const p = { ...params(), mention: vi.fn().mockRejectedValue(new Error('comment failed')) };
++    await expect(dispatchTrackedIssue(p)).rejects.toThrow('comment failed');
++    expect(p.save).not.toHaveBeenCalled();
++    expect(p.mention).toHaveBeenCalledWith(issue.id);
++  });
++});
+diff --git a/supabase/functions/codex-linear/trackedDispatch.ts b/supabase/functions/codex-linear/trackedDispatch.ts
+new file mode 100644
+index 0000000..036b659
+--- /dev/null
++++ b/supabase/functions/codex-linear/trackedDispatch.ts
+@@ -0,0 +1,27 @@
++/** DB에 먼저 예약한 UUID로 생성한다. 재전송/응답 유실 뒤에도 같은 이슈를 조회한다. */
++export type LinearIssue = { id: string; identifier: string; url: string };
++export async function dispatchTrackedIssue(p: {
++  issueId: string;
++  create: (id: string) => Promise<LinearIssue>;
++  read: (id: string) => Promise<LinearIssue | null>;
++  mention?: (id: string) => Promise<void>;
++  save: (issue: LinearIssue) => Promise<void>;
++}): Promise<LinearIssue> {
++  let issue: LinearIssue;
++  try {
++    issue = await p.create(p.issueId);
++  } catch (e) {
++    // 중복 UUID 또는 응답 유실일 수 있으므로 새 이슈를 만들지 않고 기존 UUID를 확인한다.
++    const existing = await p.read(p.issueId).catch(() => null);
++    if (!existing) throw e;
++    issue = existing;
++  }
++  if (issue.id !== p.issueId) throw new Error(`예약한 식별자와 다른 Linear 이슈입니다: ${issue.url}`);
++  await p.mention?.(issue.id);
++  try {
++    await p.save(issue);
++  } catch {
++    throw new Error(`Linear 이슈는 생성됐지만 상태 저장을 확인하지 못했어요. '소식 다시 읽기'로 확인하세요: ${issue.url}`);
++  }
++  return issue;
++}
+diff --git a/supabase/functions/linear-webhook/index.ts b/supabase/functions/linear-webhook/index.ts
+index f994e32..5115d35 100644
+--- a/supabase/functions/linear-webhook/index.ts
++++ b/supabase/functions/linear-webhook/index.ts
+@@ -48,11 +48,12 @@ Deno.serve(async (req) => {
+ 
+   const note = `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`.slice(0, 300);
+   if (note === a.actual_provider_status) return reply(200, { ok: true, same: true });
+-  const failed = news.kind === 'error' && a.dispatch_status === 'started';
+-  await admin
++  const failed = news.kind === 'error' && (a.dispatch_status === 'starting' || a.dispatch_status === 'started');
++  const { data: saved, error: saveError } = await admin
+     .from('agent_assignments')
+     .update({ actual_provider_status: note, last_verified_at: new Date().toISOString(), ...(failed ? { dispatch_status: 'failed' } : {}) })
+-    .eq('id', a.id);
++    .eq('id', a.id).eq('provider_execution_id', issueId).eq('dispatch_status', a.dispatch_status).select('id').maybeSingle();
++  if (saveError || !saved) return reply(502, { ok: false });
+   await admin.rpc('push_enqueue', {
+     p_owner: a.owner_id,
+     p_task: a.task_id,
+diff --git a/supabase/functions/linear-webhook/linear.ts b/supabase/functions/linear-webhook/linear.ts
+index 162629d..7d52f2d 100644
+--- a/supabase/functions/linear-webhook/linear.ts
++++ b/supabase/functions/linear-webhook/linear.ts
+@@ -17,7 +17,7 @@ export const CREATE_COMMENT = `mutation MinLabCodexComment($input: CommentCreate
+ 
+ export const STATUS_QUERY = `query MinLabCodexStatus($id: String!) {
+   issue(id: $id) {
+-    identifier url
++    id identifier url
+     state { name type }
+     comments(last: 20) { nodes { body createdAt user { name displayName } botActor { name } } }
+   }
+@@ -31,10 +31,10 @@ type Lookup = {
+ };
+ 
+ /** 팀(키·이름을 정했으면 그 팀, 아니면 첫 팀), Codex 앱 사용자, 위임 칸 여부, AI Office 라벨(v0.5.4 소유자: 라벨 이름 "ai office") */
+-export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'): { teamId: string | null; codexId: string | null; canDelegate: boolean; labelId: string | null } {
++export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'): { teamId: string | null; codexId: string | null; canDelegate: boolean; canSetId: boolean; labelId: string | null } {
+   const teams = data.teams?.nodes ?? [];
+-  const want = teamKey.toLowerCase();
+-  const team = (want ? teams.find((t) => (t.key ?? '').toLowerCase() === want || (t.name ?? '').toLowerCase() === want) : null) ?? teams[0];
++  const want = teamKey.trim().toLowerCase();
++  const team = want ? teams.find((t) => (t.key ?? '').toLowerCase() === want || (t.name ?? '').toLowerCase() === want) : teams[0];
+   // 라벨은 그 팀 라벨이나 워크스페이스 공통 라벨(team 없음)만, 이름은 대소문자·공백 무시
+   const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+   const label = (data.issueLabels?.nodes ?? []).find((l) => norm(l.name ?? '') === norm(labelName) && (!l.team?.id || l.team.id === team?.id));
+@@ -44,14 +44,16 @@ export function readLookup(data: Lookup, teamKey = '', labelName = 'ai office'):
+     teamId: team?.id ?? null,
+     codexId: codex?.id ?? null,
+     canDelegate: (data.issueInput?.inputFields ?? []).some((f) => f.name === 'delegateId'),
++    canSetId: (data.issueInput?.inputFields ?? []).some((f) => f.name === 'id'),
+     labelId: label?.id ?? null,
+   };
+ }
+ 
+ /** 이슈 입력: 위임 칸이 있으면 Codex에게 위임, 없으면 담당자로 */
+-export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string; labelId?: string | null }): Record<string, unknown> {
++export function issueInput(p: { teamId: string; codexId: string | null; canDelegate: boolean; title: string; description: string; labelId?: string | null; issueId?: string }): Record<string, unknown> {
+   return {
+     teamId: p.teamId,
++    ...(p.issueId ? { id: p.issueId } : {}),
+     ...(p.labelId ? { labelIds: [p.labelId] } : {}),
+     title: p.title.slice(0, 250),
+     description: p.description,
+diff --git a/supabase/migrations/0039_atomic_plan_and_linear_tracking.sql b/supabase/migrations/0039_atomic_plan_and_linear_tracking.sql
+new file mode 100644
+index 0000000..f4f363c
+--- /dev/null
++++ b/supabase/migrations/0039_atomic_plan_and_linear_tracking.sql
+@@ -0,0 +1,87 @@
++-- 계획과 배정을 한 트랜잭션으로 저장한다. 호출자의 RLS·기존 승인 트리거를 그대로 적용한다.
++create function public.save_pm_plan(p_plan jsonb, p_assignments jsonb)
++returns void language plpgsql security invoker set search_path = public as $$
++declare
++  v_task uuid := (p_plan->>'task_id')::uuid;
++  v_revision integer := (p_plan->>'plan_revision')::integer;
++  v_items jsonb := p_plan->'plan'->'work_items';
++begin
++  if auth.uid() is null then raise exception 'login required'; end if;
++  perform 1 from tasks where id = v_task and owner_id = auth.uid() for update;
++  if not found then raise exception 'task does not belong to owner'; end if;
++  if jsonb_typeof(v_items) is distinct from 'array' or jsonb_typeof(p_assignments) is distinct from 'array' then
++    raise exception 'plan work items and assignments must be arrays';
++  end if;
++  if jsonb_array_length(v_items) <> jsonb_array_length(p_assignments)
++    or (select count(distinct x->>'id') from jsonb_array_elements(v_items) x) <> jsonb_array_length(v_items)
++    or (select count(distinct x->>'work_item_id') from jsonb_array_elements(p_assignments) x) <> jsonb_array_length(p_assignments)
++    or exists (
++      select x->>'id' from jsonb_array_elements(v_items) x
++      except select x->>'work_item_id' from jsonb_array_elements(p_assignments) x
++    ) then raise exception 'assignments must match all plan work items';
++  end if;
++  insert into pm_plans(id, task_id, plan_revision, approved_spec_revision, target_base_revision, source, plan)
++    values ((p_plan->>'id')::uuid, v_task, v_revision, (p_plan->>'approved_spec_revision')::integer,
++      coalesce(p_plan->>'target_base_revision',''), p_plan->>'source', p_plan->'plan');
++  insert into agent_assignments(id, task_id, plan_revision, work_item_id, title, assignee, execution_mode, dispatch_status)
++    select (x->>'id')::uuid, v_task, v_revision, x->>'work_item_id', coalesce(x->>'title',''),
++      x->>'assignee', x->>'execution_mode', 'awaiting_user_execution_approval'
++    from jsonb_array_elements(p_assignments) x;
++end;
++$$;
++revoke all on function public.save_pm_plan(jsonb, jsonb) from public, anon;
++grant execute on function public.save_pm_plan(jsonb, jsonb) to authenticated;
++
++-- Linear 이슈 식별자는 외부 요청 전에 예약한다. 실패 후 재시도도 같은 UUID를 사용한다.
++create or replace function public.claim_codex_linear(
++  p_assignment uuid,
++  p_owner uuid,
++  p_allow_retry boolean
++)
++returns table (ok boolean, reason text)
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_a public.agent_assignments;
++  v_plan integer;
++begin
++  perform pg_advisory_xact_lock(hashtext('codex-linear:' || p_owner::text));
++  select * into v_a from agent_assignments where id = p_assignment and owner_id = p_owner;
++  if not found or v_a.assignee <> 'codex' then
++    return query select false, 'not_codex';
++    return;
++  end if;
++  select max(plan_revision) into v_plan from pm_plans where task_id = v_a.task_id;
++  if v_a.plan_revision <> v_plan then
++    return query select false, 'stale_plan';
++    return;
++  end if;
++  if not exists (
++    select 1 from approvals a
++    where a.task_id = v_a.task_id and a.gate = 'E' and a.decision = 'approved'
++      and a.approved_revision = v_a.plan_revision and a.work_item_id = v_a.work_item_id
++  ) then
++    return query select false, 'not_approved';
++    return;
++  end if;
++  if not (v_a.dispatch_status = 'ready' or (v_a.dispatch_status = 'failed' and p_allow_retry)) then
++    return query select false, 'not_claimable';
++    return;
++  end if;
++  update agent_assignments set
++    dispatch_status = 'starting', started_at = now(),
++    provider_execution_id = case
++      when provider_execution_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
++      then provider_execution_id else gen_random_uuid()::text end,
++    provider_task_url = case when provider_execution_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then provider_task_url else null end,
++    actual_provider_status = 'linear: 이슈 전송 예약(아직 생성 확인 전)'
++  where id = p_assignment;
++  insert into usage_runs (owner_id, agent, task_id, kind) values (p_owner, 'codex', v_a.task_id, 'cloud');
++  return query select true, 'claimed';
++end;
++$$;
++
++revoke all on function public.claim_codex_linear(uuid, uuid, boolean) from public, anon, authenticated;
++grant execute on function public.claim_codex_linear(uuid, uuid, boolean) to service_role;
+diff --git a/supabase/tests/99_atomic_plan_and_linear_tracking.sql b/supabase/tests/99_atomic_plan_and_linear_tracking.sql
+new file mode 100644
+index 0000000..a852dfe
+--- /dev/null
++++ b/supabase/tests/99_atomic_plan_and_linear_tracking.sql
+@@ -0,0 +1,68 @@
++\set ON_ERROR_STOP on
++begin;
++create function pg_temp.check(ok boolean, label text) returns void language plpgsql as $$
++begin if ok is not true then raise exception 'check failed: %', label; end if; end $$;
++create function pg_temp.expect_fail(q text, needle text) returns void language plpgsql as $$
++begin
++  begin execute q;
++  exception when others then
++    if position(needle in sqlerrm)=0 then raise exception 'expected %, got %',needle,sqlerrm; end if;
++    return;
++  end;
++  raise exception 'expected failure: %',needle;
++end $$;
++create function pg_temp.plan(rev integer default 1) returns jsonb language sql as $$
++  select jsonb_build_object('id', gen_random_uuid(), 'task_id','b0390000-0000-4000-8000-000000000001',
++    'plan_revision',rev, 'approved_spec_revision',1,'source','manual',
++    'plan','{"work_items":[{"id":"W1","dependencies":[]},{"id":"W2","dependencies":[]}]}'::jsonb)
++$$;
++create function pg_temp.assignments() returns jsonb language sql as $$
++  select jsonb_build_array(
++    jsonb_build_object('id',gen_random_uuid(),'work_item_id','W1','assignee','codex','execution_mode','manual_handoff'),
++    jsonb_build_object('id',gen_random_uuid(),'work_item_id','W2','assignee','claude','execution_mode','manual_handoff'))
++$$;
++insert into auth.users(id,email) values ('f0390000-0000-4000-8000-000000000001','atomic@example.invalid');
++select set_config('request.jwt.claims','{"sub":"f0390000-0000-4000-8000-000000000001","role":"authenticated","email":"atomic@example.invalid"}',true);
++set local role authenticated;
++insert into projects(id,name,repo) values ('a0390000-0000-4000-8000-000000000001','Atomic test','owner/test');
++insert into tasks(id,project_id,title,type,assignee) values ('b0390000-0000-4000-8000-000000000001','a0390000-0000-4000-8000-000000000001','Atomic test','dev','codex');
++insert into task_specs(task_id,revision,intent,user_original_text,final_prompt) values ('b0390000-0000-4000-8000-000000000001',1,'change_request','test','test');
++select pg_temp.expect_fail($q$select save_pm_plan(pg_temp.plan(),pg_temp.assignments())$q$,'A approval required');
++insert into approvals(task_id,gate,decision,approved_revision) values ('b0390000-0000-4000-8000-000000000001','A','approved',1);
++select pg_temp.expect_fail($q$select save_pm_plan(pg_temp.plan(),jsonb_build_array(pg_temp.assignments()->0))$q$, 'assignments must match');
++-- 계획 INSERT 뒤 두 번째 배정 INSERT가 실패하는 실제 경로. 함수의 서브트랜잭션 전체가 롤백되어야 한다.
++select pg_temp.expect_fail($q$select save_pm_plan(pg_temp.plan(),jsonb_set(pg_temp.assignments(),'{1,execution_mode}','"bad_mode"'))$q$, 'execution_mode_check');
++select pg_temp.check((select count(*)=0 from pm_plans where task_id='b0390000-0000-4000-8000-000000000001'),'failed assignment rolls back plan');
++select pg_temp.check((select count(*)=0 from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001'),'failed assignment leaves no partial work');
++select pg_temp.expect_fail($q$select save_pm_plan(pg_temp.plan(),jsonb_set(pg_temp.assignments(),'{1,work_item_id}','"W1"'))$q$, 'assignments must match');
++-- 소유자가 아닌 로그인으로 RPC를 호출해도 쓸 수 없다.
++select set_config('request.jwt.claims','{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}',true);
++select pg_temp.expect_fail($q$select save_pm_plan(pg_temp.plan(),pg_temp.assignments())$q$,'task does not belong to owner');
++select set_config('request.jwt.claims','{"sub":"f0390000-0000-4000-8000-000000000001","role":"authenticated","email":"atomic@example.invalid"}',true);
++select save_pm_plan(pg_temp.plan(),pg_temp.assignments());
++select pg_temp.check((select count(*)=1 from pm_plans where task_id='b0390000-0000-4000-8000-000000000001'),'plan saved once');
++select pg_temp.check((select count(*)=2 and bool_and(dispatch_status='awaiting_user_execution_approval') from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001'),'all work saved but not executed');
++select pg_temp.expect_fail($q$select save_pm_plan(pg_temp.plan(),pg_temp.assignments())$q$,'plan revision must be 2');
++
++-- Linear ID는 E 승인 뒤 외부 호출 전에 만들어지고 중단/확인 뒤 재시도에도 보존된다.
++set local role service_role;
++select pg_temp.check((select reason='not_approved' from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'Linear E required');
++set local role authenticated;
++insert into approvals(task_id,gate,decision,approved_revision,work_item_id) values ('b0390000-0000-4000-8000-000000000001','E','approved',1,'W1');
++set local role service_role;
++select pg_temp.check((select reason='not_claimable' from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'E alone does not mark work ready');
++set local role authenticated;
++update agent_assignments set dispatch_status='ready' where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1';
++set local role service_role;
++select pg_temp.check((select ok from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'Linear reserved');
++create temp table saved_linear_id as select provider_execution_id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1';
++select pg_temp.check((select provider_execution_id::uuid is not null from saved_linear_id),'issue UUID is persisted before any external request');
++set local role authenticated;
++-- 앱의 실제 중단 기록은 상태 문구를 user_stopped로 덮어쓴다.
++update agent_assignments set dispatch_status='failed',actual_provider_status='user_stopped' where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1';
++set local role service_role;
++select pg_temp.check((select reason='not_claimable' from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',false)),'explicit retry acknowledgment required');
++select pg_temp.check((select ok from claim_codex_linear((select id from agent_assignments where task_id='b0390000-0000-4000-8000-000000000001' and work_item_id='W1'),'f0390000-0000-4000-8000-000000000001',true)),'acknowledged retry');
++select pg_temp.check((select a.provider_execution_id=s.provider_execution_id from agent_assignments a cross join saved_linear_id s where a.task_id='b0390000-0000-4000-8000-000000000001' and a.work_item_id='W1'),'stopping cannot erase reserved Linear ID');
++rollback;
++\echo 'Atomic plan save and durable Linear reservation tests passed'
