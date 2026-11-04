@@ -1455,6 +1455,9 @@ export function App() {
             </button>
           </div>
           <div className="nx-right">
+            <button type="button" className="nx-classic" onClick={() => setUiMode('classic')} title="기존 화면으로 돌아가기">
+              Classic
+            </button>
             <TurnMenu items={turns} onOpen={showTask} />
             <button type="button" className={`nx-gear${nxSettings ? ' is-on' : ''}`} aria-expanded={nxSettings} onClick={() => setNxSettings((v) => !v)} title="설정·사용량">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
