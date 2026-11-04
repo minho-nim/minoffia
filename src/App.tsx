@@ -42,9 +42,12 @@ import { dispatchClaude } from './lib/dispatch';
 import { getSupabase } from './lib/supabase';
 import { PushToggle } from './components/PushToggle';
 import { OfficeView } from './office/OfficeView';
+import { NewOfficeView } from './office/NewOfficeView';
+import { UiBoundary } from './components/UiBoundary';
+import { loadNewView, loadUiMode, saveNewView, saveUiMode, type NewView, type UiMode } from './domain/uiMode';
 import { version } from '../package.json';
 
-type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
+type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'log';
 type Filter = 'open' | 'all' | TaskStatus;
 
 const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
@@ -310,6 +313,37 @@ export function App() {
   // 기록이 바뀌지 않아도 PR·CI 진행은 1분마다 다시 본다(화면이 보일 때만).
   // 멈춤 감지(내 차례 [!])도 시간이 지나면 다시 계산되게 1분마다 다시 그린다.
   // 휴대폰: 위 머리(이름·사용량)가 화면 밖으로 나가면 맨 위에 얇은 한 줄 머리를 고정한다(v0.4.14).
+  /** 화면 모드(v0.6.0): Classic(기존, 기본) / New Office. 같은 데이터를 쓰고 표현만 바뀐다 */
+  const [uiMode, setUiModeState] = useState<UiMode>(() => loadUiMode());
+  const setUiMode = (m: UiMode) => {
+    setUiModeState(m);
+    saveUiMode(m);
+    setNxSettings(false);
+  };
+  const isNew = uiMode === 'new';
+  /** New 화면: 가운데에 사무실을 볼지(위쪽 공간형·조직형), 왼쪽 메뉴의 화면을 볼지 */
+  const [nxOffice, setNxOffice] = useState(true);
+  const [newView, setNewViewState] = useState<NewView>(() => loadNewView());
+  const [nxSettings, setNxSettings] = useState(false);
+  const showOffice = (v: NewView) => {
+    setNewViewState(v);
+    saveNewView(v);
+    setNxOffice(true);
+  };
+  // 다른 곳에서 탭을 바꾸면(업무 카드 열기·알림 등) New 화면도 그 화면을 보인다
+  const firstTab = useRef(true);
+  useEffect(() => {
+    if (firstTab.current) {
+      firstTab.current = false;
+      return;
+    }
+    setNxOffice(false);
+  }, [tab]);
+  // New 화면의 색(어두운 남색)은 문서 전체에 건다(아래 시트·팝업도 같은 색)
+  useEffect(() => {
+    document.documentElement.classList.toggle('ui-new', isNew);
+    return () => document.documentElement.classList.remove('ui-new');
+  }, [isNew]);
   const [mini, setMini] = useState(false);
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
@@ -1404,6 +1438,65 @@ export function App() {
 
   return (
     <div className="app">
+      {isNew ? (
+        <header className="nx-top">
+          <button type="button" className="nx-logo" onClick={() => setNxOffice(true)} title="사무실 보기">
+            <span className="nx-mark" aria-hidden="true">
+              M
+            </span>
+            MinLab AI Office <span className="nx-ver">v{version}</span>
+          </button>
+          <div className="nx-views" role="tablist" aria-label="사무실 보기">
+            <button type="button" role="tab" aria-selected={nxOffice && newView === 'space'} onClick={() => showOffice('space')}>
+              공간형
+            </button>
+            <button type="button" role="tab" aria-selected={nxOffice && newView === 'org'} onClick={() => showOffice('org')}>
+              조직형
+            </button>
+          </div>
+          <div className="nx-right">
+            <TurnMenu items={turns} onOpen={showTask} />
+            <button type="button" className={`nx-gear${nxSettings ? ' is-on' : ''}`} aria-expanded={nxSettings} onClick={() => setNxSettings((v) => !v)} title="설정·사용량">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" />
+              </svg>
+            </button>
+            <span className="nx-me" title={session?.user.email ?? '로컬 데모'}>
+              {(session?.user.email ?? 'M').slice(0, 1).toUpperCase()}
+            </span>
+          </div>
+          {nxSettings && (
+            <>
+              <div className="nx-pop-backdrop" onClick={() => setNxSettings(false)} aria-hidden="true" />
+              <div className="nx-settings" role="dialog" aria-label="설정·사용량">
+                <p className="nx-settings-title">화면</p>
+                <div className="ui-switch" role="group" aria-label="화면 선택">
+                  <button type="button" aria-pressed={!isNew} onClick={() => setUiMode('classic')}>
+                    Classic
+                  </button>
+                  <button type="button" aria-pressed={isNew} onClick={() => setUiMode('new')}>
+                    New
+                  </button>
+                </div>
+                <p className="nx-settings-title">계정·알림</p>
+                {store.mode === 'local' ? (
+                  <span className="mode mode-local">로컬 데모 · 이 기기에만 저장</span>
+                ) : (
+                  <span className="mode mode-cloud">
+                    Supabase 동기화 · {session?.user.email}
+                    <button type="button" className="link-btn" onClick={() => void client?.auth.signOut()}>
+                      로그아웃
+                    </button>
+                  </span>
+                )}
+                {store.mode === 'supabase' && <PushToggle store={store} />}
+                <p className="nx-settings-title">오늘 사용량</p>
+                {usageList}
+              </div>
+            </>
+          )}
+        </header>
+      ) : (
       <header className="topbar" ref={topRef}>
         <div className="brand-block">
           <span className="brand-line">
@@ -1426,12 +1519,21 @@ export function App() {
           )}
           {/* 알림 켜기·끄기 아이콘은 밝기 버튼 바로 옆(v0.4.89) */}
           {store.mode === 'supabase' && <PushToggle store={store} />}
+          <div className="ui-switch" role="group" aria-label="화면 선택">
+            <button type="button" aria-pressed={!isNew} onClick={() => setUiMode('classic')}>
+              Classic
+            </button>
+            <button type="button" aria-pressed={isNew} onClick={() => setUiMode('new')}>
+              New
+            </button>
+          </div>
           <ThemeToggle />
         </div>
         {usageList}
       </header>
+      )}
 
-      <div className={`topbar-mini${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
+      {!isNew && <div className={`topbar-mini${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
         <button type="button" tabIndex={barOn ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
           MINLAB AI OFFICE <span className="ver">v{version}</span>
         </button>
@@ -1453,8 +1555,8 @@ export function App() {
         </button>
         {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
         <ThemeToggle tabbable={barOn} />
-      </div>
-      {usageOpen && barOn && (
+      </div>}
+      {!isNew && usageOpen && barOn && (
         <>
           <div className="usage-pop-backdrop" onClick={() => setUsageOpen(false)} aria-hidden="true" />
           <div className="usage-pop" role="dialog" aria-label="오늘 사용량">
@@ -1475,26 +1577,80 @@ export function App() {
       )}
 
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
-      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}`}>
-        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`} aria-label="오피스">
-          <OfficeView
-            tasks={snap.tasks}
-            assignments={snap.workflow.assignments}
-            workflow={snap.workflow}
-            selected={selected}
-            onSelect={selectAgent}
-            onOpenTask={(id) => {
-              setPeek(false);
-              showTask(id);
-            }}
-            leave={snap.leave ?? []}
-          />
+      <main className={isNew ? `layout is-new${nxOffice ? ' is-office' : ''}` : `layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}`}>
+        {isNew && (
+          <nav key="nx-side" className="nx-side" aria-label="메뉴">
+            {(
+              [
+                ['projects', '프로젝트', 'M4 5h6l2 2h8v12H4z'],
+                ['chat', '대화', 'M4 5h16v11H9l-5 4z'],
+                ['tasks', '업무', 'M6 3h12v18H6zM9 8h6M9 12h6M9 16h4'],
+                ['agent', 'AI 에이전트', 'M12 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM5 20a7 7 0 0 1 14 0'],
+                ['log', '작업 기록', 'M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h3'],
+                ['team', '팀 관리', 'M8 7a3 3 0 1 1 0 .1M17 8a2.5 2.5 0 1 1 0 .1M3 20a5 5 0 0 1 10 0M14 20a4 4 0 0 1 7 0'],
+              ] as [Tab, string, string][]
+            ).map(([id, label, d]) => (
+              <button
+                type="button"
+                key={id}
+                aria-current={!nxOffice && tab === id ? 'page' : undefined}
+                onClick={() => {
+                  setTab(id);
+                  setNxOffice(false);
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                  <path d={d} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" />
+                </svg>
+                {label}
+                {id === 'tasks' && turns.length > 0 && <span className="num num-turn">{turns.length}</span>}
+              </button>
+            ))}
+          </nav>
+        )}
+        <section key="stage" className={isNew ? 'stage nx-stage' : `stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`} aria-label="오피스">
+          {uiMode === 'new' ? (
+            <UiBoundary onFallback={() => setUiMode('classic')}>
+              <NewOfficeView
+                tasks={snap.tasks}
+                assignments={snap.workflow.assignments}
+                leave={snap.leave ?? []}
+                pending={turns.length}
+                view={newView}
+                docked
+                onSelectAgent={(id) => {
+                  selectAgent(id);
+                  setNxOffice(false);
+                }}
+                onOpenTask={(id) => {
+                  setPeek(false);
+                  setNxOffice(false);
+                  showTask(id);
+                }}
+              />
+            </UiBoundary>
+          ) : (
+            <OfficeView
+              tasks={snap.tasks}
+              assignments={snap.workflow.assignments}
+              workflow={snap.workflow}
+              selected={selected}
+              onSelect={selectAgent}
+              onOpenTask={(id) => {
+                setPeek(false);
+                showTask(id);
+              }}
+              leave={snap.leave ?? []}
+            />
+          )}
           <p className="stage-note">
-            캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.
+            {uiMode === 'new'
+              ? '공간·AI·숫자는 실제 업무 기록에서 계산합니다. 공간이나 AI를 누르면 상세가 열리고, Ctrl+휠·끌기·버튼으로 확대·이동합니다.'
+              : '캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.'}
           </p>
         </section>
 
-        <aside className="panel">
+        <aside key="panel" className="panel">
           <nav className="tabs" role="tablist" ref={watchTabsHeight}>
             <button type="button" role="tab" aria-selected={tab === 'chat'} onClick={() => setTab('chat')}>
               대화
@@ -1758,7 +1914,7 @@ export function App() {
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
           )}
-          {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}
+          {(tab === 'log' || (tab === 'projects' && !isNew)) && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}
 
           {tab === 'agent' && <ReviewLog reviews={snap.workflow.reviews ?? []} tasks={snap.tasks} onOpenTask={(t) => showTask(t.id)} />}
           {tab === 'agent' && (
