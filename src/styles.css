@@ -40,6 +40,9 @@
   --turn-alert-bg: #f6ad91;
   --turn-ink: #2a1a10;
   --turn-muted: #5a4632;
+  /* 내 차례·알림 숫자 배지(Classic 주황, New는 남색에 맞는 파랑) */
+  --badge: #d9822b;
+  --badge-hi: #ef9440;
 
   --font-display: 'Galmuri11', 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   --font-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
@@ -221,7 +224,7 @@ a {
   padding: 0 6px;
   border: 0;
   border-radius: 5px;
-  background: #d9822b;
+  background: var(--badge);
   color: #fffaf0;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -233,7 +236,7 @@ a {
 
 .turn-menu .num-turn.turn-menu-btn:hover,
 .turn-menu .num-turn.turn-menu-btn[aria-expanded='true'] {
-  background: #ef9440;
+  background: var(--badge-hi);
 }
 
 .turn-menu-list {
@@ -352,7 +355,7 @@ a {
   color: var(--st-blocked-ink);
 }
 .pill.pill-mark-ask {
-  background: #d9822b;
+  background: var(--badge);
   color: #fffaf0;
 }
 .pill.pill-mark-busy {
@@ -1380,7 +1383,7 @@ a {
   min-width: 18px;
   padding: 0 5px;
   border-radius: 5px;
-  background: #d9822b;
+  background: var(--badge);
   color: #fffaf0;
   font-size: 12px;
   line-height: 18px;
@@ -1794,7 +1797,7 @@ a {
   flex: none;
   padding: 1px 7px;
   border-radius: 5px;
-  background: #d9822b;
+  background: var(--badge);
   color: #fffaf0;
   font-size: 12px;
   font-weight: 700;
@@ -2085,7 +2088,7 @@ a {
   margin-left: 4px;
   padding: 0 5px;
   border-radius: 5px;
-  background: #d9822b;
+  background: var(--badge);
   color: #fffaf0;
   font-size: 12px;
   line-height: 18px;
@@ -3300,7 +3303,7 @@ a {
 /* 내 차례: 내가 손대야 하는 일만(업무 탭 맨 위) */
 .my-turn {
   padding: 10px;
-  border: 2px solid #d9822b;
+  border: 2px solid var(--badge);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -3364,7 +3367,7 @@ a {
 
 .num-turn {
   margin-left: 4px;
-  background: #d9822b;
+  background: var(--badge);
   color: #fffaf0;
 }
 
@@ -4428,7 +4431,6 @@ a {
   position: absolute;
   inset: 0;
   transform-origin: 0 0;
-  will-change: transform;
 }
 .office-new .no-links {
   position: absolute;
@@ -4995,10 +4997,12 @@ a {
   --st-blocked-ink: #ffbdb0;
   --st-done: #1c3a2a;
   --st-done-ink: #a9e2bf;
-  --turn-bg: #3a3322;
-  --turn-alert-bg: #4d2621;
-  --turn-ink: #f4e7c6;
-  --turn-muted: #cdb88f;
+  --turn-bg: #1c2a3a;
+  --turn-alert-bg: #3a2226;
+  --turn-ink: #e7edf4;
+  --turn-muted: #9fb3c8;
+  --badge: #2f7fb5;
+  --badge-hi: #3d93cc;
   --font-display: var(--font-body);
   --radius: 10px;
   color-scheme: dark;
@@ -5322,4 +5326,54 @@ a {
     font-size: 0;
     gap: 0;
   }
+}
+
+/* 캐릭터 그림(v0.6.1): 동그라미는 얼굴 부분, 방 안은 전신 */
+.no-avatar.is-art {
+  background-color: #dfe6ee;
+  background-size: 210% auto;
+  background-position: 50% 10%;
+  background-repeat: no-repeat;
+}
+.office-new .no-people {
+  top: 54%;
+  align-items: flex-end;
+}
+.office-new .no-room .no-figure {
+  display: block;
+  height: 6.4cqw;
+  width: auto;
+  filter: drop-shadow(0 0.25cqw 0.25cqw rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.office-new .no-room .no-figure.is-dim {
+  opacity: 0.55;
+  filter: grayscale(0.5) drop-shadow(0 0.25cqw 0.25cqw rgba(0, 0, 0, 0.45));
+}
+/* New 화면의 알림 색: 주황 대신 남색 화면에 맞는 파랑, 로컬 데모 표시도 차분하게 */
+:root.ui-new .mode-local {
+  color: #9fc4e0;
+}
+.nx-classic {
+  padding: 4px 11px;
+  border: 1px solid #2f3a4a;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 12px var(--font-body);
+  cursor: pointer;
+}
+.nx-classic:hover {
+  color: var(--ink);
+  background: #1f2732;
+}
+
+.nx-side .num {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.4;
 }
