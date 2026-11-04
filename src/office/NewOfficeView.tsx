@@ -39,14 +39,32 @@ const box = (r: { x: number; y: number; w: number; h: number }): CSSProperties =
   height: `${(r.h / VIEW.h) * 100}%`,
 });
 
+/**
+ * 캐릭터 그림(v0.6.1, 소유자 캐릭터 아트 v3.6): src/assets/office-new/characters/<AI id>.webp 가 있으면 그 그림,
+ * 없으면 글자 동그라미. 새 그림은 파일만 넣으면 붙는다(scripts가 아니라 같은 이름 규칙).
+ */
+const ART = import.meta.glob('../assets/office-new/characters/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const artOf = (id: string): string | undefined => ART[`../assets/office-new/characters/${id}.webp`];
+
 function Avatar({ id, dim = false, size }: { id: AgentId; dim?: boolean; size?: string }) {
   const a = AGENT_BY_ID[id];
+  const art = artOf(id);
   const icon = ICON[id] ?? { bg: '#3a4352', fg: '#fff', t: (a?.name ?? '?').slice(0, 1) };
+  const sz = size ? { width: size, height: size } : {};
+  if (art)
+    return <span className={`no-avatar is-art${dim ? ' is-dim' : ''}`} style={{ backgroundImage: `url(${art})`, ...sz }} aria-hidden="true" />;
   return (
-    <span className={`no-avatar${dim ? ' is-dim' : ''}`} style={{ background: icon.bg, color: icon.fg, ...(size ? { width: size, height: size } : {}) }} aria-hidden="true">
+    <span className={`no-avatar${dim ? ' is-dim' : ''}`} style={{ background: icon.bg, color: icon.fg, ...sz }} aria-hidden="true">
       {icon.t}
     </span>
   );
+}
+
+/** 공간형 방 안에 서 있는 캐릭터(그림이 있으면 전신, 없으면 동그라미) */
+function Figure({ id, dim }: { id: AgentId; dim: boolean }) {
+  const art = artOf(id);
+  if (!art) return <Avatar id={id} dim={dim} />;
+  return <img className={`no-figure${dim ? ' is-dim' : ''}`} src={art} alt="" draggable={false} />;
 }
 
 function ago(iso: string): string {
@@ -282,7 +300,7 @@ function SpaceScene({
                 <span className="no-people">
                   {here.map((a) => (
                     <span key={a.id} title={AGENT_BY_ID[a.id]?.name}>
-                      <Avatar id={a.id} dim={a.resting} />
+                      <Figure id={a.id} dim={a.resting} />
                     </span>
                   ))}
                 </span>
