@@ -32,3 +32,26 @@ describe('계획 수신', () => {
     expect(markPlanInbox).not.toHaveBeenCalledWith('in1', 'imported', expect.anything());
   });
 });
+
+describe('결과는 있는데 작업이 시작됨에 남은 경우', () => {
+  it('그 작업의 자동 결과가 이미 있으면 작업을 완료로 고쳐 올리기 승인이 막히지 않게 한다', async () => {
+    const snap = snapshot();
+    const a = {
+      id: 'as1', taskId: 't1', planRevision: 1, workItemId: 'W1', title: '', assignee: 'gemini' as const, executionMode: 'gemini_actions' as const,
+      dispatchStatus: 'started' as const, statusSource: 'server_verified' as const, providerExecutionId: null, providerTaskUrl: null,
+      actualProviderStatus: 'workflow_dispatched', startedAt: null, lastVerifiedAt: null, updatedAt: '',
+    };
+    snap.workflow = {
+      ...snap.workflow,
+      assignments: [a, { ...a, id: 'as2', workItemId: 'W2' }],
+      results: [{ ...snap.workflow.results[0], planRevision: 1, workItemId: 'W1', source: 'gemini_actions_auto' }],
+    };
+    const updateAssignment = vi.fn().mockResolvedValue(undefined);
+    await receiveWorkflowInbox({
+      snap, reported: new Set(), say: vi.fn(), step: vi.fn(), importPlanText: vi.fn(),
+      store: { loadPlanInbox: vi.fn().mockResolvedValue([]), loadResultInbox: vi.fn().mockResolvedValue([]), updateAssignment } as unknown as OfficeStore,
+    });
+    expect(updateAssignment).toHaveBeenCalledTimes(1);
+    expect(updateAssignment).toHaveBeenCalledWith(expect.objectContaining({ id: 'as1', dispatchStatus: 'completed' }));
+  });
+});

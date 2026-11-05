@@ -432,7 +432,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           .from('agent_assignments')
           .update({
             dispatch_status: a.dispatchStatus,
-            status_source: a.statusSource,
+            // 앱에서 바꾸는 상태는 사용자 기록이다. 서버 확인 표시(server_verified)를 그대로 보내면 DB 보호 규칙이 막아
+            // 서버가 시작한 작업(Gemini 개발·Codex Linear)의 완료·중단 기록이 저장되지 않았다(v0.5.33).
+            status_source: a.statusSource === 'server_verified' ? 'user_reported' : a.statusSource,
             provider_task_url: a.providerTaskUrl,
             actual_provider_status: a.actualProviderStatus,
             started_at: a.startedAt,
