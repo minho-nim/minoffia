@@ -67,3 +67,22 @@ describe('계획과 배정의 원자적 저장', () => {
     await expect(store.addPlan(p.plan, p.assignments)).rejects.toThrow('배정 저장 실패');
   });
 });
+
+describe('배정 상태 기록(v0.5.33 버그: 서버가 시작한 작업을 앱이 못 바꿈)', () => {
+  it('서버 확인 표시가 붙은 작업도 앱이 바꿀 때는 사용자 기록으로 보낸다(DB 보호 규칙이 server_verified를 막음)', async () => {
+    const { vi } = await import('vitest');
+    const sent: Record<string, unknown>[] = [];
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const client = {
+      from: () => ({ update: (row: Record<string, unknown>) => (sent.push(row), { eq }) }),
+    } as unknown as SupabaseClient;
+    const store = createSupabaseStore(client);
+    await store.updateAssignment({
+      id: 'a1', taskId: 't1', planRevision: 1, workItemId: 'W1', title: '', assignee: 'gemini', executionMode: 'gemini_actions',
+      dispatchStatus: 'completed', statusSource: 'server_verified', providerExecutionId: null, providerTaskUrl: null,
+      actualProviderStatus: 'session_reported_result', startedAt: null, lastVerifiedAt: '2026-11-05T00:00:00Z', updatedAt: '',
+    });
+    expect(sent[0]).toMatchObject({ dispatch_status: 'completed', status_source: 'user_reported' });
+    expect(sent[0]).not.toHaveProperty('last_verified_at');
+  });
+});

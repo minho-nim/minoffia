@@ -110,4 +110,13 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
       say('error', `결과 자동 저장 실패(${task.title}) — 1분 뒤 다시 시도해요. 계속 안 되면 Claude 세션의 마지막 메시지를 결과 패키지에 붙여넣으세요.`);
     }
   }
+  // 결과는 저장됐는데 작업이 '시작됨'에 남은 경우(v0.5.33 전에는 완료 기록이 DB에서 막혔다): 그 작업의 자동 결과가
+  // 이미 있으면 완료로 고친다. 그래야 올리기 승인(B)이 "결과를 기다리는 중"으로 막히지 않는다.
+  for (const a of snap.workflow.assignments) {
+    if (a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting') continue;
+    const got = snap.workflow.results.some(
+      (r) => r.taskId === a.taskId && r.planRevision === a.planRevision && r.workItemId === a.workItemId && (r.source === 'gemini_actions_auto' || r.source === 'claude_session_auto'),
+    );
+    if (got) await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result' }).catch(() => undefined);
+  }
 }
