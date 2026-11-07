@@ -132,7 +132,7 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
     <section className="team-panel" aria-label="팀 관리">
       <p className="muted small">
         카드를 눌러 고른 뒤 가운데 버튼으로 옮기거나, 끌어서 반대 칸에 놓으세요. 휴가인 AI의 업무는 일할 수 있는 다른 AI에게 넘어가고, 새 업무와 PM 계획에서도 빠져요(맡을 AI가 없는 업무만 그대로). 미니엉과
-        CI 봇은 늘 근무해요.
+        미노(CI)는 늘 근무해요.
       </p>
       <div className="team-board">
         {column('work', working)}
