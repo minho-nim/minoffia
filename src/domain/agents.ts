@@ -114,7 +114,7 @@ export const AGENTS: Agent[] = [
   },
   {
     id: 'ci',
-    name: 'CI 봇',
+    name: '미노',
     role: '검수·QA',
     provider: 'GitHub Actions',
     mode: 'ci',

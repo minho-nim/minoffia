@@ -1408,7 +1408,7 @@ export function App() {
         <div className="brand-block">
           <span className="brand-line">
             <h1 className="brand">
-              MINLAB AI OFFICE <span className="ver">v{version}</span>
+              minoffia. <span className="ver">v{version}</span>
             </h1>
             <TurnMenu items={turns} onOpen={showTask} />
           </span>
@@ -1433,7 +1433,7 @@ export function App() {
 
       <div className={`topbar-mini${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
         <button type="button" tabIndex={barOn ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
-          MINLAB AI OFFICE <span className="ver">v{version}</span>
+          minoffia. <span className="ver">v{version}</span>
         </button>
         <TurnMenu items={turns} onOpen={showTask} tabbable={barOn} />
         {/* 머리의 프로젝트 이름: 대화 탭은 대화에서 고른 프로젝트, 다른 탭은 업무 필터 */}

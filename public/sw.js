@@ -3,7 +3,7 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 
 self.addEventListener('push', (event) => {
-  let msg = { title: 'MinLab AI Office', body: '내 차례가 생겼어요.', tag: 'my-turn', url: '/' };
+  let msg = { title: 'minoffia.', body: '내 차례가 생겼어요.', tag: 'my-turn', url: '/' };
   try {
     if (event.data) msg = { ...msg, ...event.data.json() };
   } catch {
