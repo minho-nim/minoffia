@@ -21,7 +21,7 @@ export function Login({ client }: { client: SupabaseClient }) {
 
   return (
     <main className="login">
-      <h1 className="brand">MINLAB AI OFFICE</h1>
+      <h1 className="brand">minoffia.</h1>
       <p className="muted">소유자 계정으로 로그인하세요. 업무는 Supabase에 저장되어 다른 기기와 공유됩니다.</p>
       <form
         className="task-form"

@@ -40,7 +40,7 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
     }),
     t({
       id: 's-5', projectId: 'p-musclemap', title: '로그인 회귀 테스트 점검', type: 'qa', assignee: 'ci', status: 'done',
-      routeReason: "키워드 '테스트', '점검' → 검수·QA → CI 봇",
+      routeReason: "키워드 '테스트', '점검' → 검수·QA → 미노",
     }),
   ];
   const usage = [
