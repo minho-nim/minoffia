@@ -16,7 +16,7 @@ describe('개발 습관·저장소 지도(v0.4.96)', () => {
   it('이 저장소에서 돌리면 이미 있는 것을 짧게 보여 준다', () => {
     const out = execFileSync('node', ['scripts/repo-map.mjs'], { encoding: 'utf8' });
     expect(out).toContain('src/domain/:');
-    expect(out).toContain('BASE_RULES');
+    expect(out).toContain('supabase/functions/');
     expect(out.length).toBeLessThanOrEqual(2600);
     expect(out).not.toMatch(/\.test\./);
   });

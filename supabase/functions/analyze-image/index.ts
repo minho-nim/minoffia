@@ -6,6 +6,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import JSZip from 'npm:jszip@3.10.1';
 import { buildDocPrompt, buildPrompt, geminiMime, parseAnalysis, toBase64 } from './analysis.ts';
 import { extractOffice, OFFICE_KIND, officeToText } from './office.ts';
+import { NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -139,6 +140,7 @@ Deno.serve(async (req) => {
     let status = 0;
     let text = '';
     let message = '';
+    let tokens: GeminiTokens = NO_TOKENS;
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
@@ -153,12 +155,13 @@ Deno.serve(async (req) => {
       const json = (await res.json().catch(() => ({}))) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } };
       text = (json.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim();
       message = json.error?.message ?? '';
+      tokens = tokensOf(json);
     } catch (e) {
       message = (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message;
     }
     const slot = i + 1;
     if (status === 200 && text) {
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'image', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: prompt.length, answer_chars: text.length });
+      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'image', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: prompt.length, answer_chars: text.length, ...tokens });
       return save(parseAnalysis(text), model, slot);
     }
     last = { status, message };

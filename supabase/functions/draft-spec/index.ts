@@ -4,6 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { autoTitle, DRAFT_SYSTEM, parseDraft } from './draft.ts';
 import { loadRules, rulesSection, saveRules } from './projectRules.ts';
+import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -35,7 +36,7 @@ async function callGemini(key: string, model: string, text: string) {
   });
   const data = await res.json().catch(() => ({}) as Record<string, unknown>);
   const parts = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? [];
-  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '' };
+  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '', tokens: tokensOf(data) };
 }
 
 Deno.serve(async (req) => {
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
   for (const [i, key] of keys.entries()) {
     if (!key) continue;
-    let r: { status: number; text: string; message: string };
+    let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
     try {
       r = await callGemini(key, model, prompt);
     } catch (e) {
@@ -100,7 +101,7 @@ Deno.serve(async (req) => {
         last = { status: 200, message: '초안 형식이 맞지 않습니다.' };
         break;
       }
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'plan', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: r.text.length });
+      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'plan', key_slot: slot, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}) });
       const { data: latest } = await userClient.from('task_specs').select('revision').eq('task_id', task.id).order('revision', { ascending: false }).limit(1).maybeSingle();
       const revision = (latest?.revision ?? 0) + 1;
       const { error } = await userClient.from('task_specs').insert({

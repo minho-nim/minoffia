@@ -3,6 +3,7 @@
 // v0.4.94부터 근무 중인 Studio A·B가 하나씩(최대 두 장) 만들고 소유자가 하나를 고른다. 이 계획 버전에 견본이 이미 있으면 만들지 않는다. 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만, 글은 저장하지 않고 횟수만 ai_calls(purpose prototype).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { extractHtml, PROTOTYPE_SYSTEM, stripActive } from './prototype.ts';
+import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
 const HARD_DAILY_CAP = 20;
 const DEFAULT_DAILY_CAP = 10;
@@ -34,7 +35,7 @@ async function callGemini(key: string, model: string, text: string) {
   });
   const data = await res.json().catch(() => ({}) as Record<string, unknown>);
   const parts = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? [];
-  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '' };
+  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '', tokens: tokensOf(data) };
 }
 
 Deno.serve(async (req) => {
@@ -90,7 +91,7 @@ Deno.serve(async (req) => {
   const slots = keys.map((key, i) => ({ key, i })).filter((x) => x.key).slice(0, Math.max(1, cap - (count ?? 0)));
   const runs = await Promise.all(
     slots.map(async ({ key, i }) => {
-      let r: { status: number; text: string; message: string };
+      let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
       try {
         r = await callGemini(key, model, text);
       } catch (e) {
@@ -99,7 +100,7 @@ Deno.serve(async (req) => {
       const html = r.status === 200 && r.text ? extractHtml(r.text) : '';
       if (html) {
         const clean = stripActive(html);
-        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'prototype', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: clean.length });
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'prototype', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: clean.length, ...(r.tokens ?? {}) });
         return { slot: i === 0 ? 'A' : 'B', html: clean, status: 200, message: '' };
       }
       return { slot: i === 0 ? 'A' : 'B', html: '', status: r.status, message: r.status === 200 ? 'HTML 견본 형식이 아닙니다.' : r.message };

@@ -1,5 +1,11 @@
 # 변경 기록
 
+## Gemini 실제 토큰 저장(v0.5.50) — 2026-11-08
+
+- Gemini 응답의 usageMetadata(질문·답·생각 토큰)를 ai_calls에 그대로 남긴다(추가 호출 없음). 대상: ask-gemini(스트리밍 포함)·draft-spec·draft-plan·review-result·analyze-image·draft-prototype.
+- 위쪽 사용량의 Gemini 줄에 오늘 실제 토큰 합을 같이 보인다(예: 12회 · 34.5k 토큰). 예전 기록은 횟수만.
+- 반영 순서: 마이그레이션 0040 먼저 적용 → 함수 6개 배포 → 앱 배포. 함수만 먼저 올리면 사용량 기록이 실패한다.
+
 ## 로그 비밀값 가리기(v0.5.49) — 2026-11-08
 
 - 결과의 시험 기록·요약·남은 문제를 저장하기 전에 토큰·키처럼 생긴 글자(GitHub·OpenAI·Google·Supabase·Slack·AWS·Linear 키, JWT, 개인 키, `api_key=…`·`Authorization: Bearer …`)를 `[가림]`으로 바꾼다. 서버(submit-result)와 앱(자동 결과 받기·직접 등록) 둘 다. diff는 실제 코드라 그대로 둔다. submit-result 배포 필요.

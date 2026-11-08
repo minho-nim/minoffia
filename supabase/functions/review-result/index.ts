@@ -6,6 +6,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, redoFeedback, REVIEW_SYSTEM, SECOND_OPINION_NOTE, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
 import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
+import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -38,7 +39,7 @@ async function callGemini(key: string, model: string, text: string) {
   });
   const data = await res.json().catch(() => ({}) as Record<string, unknown>);
   const parts = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? [];
-  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '' };
+  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '', tokens: tokensOf(data) };
 }
 
 Deno.serve(async (req) => {
@@ -175,14 +176,14 @@ Deno.serve(async (req) => {
     const ask = async (text = prompt): Promise<Score | null> => {
       for (const [i, key] of keys.entries()) {
         if (!key) continue;
-        let r: { status: number; text: string; message: string };
+        let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
         try {
           r = await callGemini(key, model, text);
         } catch (e) {
           r = { status: 0, text: '', message: (e as Error).name };
         }
         const parsed = r.status === 200 ? parseScore(r.text) : null;
-        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(parsed ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}), ...(parsed ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
         if (parsed) {
           judge = `Gemini · Studio ${i === 0 ? 'A' : 'B'}`;
           return parsed;
