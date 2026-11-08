@@ -1,5 +1,11 @@
 # 변경 기록
 
+## 개발 지시서 다듬기(v0.5.40) — 2026-11-08
+
+- 개발 습관(DEV_HABITS, 개발·PM 지시서 5곳 복사본)을 '하지 마라' 대신 '이렇게 해라'로 고치고 12줄 → 10줄로 합침(mattpocock writing-for-agents 착안).
+- 세부 확인은 채점이 맡게: 채점 지시문에 사용자 글 innerHTML·로그 비밀값·AI 지시문에 입력 이어 붙이기·화면 상태 누락 확인 추가(retro의 구현/검토 나누기 착안).
+- 서버 함수 dispatch-claude·dispatch-claude-dev·dispatch-gemini-dev·draft-plan·review-result·submit-review 배포 필요.
+
 ## 요구사항 번호와 '다 덮었나' 검사(v0.5.39) — 2026-11-08
 
 - 기획서 테스트 기준 줄마다 R1, R2…를 붙여 PM(Claude·Gemini 대신 분배)에 보내고, 작업마다 맡는 번호(covers)를 적게 한다. 작은 일 바로 배정은 작업 하나가 전부 맡는다.
