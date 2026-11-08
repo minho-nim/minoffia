@@ -35,6 +35,7 @@ import { createResultReviewer } from './workflow/resultReview';
 import { RepoStructure } from './components/FileTreeView';
 import { projectChanges } from './domain/fileTree';
 import { checkSmallTask, smallPlanText } from './domain/smallTask';
+import { mentionedAssignee } from './domain/mention';
 import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
 import type { Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
@@ -1320,11 +1321,12 @@ export function App() {
     const away = new Set(data.leave ?? []);
     const firstPlan = view.spec && !data.workflow.plans.some((p) => p.taskId === task.id && p.approvedSpecRevision === view.spec!.revision);
     if (!opts.skipSmall && view.spec && firstPlan && repo) {
-      const check = checkSmallTask(view.spec, repo, { codex: away.has('codex'), gemini: away.has('studioA') && away.has('studioB') });
+      const want = mentionedAssignee(task.userOriginalText ?? task.description);
+      const check = checkSmallTask(view.spec, repo, { codex: away.has('codex'), gemini: away.has('studioA') && away.has('studioB'), claude: away.has('claude') }, want?.preference);
       if (check.ok) {
         const failed = await importPlanText(task, smallPlanText(task.id, repo, view.spec, check), 'rule_small', data);
         if (!failed) {
-          say('ok', `작은 일이라 PM 없이 ${check.preference === 'gemini_dev' ? 'Gemini 개발' : 'Codex'}에 바로 배정했어요(${task.title}). 실행 승인하면 시작해요.`);
+          say('ok', `작은 일이라 PM 없이 ${check.preference === 'gemini_dev' ? 'Gemini 개발' : check.preference === 'claude_support' ? 'Claude' : 'Codex'}에 바로 배정했어요(${task.title}). 실행 승인하면 시작해요.`);
           return;
         }
       }

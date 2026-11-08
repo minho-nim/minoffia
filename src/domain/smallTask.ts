@@ -30,7 +30,13 @@ export type SmallCheck = { ok: true; preference: AssigneePreference; difficulty:
  * 작은 일인지 본다. 이유를 모두 모아 알려 준다(업무 카드에 'PM에게 보낸 이유'로 쓸 수 있게).
  * away: 휴가 중(codex = Codex, gemini = Studio A·B 둘 다). repo: 프로젝트 저장소(owner/repo).
  */
-export function checkSmallTask(spec: TaskSpec, repo: string | null | undefined, away: { codex?: boolean; gemini?: boolean } = {}): SmallCheck {
+export function checkSmallTask(
+  spec: TaskSpec,
+  repo: string | null | undefined,
+  away: { codex?: boolean; gemini?: boolean; claude?: boolean } = {},
+  /** @이름으로 지정한 AI(v0.5.46). 휴가가 아니고 이 저장소에 쓸 수 있으면 먼저 쓴다 */
+  want?: AssigneePreference | null,
+): SmallCheck {
   const why: string[] = [];
   const h = spec.sizeHint;
   if (spec.intent !== 'change_request') why.push('개발·수정 요청이 아님');
@@ -46,8 +52,11 @@ export function checkSmallTask(spec: TaskSpec, repo: string | null | undefined, 
   for (const [re, label] of RISKY) if (re.test(text)) why.push(label);
   if (!repo || !repo.includes('/')) why.push('저장소 없음');
   const geminiOk = !away.gemini && !OFFICE_REPOS.includes(repo?.toLowerCase() ?? '');
-  const preference: AssigneePreference | null =
-    h && h.difficulty <= 3 && geminiOk ? 'gemini_dev' : !away.codex ? 'codex_primary' : geminiOk && h && h.difficulty <= 3 ? 'gemini_dev' : null;
+  const wantOk =
+    want === 'gemini_dev' ? geminiOk : want === 'codex_primary' ? !away.codex : want === 'claude_support' ? !away.claude : false;
+  const preference: AssigneePreference | null = wantOk && want
+    ? want
+    : h && h.difficulty <= 3 && geminiOk ? 'gemini_dev' : !away.codex ? 'codex_primary' : geminiOk && h && h.difficulty <= 3 ? 'gemini_dev' : null;
   if (!preference) why.push('맡을 AI가 휴가');
   if (why.length || !h || !preference) return { ok: false, why: [...new Set(why)] };
   return { ok: true, preference, difficulty: h.difficulty };
