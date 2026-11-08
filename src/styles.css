@@ -4688,3 +4688,11 @@ a {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* 디자인 단어 버튼(v0.5.54) */
+.design-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
