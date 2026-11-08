@@ -1,5 +1,9 @@
 # 변경 기록
 
+## 미노피아 이름 바꾸기 준비(v0.5.44) — 2026-11-08
+
+- 이 저장소를 가리키는 제외 목록(작은 일 Gemini 배정·Gemini 대신 분배·Gemini 개발 시작·Gemini 개발 워크플로)에 새 이름 minho-nim/minoffia도 넣었다. 저장소 이름을 바꿔도 이 저장소에 Gemini 개발이 배정되지 않는다.
+
 ## 모든 결과에 Archify 구조도(v0.5.43) — 2026-11-08
 
 - 결과 카드 '바뀐 곳 구조도' 안에 'Archify 구조도 크게 보기': Codex·Claude·Gemini 결과 모두. 처음 누르면 서버 함수 archify-result가 diff로 파일 나무를 만들어 GitHub Actions(archify.yml, Archify 고정 커밋)에 그리기를 맡기고, 1회용 업로드 주소(그 파일 하나, 2시간)로 소유자 폴더에 올린다. 앱은 1~2분 뒤 자동으로 연다. AI 호출·DB 변경 없음.
