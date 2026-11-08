@@ -1776,6 +1776,7 @@ export function App() {
           {tab === 'team' && (
             <TeamPanel
               snap={snap}
+              loadKeys={store.keyStatus ? () => store.keyStatus!() : undefined}
               onSetLeave={(agent, onLeave) =>
                 setLeaveNow(agent, onLeave)
               }

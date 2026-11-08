@@ -589,6 +589,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('linear-probe', {});
       return data as unknown as import('./store').LinearProbe;
     },
+    async keyStatus() {
+      const data = await invoke('key-status', {});
+      return Array.isArray(data.keys) ? (data.keys as import('./store').KeyStatus[]) : [];
+    },
     async repoTree(projectId) {
       const data = await invoke('repo-tree', { projectId });
       return Array.isArray(data.paths) ? (data.paths as unknown[]).filter((x): x is string => typeof x === 'string') : [];
