@@ -16,7 +16,7 @@ export const PLAN_SYSTEM = [
   '- id는 W1, W2…; dependencies에는 먼저 끝나야 하는 작업 id만.',
   '- difficulty: 1~3 쉬움(문구·설정·작은 화면 수정), 4~6 보통(기능 하나·여러 파일), 7~10 어려움(구조 변경·DB·보안·여러 기능 얽힘).',
   '- development_mode: "prototype_first"는 신규 앱·UI 전면 개편·새 인터랙션일 때만. 그때 첫 작업은 assignee_preference "gemini_optional"(견본)이고 다른 작업은 그 뒤에 잇는다. 그 밖에는 "direct".',
-  '- 꼭 필요한 조건이 빠져 나눌 수 없으면 status "needs_clarification", work_items는 빈 배열, questions에 확인 질문(3개 이하).',
+  '- 꼭 필요한 조건이 빠져 나눌 수 없으면 status "needs_clarification", work_items는 빈 배열, questions에 확인 질문(3개 이하). 질문마다 줄 끝에 "→ 추천: <가장 그럴듯한 답>"을 붙여 사용자가 그대로 고를 수 있게 한다.',
   '- execution_mode는 늘 "manual_handoff". 실행 승인은 사람이 한다.',
   ...PM_HABITS.map((x) => `- ${x}`),
 ].join('\n');
@@ -64,7 +64,7 @@ export function buildPlanText(i: PlanInput): string {
     s.preserve_constraints ? `유지 조건: ${s.preserve_constraints}` : '',
     s.test_criteria ? `테스트 기준: ${s.test_criteria}` : '',
     ...(i.qa.length ? ['', '## 확인 질문·답변', ...i.qa.flatMap((c, n) => [`Q${n + 1}. ${c.question}`, `A${n + 1}. ${c.answer}`])] : []),
-    ...(i.revisionFeedback ? ['', '## 결과 검토 뒤 사용자 수정 요청(새 계획 필요)', i.revisionFeedback] : []),
+    ...(i.revisionFeedback ? ['', '## 결과 검토 뒤 사용자 수정 요청(새 계획 필요)', i.revisionFeedback, '이 수정 요청을 그대로 따르기 전에 승인된 기획서와 맞는지 먼저 따진다. 기획서와 부딪히거나 결과를 더 나쁘게 만들 수 있으면 계획 대신 status "needs_clarification"로 왜 부딪히는지 묻는다.'] : []),
     ...(i.previous ? ['', '## 앞 결과에서 넘겨받은 것(이미 한 일은 다시 시키지 말고, 남은 문제만 작업으로)', i.previous] : []),
     '',
     assignLine(i.away, i.geminiDevOk),
