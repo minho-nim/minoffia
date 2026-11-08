@@ -59,6 +59,48 @@ export function bugSteps(text: string, hint?: boolean): string[] {
   return isBugWork(text, hint) ? ['', '## 버그 진단 순서(이 일은 버그라서 넣음)', ...BUG_DIAGNOSIS.map((x) => `- ${x}`)] : [];
 }
 
+/**
+ * 필요할 때만 붙는 확인 목록(v0.5.45, vercel find-skills·버그 진단과 같은 방식). 업무 글에 그 분야 말이 있을 때만
+ * 개발 지시서에 붙는다(평소 토큰 0). 문장은 검토해 고정한 것만, '이렇게 해라'로 쓴다.
+ */
+export const DOMAIN_STEPS: readonly { id: string; title: string; match: RegExp; lines: readonly string[] }[] = [
+  {
+    id: 'ui',
+    title: '화면 확인',
+    match: /화면|버튼|디자인|레이아웃|스타일|모바일|휴대폰|반응형|페이지|색|글꼴|css|ui\b/i,
+    lines: [
+      '데스크톱(1400px)·휴대폰(400px) 폭에서 직접 열어 보고, 콘솔 오류·가로 넘침이 없는지 결과에 적는다.',
+      '불러오는 중·빈 화면·오류 상태와 아주 긴 글자(넘침)를 함께 확인한다.',
+      '이미 있는 색·글꼴·간격 규칙(CSS 변수 등)을 그대로 쓰고, 글자 대비와 손가락으로 누르기 쉬운 버튼 크기(44px 안팎)를 지킨다.',
+    ],
+  },
+  {
+    id: 'db',
+    title: 'DB 변경 확인',
+    match: /db\b|데이터베이스|테이블|마이그레이션|스키마|supabase|sql|rls/i,
+    lines: [
+      '스키마 변경은 새 마이그레이션 파일로만 하고, 이미 있는 마이그레이션 파일은 그대로 둔다.',
+      '새 표는 RLS를 켜고 소유자 조건 정책을 함께 만든다.',
+      '되돌리기 어려운 변경(열 삭제·이름 변경)은 데이터를 지키는 방법과 함께 남은 문제에 적고, DB 시험이 있으면 돌린다.',
+    ],
+  },
+  {
+    id: 'security',
+    title: '보안 확인',
+    match: /로그인|인증|권한|토큰|비밀번호|결제|보안|auth/i,
+    lines: [
+      '권한 검사는 서버에서 하고, 화면에서 숨기는 것은 편의로만 쓴다.',
+      '비밀값·토큰은 서버 비밀 설정에서만 읽고 응답·로그·화면에는 가려서 쓴다.',
+      '로그인 안 됨·권한 없음 경우를 시험으로 확인한다.',
+    ],
+  },
+];
+
+/** 업무 글에 맞는 확인 목록 절들(없으면 빈 목록) */
+export function domainSteps(text: string): string[] {
+  return DOMAIN_STEPS.filter((d) => d.match.test(text)).flatMap((d) => ['', `## ${d.title}(이 일에 해당해서 넣음)`, ...d.lines.map((x) => `- ${x}`)]);
+}
+
 /** 작업 전에 돌리는 저장소 지도 만들기(이미 있는 함수·컴포넌트 목록, 모델 호출 없음). scripts/repo-map.mjs와 같다. */
 export const REPO_MAP_SCRIPT = "import{execFileSync as x}from'node:child_process';import{readFileSync as r}from'node:fs';\nconst S=/\\.(m?[jt]sx?|py|go)$/,K=/(^|\\/)(node_modules|dist|build|vendor|tests?|__tests__|migrations|fixtures)\\/|\\.(test|spec|d|min)\\.\\w+$/,\nE=/^export\\s+(?:default\\s+)?(?:async\\s+)?(?:function\\*?|class|const|let|interface|type|enum)\\s+([\\w$]+)/gm,P=/^(?:async\\s+)?def\\s+([a-zA-Z]\\w*)|^class\\s+(\\w+)/gm,G=/^func\\s+(?:\\([^)]*\\)\\s*)?([A-Z]\\w*)/gm,m=new Map();\nfor(const f of x('git',['ls-files'],{encoding:'utf8',maxBuffer:1<<26}).split('\\n').filter(f=>S.test(f)&&!K.test(f)).slice(0,3000)){\nlet t;try{t=r(f,'utf8')}catch{continue}const re=f.endsWith('.py')?P:f.endsWith('.go')?G:E,d=f.includes('/')?f.slice(0,f.lastIndexOf('/')+1):'./',a=m.get(d)??[];\nfor(const k of t.matchAll(re))a.push(k[1]??k[2]);if(a.length)m.set(d,a)}\nlet o='저장소 지도(이미 있는 것. 다시 만들지 말고 쓴다. 자세한 건 그 파일만 읽는다):';\nfor(const[d,a]of m){const u=[...new Set(a)],l=`\\n${d}: ${u.slice(0,25).join(', ')}${u.length>25?` 외 ${u.length-25}개`:''}`;if(o.length+l.length<=Number(process.argv[2]||2500))o+=l}\nconsole.log(o);";
 
