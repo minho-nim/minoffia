@@ -7,6 +7,7 @@ import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, redoF
 import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
+import { NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -40,6 +41,23 @@ async function callGemini(key: string, model: string, text: string) {
   const data = await res.json().catch(() => ({}) as Record<string, unknown>);
   const parts = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? [];
   return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '', tokens: tokensOf(data) };
+}
+
+/** 채점 AI가 요청한 파일을 기본 브랜치에서 읽는다(읽기 전용 토큰, 너무 크면 null) */
+async function readRepoFile(repo: string, path: string): Promise<string | null> {
+  const token = env('GITHUB_REPO_TOKEN');
+  if (!token || !repo.includes('/')) return null;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.raw', 'User-Agent': 'minoffia' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.length > 200_000 ? null : text;
+  } catch {
+    return null;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -173,29 +191,41 @@ Deno.serve(async (req) => {
     const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);
     const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
     const prompt = reviewMaterial();
-    const ask = async (text = prompt): Promise<Score | null> => {
+    // 파일 요청(v0.5.52): 첫 채점에서만 "이 파일이 필요해"를 허용하고, 서버가 GitHub에서 읽어 한 번만 다시 묻는다.
+    let used = count ?? 0;
+    let filesAsked = false;
+    const repoName = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
+    const ask = async (text = prompt, allowFiles = false): Promise<Score | null> => {
       for (const [i, key] of keys.entries()) {
         if (!key) continue;
         let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
         try {
-          r = await callGemini(key, model, text);
+          r = await callGemini(key, model, allowFiles ? `${text}\n\n${NEED_FILES_ASK}` : text);
         } catch (e) {
           r = { status: 0, text: '', message: (e as Error).name };
         }
         const parsed = r.status === 200 ? parseScore(r.text) : null;
-        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}), ...(parsed ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
+        const need = !parsed && allowFiles && r.status === 200 ? parseNeedFiles(r.text) : null;
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed || need), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}), ...(parsed || need ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
+        used += parsed || need ? 1 : 0;
         if (parsed) {
           judge = `Gemini · Studio ${i === 0 ? 'A' : 'B'}`;
           return parsed;
+        }
+        if (need && used < cap) {
+          filesAsked = true;
+          const files = await Promise.all(need.map(async (path) => ({ path, text: await readRepoFile(repoName, path) })));
+          return ask(withFiles(text, files));
         }
         if (r.status === 400 || r.status === 404) break;
       }
       return null;
     };
     if ((count ?? 0) < cap && (keys[0] || keys[1])) {
-      score = await ask();
+      score = await ask(prompt, repoName.includes('/') && repoName.toLowerCase() !== 'minho-nim/minlab');
+      if (filesAsked) judge += ' · 파일 확인';
       // 경계 점수면 한 번 더 채점해 평균(무료 호출 1번 더). 두 번째는 '반대 쪽 검토자' 입장(v0.5.37)
-      if (score && needsSecondOpinion(score) && (count ?? 0) + 1 < cap) {
+      if (score && needsSecondOpinion(score) && used < cap) {
         const again = await ask(`${prompt}\n\n${SECOND_OPINION_NOTE}`);
         if (again) {
           score = averageScores(score, again);
