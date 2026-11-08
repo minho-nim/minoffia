@@ -74,7 +74,7 @@ jobs:
           [ "$HAS_KEY" = "true" ] || echo "::notice::GEMINI_API_KEY(키 A)가 없어 키 B만 씁니다."
           [ "$HAS_KEY2" = "true" ] || echo "::notice::GEMINI_API_KEY2(키 B)가 없어 키 A만 씁니다."
           [ "$HAS_TOKEN" = "true" ] || missing="$missing TARGET_REPO_TOKEN"
-          if [ -n "$missing" ]; then echo "::error::이 저장소(MinLab-AI-Office)의 Actions secrets에 없는 것:${missing} (Settings → Secrets and variables → Actions)"; exit 1; fi
+          if [ -n "$missing" ]; then echo "::error::이 저장소(minoffia)의 Actions secrets에 없는 것:${missing} (Settings → Secrets and variables → Actions)"; exit 1; fi
 
       - name: 대상 저장소 받기(토큰은 남기지 않음)
         uses: actions/checkout@v4
