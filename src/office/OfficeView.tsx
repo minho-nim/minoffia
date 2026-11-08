@@ -192,7 +192,9 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
       <div
         className={`memo-board${memoOpen ? ' is-open' : ''}`}
         style={{
-          left: pct(MEMO_BOARD.x, W),
+          // 사무실 가운데 기준으로 두어 펼쳐도 양옆으로 넓어지게(오른쪽으로 빠지지 않게, v0.5.36)
+          left: '50%',
+          transform: 'translateX(-50%)',
           top: pct(MEMO_BOARD.y, H),
           width: pct(MEMO_BOARD.w, W),
           height: memoOpen ? undefined : pct(MEMO_BOARD.h, H),
