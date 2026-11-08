@@ -1,4 +1,5 @@
 import { ImageZoom } from './ImageZoom';
+import { PointFix } from './PointFix';
 import { useEffect, useRef, useState } from 'react';
 import { FilePreview } from './FilePreview';
 import {
@@ -246,6 +247,7 @@ export function AttachmentGallery({
   emptyText,
   analyses,
   onAnalyze,
+  onPoint,
   analyzeBlocker,
   allowDocs = false,
 }: {
@@ -266,6 +268,8 @@ export function AttachmentGallery({
   onAnalyze?: (a: Attachment) => Promise<boolean>;
   /** 분석할 수 없는 이유(예: 기획 승인 뒤 잠김) */
   analyzeBlocker?: string | null;
+  /** 화면 짚어서 수정: 사진을 눌러 고칠 곳을 표시하면 그 글을 받는다(v0.5.48) */
+  onPoint?: (text: string) => void;
   /** 요청 자료면 문서도 받는다 */
   allowDocs?: boolean;
 }) {
@@ -276,6 +280,7 @@ export function AttachmentGallery({
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({});
   const [zoom, setZoom] = useState<{ src: string; name: string } | null>(null);
+  const [pointing, setPointing] = useState<{ src: string; name: string } | null>(null);
   const editable = !blocker && !!onUpdate;
 
   useEffect(() => {
@@ -305,6 +310,17 @@ export function AttachmentGallery({
   return (
     <div className="att">
       {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
+      {pointing && onPoint && (
+        <PointFix
+          src={pointing.src}
+          name={pointing.name}
+          onClose={() => setPointing(null)}
+          onDone={(text) => {
+            onPoint(text);
+            setPointing(null);
+          }}
+        />
+      )}
       {items.length === 0 ? (
         emptyText && <p className="muted small">{emptyText}</p>
       ) : (
@@ -347,6 +363,11 @@ export function AttachmentGallery({
                   <p className="small">
                     <span className="pill">{ROLE_LABEL[a.role]}</span> {a.note}
                   </p>
+                )}
+                {onPoint && urls[a.id] && isRaster(a.mime) && (
+                  <button type="button" className="btn btn-small btn-ghost att-analyze" onClick={() => setPointing({ src: urls[a.id]!, name: a.fileName })}>
+                    짚어서 수정
+                  </button>
                 )}
                 {previewable(a.mime) && (
                   <button type="button" className="btn btn-small btn-ghost att-analyze" aria-expanded={!!previewOpen[a.id]} onClick={() => setPreviewOpen({ ...previewOpen, [a.id]: !previewOpen[a.id] })}>
