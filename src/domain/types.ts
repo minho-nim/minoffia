@@ -86,6 +86,8 @@ export interface AiCall {
   purpose: 'question' | 'image';
   /** 공급자 응답 코드(429 = 한도) */
   httpStatus: number | null;
+  /** Gemini가 알려 준 실제 토큰(질문+답+생각, v0.5.50). 예전 기록은 null */
+  tokens?: number | null;
   createdAt: string;
 }
 

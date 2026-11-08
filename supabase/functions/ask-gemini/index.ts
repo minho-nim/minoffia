@@ -4,6 +4,7 @@
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
 /** 코드 상한. GEMINI_DAILY_CAP을 더 크게 줘도 넘지 않는다(이미지 분석과 무료 한도를 나눠 쓴다). */
 const HARD_DAILY_CAP = 100;
@@ -270,6 +271,7 @@ Deno.serve(async (req) => {
             let buf = '';
             let total = 0;
             let first = 0;
+            let tokens: GeminiTokens = NO_TOKENS;
             const found = new Map<string, string>();
             try {
               for (;;) {
@@ -283,6 +285,7 @@ Deno.serve(async (req) => {
                   if (!line.startsWith('data:')) continue;
                   const chunk = JSON.parse(line.slice(5).trim() || '{}');
                   if (research) sourcesOf(chunk, found);
+                  tokens = latestTokens(tokens, chunk);
                   const text = partsText(chunk);
                   if (!text) continue;
                   if (!first) first = Date.now() - started;
@@ -296,7 +299,7 @@ Deno.serve(async (req) => {
             } finally {
               controller.close();
               console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
-              await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total });
+              await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total, ...tokens });
             }
           },
         });
@@ -306,7 +309,7 @@ Deno.serve(async (req) => {
       const text = res.status === 200 ? partsText(data).trim() : '';
       if (text) {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
-        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length });
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
         const found = new Map<string, string>();
         if (research) sourcesOf(data, found);
         return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
