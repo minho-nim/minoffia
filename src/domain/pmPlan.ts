@@ -75,6 +75,8 @@ export function parsePmPlan(text: string, expectedTaskId: string): ParseResult {
       // 난이도(v0.4.71): 1~10 정수만, 틀리거나 없으면 빼고 계획은 그대로 받는다(예전 계획 호환)
       ...(cleanDifficulty(item.difficulty) !== undefined ? { difficulty: cleanDifficulty(item.difficulty) } : {}),
       ...(typeof item.difficulty_reason === 'string' && item.difficulty_reason.trim() ? { difficulty_reason: item.difficulty_reason.trim().slice(0, 200) } : {}),
+      // 맡는 요구사항 번호(v0.5.39): R+숫자만 받고 나머지는 버린다(없어도 계획은 받음)
+      ...(isStrArray(item.covers) ? { covers: item.covers.map((c) => c.trim().toUpperCase()).filter((c) => /^R\d{1,3}$/.test(c)).slice(0, 50) } : {}),
     });
   });
   for (const item of items) {

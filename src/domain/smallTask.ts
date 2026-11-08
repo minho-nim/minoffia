@@ -1,6 +1,7 @@
 // 작은 일은 PM 없이 바로 배정(v0.5.20, 소유자 2026-11-03 "Claude 한도가 차도 업무가 안 멈추게").
 // Gemini 기획서 초안이 같은 호출로 매긴 크기 힌트 + 규칙 검사(토큰 0)를 모두 지나야 작은 일이다. 하나라도 걸리면 PM이 나눈다.
 // 바로 배정해도 실행 승인(E)은 그대로 소유자가 하고, 업무 카드의 'PM에게 나눠 맡기기'로 되돌릴 수 있다.
+import { requirementLines } from './requirements';
 import type { AssigneePreference, TaskSpec } from './workflow-types';
 
 /** 이 저장소(AI Office 자신)에는 Gemini 개발을 쓰지 않는다(dispatch-claude와 같은 규칙) */
@@ -76,6 +77,8 @@ export function smallPlanText(taskId: string, repo: string, spec: TaskSpec, chec
         requires_execution_approval: true,
         difficulty: check.difficulty,
         difficulty_reason: '기획서 초안의 크기 힌트',
+        // 작업 하나가 모든 요구사항을 맡는다(v0.5.39)
+        covers: requirementLines(spec.testCriteria).map((_, i) => `R${i + 1}`),
       },
     ],
   });

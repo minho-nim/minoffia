@@ -66,6 +66,8 @@ export interface WorkItem {
   difficulty?: number;
   /** 난이도 이유 한 줄 */
   difficulty_reason?: string;
+  /** 이 작업이 맡는 기획서 요구사항 번호(R1, R2…, v0.5.39). 없으면 예전 계획 */
+  covers?: string[];
 }
 
 /** 개발 방식(새 플로우 07단계): 견본 먼저(AI Studio Build → 견본 승인 → Codex) / 바로 개발 */

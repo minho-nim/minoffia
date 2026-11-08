@@ -4444,3 +4444,18 @@ a {
 .team-keys li.is-bad b {
   color: var(--danger);
 }
+
+/* 계획에 빠진 요구사항(v0.5.39) */
+.wf-warn {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--warn);
+  border-radius: 4px;
+  background: var(--st-queued);
+  color: var(--st-queued-ink);
+  font-size: 12.5px;
+}
+.wf-warn ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
