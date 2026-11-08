@@ -111,6 +111,8 @@ export interface OfficeStore {
   push(action: 'key' | 'subscribe' | 'unsubscribe' | 'test', body?: Record<string, string>): Promise<Record<string, unknown>>;
   /** Linear 연결 확인(읽기만, 아무것도 만들지 않음) */
   linearProbe(): Promise<LinearProbe>;
+  /** 서버 비밀 열쇠가 들어 있는지와 GitHub 토큰 만료일(값은 받지 않음, v0.5.38). 로컬 데모는 없음 */
+  keyStatus?(): Promise<KeyStatus[]>;
   /** Gemini 무료가 견본 지시서로 HTML 견본 한 장을 만든다(서버, 저장은 앱이 견본으로 올림, v0.4.7) */
   /** v0.4.94: 근무 중인 Studio A·B가 하나씩(최대 두 장) */
   /** 프로젝트 저장소 파일 목록(경로만, v0.5.24 구조도) */
@@ -134,6 +136,17 @@ export interface OfficeStore {
 }
 
 /** Linear 연결 확인 결과(읽기만, v0.4.11) */
+export interface KeyStatus {
+  name: string;
+  secret: string;
+  /** 서버 비밀값이 들어 있는지 */
+  set: boolean;
+  /** GitHub 확인 결과(true 통함, false 거절, null 확인 안 함) */
+  works: boolean | null;
+  /** 만료 시각(ISO). null이면 만료 없음 또는 알 수 없음 */
+  expiresAt: string | null;
+}
+
 export interface LinearProbe {
   connected: boolean;
   reason?: string;
