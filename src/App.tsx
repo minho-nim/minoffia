@@ -1748,6 +1748,7 @@ export function App() {
               onSave={saveProject}
               onDelete={(p) => void mutate(() => store.deleteProject(p.id), `${p.name} 프로젝트를 삭제했습니다.`)}
               rules={snap.projectRules ?? []}
+              reviews={snap.workflow.reviews ?? []}
               onAddRule={(projectId, rule) => void mutate(() => store.addProjectRule(projectId, rule), '지켜야 할 것에 적었어요. 다음 지시서부터 함께 들어가요.')}
               onRemoveRule={(r) => void mutate(() => store.removeProjectRule(r.id), '지켜야 할 것에서 지웠어요.')}
               onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
