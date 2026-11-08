@@ -49,3 +49,18 @@ end $$;
 select pg_temp.as_user('22222222-2222-4222-8222-222222222222');
 select pg_temp.check((select count(*) from push_subscriptions) = 0, '남의 구독은 안 보임');
 reset role;
+
+-- v0.5.51 아침·저녁 브리핑: 구독한 사람에게 한 줄, 1시간 안에 다시 돌려도 한 번만, 사용자는 직접 못 부름
+update tasks set stage = 'result_review', status = 'review' where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+select pg_temp.check(public.push_briefing('아침 브리핑') = 1, '브리핑 한 줄');
+select pg_temp.check((select body from push_outbox where kind = 'briefing') like '내 차례 1 · 막힘 0 · %', '브리핑 본문은 개수');
+select pg_temp.check(public.push_briefing('아침 브리핑') = 0, '1시간 안에 또 돌려도 한 번만');
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
+do $$ begin
+  begin
+    perform public.push_briefing('x');
+    raise exception 'call should fail';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
