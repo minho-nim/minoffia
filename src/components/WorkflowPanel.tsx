@@ -1040,6 +1040,14 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 urlFor={actions.attachmentUrl}
                 onAdd={(files) => actions.addAttachments(task, 'result', view.result!.revision, files)}
                 emptyText="결과 스크린샷 없음"
+                onPoint={
+                  !view.bApproved && !view.pendingRevision && !view.resultRevised && revisionCheck.ok
+                    ? (text) => {
+                        setRevisionText((v) => (v.trim() ? `${v.trimEnd()}\n${text}` : text));
+                        window.setTimeout(() => document.getElementById(`rev-${task.id}`)?.focus(), 0);
+                      }
+                    : undefined
+                }
               />
             </div>
           )}
@@ -1074,9 +1082,10 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 <p className="muted small">이 결과에는 수정 요청을 보냈습니다. 새 계획으로 작업한 결과를 새 버전으로 등록하세요.</p>
               ) : (
                 <span className="wf-inline">
-                  <input
+                  <textarea
                     id={`rev-${task.id}`}
-                    placeholder="예: 버튼 색은 원래대로, 크기만 키우기"
+                    rows={revisionText.includes('\n') ? 4 : 1}
+                    placeholder="예: 버튼 색은 원래대로, 크기만 키우기 (스크린샷의 '짚어서 수정'으로 위치도 넣을 수 있어요)"
                     value={revisionText}
                     onChange={(e) => setRevisionText(e.target.value)}
                     maxLength={4000}
