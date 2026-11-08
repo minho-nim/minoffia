@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import type { KeyStatus } from '../data/store';
+import { KeyStatusList } from './KeyStatusList';
 import { AGENT_BY_ID, AGENTS } from '../domain/agents';
 import { LEAVE_AGENTS, WORK_TYPE_LABEL, type AgentId, type Snapshot, type WorkType } from '../domain/types';
 
@@ -28,7 +30,7 @@ const UNASSIGNED = unassignedCharacters();
  * 화면 크기와 상관없이 늘 좌우(좁으면 카드만 작게, v0.4.41).
  * 휴가인 AI는 사무실 아래 출입문으로 나가고, 새 배정·PM 계획에서 빠져 규칙대로 다른 AI가 맡는다.
  */
-export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (agent: AgentId, onLeave: boolean) => void }) {
+export function TeamPanel({ snap, onSetLeave, loadKeys }: { snap: Snapshot; onSetLeave: (agent: AgentId, onLeave: boolean) => void; loadKeys?: () => Promise<KeyStatus[]> }) {
   const leave = snap.leave ?? [];
   const [picked, setPicked] = useState<Set<AgentId>>(() => new Set());
   const [over, setOver] = useState<'work' | 'leave' | null>(null);
@@ -170,6 +172,7 @@ export function TeamPanel({ snap, onSetLeave }: { snap: Snapshot; onSetLeave: (a
           </ul>
         </div>
       )}
+      {loadKeys && <KeyStatusList load={loadKeys} />}
     </section>
   );
 }

@@ -4401,3 +4401,46 @@ a {
     animation: none;
   }
 }
+
+/* 비밀 열쇠 상태(v0.5.38) */
+.team-keys {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.team-keys h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.team-keys ul {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.team-keys li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+  padding: 5px 8px;
+  border-left: 3px solid var(--ok);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+.team-keys li b {
+  font-weight: 600;
+}
+.team-keys li.is-warn {
+  border-left-color: var(--warn);
+}
+.team-keys li.is-bad {
+  border-left-color: var(--danger);
+}
+.team-keys li.is-bad b {
+  color: var(--danger);
+}
