@@ -33,7 +33,7 @@ async function loadKeys(create: boolean): Promise<VapidKeys | null> {
   return loadKeys(false);
 }
 
-const TAG: Record<string, string> = { question: 'ask', spec: 'ask', plan: 'ask', prototype: 'ask', result: 'ask', blocked: 'alert', test: 'test' };
+const TAG: Record<string, string> = { question: 'ask', spec: 'ask', plan: 'ask', prototype: 'ask', result: 'ask', blocked: 'alert', test: 'test', briefing: 'brief' };
 
 /** 보낼 알림 줄을 가져가(보냄 표시를 먼저 해서 두 번 보내지 않음) 주인의 모든 기기에 보낸다. */
 async function flush(): Promise<{ sent: number; removed: number }> {
@@ -55,7 +55,7 @@ async function flush(): Promise<{ sent: number; removed: number }> {
   for (const row of rows ?? []) {
     const { data: subs } = await db.from('push_subscriptions').select('id, endpoint, p256dh, auth, fail_count').eq('owner_id', row.owner_id);
     for (const s of subs ?? []) {
-      const msg = { title: row.title, body: row.body || 'MinLab AI Office', tag: `${TAG[row.kind] ?? 'ask'}-${row.task_id ?? 'all'}`, url: '/' };
+      const msg = { title: row.title, body: row.body || 'minoffia.', tag: `${TAG[row.kind] ?? 'ask'}-${row.task_id ?? 'all'}`, url: '/' };
       let status = 0;
       try {
         status = (await sendPush(s, msg, keys, subject)).status;
