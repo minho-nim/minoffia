@@ -12,7 +12,7 @@ export const PLAN_SYSTEM = [
   ' "work_items":[{"id":"W1","title":"짧은 제목","goal":"개발 AI가 그대로 따를 목표(무엇을 어디에, 기존 ○○을 써서)",',
   '  "dependencies":[],"assignee_preference":"codex_primary","execution_mode":"manual_handoff",',
   '  "acceptance_tests":["확인할 수 있는 문장"],"preserve_constraints":["바꾸면 안 되는 것"],"attachment_refs":[],',
-  '  "difficulty":3,"difficulty_reason":"한 줄"}],"project_rules":[]}',
+  '  "difficulty":3,"difficulty_reason":"한 줄","covers":["R1"]}],"project_rules":[]}',
   '- id는 W1, W2…; dependencies에는 먼저 끝나야 하는 작업 id만.',
   '- difficulty: 1~3 쉬움(문구·설정·작은 화면 수정), 4~6 보통(기능 하나·여러 파일), 7~10 어려움(구조 변경·DB·보안·여러 기능 얽힘).',
   '- development_mode: "prototype_first"는 신규 앱·UI 전면 개편·새 인터랙션일 때만. 그때 첫 작업은 assignee_preference "gemini_optional"(견본)이고 다른 작업은 그 뒤에 잇는다. 그 밖에는 "direct".',
@@ -20,6 +20,8 @@ export const PLAN_SYSTEM = [
   '- execution_mode는 늘 "manual_handoff". 실행 승인은 사람이 한다.',
   ...PM_HABITS.map((x) => `- ${x}`),
 ].join('\n');
+
+const reqLines = (t: string) => t.split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)]|R\d+[.)]?)\s*/i, '').trim()).filter(Boolean);
 
 export interface PlanInput {
   taskId: string;
@@ -62,7 +64,7 @@ export function buildPlanText(i: PlanInput): string {
     s.final_prompt,
     s.change_scope ? `변경 범위: ${s.change_scope}` : '',
     s.preserve_constraints ? `유지 조건: ${s.preserve_constraints}` : '',
-    s.test_criteria ? `테스트 기준: ${s.test_criteria}` : '',
+    s.test_criteria ? `테스트 기준(요구사항 번호):\n${reqLines(s.test_criteria).map((l, n) => `R${n + 1}. ${l}`).join('\n')}\n각 work_item에 "covers": ["R1", ...]로 그 작업이 맡는 요구사항 번호를 적는다. 모든 R 번호가 어느 작업엔가 들어가야 한다(앱이 빠진 번호를 확인한다).` : '',
     ...(i.qa.length ? ['', '## 확인 질문·답변', ...i.qa.flatMap((c, n) => [`Q${n + 1}. ${c.question}`, `A${n + 1}. ${c.answer}`])] : []),
     ...(i.revisionFeedback ? ['', '## 결과 검토 뒤 사용자 수정 요청(새 계획 필요)', i.revisionFeedback, '이 수정 요청을 그대로 따르기 전에 승인된 기획서와 맞는지 먼저 따진다. 기획서와 부딪히거나 결과를 더 나쁘게 만들 수 있으면 계획 대신 status "needs_clarification"로 왜 부딪히는지 묻는다.'] : []),
     ...(i.previous ? ['', '## 앞 결과에서 넘겨받은 것(이미 한 일은 다시 시키지 말고, 남은 문제만 작업으로)', i.previous] : []),

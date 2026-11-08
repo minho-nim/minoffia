@@ -8,6 +8,7 @@ import { PM_HABITS, repoMapStep } from './devHabits.ts';
 
 /** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
 const HARD_DAILY_CAP = 20;
+const reqLines = (t: string) => t.split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)]|R\d+[.)]?)\s*/i, '').trim()).filter(Boolean);
 const FIRE_TIMEOUT_MS = 20_000;
 /** 공식 문서 예시 버전. 2023-06-01 이후 모든 버전을 같은 동작으로 받는다. */
 const ANTHROPIC_VERSION = '2026-10-21';
@@ -218,7 +219,8 @@ Deno.serve(async (req) => {
     spec.final_prompt,
     spec.change_scope ? `\n변경 범위: ${spec.change_scope}` : '',
     spec.preserve_constraints ? `유지 조건: ${spec.preserve_constraints}` : '',
-    spec.test_criteria ? `테스트 기준: ${spec.test_criteria}` : '',
+    // 요구사항 번호(v0.5.39): 테스트 기준 줄마다 R1, R2… 앱 src/domain/requirements.ts와 같은 규칙
+    spec.test_criteria ? `테스트 기준(요구사항 번호):\n${reqLines(spec.test_criteria).map((l, i) => `R${i + 1}. ${l}`).join('\n')}\n각 work_item에 "covers": ["R1", ...]로 그 작업이 맡는 요구사항 번호를 적는다. 모든 R 번호가 어느 작업엔가 들어가야 한다(앱이 빠진 번호를 확인한다).` : '',
     ``,
     imageLines.length ? `## 요청 자료 이미지 ${imageLines.length}장 (이 세션에서는 볼 수 없음. 내용을 추측하지 말고 작업의 attachment_refs에 첨부 ID를 적는다)` : '',
     ...imageLines,

@@ -1,4 +1,5 @@
 import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
+import { uncoveredRequirements } from '../domain/requirements';
 import { recommendedReply } from '../domain/recommend';
 import type { ResultReview } from '../domain/workflow-types';
 import { AGENT_BY_ID } from '../domain/agents';
@@ -674,6 +675,22 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
         <section className={fold.cls('E', 3)} id={`wf-${task.id}-E`}>
           {fold.head('E', 3, <>4. 배정된 작업 — {GATE_LABEL.E}</>)}
           <WaitMap assignments={view.assignments} all={allAssignments} plan={view.plan} />
+          {/* 요구사항 번호 검사(v0.5.39): 기획서 완료 기준 중 어느 작업도 맡지 않은 것 */}
+          {(() => {
+            const missing = view.spec && view.plan ? uncoveredRequirements(view.spec.testCriteria, view.plan.plan.work_items) : [];
+            return missing.length > 0 ? (
+              <div className="wf-warn" role="status">
+                <b>계획에 빠진 요구사항 {missing.length}개</b> — 어느 작업도 맡지 않았어요. 실행 승인 전에 확인하세요.
+                <ul>
+                  {missing.map((r) => (
+                    <li key={r.id}>
+                      {r.id}. {r.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null;
+          })()}
           <ul className="wf-items">
             {view.assignments.map((a) => {
               const item = view.plan!.plan.work_items.find((w) => w.id === a.workItemId);
