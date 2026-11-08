@@ -8,6 +8,12 @@ import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
 import type { OfficeStore, ResultInboxItem } from './store';
 
+/** ai_calls의 토큰 세 칸 합(하나도 없으면 null, v0.5.50) */
+const callTokens = (r: Record<string, unknown>): number | null => {
+  const v = [r.prompt_tokens, r.answer_tokens, r.thinking_tokens].filter((x): x is number => typeof x === 'number');
+  return v.length ? v.reduce((a, b) => a + b, 0) : null;
+};
+
 type Row = Record<string, unknown>;
 
 const toProject = (r: Row): Project => ({
@@ -338,7 +344,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
             })),
         agentLimits: agentLimits.error ? {} : Object.fromEntries((agentLimits.data ?? []).map((r: Row) => [r.assignee as string, r.max_running as number])),
         // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
-        aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : 'question') as 'question' | 'image', httpStatus: (r.http_status as number | null) ?? null, createdAt: r.created_at as string })),
+        aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : 'question') as 'question' | 'image', httpStatus: (r.http_status as number | null) ?? null, tokens: callTokens(r), createdAt: r.created_at as string })),
       };
     },
     async saveProject(p) {

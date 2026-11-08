@@ -428,9 +428,16 @@ export function App() {
         );
       })}
       {store.mode === 'supabase' && (
-        <li title="입력창 일반 질문을 Gemini 무료 API에 보낸 횟수(오늘, 성공만). 하루 상한은 서버가 관리합니다.">
+        <li title="Gemini 무료 API를 부른 횟수와 실제 토큰(오늘, 성공만). 하루 상한은 서버가 관리합니다.">
           <span>Gemini</span>
-          <span className="num">{(snap.aiCalls ?? []).filter((c) => c.ok && kstDay(new Date(c.createdAt)) === kstDay()).length}회</span>
+          <span className="num">
+            {(() => {
+              const today = (snap.aiCalls ?? []).filter((c) => c.ok && kstDay(new Date(c.createdAt)) === kstDay());
+              const tokens = today.reduce((n, c) => n + (c.tokens ?? 0), 0);
+              // 실제 토큰(v0.5.50): Gemini가 알려 준 값만 더한다. 없으면 횟수만
+              return tokens ? `${today.length}회 · ${tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens} 토큰` : `${today.length}회`;
+            })()}
+          </span>
         </li>
       )}
     </ul>

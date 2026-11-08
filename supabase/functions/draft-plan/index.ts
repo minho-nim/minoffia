@@ -5,6 +5,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { cleanPlanJson, codePaths, buildPlanText, PLAN_SYSTEM } from './planPrompt.ts';
 import { loadRules } from './projectRules.ts';
+import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
 const HARD_DAILY_CAP = 20;
 const DEFAULT_DAILY_CAP = 10;
@@ -37,7 +38,7 @@ async function callGemini(key: string, model: string, text: string) {
   });
   const data = await res.json().catch(() => ({}) as Record<string, unknown>);
   const parts = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? [];
-  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '' };
+  return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '', tokens: tokensOf(data) };
 }
 
 /** 저장소 파일 목록(경로만). 실패하면 빈 목록 */
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
     let last = { status: 0, message: '' };
     for (const [i, key] of keys.entries()) {
       if (!key) continue;
-      let r: { status: number; text: string; message: string };
+      let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
       try {
         r = await callGemini(key, model, text);
       } catch (e) {
@@ -164,7 +165,7 @@ Deno.serve(async (req) => {
         const { data: saved, error: saveError } = await admin.from('gemini_pm_drafts')
           .update({ state: 'completed', plan_text: plan }).eq('id', reservation.draft_id).eq('call_id', reservation.call_id).eq('state', 'running').select('id').maybeSingle();
         if (saveError || !saved) return reply(503, { ok: false, error: '계획 보관을 확인하지 못했습니다. 잠시 뒤 다시 확인하세요.' });
-        await admin.from('ai_calls').update({ key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: plan.length }).eq('id', reservation.call_id);
+        await admin.from('ai_calls').update({ key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: text.length, answer_chars: plan.length, ...(r.tokens ?? {}) }).eq('id', reservation.call_id);
         return reply(200, { ok: true, plan, specRevision: spec.revision, keySlot: i + 1, model });
       }
       last = { status: r.status, message: r.status === 200 ? '계획 형식이 아닙니다.' : r.message };
