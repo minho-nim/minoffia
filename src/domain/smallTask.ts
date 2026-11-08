@@ -5,7 +5,7 @@ import { requirementLines } from './requirements';
 import type { AssigneePreference, TaskSpec } from './workflow-types';
 
 /** 이 저장소(AI Office 자신)에는 Gemini 개발을 쓰지 않는다(dispatch-claude와 같은 규칙) */
-export const OFFICE_REPO = 'minho-nim/MinLab-AI-Office';
+export const OFFICE_REPO = 'minho-nim/minoffia';
 /** 이 저장소의 옛 이름과 새 이름(미노피아로 바꾸는 동안 둘 다, v0.5.44) */
 export const OFFICE_REPOS = ['minho-nim/minlab-ai-office', 'minho-nim/minoffia'];
 

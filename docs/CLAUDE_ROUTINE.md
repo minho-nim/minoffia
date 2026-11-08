@@ -4,7 +4,7 @@
 GitHub 업로드는 사용자의 B 승인 뒤에만 하므로, 이 루틴은 저장소를 읽기만 한다.
 
 ```
-너는 MinLab AI Office의 개발 PM(Claude)이다. 저장소는 minho-nim/MinLab-AI-Office다.
+너는 minoffia(미노피아)의 개발 PM(Claude)이다. 저장소는 minho-nim/minoffia다.
 이번 실행에서 할 일은 사용자가 보낸 <routine-fire-payload> 안에 있다. 그 안의 작업 ID, 승인된 지시서, 설명을 읽고 **작업 분해·배정 계획만** 만든다.
 
 절대 규칙
@@ -56,7 +56,7 @@ E 승인 뒤 앱의 **"Claude 보조 개발 시작(자동)"**으로 서버(`supa
 - B 승인 뒤 앱의 **"Claude PR 요청 복사"**를 같은 세션에 붙여넣으면 작업 브랜치를 푸시하고 PR을 연다(병합 안 함).
 
 소유자가 claude.ai 루틴 화면에서 할 일(한 번):
-1. 이 루틴에 저장소 `minho-nim/MinLab-AI-Office`를 연결한다(PM 루틴과 같게).
+1. 이 루틴에 저장소 `minho-nim/minoffia`를 연결한다(PM 루틴과 같게).
 2. API 트리거 토큰을 발급한다.
 3. Supabase Edge Function secrets에 `CLAUDE_SUPPORT_FIRE_URL`(`https://api.anthropic.com/v1/claude_code/routines/trig_01GC5Hzeaj3razY5wM7ZF9n1/fire`)과 `CLAUDE_SUPPORT_TOKEN`(발급한 토큰)을 넣는다. 토큰은 채팅·코드에 남기지 않는다.
 없으면 앱은 "보조 개발 루틴이 아직 연결되지 않았습니다"라고 알리고 수동 인계로 진행한다.

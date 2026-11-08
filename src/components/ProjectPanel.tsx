@@ -148,7 +148,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
           <div className="form-foot">
             <p className={repoValid && hostValid ? 'route-preview' : 'task-error'}>
               {!repoValid
-                ? 'owner/repo 형식으로 입력하세요. 예: minho-nim/MinLab-AI-Office'
+                ? 'owner/repo 형식으로 입력하세요. 예: minho-nim/minoffia'
                 : !hostValid
                   ? '미리보기 주소는 my-app.pages.dev처럼 주소 이름만 적어요.'
                   : '저장소는 owner/repo 형식. 미리보기 주소(Cloudflare Pages)를 적으면 Claude 결과에 "미리보기 열기"가 붙어요.'}
