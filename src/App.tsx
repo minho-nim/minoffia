@@ -46,6 +46,7 @@ import { PushToggle } from './components/PushToggle';
 import { OfficeView } from './office/OfficeView';
 import { version } from '../package.json';
 import { HealthCheck } from './components/HealthCheck';
+import { DesignStandard } from './components/DesignStandard';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -868,6 +869,7 @@ export function App() {
 
   const workflowActions: WorkflowActions = {
     archify: store.archify ? (taskId, revision) => store.archify!(taskId, revision) : undefined,
+    designCheck: store.designCheck,
     draftSpec: (task) => draftSpec(task.id),
     makePrototype: (task) => makePrototype(task.id),
     // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.
@@ -1768,6 +1770,7 @@ export function App() {
               onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
               shortcutsOf={(id) => projectShortcuts(id, snap.tasks, snap.workflow.results)}
               onOpenTask={(id) => showTask(id)}
+              renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
               renderHealth={store.healthCheck ? (p) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id) }} /> : undefined}
               renderStructure={(p) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />}
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}

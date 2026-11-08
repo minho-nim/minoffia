@@ -16,6 +16,9 @@ export interface Project {
   description: string;
   /** 브랜치 미리보기 주소의 호스트(예: minlab-ai-office.pages.dev, Cloudflare Pages). 있으면 Claude 결과에 미리보기 링크가 붙는다(v0.4.57) */
   previewHost?: string | null;
+  /** 확정된 디자인 기준(DESIGN.md)과 Gemini 초안(v0.5.56). 칸이 없는 DB면 undefined */
+  designMd?: string;
+  designDraft?: string;
   sample?: boolean;
   createdAt: string;
 }
