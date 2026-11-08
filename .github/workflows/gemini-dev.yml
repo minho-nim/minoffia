@@ -67,7 +67,7 @@ jobs:
           if [ -n "$SUBMIT_TOKEN" ]; then echo "::add-mask::$SUBMIT_TOKEN"; fi
           if ! [[ "$REPO" =~ ^minho-nim/[A-Za-z0-9._-]+$ ]]; then echo "::error::minho-nim/… 저장소만 받습니다."; exit 1; fi
           lower=$(echo "$REPO" | tr 'A-Z' 'a-z')
-          if [ "$lower" = "minho-nim/minlab" ] || [ "$lower" = "minho-nim/minlab-ai-office" ]; then echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; fi
+          if [ "$lower" = "minho-nim/minlab" ] || [ "$lower" = "minho-nim/minlab-ai-office" ] || [ "$lower" = "minho-nim/minoffia" ]; then echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; fi
           if ! [[ "$BRANCH" =~ ^ai/gemini/[a-z0-9._/-]+$ ]]; then echo "::error::브랜치는 ai/gemini/로 시작해야 합니다(소문자·숫자·-·_·.)."; exit 1; fi
           missing=""
           if [ "$HAS_KEY" != "true" ] && [ "$HAS_KEY2" != "true" ]; then missing="$missing GEMINI_API_KEY(또는 GEMINI_API_KEY2)"; fi
