@@ -1,0 +1,68 @@
+# 앱 건강 검진·기본 지도(floorplan 1단계, v0.5.53): 서버 함수 health-check가 시작한다. 모델 호출 없음.
+# 대상 저장소를 읽기 전용으로 받아(TARGET_REPO_TOKEN) floorplan(MIT, 고정 커밋)으로 훑고, 폴더별 기본 지도와 검진 결과를 만든다.
+# 결과 두 개(지도 HTML·검진 JSON)는 함께 받은 1회용 업로드 주소(그 파일만, 2시간)로 올린다. 대상 저장소 코드는 올리지 않는다.
+name: 앱 건강 검진(floorplan)
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '대상 저장소(owner/repo)'
+        required: true
+      name:
+        description: '프로젝트 이름'
+        required: false
+      map_url:
+        description: '지도 HTML 1회용 업로드 주소'
+        required: true
+      health_url:
+        description: '검진 JSON 1회용 업로드 주소'
+        required: true
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 대상 저장소 확인
+        env:
+          REPO: ${{ inputs.repo }}
+        run: |
+          echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
+          lower=$(echo "$REPO" | tr 'A-Z' 'a-z')
+          if [ "$lower" = "minho-nim/minlab" ]; then echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; fi
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 받기·훑기·지도 만들기
+        env:
+          REPO: ${{ inputs.repo }}
+          NAME: ${{ inputs.name }}
+          TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          git clone -q --filter=blob:none https://github.com/haydenschmitty/floorplan.git /tmp/fp
+          git -C /tmp/fp checkout -q 70be3f40f9c2e061290b76027f180d9ff892edd6
+          if [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" = "$(echo "$GITHUB_REPOSITORY" | tr 'A-Z' 'a-z')" ]; then cp -r "$GITHUB_WORKSPACE" /tmp/target
+          else git clone -q --depth 1 "https://x-access-token:${TOKEN}@github.com/${REPO}.git" /tmp/target; fi
+          git -C /tmp/target remote set-url origin "https://github.com/${REPO}.git"
+          node /tmp/fp/skills/floorplan/scripts/scan.mjs /tmp/target > /dev/null
+          node scripts/floorplan-arch.mjs /tmp/target "${NAME:-$REPO}"
+          node /tmp/fp/skills/floorplan/scripts/build.mjs /tmp/target | grep -E 'ASSIGNMENT|HEALTH|wrote' || true
+          node -e "const g=require('/tmp/target/floorplan/graph.json');const h=g.health||{summary:{high:0,medium:0,low:0},issues:[]};require('fs').writeFileSync('/tmp/health.json',JSON.stringify({checkedAt:new Date().toISOString(),head:(g.meta&&g.meta.repos&&g.meta.repos[0]&&g.meta.repos[0].head)||'',files:(g.files||[]).length,summary:h.summary,issues:(h.issues||[]).map(i=>({kind:i.kind,severity:i.severity,title:i.title,detail:i.detail,items:(i.items||[]).slice(0,20).map(x=>String(x).replace(/^[a-z]+:/,''))}))}))"
+          echo "검진: $(node -e "console.log(JSON.stringify(require('/tmp/health.json').summary))")"
+      - name: 올리기
+        env:
+          MAP_URL: ${{ inputs.map_url }}
+          HEALTH_URL: ${{ inputs.health_url }}
+        run: |
+          echo "::add-mask::$MAP_URL"; echo "::add-mask::$HEALTH_URL"
+          size=$(wc -c < /tmp/target/floorplan/index.html); echo "지도 크기: $size 바이트"
+          [ "$size" -lt 20000000 ] || { echo "::error::지도가 너무 큽니다"; exit 1; }
+          for pair in "/tmp/target/floorplan/index.html|$MAP_URL|text/plain;charset=UTF-8" "/tmp/health.json|$HEALTH_URL|application/json"; do
+            f=${pair%%|*}; rest=${pair#*|}; url=${rest%%|*}; type=${rest#*|}
+            code=$(curl -sS -o /tmp/up.txt -w '%{http_code}' -X PUT -H "Content-Type: $type" -H 'x-upsert: true' --data-binary @"$f" "$url")
+            echo "올리기 응답: $code"; [ "$code" -lt 300 ] || { head -c 300 /tmp/up.txt; exit 1; }
+          done
