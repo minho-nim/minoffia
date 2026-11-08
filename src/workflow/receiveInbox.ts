@@ -1,6 +1,7 @@
 import { newId, type OfficeStore } from '../data/store';
 import { parsePmPlan } from '../domain/pmPlan';
 import { deriveWorkflow, sha256Hex } from '../domain/workflow';
+import { maskSecrets } from '../domain/maskSecrets';
 import type { Snapshot, Task } from '../domain/types';
 import type { PmPlan } from '../domain/workflow-types';
 
@@ -52,7 +53,9 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
     const a = snap.workflow.assignments.find((x) => x.id === item.assignmentId);
     if (!task || !a) continue;
     // 다른 기기가 이미 같은 결과를 저장했으면 받음으로만 표시한다.
-    const itemSha = await sha256Hex(`${item.diff}\n---\n${item.testLog}`);
+    // 시험 기록의 토큰·키처럼 생긴 글자는 저장 전에 가린다(v0.5.49, 서버에서도 가림)
+    const testLog = maskSecrets(item.testLog);
+    const itemSha = await sha256Hex(`${item.diff}\n---\n${testLog}`);
     if (snap.workflow.results.some((r) => r.taskId === task.id && r.sha256 === itemSha)) {
       await store.markResultInbox(item.id, 'imported', '');
       continue;
@@ -74,7 +77,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
       continue;
     }
     const summary = [
-      item.summary,
+      maskSecrets(item.summary),
       item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
       item.branch ? `\n작업 브랜치: ${item.branch} (${item.previewUrl ? '미리보기용으로 올림, PR은 올리기 승인 뒤' : fromGemini ? 'Gemini가 올림, PR은 올리기 승인 뒤' : 'PR은 올리기 승인 뒤'})` : '',
     ].join('\n');
@@ -91,9 +94,9 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
           source: fromGemini ? 'gemini_actions_auto' : 'claude_session_auto',
           summary: summary.slice(0, 4000),
           diff: item.diff,
-          testLog: item.testLog,
-          remainingIssues: item.remainingIssues,
-          sha256: await sha256Hex(`${item.diff}\n---\n${item.testLog}`),
+          testLog,
+          remainingIssues: maskSecrets(item.remainingIssues),
+          sha256: itemSha,
           previewUrl: item.previewUrl,
           createdAt: new Date().toISOString(),
         });

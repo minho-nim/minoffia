@@ -36,6 +36,7 @@ import { RepoStructure } from './components/FileTreeView';
 import { projectChanges } from './domain/fileTree';
 import { checkSmallTask, smallPlanText } from './domain/smallTask';
 import { mentionedAssignee } from './domain/mention';
+import { maskSecrets } from './domain/maskSecrets';
 import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
 import type { Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
@@ -1032,11 +1033,12 @@ export function App() {
             planRevision: view.plan?.planRevision ?? null,
             workItemId: f.workItemId,
             source: assignment?.assignee === 'codex' ? 'codex_cloud_manual' : assignment?.assignee === 'claude' ? 'claude_manual' : 'manual',
-            summary: f.summary,
+            // 시험 기록·요약의 토큰·키처럼 생긴 글자는 저장 전에 가린다(v0.5.49)
+            summary: maskSecrets(f.summary),
             diff: f.diff,
-            testLog: f.testLog,
-            remainingIssues: f.remainingIssues,
-            sha256: await sha256Hex(`${f.diff}\n---\n${f.testLog}`),
+            testLog: maskSecrets(f.testLog),
+            remainingIssues: maskSecrets(f.remainingIssues),
+            sha256: await sha256Hex(`${f.diff}\n---\n${maskSecrets(f.testLog)}`),
             createdAt: new Date().toISOString(),
           });
         },
