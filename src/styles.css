@@ -4642,3 +4642,49 @@ a {
   gap: 8px;
   justify-content: flex-end;
 }
+
+/* 앱 건강 검진(v0.5.53) */
+.health {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.health-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.health-list li {
+  display: block;
+}
+
+.health-list .pill {
+  display: inline-block;
+  width: auto;
+  margin-right: 4px;
+}
+
+.health-list p {
+  margin: 2px 0 0;
+}
+
+.health-items {
+  overflow-wrap: anywhere;
+}
+
+.health-high,
+.pill.health-high {
+  color: #c0392b;
+}
+
+.health-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

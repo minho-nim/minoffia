@@ -7,6 +7,7 @@ import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPack
 import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
 import type { OfficeStore, ResultInboxItem } from './store';
+import { parseHealth } from '../domain/healthText';
 
 /** ai_calls의 토큰 세 칸 합(하나도 없으면 null, v0.5.50) */
 const callTokens = (r: Record<string, unknown>): number | null => {
@@ -605,6 +606,22 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async keyStatus() {
       const data = await invoke('key-status', {});
       return Array.isArray(data.keys) ? (data.keys as import('./store').KeyStatus[]) : [];
+    },
+    healthCheck: {
+      async load(projectId) {
+        const uid = await userId();
+        const { data } = await client.storage.from('attachments').download(`${uid}/projects/${projectId}/health.json`);
+        if (!data) return null;
+        return parseHealth(JSON.parse(await data.text()));
+      },
+      async start(projectId) {
+        await invoke('health-check', { projectId });
+      },
+      async map(projectId) {
+        const uid = await userId();
+        const { data } = await client.storage.from('attachments').download(`${uid}/projects/${projectId}/floorplan.html`);
+        return data ? await data.text() : null;
+      },
     },
     async repoTree(projectId) {
       const data = await invoke('repo-tree', { projectId });

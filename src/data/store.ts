@@ -119,6 +119,12 @@ export interface OfficeStore {
   /** v0.4.94: 근무 중인 Studio A·B가 하나씩(최대 두 장) */
   /** 프로젝트 저장소 파일 목록(경로만, v0.5.24 구조도) */
   repoTree(projectId: string): Promise<string[]>;
+  /** 앱 건강 검진(floorplan 1단계, v0.5.53, Supabase 모드에서만) */
+  healthCheck?: {
+    load(projectId: string): Promise<import('../domain/healthText').HealthReport | null>;
+    start(projectId: string): Promise<void>;
+    map(projectId: string): Promise<string | null>;
+  };
   /** Claude PM 대신 Gemini가 쓴 분배 계획 글(v0.5.20). 저장은 앱이 검증한 뒤 */
   draftPlan(taskId: string): Promise<{ plan: string; specRevision: number }>;
   draftPrototype(taskId: string, text: string): Promise<{ drafts: { slot: 'A' | 'B'; html: string }[]; planRevision: number }>;
