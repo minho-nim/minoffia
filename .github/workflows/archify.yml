@@ -1,0 +1,33 @@
+# 바뀐 곳 구조도(Archify, v0.5.43): 서버 함수 archify-result가 시작한다. 받은 파일 나무 JSON을 Archify(Apache-2.0, 고정 커밋)로
+# 그림 HTML로 만들고, 함께 받은 1회용 업로드 주소(그 파일 하나만, 2시간)로 올린다. 모델 호출 없음. 저장소 열쇠는 쓰지 않는다.
+name: 바뀐 곳 구조도(Archify)
+on:
+  workflow_dispatch:
+    inputs:
+      tree:
+        description: 'Archify tree JSON(서버가 만듦)'
+        required: true
+      upload_url:
+        description: '1회용 업로드 주소(서버가 만듦)'
+        required: true
+permissions:
+  contents: read
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 그리고 올리기
+        env:
+          TREE: ${{ inputs.tree }}
+          UPLOAD_URL: ${{ inputs.upload_url }}
+        run: |
+          echo "::add-mask::$UPLOAD_URL"
+          printf '%s' "$TREE" > /tmp/change-tree.json
+          git clone -q --filter=blob:none https://github.com/tt-a1i/archify.git /tmp/archify
+          git -C /tmp/archify checkout -q a4065941f12be7967436261d9934784e381d423c
+          node /tmp/archify/archify/bin/archify.mjs render tree /tmp/change-tree.json /tmp/change-tree.html
+          size=$(wc -c < /tmp/change-tree.html); echo "그림 크기: $size 바이트"
+          [ "$size" -lt 20000000 ] || { echo "::error::그림이 너무 큽니다"; exit 1; }
+          code=$(curl -sS -o /tmp/up.txt -w '%{http_code}' -X PUT -H 'Content-Type: text/plain;charset=UTF-8' -H 'x-upsert: true' --data-binary @/tmp/change-tree.html "$UPLOAD_URL")
+          echo "올리기 응답: $code"; [ "$code" -lt 300 ] || { cat /tmp/up.txt | head -c 300; exit 1; }

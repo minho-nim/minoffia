@@ -1,5 +1,10 @@
 # 변경 기록
 
+## 모든 결과에 Archify 구조도(v0.5.43) — 2026-11-08
+
+- 결과 카드 '바뀐 곳 구조도' 안에 'Archify 구조도 크게 보기': Codex·Claude·Gemini 결과 모두. 처음 누르면 서버 함수 archify-result가 diff로 파일 나무를 만들어 GitHub Actions(archify.yml, Archify 고정 커밋)에 그리기를 맡기고, 1회용 업로드 주소(그 파일 하나, 2시간)로 소유자 폴더에 올린다. 앱은 1~2분 뒤 자동으로 연다. AI 호출·DB 변경 없음.
+- 그림은 확대·접기 스크립트가 있어 앱과 분리된 창(sandbox allow-scripts, 같은 출처 권한 없음)에서 연다. Graphify는 지금처럼 AI 개발용으로만.
+
 ## 서버 함수 배포 버튼(v0.5.42) — 2026-11-08
 
 - GitHub Actions '서버 함수 배포': main의 함수 파일을 그대로 운영에 올린다(Supabase CLI 2.121.0 고정, 서버에서 묶음). 함수 내용을 손으로 옮겨 적지 않아 틀릴 일이 없고 토큰도 들지 않는다. Actions secret SUPABASE_ACCESS_TOKEN 필요.
