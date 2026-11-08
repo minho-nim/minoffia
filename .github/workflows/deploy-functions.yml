@@ -1,0 +1,34 @@
+# 서버 함수 배포(v0.5.42): 저장소 main의 supabase/functions/<이름>을 그대로 운영 Supabase에 올린다.
+# 손으로 실행(휴대폰 GitHub 앱의 Actions에서도 가능). 운영 변경이므로 소유자가 요청할 때만 실행한다.
+# 필요한 것: 이 저장소 Actions secrets의 SUPABASE_ACCESS_TOKEN(Supabase 계정 토큰). 이 작업에서만 쓰고 다른 워크플로에는 넘기지 않는다.
+# 로그인 확인(verify_jwt)을 끄는 함수는 아래 NO_JWT 목록뿐(제출표·서명·DB 알림으로 따로 확인하는 함수). 나머지는 켠 채로 올린다.
+name: 서버 함수 배포
+on:
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: '배포할 함수 이름(쉼표로 구분, 예: draft-spec,key-status)'
+        required: true
+permissions:
+  contents: read
+concurrency: deploy-functions
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 함수 배포
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          FUNCS: ${{ inputs.functions }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then echo "::error::Actions secrets에 SUPABASE_ACCESS_TOKEN이 없습니다."; exit 1; fi
+          NO_JWT=" submit-plan submit-result submit-review linear-webhook push "
+          for f in $(echo "$FUNCS" | tr ',' ' '); do
+            case "$f" in ''|*[!a-z0-9-]*) echo "::error::함수 이름이 올바르지 않음: $f"; exit 1;; esac
+            [ -f "supabase/functions/$f/index.ts" ] || { echo "::error::없는 함수: $f"; exit 1; }
+            flag=""; case "$NO_JWT" in *" $f "*) flag="--no-verify-jwt";; esac
+            echo "▶ $f ${flag:-(로그인 확인 켬)}"
+            npx --yes supabase@2.121.0 functions deploy "$f" --project-ref kmmicksimbredbyvdmvx --use-api $flag
+          done
