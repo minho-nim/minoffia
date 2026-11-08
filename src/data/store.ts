@@ -119,6 +119,13 @@ export interface OfficeStore {
   /** v0.4.94: 근무 중인 Studio A·B가 하나씩(최대 두 장) */
   /** 프로젝트 저장소 파일 목록(경로만, v0.5.24 구조도) */
   repoTree(projectId: string): Promise<string[]>;
+  /** 프로젝트 디자인 기준(v0.5.56, Supabase 모드에서만) */
+  designStandard?: { draft(projectId: string): Promise<string>; approve(projectId: string, md: string): Promise<void> };
+  /** 디자인 자동 검사(v0.5.56, Supabase 모드에서만) */
+  designCheck?: {
+    load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>;
+    start(taskId: string, revision: number): Promise<void>;
+  };
   /** 앱 건강 검진(floorplan 1단계, v0.5.53, Supabase 모드에서만) */
   healthCheck?: {
     load(projectId: string): Promise<import('../domain/healthText').HealthReport | null>;

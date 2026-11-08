@@ -8,6 +8,7 @@ import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
 import type { OfficeStore, ResultInboxItem } from './store';
 import { parseHealth } from '../domain/healthText';
+import { parseDesignReport } from '../domain/designCheck';
 
 /** ai_calls의 토큰 세 칸 합(하나도 없으면 null, v0.5.50) */
 const callTokens = (r: Record<string, unknown>): number | null => {
@@ -24,6 +25,8 @@ const toProject = (r: Row): Project => ({
   description: (r.description as string) ?? '',
   // 마이그레이션 전 DB에는 칸이 없다(undefined면 저장할 때도 보내지 않음)
   previewHost: r.preview_host === undefined ? undefined : ((r.preview_host as string | null) ?? null),
+  designMd: r.design_md === undefined ? undefined : String(r.design_md ?? ''),
+  designDraft: r.design_draft === undefined ? undefined : String(r.design_draft ?? ''),
   createdAt: r.created_at as string,
 });
 
@@ -606,6 +609,26 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async keyStatus() {
       const data = await invoke('key-status', {});
       return Array.isArray(data.keys) ? (data.keys as import('./store').KeyStatus[]) : [];
+    },
+    designStandard: {
+      async draft(projectId) {
+        const data = await invoke('design-standard', { projectId });
+        return String(data.draft ?? '');
+      },
+      async approve(projectId, md) {
+        check(await client.from('projects').update({ design_md: md, design_draft: '' }).eq('id', projectId));
+      },
+    },
+    designCheck: {
+      async load(taskId, revision) {
+        const uid = await userId();
+        const { data } = await client.storage.from('attachments').download(`${uid}/${taskId}/design-r${revision}.json`);
+        if (!data) return null;
+        return parseDesignReport(JSON.parse(await data.text()));
+      },
+      async start(taskId, revision) {
+        await invoke('design-check', { taskId, revision });
+      },
     },
     healthCheck: {
       async load(projectId) {

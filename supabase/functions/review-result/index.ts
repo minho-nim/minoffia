@@ -8,6 +8,7 @@ import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
+import { designReviewSection } from './designReview.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -88,7 +89,7 @@ Deno.serve(async (req) => {
   if (existing) return reply(200, { ok: true, review: existing, cached: true });
   const { data: result } = await userClient.from('result_packages').select('revision, plan_revision, work_item_id, source, diff, test_log, remaining_issues').eq('task_id', taskId).eq('revision', revision).maybeSingle();
   if (!result) return reply(404, { ok: false, error: '결과 패키지를 찾을 수 없습니다.' });
-  const { data: task } = await userClient.from('tasks').select('id, project_id, projects(repo)').eq('id', taskId).maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('id, project_id, projects(repo, design_md)').eq('id', taskId).maybeSingle();
   const { data: spec } = await userClient.from('task_specs').select('final_prompt, change_scope, preserve_constraints, test_criteria').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
   if (!task || !spec) return reply(409, { ok: false, error: '기획서를 찾을 수 없습니다.' });
   let item: { title: string; goal: string; acceptance_tests: string[]; preserve_constraints: string[] } | null = null;
@@ -190,7 +191,8 @@ Deno.serve(async (req) => {
     const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
     const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);
     const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
-    const prompt = reviewMaterial();
+    // 화면·디자인 업무면 디자인 채점 기준과 프로젝트 디자인 기준을 붙인다(v0.5.56, 호출 수 그대로)
+    const prompt = `${reviewMaterial()}${designReviewSection(`${spec.final_prompt ?? ''}\n${spec.change_scope ?? ''}`, String((task.projects as unknown as { design_md?: string } | null)?.design_md ?? ''))}`;
     // 파일 요청(v0.5.52): 첫 채점에서만 "이 파일이 필요해"를 허용하고, 서버가 GitHub에서 읽어 한 번만 다시 묻는다.
     let used = count ?? 0;
     let filesAsked = false;
