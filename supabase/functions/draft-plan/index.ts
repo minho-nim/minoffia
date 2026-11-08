@@ -10,7 +10,8 @@ const HARD_DAILY_CAP = 20;
 const DEFAULT_DAILY_CAP = 10;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 90_000;
-const OFFICE_REPO = 'minho-nim/minlab-ai-office';
+// 이 저장소의 옛 이름과 새 이름(미노피아로 바꾸는 동안 둘 다, v0.5.44)
+const OFFICE_REPOS = ['minho-nim/minlab-ai-office', 'minho-nim/minoffia'];
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 
@@ -141,7 +142,7 @@ Deno.serve(async (req) => {
       revisionFeedback: revision?.feedback ?? '',
       previous,
       away: { codex: away.has('codex'), claude: away.has('claude'), gemini: away.has('studioA') && away.has('studioB') },
-      geminiDevOk: repo.toLowerCase() !== OFFICE_REPO,
+      geminiDevOk: !OFFICE_REPOS.includes(repo.toLowerCase()),
       rules: await loadRules(userClient, task.project_id),
       files: await repoFiles(repo),
     });

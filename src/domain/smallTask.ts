@@ -6,6 +6,8 @@ import type { AssigneePreference, TaskSpec } from './workflow-types';
 
 /** 이 저장소(AI Office 자신)에는 Gemini 개발을 쓰지 않는다(dispatch-claude와 같은 규칙) */
 export const OFFICE_REPO = 'minho-nim/MinLab-AI-Office';
+/** 이 저장소의 옛 이름과 새 이름(미노피아로 바꾸는 동안 둘 다, v0.5.44) */
+export const OFFICE_REPOS = ['minho-nim/minlab-ai-office', 'minho-nim/minoffia'];
 
 /** 실수하면 되돌리기 어려운 일: 이런 말이 기획서에 있으면 PM이 나눈다 */
 const RISKY: [RegExp, string][] = [
@@ -43,7 +45,7 @@ export function checkSmallTask(spec: TaskSpec, repo: string | null | undefined, 
   const text = [spec.finalPrompt, spec.changeScope].join('\n');
   for (const [re, label] of RISKY) if (re.test(text)) why.push(label);
   if (!repo || !repo.includes('/')) why.push('저장소 없음');
-  const geminiOk = !away.gemini && repo?.toLowerCase() !== OFFICE_REPO.toLowerCase();
+  const geminiOk = !away.gemini && !OFFICE_REPOS.includes(repo?.toLowerCase() ?? '');
   const preference: AssigneePreference | null =
     h && h.difficulty <= 3 && geminiOk ? 'gemini_dev' : !away.codex ? 'codex_primary' : geminiOk && h && h.difficulty <= 3 ? 'gemini_dev' : null;
   if (!preference) why.push('맡을 AI가 휴가');

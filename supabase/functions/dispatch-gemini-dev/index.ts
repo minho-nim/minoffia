@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
   const repo = (project?.repo ?? '').toLowerCase();
   const { data: managed } = await userClient.from('managed_repos').select('full_name').eq('owner_id', user.id);
   const allowed =
-    !!repo && repo !== 'minho-nim/minlab' && repo !== officeRepo.toLowerCase() && (managed ?? []).some((m) => String(m.full_name).toLowerCase() === repo);
+    !!repo && repo !== 'minho-nim/minlab' && repo !== officeRepo.toLowerCase() && repo !== 'minho-nim/minoffia' && (managed ?? []).some((m) => String(m.full_name).toLowerCase() === repo);
   if (!project?.repo || !allowed) return reply(403, { ok: false, error: 'Gemini 개발은 AI Office가 만든 저장소의 프로젝트에서만 합니다.' });
 
   // 휴가(v0.4.44): Studio A = 키 A, Studio B = 키 B. 둘 다 휴가면 시작하지 않는다.
