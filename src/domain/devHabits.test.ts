@@ -10,3 +10,11 @@ describe('필요할 때만 붙는 확인 목록(v0.5.45)', () => {
     expect(domainSteps('README 오타 고치기')).toEqual([]);
   });
 });
+
+describe('디자인 지시 묶음(v0.5.55)', () => {
+  it('새 디자인·꾸미기 업무에만 붙는다', async () => {
+    const { domainSteps } = await import('./devHabits');
+    expect(domainSteps('홈페이지 첫 화면을 세련되게 새 디자인').join('\n')).toContain('디자인 원칙');
+    expect(domainSteps('README 오타 고치기').join('\n')).not.toContain('디자인 원칙');
+  });
+});
