@@ -11,8 +11,8 @@
 Node.js 20.19 이상(또는 22.12 이상)과 Git이 설치되어 있어야 한다. 버전은 `node -v`로 확인한다.
 
 ```cmd
-git clone https://github.com/minho-nim/MinLab-AI-Office.git
-cd MinLab-AI-Office
+git clone https://github.com/minho-nim/minoffia.git
+cd minoffia
 
 REM .env.local 만들기 (비워두면 로컬 데모 모드)
 echo VITE_SUPABASE_URL=> .env.local
@@ -102,7 +102,7 @@ PM·보조 개발 루틴의 저장 프롬프트·네트워크 허용·서버 설
 **배포 규칙:** Cloudflare는 `release` 브랜치만 운영 배포한다. `main`에 병합해도 사이트는 바뀌지 않는다. 소유자가 승인하면 `release`를 `main`과 같게 맞추고, 그때 배포된다.
 
 처음 한 번 연결:
-1. [Cloudflare 대시보드](https://dash.cloudflare.com) → Workers & Pages → Create → **Pages** → **Connect to Git** → GitHub 권한 승인 → `minho-nim/MinLab-AI-Office` 선택
+1. [Cloudflare 대시보드](https://dash.cloudflare.com) → Workers & Pages → Create → **Pages** → **Connect to Git** → GitHub 권한 승인 → `minho-nim/minoffia` 선택
 2. 빌드 설정
    - Production branch: **`release`**
    - Framework preset: Vite (또는 None)
