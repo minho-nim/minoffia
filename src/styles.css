@@ -4385,3 +4385,19 @@ a {
     transition: none;
   }
 }
+
+/* 말로 입력(v0.5.37): 듣는 중에는 강조 */
+.inbox-voice.is-on {
+  color: var(--danger);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .inbox-voice.is-on {
+    animation: none;
+  }
+}

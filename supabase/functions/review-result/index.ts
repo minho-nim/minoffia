@@ -3,7 +3,7 @@
 // 판정만 기록하고, 다시 개발 보내기는 앱이 기존 수정 요청 길(PM 재계획 → 실행 승인)로 한다. 올리기 승인(B)은 늘 소유자가 한다.
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않는다. 글은 저장하지 않고 점수·이유만 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, redoFeedback, REVIEW_SYSTEM, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
+import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, redoFeedback, REVIEW_SYSTEM, SECOND_OPINION_NOTE, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
 import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 
@@ -172,17 +172,17 @@ Deno.serve(async (req) => {
     const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);
     const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
     const prompt = reviewMaterial();
-    const ask = async (): Promise<Score | null> => {
+    const ask = async (text = prompt): Promise<Score | null> => {
       for (const [i, key] of keys.entries()) {
         if (!key) continue;
         let r: { status: number; text: string; message: string };
         try {
-          r = await callGemini(key, model, prompt);
+          r = await callGemini(key, model, text);
         } catch (e) {
           r = { status: 0, text: '', message: (e as Error).name };
         }
         const parsed = r.status === 200 ? parseScore(r.text) : null;
-        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed), http_status: r.status || null, model, prompt_chars: prompt.length, answer_chars: r.text.length, ...(parsed ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(parsed ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
         if (parsed) {
           judge = `Gemini · Studio ${i === 0 ? 'A' : 'B'}`;
           return parsed;
@@ -193,9 +193,9 @@ Deno.serve(async (req) => {
     };
     if ((count ?? 0) < cap && (keys[0] || keys[1])) {
       score = await ask();
-      // 경계 점수면 한 번 더 채점해 평균(무료 호출 1번 더)
+      // 경계 점수면 한 번 더 채점해 평균(무료 호출 1번 더). 두 번째는 '반대 쪽 검토자' 입장(v0.5.37)
       if (score && needsSecondOpinion(score) && (count ?? 0) + 1 < cap) {
-        const again = await ask();
+        const again = await ask(`${prompt}\n\n${SECOND_OPINION_NOTE}`);
         if (again) {
           score = averageScores(score, again);
           judge += ' ×2';

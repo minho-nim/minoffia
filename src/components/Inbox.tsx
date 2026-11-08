@@ -1,4 +1,5 @@
 import { taskContext } from '../domain/taskContext';
+import { VoiceInput } from './VoiceInput';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
@@ -1454,6 +1455,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             <path fill="currentColor" d="M10 5h2v2h-2zM3 11h1v-1h1V9h1V8h1v1h1v1h1V9h1V8h1v1h1v1h1v1h1v1H3z" opacity=".75" />
           </svg>
         </button>
+        <VoiceInput disabled={busy} onText={(t) => setInput((v) => (v.trim() ? `${v.trimEnd()} ${t}` : t))} />
       {shown.length > 0 && (
           <button
             type="button"

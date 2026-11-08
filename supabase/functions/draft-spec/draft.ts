@@ -58,7 +58,7 @@ export const DRAFT_SYSTEM = [
   '- project_rules: 사용자가 이번 요청에서 "항상·앞으로·절대" 같은 말로 이 프로젝트 전체에 두고두고 지킬 것을 말했으면 짧은 문장 배열로(최대 5개). 이미 목록에 있는 것·이번 업무에만 해당하는 것은 빼고, 없으면 빈 배열.',
   '- intent: "question"(단순 질문) | "change_request"(개발·수정) | "asset_request"(이미지·에셋) | "ambiguous"(꼭 필요한 조건이 빠짐).',
   '- question이면 answer에 답만 쓰고 나머지는 빈 문자열.',
-  '- ambiguous이면 answer에 꼭 필요한 확인 질문만 번호를 붙여 쓴다(3개 이하). 나머지는 빈 문자열.',
+  '- ambiguous이면 answer에 꼭 필요한 확인 질문만 번호를 붙여 쓴다(3개 이하). 질문마다 줄 끝에 "→ 추천: <가장 그럴듯한 답>"을 붙여 사용자가 그대로 고를 수 있게 한다. 나머지는 빈 문자열.',
   '- change_request·asset_request이면 final_prompt에 개발 AI가 그대로 따를 지시(목표·기능·화면 요구), change_scope에 바꿀 범위,',
   '  preserve_constraints에 바꾸면 안 되는 것, test_criteria에 확인 방법(데스크톱·모바일 화면 확인 포함)을 쓴다. answer는 빈 문자열.',
   '- test_criteria는 확인할 수 있는 문장으로 쓴다(예: "400px에서 가로 넘침 없음"). "보기 좋게" 같은 말은 쓰지 않는다.',

@@ -231,6 +231,8 @@ Deno.serve(async (req) => {
     ``,
     revision ? `## 결과 v${revision.result_revision} 검토 후 사용자 수정 요청 (새 계획 필요)` : '',
     revision ? revision.feedback : '',
+    // v0.5.37(zen-mcp-server challenge에서 착안): 수정 요청을 무조건 따르지 않고 먼저 따져 본다
+    revision ? '이 수정 요청을 그대로 따르기 전에 승인된 기획서와 맞는지 먼저 따진다. 기획서와 부딪히거나 결과를 더 나쁘게 만들 수 있으면 계획 대신 status "needs_clarification"로 왜 부딪히는지 묻는다.' : '',
     revision && previousResult?.summary ? `이전 결과 요약: ${previousResult.summary}` : '',
     revision && previousResult?.remaining_issues ? `이전 결과의 남은 문제: ${previousResult.remaining_issues}` : '',
     ``,
@@ -255,6 +257,8 @@ Deno.serve(async (req) => {
     ``,
     ...repoMapStep(),
     `지도에 있는 것으로 될 일은 작업 목표에 "기존 ○○을 써서"라고 적어 개발 AI가 다시 찾지 않게 한다.`,
+    ``,
+    `계획을 멈추고 questions로 물을 때는 질문마다 줄 끝에 "→ 추천: <가장 그럴듯한 답>"을 붙여 사용자가 그대로 고를 수 있게 한다.`,
     ``,
     `## 앞으로도 지켜야 할 것(선택)`,
     rulesAsk('project_rules').replace('- ', '계획 JSON 최상위 '),
