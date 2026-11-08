@@ -30,3 +30,27 @@ export function mentionAllowed(m: Mention, repo: string | null | undefined): boo
 export function applyMention(items: WorkItem[], m: Mention): WorkItem[] {
   return items.map((w) => ({ ...w, assignee_preference: m.preference, execution_mode: 'manual_handoff' }));
 }
+
+/** @ 누르면 뜨는 목록(v0.5.47, 카카오톡 태그처럼). 넣는 글은 영어 이름 */
+export const MENTION_OPTIONS = [
+  { tag: 'Claude', ko: '클로드', desc: '개발·꼼꼼한 수정' },
+  { tag: 'Codex', ko: '코덱스', desc: 'Linear로 맡기는 개발' },
+  { tag: 'Gemini', ko: '제미나이', desc: '쉬운 개발(다른 저장소만)' },
+] as const;
+
+/** 커서 바로 앞이 "@글자"면 그 시작 위치와 글자. 메일 주소(a@b)는 무시 */
+export function mentionQuery(text: string, caret: number): { start: number; query: string } | null {
+  const m = /(^|\s)@([^\s@]{0,12})$/.exec(text.slice(0, caret));
+  return m ? { start: caret - m[2].length - 1, query: m[2] } : null;
+}
+
+export function mentionOptions(query: string) {
+  const q = query.toLowerCase();
+  return MENTION_OPTIONS.filter((o) => o.tag.toLowerCase().startsWith(q) || o.ko.startsWith(query));
+}
+
+/** 고른 이름을 넣은 새 글과 커서 위치 */
+export function insertMention(text: string, caret: number, start: number, tag: string): { text: string; caret: number } {
+  const head = `${text.slice(0, start)}@${tag} `;
+  return { text: head + text.slice(caret).replace(/^\s+/, ''), caret: head.length };
+}

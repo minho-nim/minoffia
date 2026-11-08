@@ -1,5 +1,6 @@
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
+import { insertMention, mentionOptions, mentionQuery } from '../domain/mention';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
@@ -345,6 +346,21 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   }, []);
   const fileInput = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // @ 누르면 위에 뜨는 AI 목록(v0.5.47, 카카오톡 태그처럼)
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
+  const mentionList = mention ? mentionOptions(mention.query) : [];
+  const readMention = (el: HTMLTextAreaElement) => setMention(el.selectionStart === el.selectionEnd ? mentionQuery(el.value, el.selectionStart) : null);
+  const pickMention = (tag: string) => {
+    const el = inputRef.current;
+    if (!el || !mention) return;
+    const next = insertMention(el.value, el.selectionStart, mention.start, tag);
+    setInput(next.text);
+    setMention(null);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+    });
+  };
   // 입력칸은 쓴 만큼 늘어난다(최대 높이는 CSS max-height). 보내서 비우면 다시 줄어든다.
   useEffect(() => {
     const el = inputRef.current;
@@ -1418,6 +1434,17 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             e.target.value = '';
           }}
         />
+        {mentionList.length > 0 && (
+          <ul className="mention-pop" role="listbox" aria-label="맡길 AI 고르기">
+            {mentionList.map((o) => (
+              <li key={o.tag}>
+                <button type="button" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => pickMention(o.tag)}>
+                  <b>@{o.tag}</b> <span>{o.ko} · {o.desc}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <textarea
           onPaste={(e) => {
             const files = [...e.clipboardData.files];
@@ -1431,15 +1458,30 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           rows={1}
           value={input}
           maxLength={4000}
-          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일 (@클로드처럼 맡길 AI 지정)` : '묻거나 시킬 일을 적으세요 (@이름으로 AI 지정)'}
+          placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일 (@로 맡길 AI 지정)` : '묻거나 시킬 일을 적으세요 (@로 AI 지정)'}
           aria-label="묻기·요청"
           onFocus={() => {
             if (canAskGemini) onWarmGemini?.();
             // 휴대폰 키보드가 올라온 뒤(애니메이션 끝) 마지막 말이 입력창 위에 보이게
             window.setTimeout(revealEnd, 350);
           }}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            readMention(e.target);
+          }}
+          onSelect={(e) => readMention(e.currentTarget)}
+          onBlur={() => setMention(null)}
           onKeyDown={(e) => {
+            // @ 목록이 떠 있으면 Enter·Tab은 첫 번째 AI를 넣고, Esc는 닫는다
+            if (mentionList.length && (e.key === 'Enter' || e.key === 'Tab') && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              pickMention(mentionList[0].tag);
+              return;
+            }
+            if (mention && e.key === 'Escape') {
+              setMention(null);
+              return;
+            }
             // PC: Enter로 보내고 Shift+Enter는 줄바꿈. 휴대폰: Enter는 줄바꿈(보내기 버튼으로만). 한글 조합 중 Enter는 무시한다.
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !touchInput()) {
               e.preventDefault();

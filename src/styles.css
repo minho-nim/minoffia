@@ -2837,6 +2837,55 @@ a {
   border-color: var(--accent);
 }
 
+/* @ 누르면 입력창 위에 뜨는 AI 목록(v0.5.47) */
+.inbox-form {
+  position: relative;
+}
+
+.mention-pop {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(100% + 6px);
+  z-index: 6;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.35);
+}
+
+.mention-pop button {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mention-pop button:hover,
+.mention-pop button:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.mention-pop span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* 입력창은 화면 아래에 붙어 늘 보인다(v0.4.65, 소유자: 기본 화면에서 아래가 잘림). 대화가 짧으면 원래 자리 그대로 */
 .inbox > .inbox-form {
   position: sticky;
@@ -4176,7 +4225,7 @@ a {
 /* 프로젝트 칩 접기(v0.5.5) */
 .project-chips .chip-fold {
   border-style: dashed;
-  color: var(--muted, inherit);
+  color: var(--muted);
 }
 
 /* 누가 누구를 기다리나(v0.5.22): 안 끝난 앞 작업 */

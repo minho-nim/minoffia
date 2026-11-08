@@ -34,3 +34,17 @@ describe('@이름으로 맡기기(v0.5.46)', () => {
     expect(applyMention([w, { ...w, id: 'W2' }], { preference: 'claude_support', label: 'Claude' }).map((x) => x.assignee_preference)).toEqual(['claude_support', 'claude_support']);
   });
 });
+
+describe('@ 목록(v0.5.47)', () => {
+  it('커서 앞 @글자를 찾고, 메일 주소는 무시', async () => {
+    const { mentionQuery, mentionOptions, insertMention } = await import('./mention');
+    expect(mentionQuery('다크모드 @', 6)).toEqual({ start: 5, query: '' });
+    expect(mentionQuery('@cl', 3)).toEqual({ start: 0, query: 'cl' });
+    expect(mentionQuery('a@b', 3)).toBeNull();
+    expect(mentionOptions('').length).toBe(3);
+    expect(mentionOptions('cl').map((o) => o.tag)).toEqual(['Claude']);
+    expect(mentionOptions('제').map((o) => o.tag)).toEqual(['Gemini']);
+    expect(insertMention('고쳐줘 @cl', 7, 4, 'Claude')).toEqual({ text: '고쳐줘 @Claude ', caret: 12 });
+    expect(mentionedAssignee('@Gemini 해줘')).toMatchObject({ preference: 'gemini_dev' });
+  });
+});
