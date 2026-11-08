@@ -1,7 +1,7 @@
 // Gemini 개발 워크플로에 넘길 할 일(v0.4.82). 외부 의존 없음(Deno 함수와 vitest가 같이 쓴다).
 // 워크플로(gemini-dev.yml)가 앞머리 규칙(범위·비밀값·시험·커밋 금지)을 붙이므로 여기서는 이 작업의 내용만 담는다.
 import { rulesSection } from './projectRules.ts';
-import { bugSteps, DEV_HABITS } from './devHabits.ts';
+import { bugSteps, domainSteps, DEV_HABITS } from './devHabits.ts';
 
 /** 워크플로 입력 하나에 넣을 수 있는 길이(GitHub workflow_dispatch 입력 전체 한도 안) */
 export const MAX_INSTRUCTIONS = 20_000;
@@ -51,6 +51,7 @@ export function buildGeminiTask(p: GeminiTaskInput): string {
     '### 개발 습관(토큰·범위 아끼기)',
     ...DEV_HABITS.map((x) => `- ${x}`),
     ...bugSteps([p.title, p.goal, p.finalPrompt].join('\n'), p.bug).map((l) => l.replace(/^## /, '### ')),
+    ...domainSteps([p.title, p.goal, p.finalPrompt].join('\n')).map((l) => l.replace(/^## /, '### ')),
   ];
   const text = lines.filter((l, i, all) => !(l === '' && (i === 0 || all[i - 1] === ''))).join('\n').trim();
   return text.length > MAX_INSTRUCTIONS ? `${text.slice(0, MAX_INSTRUCTIONS - 20)}\n…(길어서 잘림)` : text;

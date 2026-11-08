@@ -32,3 +32,12 @@ describe('내 차례(v0.4.8)', () => {
     expect(myTurns([task], data({ specs: [{ ...spec, intent: 'ambiguous', answer: '1. 무엇?' }] }))[0]).toMatchObject({ word: '질문' });
   });
 });
+
+describe('시작한 일부터 끝내기(v0.5.45)', () => {
+  it('막힘 먼저, 그다음 끝에 가까운 단계, 같으면 오래 기다린 것', async () => {
+    const { turnOrder } = await import('./myTurn');
+    const t = (taskId: string, step: 'A' | 'B' | 'C' | undefined, at: string, alert = false) => ({ taskId, title: '', word: '', label: '', step, at, alert });
+    const sorted = [t('기획', 'A', '1'), t('올리기', 'B', '3'), t('배포', 'C', '4'), t('막힘', undefined, '9', true), t('올리기 옛', 'B', '2')].sort(turnOrder);
+    expect(sorted.map((x) => x.taskId)).toEqual(['막힘', '배포', '올리기 옛', '올리기', '기획']);
+  });
+});
