@@ -45,6 +45,7 @@ import { getSupabase } from './lib/supabase';
 import { PushToggle } from './components/PushToggle';
 import { OfficeView } from './office/OfficeView';
 import { version } from '../package.json';
+import { HealthCheck } from './components/HealthCheck';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -1767,6 +1768,7 @@ export function App() {
               onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
               shortcutsOf={(id) => projectShortcuts(id, snap.tasks, snap.workflow.results)}
               onOpenTask={(id) => showTask(id)}
+              renderHealth={store.healthCheck ? (p) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id) }} /> : undefined}
               renderStructure={(p) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />}
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
