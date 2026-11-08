@@ -589,6 +589,13 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('linear-probe', {});
       return data as unknown as import('./store').LinearProbe;
     },
+    async archify(taskId, revision) {
+      const uid = await userId();
+      const { data } = await client.storage.from('attachments').download(`${uid}/${taskId}/archify-r${revision}.html`);
+      if (data) return { html: await data.text() };
+      const res = await invoke('archify-result', { taskId, revision });
+      return { started: Boolean(res.started || res.ready) };
+    },
     async keyStatus() {
       const data = await invoke('key-status', {});
       return Array.isArray(data.keys) ? (data.keys as import('./store').KeyStatus[]) : [];

@@ -113,6 +113,8 @@ export interface OfficeStore {
   linearProbe(): Promise<LinearProbe>;
   /** 서버 비밀 열쇠가 들어 있는지와 GitHub 토큰 만료일(값은 받지 않음, v0.5.38). 로컬 데모는 없음 */
   keyStatus?(): Promise<KeyStatus[]>;
+  /** 결과의 바뀐 곳 구조도(Archify) HTML. 아직 없으면 서버가 그리기를 시작한다(v0.5.43). 로컬 데모는 없음 */
+  archify?(taskId: string, revision: number): Promise<{ html?: string; started?: boolean }>;
   /** Gemini 무료가 견본 지시서로 HTML 견본 한 장을 만든다(서버, 저장은 앱이 견본으로 올림, v0.4.7) */
   /** v0.4.94: 근무 중인 Studio A·B가 하나씩(최대 두 장) */
   /** 프로젝트 저장소 파일 목록(경로만, v0.5.24 구조도) */
