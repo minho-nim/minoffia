@@ -21,6 +21,7 @@ import { mergeDanger } from '../domain/mergeDanger';
 import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
 import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
 import { addDesignWord, DESIGN_WORDS } from '../domain/designWords';
+import { DesignCheckView } from './DesignCheckView';
 
 export interface SpecFields {
   intent: Intent;
@@ -43,6 +44,8 @@ export interface WorkflowActions {
   copy: (text: string) => Promise<boolean>;
   /** 바뀐 곳 구조도(Archify) 보기(v0.5.43, 서버 모드만) */
   archify?: (taskId: string, revision: number) => Promise<{ html?: string; started?: boolean }>;
+  /** 디자인 자동 검사(v0.5.56): 미리보기 주소가 있는 결과만 */
+  designCheck?: { load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>; start(taskId: string, revision: number): Promise<void> };
   /** 성공하면 true. 실패 이유는 App이 알림으로 보여준다. */
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   /** Gemini 무료 기획서 초안(서버가 새 버전으로 저장) */
@@ -984,6 +987,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     emptyText="diff에서 바뀐 파일을 찾지 못했어요."
                   />
                   {actions.archify && <ArchifyView load={() => actions.archify!(task.id, view.result!.revision)} />}
+                  {actions.designCheck && view.result.previewUrl && <DesignCheckView key={view.result.revision} api={{ load: () => actions.designCheck!.load(task.id, view.result!.revision), start: () => actions.designCheck!.start(task.id, view.result!.revision) }} />}
                 </details>
               )}
               {(() => {

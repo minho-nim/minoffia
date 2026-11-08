@@ -1,0 +1,55 @@
+# 디자인 자동 검사(v0.5.56, 소유자 목록 26번): 서버 함수 design-check가 시작한다. 모델 호출 없음.
+# 결과 미리보기 주소를 impeccable(Apache-2.0, 고정 버전 4.7.0)로 데스크톱(1280x800)·휴대폰(390x844) 폭에서 검사하고,
+# 프로젝트 디자인 기준(DESIGN.md)이 있으면 함께 쓴다. 결과 JSON만 1회용 업로드 주소로 올린다. 저장소 열쇠는 쓰지 않는다.
+name: 디자인 자동 검사(impeccable)
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: '검사할 미리보기 주소(https)'
+        required: true
+      design_md:
+        description: '프로젝트 디자인 기준(DESIGN.md, 없으면 빈칸)'
+        required: false
+      upload_url:
+        description: '결과 JSON 1회용 업로드 주소'
+        required: true
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 검사
+        env:
+          URL: ${{ inputs.url }}
+          DESIGN_MD: ${{ inputs.design_md }}
+        run: |
+          echo "$URL" | grep -Eq '^https://[A-Za-z0-9.-]+(/[^[:space:]]*)?$' || { echo "::error::주소가 이상합니다"; exit 1; }
+          mkdir -p /tmp/dc && cd /tmp/dc
+          [ -n "$DESIGN_MD" ] && printf '%s' "$DESIGN_MD" > DESIGN.md
+          npm init -y > /dev/null
+          npm i -s impeccable@4.7.0
+          npx impeccable detect --json --no-advisory --viewport 1280x800 "$URL" > desktop.json 2> desktop.err || true
+          npx impeccable detect --json --no-advisory --viewport 390x844 "$URL" > mobile.json 2> mobile.err || true
+          tail -3 desktop.err mobile.err || true
+          node -e "
+            const fs=require('fs');
+            const read=(f)=>{try{const j=JSON.parse(fs.readFileSync(f,'utf8'));return Array.isArray(j)?j:[]}catch{return null}};
+            const d=read('desktop.json'), m=read('mobile.json');
+            const pick=(list,view)=>(list||[]).slice(0,60).map(x=>({rule:String(x.antipattern||''),name:String(x.name||''),severity:String(x.severity||''),category:String(x.category||''),snippet:String(x.snippet||'').slice(0,200),view}));
+            const out={checkedAt:new Date().toISOString(),url:process.env.URL,ok:d!==null||m!==null,designMd:!!process.env.DESIGN_MD,findings:[...pick(d,'desktop'),...pick(m,'mobile')]};
+            fs.writeFileSync('result.json',JSON.stringify(out));
+            console.log('검사 결과:',out.ok?out.findings.length+'건':'검사 실패');
+          "
+      - name: 올리기
+        env:
+          UPLOAD_URL: ${{ inputs.upload_url }}
+        run: |
+          echo "::add-mask::$UPLOAD_URL"
+          code=$(curl -sS -o /tmp/up.txt -w '%{http_code}' -X PUT -H 'Content-Type: application/json' -H 'x-upsert: true' --data-binary @/tmp/dc/result.json "$UPLOAD_URL")
+          echo "올리기 응답: $code"; [ "$code" -lt 300 ] || { head -c 300 /tmp/up.txt; exit 1; }
