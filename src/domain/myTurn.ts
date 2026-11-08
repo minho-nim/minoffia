@@ -27,6 +27,12 @@ export interface MyTurn {
 
 export type TurnStep = 'qa' | 'pm' | 'A' | 'P' | 'E' | 'B' | 'C';
 
+/** 끝에 가까운 단계일수록 앞(배포 → 올리기 → 실행·견본 → 계획 → 기획 → 질문) */
+const STEP_RANK: Record<TurnStep, number> = { C: 0, B: 1, E: 2, P: 2, pm: 3, A: 4, qa: 5 };
+const stepRank = (s?: TurnStep) => (s ? STEP_RANK[s] : 6);
+/** 내 차례 정렬 */
+export const turnOrder = (a: MyTurn, b: MyTurn) => Number(!!b.alert) - Number(!!a.alert) || stepRank(a.step) - stepRank(b.step) || a.at.localeCompare(b.at);
+
 export function myTurns(tasks: Task[], all: WorkflowData, now: number = Date.now()): MyTurn[] {
   const out: MyTurn[] = [];
   for (const t of tasks) {
@@ -79,5 +85,6 @@ export function myTurns(tasks: Task[], all: WorkflowData, now: number = Date.now
   // 자동으로 넘어가야 할 단계가 너무 오래 그대로면(멈춤) [!]로 알린다(v0.4.10).
   const title = new Map(tasks.map((t) => [t.id, t.title]));
   for (const s of stalls(tasks, all, now)) out.push({ taskId: s.taskId, title: title.get(s.taskId) ?? '', word: s.word, label: s.label, alert: true, at: s.since });
-  return out.sort((a, b) => Number(!!b.alert) - Number(!!a.alert) || a.at.localeCompare(b.at));
+  // 막힘 먼저, 그다음 끝에 가까운 단계부터(시작한 일부터 끝내기, v0.5.45 Task Master의 다음 작업 고르기에서 착안), 같으면 오래 기다린 것부터
+  return out.sort(turnOrder);
 }
