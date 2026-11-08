@@ -11,6 +11,8 @@
 - 2026-11-03 운영 Supabase에 `0038_gemini_pm_claim`·`0039_atomic_plan_and_linear_tracking` 적용, `draft-plan`(v2)·`codex-linear`(v2)·`linear-webhook`(v2, JWT 끔·서명 확인) 배포를 마쳤다. 확인: 새 표·함수·고유 색인 존재, `gemini_pm_drafts`는 RLS 켜짐·로그인 사용자 접근 없음(서버 전용), `save_pm_plan`은 SECURITY INVOKER·로그인 사용자만 실행, `claim_gemini_pm`·`claim_codex_linear`는 서버만 실행. 보안 점검에 새 경고 없음(서버 전용 표의 '정책 없음' 안내만).
 - **남은 것**: 이 앱 버전(save_pm_plan 사용)의 release 배포는 소유자가 따로 한다. Linear의 이슈 id 입력 지원(`canSetId`)·예약 UUID 조회는 실제 맡기기 때 처음 확인된다(읽기 전용 확인은 아직 안 함).
 
+- 2026-11-08 이름은 minoffia(저장소 minho-nim/minoffia)로 바꿨지만 운영 주소는 minlab-ai-office.pages.dev를 그대로 쓴다(새 Pages 프로젝트 minoffia1은 지움). 지운 Worker의 'Workers Builds: minoffia' 실패 표시는 남아 있으나 배포와 무관하다.
+
 ## 구현된 경로와 남은 확인
 
 - Gemini 기획서 → Claude PM → 승인별 실행·결과·채점·PR·배포. 작은 일은 규칙으로 바로 배정하고 Claude PM 불가 시 Gemini 분배로 대체하는 코드가 있다. 운영 반영은 확인 필요.
