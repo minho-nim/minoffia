@@ -1,6 +1,7 @@
 import { newId } from '../data/store';
 import { PREF_AGENT, parsePmPlan } from '../domain/pmPlan';
 import { deriveWorkflow } from '../domain/workflow';
+import { applyMention, mentionAllowed, mentionedAssignee } from '../domain/mention';
 import type { Task, Snapshot } from '../domain/types';
 import type { AgentAssignment, PmPlan } from '../domain/workflow-types';
 
@@ -18,6 +19,13 @@ export function preparePlanImport(task: Task, text: string, source: PmPlan['sour
     if (existing) return { plan: existing, assignments: [], existing: true };
   }
   const planRevision = Math.max(0, ...data.workflow.plans.filter((p) => p.taskId === task.id).map((p) => p.planRevision)) + 1;
+  // @이름으로 맡긴 업무는 PM이 나눈 작업도 모두 그 AI가 맡는다(v0.5.46)
+  const mention = mentionedAssignee(task.userOriginalText ?? task.description);
+  const repo = data.projects.find((p) => p.id === task.projectId)?.repo;
+  if (mention && mentionAllowed(mention, repo) && parsed.plan.work_items.some((w) => w.assignee_preference !== mention.preference)) {
+    parsed.plan.work_items = applyMention(parsed.plan.work_items, mention);
+    parsed.plan.mode_reason = `${parsed.plan.mode_reason ? `${parsed.plan.mode_reason} · ` : ''}소유자가 @${mention.label} 지정`.slice(0, 300);
+  }
   const plan: PmPlan = {
     id: newId(),
     taskId: task.id,

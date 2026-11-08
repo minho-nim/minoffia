@@ -27,4 +27,10 @@ describe('계획 응답의 기획서 버전 유지', () => {
     const replay = preparePlanImport(task, planText, 'gemini_fallback', snap, 1);
     expect('existing' in replay && replay.existing).toBe(true);
   });
+  it('@클로드로 맡긴 업무는 PM 계획의 작업도 Claude가 맡는다(v0.5.46)', () => {
+    const prepared = preparePlanImport({ ...task, userOriginalText: '@클로드 다크모드 고쳐줘' }, planText, 'routine_session_auto', snapshot(1), 1);
+    if (!('plan' in prepared)) throw new Error('계획 생성 실패');
+    expect(prepared.assignments.map((a) => a.assignee)).toEqual(['claude']);
+    expect(prepared.plan.plan.mode_reason).toContain('@Claude 지정');
+  });
 });
