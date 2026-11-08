@@ -1079,12 +1079,10 @@ a {
   border: 0;
   background: none;
   color: inherit;
-  text-align: left;
-  min-width: 0;
-}
-
-.memo-more .memo-btn {
+  /* 메모 줄은 가운데 정렬(v0.5.35 소유자) */
   justify-content: center;
+  text-align: center;
+  min-width: 0;
 }
 
 .memo-head {
