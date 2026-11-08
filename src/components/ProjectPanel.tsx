@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { repeatIssues } from '../domain/repeatIssues';
+import type { ResultReview } from '../domain/workflow-types';
 import type { Shortcut } from '../domain/shortcuts';
 import { BASE_RULES } from '../domain/baseRules';
 import { useState } from 'react';
@@ -24,6 +26,8 @@ interface Props {
   onAddRepoRules?: (project: Project) => void;
   /** 프로젝트에서 지켜야 할 것(v0.4.57): AI가 적고, 나는 지우거나 직접 더한다 */
   rules?: ProjectRule[];
+  /** 결과 채점 기록(반복되는 문제 찾기, v0.5.41) */
+  reviews?: ResultReview[];
   onAddRule?: (projectId: string, rule: string) => void;
   onRemoveRule?: (rule: ProjectRule) => void;
   /** 프로젝트 '한 일 기록'(v0.4.74): 펼쳤을 때만 그린다 */
@@ -39,7 +43,7 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], onAddRule, onRemoveRule, renderHistory, renderStructure, shortcutsOf, onOpenTask }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, shortcutsOf, onOpenTask }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
@@ -297,6 +301,26 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                       저장소 CLAUDE.md 지금 맞추기 — 없으면 넣고, 다르면 '지켜야 할 것'만 맞춤(개발할 때는 AI가 알아서 맞춰요)
                     </button>
                   )}
+                  {/* 반복되는 문제(v0.5.41): 채점에서 서로 다른 결과 2번 이상 나온 위반·고칠 점 */}
+                  {onAddRule &&
+                    (() => {
+                      const repeats = repeatIssues(reviews, tasks, p.id, mineRules.map((r) => r.rule));
+                      return repeats.length > 0 ? (
+                        <div className="wf-warn">
+                          <b>채점에서 반복되는 문제</b> — 지켜야 할 것에 넣으면 다음 지시서부터 함께 가요.
+                          <ul>
+                            {repeats.map((x) => (
+                              <li key={x.text}>
+                                {x.text} <span className="muted small">({x.count}번)</span>{' '}
+                                <button type="button" className="link-btn small" onClick={() => onAddRule(p.id, x.text)}>
+                                  지켜야 할 것에 추가
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null;
+                    })()}
                   {mineRules.length > 0 ? (
                     <ul>
                       {mineRules.map((r) => (
