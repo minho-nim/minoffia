@@ -857,6 +857,7 @@ export function App() {
   };
 
   const workflowActions: WorkflowActions = {
+    archify: store.archify ? (taskId, revision) => store.archify!(taskId, revision) : undefined,
     draftSpec: (task) => draftSpec(task.id),
     makePrototype: (task) => makePrototype(task.id),
     // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.

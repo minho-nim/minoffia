@@ -1,4 +1,5 @@
 import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
+import { ArchifyView } from './ArchifyView';
 import { uncoveredRequirements } from '../domain/requirements';
 import { recommendedReply } from '../domain/recommend';
 import type { ResultReview } from '../domain/workflow-types';
@@ -39,6 +40,8 @@ export interface ResultFields {
 
 export interface WorkflowActions {
   copy: (text: string) => Promise<boolean>;
+  /** 바뀐 곳 구조도(Archify) 보기(v0.5.43, 서버 모드만) */
+  archify?: (taskId: string, revision: number) => Promise<{ html?: string; started?: boolean }>;
   /** 성공하면 true. 실패 이유는 App이 알림으로 보여준다. */
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   /** Gemini 무료 기획서 초안(서버가 새 버전으로 저장) */
@@ -979,6 +982,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     changes={new Map(diffStats(view.result.diff).map((f) => [f.path, { add: f.add, del: f.del, tasks: [task.title] }]))}
                     emptyText="diff에서 바뀐 파일을 찾지 못했어요."
                   />
+                  {actions.archify && <ArchifyView load={() => actions.archify!(task.id, view.result!.revision)} />}
                 </details>
               )}
               {(() => {
