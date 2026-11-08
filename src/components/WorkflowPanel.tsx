@@ -1,4 +1,5 @@
 import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
+import { recommendedReply } from '../domain/recommend';
 import type { ResultReview } from '../domain/workflow-types';
 import { AGENT_BY_ID } from '../domain/agents';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -360,6 +361,11 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                       });
                     }}
                   >
+                    {recommendedReply(view.spec.answer) && (
+                      <button type="button" className="btn btn-small" onClick={() => setQaReply(recommendedReply(view.spec!.answer) ?? '')}>
+                        추천대로 채우기
+                      </button>
+                    )}
                     <textarea
                       rows={3}
                       value={qaReply}
@@ -639,6 +645,11 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     });
                   }}
                 >
+                  {recommendedReply(view.plan.plan.questions) && (
+                    <button type="button" className="btn btn-small" onClick={() => setPmReply(recommendedReply(view.plan!.plan.questions) ?? '')}>
+                      추천대로 채우기
+                    </button>
+                  )}
                   <textarea
                     rows={3}
                     value={pmReply}
