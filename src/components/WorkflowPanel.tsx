@@ -20,6 +20,7 @@ import { diffStats } from '../domain/fileTree';
 import { mergeDanger } from '../domain/mergeDanger';
 import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
 import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
+import { addDesignWord, DESIGN_WORDS } from '../domain/designWords';
 
 export interface SpecFields {
   intent: Intent;
@@ -1081,6 +1082,14 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               ) : view.resultRevised ? (
                 <p className="muted small">이 결과에는 수정 요청을 보냈습니다. 새 계획으로 작업한 결과를 새 버전으로 등록하세요.</p>
               ) : (
+                <>
+                <span className="design-words" aria-label="디자인 단어로 수정 요청">
+                  {DESIGN_WORDS.map((d) => (
+                    <button key={d.word} type="button" className="chip" title={d.text} onClick={() => setRevisionText((v) => addDesignWord(v, d.word))}>
+                      {d.word}
+                    </button>
+                  ))}
+                </span>
                 <span className="wf-inline">
                   <textarea
                     id={`rev-${task.id}`}
@@ -1103,6 +1112,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     수정 요청 기록
                   </button>
                 </span>
+                </>
               )}
             </div>
           )}
