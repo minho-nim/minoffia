@@ -4,6 +4,7 @@
 // verify_jwt = false(세션에 Supabase 로그인이 없다). 대신 제출표가 맞아야만 한 줄을 넣을 수 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { previewUrl, saveRules } from './projectRules.ts';
+import { maskSecrets } from './maskSecrets.ts';
 
 const MAX_USES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -93,11 +94,12 @@ Deno.serve(async (req) => {
     owner_id: ticket.owner_id,
     task_id: ticket.task_id,
     assignment_id: ticket.assignment_id,
-    summary,
+    summary: maskSecrets(summary),
     changed_files: files.slice(0, LIMITS.changed_files),
     diff: text(r.diff, LIMITS.diff),
-    test_log: text(r.test_log, LIMITS.test_log),
-    remaining_issues: text(r.remaining_issues, LIMITS.remaining_issues),
+    // 시험 기록·요약의 토큰·키처럼 생긴 글자는 저장 전에 가린다(v0.5.49). diff는 그대로(PR이 깨지지 않게).
+    test_log: maskSecrets(text(r.test_log, LIMITS.test_log)),
+    remaining_issues: maskSecrets(text(r.remaining_issues, LIMITS.remaining_issues)),
     branch,
     preview_url: preview,
     screenshots: shots,
