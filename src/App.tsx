@@ -48,7 +48,7 @@ import { version } from '../package.json';
 import { HealthCheck } from './components/HealthCheck';
 import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
-import { PREF_LABEL, quotaHit, reassignPlanText } from './domain/reassign';
+import { ciFixDone, ciFixWhy, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -705,6 +705,7 @@ export function App() {
   };
 
   /** PM 계획 글을 검증해 계획·배정으로 저장한다. 손으로 붙여넣기와 PM 세션 자동 전송이 같은 규칙을 쓴다. 문제가 있으면 이유 목록. */
+  const ciFixTried = useRef(new Set<string>());
   // 시작이 한도(사용량·요청 수) 때문에 실패하면 작업을 '한도 대기'로 표시해 업무 카드에서 다른 AI로 넘길 수 있게 한다(v0.5.73).
   const markQuota = async (a: AgentAssignment, message: string) => {
     if (!quotaHit({ dispatchStatus: a.dispatchStatus, actualProviderStatus: message })) return;
@@ -780,6 +781,19 @@ export function App() {
           }
         }
         if (checked) setSnap(await store.load());
+        // CI(PR 검사)가 실패하면 같은 AI에게 다시 맡기는 새 계획을 자동으로 만든다(v0.5.75, 커밋마다 한 번). 실행 승인(E)은 소유자가 한다.
+        for (const t of snap.tasks) {
+          const v = deriveWorkflow(t, snap.workflow);
+          if (!v.bApproved || v.cApproved || !v.plan || !v.spec || !v.result) continue;
+          const c = latestPrCheck(t, snap.workflow);
+          if (!c || c.ciState !== 'failure' || c.prState === 'closed') continue;
+          if (snap.workflow.plans.some((p) => p.taskId === t.id && ciFixDone(p.plan.mode_reason, c.headSha))) continue;
+          const a = v.assignments.find((x) => x.workItemId === v.result!.workItemId);
+          if (!a || ciFixTried.current.has(`${t.id}:${c.headSha}`)) continue;
+          ciFixTried.current.add(`${t.id}:${c.headSha}`);
+          const failed = await importPlanText(t, reassignPlanText(v.plan, a.workItemId, prefOf(a.assignee), ciFixWhy(c)), 'manual', snap, v.spec.revision);
+          if (!failed) say('ok', `[${t.title}] PR 검사가 실패해서 같은 AI에게 다시 맡기는 계획을 만들었어요. 업무 카드에서 실행 승인하면 고치기 시작해요.`);
+        }
         // 배포 승인 뒤 배포가 안 끝난 업무: main 시험을 기다리는 중이면 1분마다, 앱을 다시 열었는데 배포 기록이 없으면(승인 24시간 이내) 한 번 더 시도한다(v0.4.20).
         for (const t of snap.tasks) {
           const v = deriveWorkflow(t, snap.workflow);
