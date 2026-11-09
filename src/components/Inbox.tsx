@@ -321,10 +321,21 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     const root = document.documentElement;
     // 입력칸에 글을 쓰는 중일 때만 잰다(v0.5.15): 화면 확대·Claude 미리보기 창처럼 키보드 없이도 보이는 화면이 작아지면
     // 입력창이 공중에 떠서 그 아래로 대화가 비치던 것.
-    const setKb = () => {
+    // v0.5.70(소유자 "스크롤할 때·올릴 때 흔들려"): 아이폰은 키보드가 뜬 채 스크롤하면 보이는 화면(offsetTop)이 조금씩 움직여
+    // 그때마다 --kb가 바뀌어 입력창이 튀었다. 한 화면 그리기마다 한 번만 재고, 6px 안쪽 변화는 무시한다.
+    let last = -1;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
       const typing = document.activeElement === inputRef.current;
-      const kb = typing ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
-      root.style.setProperty('--kb', `${kb > 40 ? kb : 0}px`);
+      const raw = typing ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+      const kb = raw > 40 ? raw : 0;
+      if (last >= 0 && Math.abs(kb - last) < 6 && kb !== 0 && last !== 0) return;
+      last = kb;
+      root.style.setProperty('--kb', `${kb}px`);
+    };
+    const setKb = () => {
+      if (!frame) frame = window.requestAnimationFrame(measure);
     };
     const onFocusChange = () => window.setTimeout(setKb, 0);
     const onResize = () => {
@@ -341,6 +352,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       document.removeEventListener('focusout', onFocusChange);
       vv.removeEventListener('resize', onResize);
       vv.removeEventListener('scroll', setKb);
+      if (frame) window.cancelAnimationFrame(frame);
       root.style.removeProperty('--kb');
     };
   }, []);
