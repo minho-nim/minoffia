@@ -55,7 +55,7 @@ async function flush(): Promise<{ sent: number; removed: number }> {
   for (const row of rows ?? []) {
     const { data: subs } = await db.from('push_subscriptions').select('id, endpoint, p256dh, auth, fail_count').eq('owner_id', row.owner_id);
     for (const s of subs ?? []) {
-      const msg = { title: row.title, body: row.body || 'minoffia.', tag: `${TAG[row.kind] ?? 'ask'}-${row.task_id ?? 'all'}`, url: '/' };
+      const msg = { title: row.title, body: row.body || 'minoffia.', tag: `${TAG[row.kind] ?? 'ask'}-${row.task_id ?? 'all'}`, url: row.task_id ? `/?task=${row.task_id}` : '/' };
       let status = 0;
       try {
         status = (await sendPush(s, msg, keys, subject)).status;

@@ -39,6 +39,9 @@ self.addEventListener('notificationclick', (event) => {
       for (const c of list) {
         if (c.url.startsWith(self.location.origin) && 'focus' in c) {
           c.postMessage({ type: 'refresh' });
+          // 알림의 업무 카드를 연다(v0.5.83)
+          const taskId = new URL(url).searchParams.get('task');
+          if (taskId) c.postMessage({ type: 'open-task', taskId });
           return c.focus();
         }
       }

@@ -127,6 +127,9 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [store, setStore] = useState<OfficeStore | null>(null);
   const [snap, setSnap] = useState<Snapshot>(EMPTY);
+  // 알림을 누르면 그 업무 카드를 연다(v0.5.83): 주소의 ?task=<id> 또는 서비스 워커 메시지. showTask는 아래에서 채운다.
+  const openTaskRef = useRef<(id: string) => void>(() => undefined);
+  const pendingTask = useRef<string | null>(typeof location !== 'undefined' ? new URLSearchParams(location.search).get('task') : null);
   // v0.4.16(소유자): 대화(입력창)와 업무 목록을 탭으로 나눈다. 처음은 대화.
   const [tab, setTab] = useState<Tab>('chat');
   const [filter, setFilter] = useState<Filter>('open');
@@ -253,6 +256,11 @@ export function App() {
     const onVisible = () => wake();
     const onMessage = (e: MessageEvent) => {
       if ((e.data as { type?: string } | null)?.type === 'refresh') wake(true);
+      const d = e.data as { type?: string; taskId?: string } | null;
+      if (d?.type === 'open-task' && d.taskId) {
+        pendingTask.current = d.taskId;
+        openTaskRef.current(d.taskId);
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
@@ -858,6 +866,17 @@ export function App() {
     }
     if (!step) window.setTimeout(() => document.getElementById(`task-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   };
+  openTaskRef.current = (id) => {
+    if (!snap.tasks.some((t) => t.id === id)) return;
+    pendingTask.current = null;
+    showTask(id);
+    if (typeof history !== 'undefined' && location.search.includes('task=')) history.replaceState(null, '', location.pathname);
+  };
+  if (pendingTask.current && snap.tasks.some((t) => t.id === pendingTask.current)) {
+    const id = pendingTask.current;
+    pendingTask.current = null;
+    window.setTimeout(() => openTaskRef.current(id), 0);
+  }
 
   /**
    * Gemini 견본(무료, v0.4.7): 견본 먼저 계획이면 견본 지시서로 HTML 견본 한 장을 만들어 견본으로 올린다.
