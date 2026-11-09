@@ -5,6 +5,49 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { loadRules, rulesAsk, rulesSection } from './projectRules.ts';
 import { PM_HABITS, repoMapStep } from './devHabits.ts';
+import { appMapSection } from './appMap.ts';
+
+const SKIP_PATH = /(^|\/)(node_modules|dist|build|vendor|\.git|coverage|\.next|\.turbo|\.cache|graphify-out)\//;
+
+/**
+ * 다른 저장소 업무(v0.6.3): PM 루틴은 미노피아 저장소만 열 수 있어 musclemap 같은 저장소의 코드를 못 읽고 질문만 남겼다.
+ * 서버가 읽기 전용 토큰으로 그 저장소의 기본 브랜치 커밋과 파일 경로 목록(최대 400개, 내용 없음)을 읽고,
+ * 점검 때 만든 앱 지도와 함께 지시서에 넣는다. 못 읽으면 빈칸(질문으로 돌아감).
+ */
+async function otherRepoContext(admin: any, ownerId: string, projectId: string, repo: string): Promise<string[]> {
+  const token = env('GITHUB_REPO_TOKEN');
+  let head = '';
+  let paths: string[] = [];
+  if (token && /^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minoffia' };
+    try {
+      const info = await fetch(`https://api.github.com/repos/${repo}/commits/HEAD`, { headers, signal: AbortSignal.timeout(10_000) });
+      if (info.ok) head = String(((await info.json()) as { sha?: string }).sha ?? '');
+      const tree = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers, signal: AbortSignal.timeout(15_000) });
+      if (tree.ok) {
+        const data = (await tree.json()) as { tree?: { path?: string; type?: string }[] };
+        paths = (data.tree ?? []).filter((t) => t.type === 'blob' && t.path && !SKIP_PATH.test(t.path)).map((t) => t.path!).slice(0, 400);
+      }
+    } catch {
+      // 못 읽으면 아래 안내만
+    }
+  }
+  let map = '';
+  try {
+    const { data } = await admin.storage.from('attachments').download(`${ownerId}/projects/${projectId}/health.json`);
+    map = data ? appMapSection(JSON.parse(await data.text()).appMap) : '';
+  } catch {
+    map = '';
+  }
+  return [
+    `## 이 저장소는 이 세션에서 열 수 없음(서버가 대신 읽은 정보)`,
+    `이 세션의 작업 폴더는 미노피아 저장소다. ${repo}는 열지 말고(접근이 막혀 있음) 아래 파일 목록·앱 지도만 보고 계획한다. 코드를 못 본다는 이유만으로 질문하지 않는다.`,
+    `계획 JSON의 "repository"는 "${repo}", "target_base_revision"은 "${head || '알 수 없음'}"으로 쓴다. 작업은 파일·화면 단위로 나누고, 실제 코드 확인은 개발 AI가 한다.`,
+    `아래 "저장소 지도 만들기" 단계는 건너뛴다(미노피아 저장소 지도라서 이 업무와 관계없음).`,
+    paths.length ? `### 파일 목록 (${paths.length}개${paths.length >= 400 ? ', 앞 400개' : ''})\n${paths.join('\n')}` : '(파일 목록을 읽지 못했다. 할 일이 불분명하면 questions로 묻는다.)',
+    map,
+  ].filter(Boolean);
+}
 
 /** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
 const HARD_DAILY_CAP = 20;
@@ -206,6 +249,7 @@ Deno.serve(async (req) => {
   const projectRules = await loadRules(userClient, task.project_id);
 
   // 6. 루틴(PM) 실행. 사용자가 보낸 내용은 <routine-fire-payload>로 전달된다. 최대 65,536자.
+  const otherRepo = repo !== allowedRepo.toLowerCase() ? await otherRepoContext(admin, user.id, task.project_id, String(project.repo)) : [];
   const text = [
     `MinLab AI Office 업무 (작업 ID ${task.id})`,
     `저장소: ${project.repo}`,
@@ -239,6 +283,8 @@ Deno.serve(async (req) => {
     revision && previousResult?.remaining_issues ? `이전 결과의 남은 문제: ${previousResult.remaining_issues}` : '',
     ``,
     ...leaveLines,
+    ``,
+    ...otherRepo,
     ``,
     ...rulesSection(projectRules),
     ``,

@@ -1,7 +1,7 @@
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
 import { insertMention, mentionOptions, mentionQuery } from '../domain/mention';
-import { CRITERIA_TAGS, insertCriterion } from '../domain/criteriaTag';
+import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
@@ -11,7 +11,7 @@ import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction } from '../domain/stageNotice';
-import { deriveWorkflow } from '../domain/workflow';
+import { canApprove, deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
 import { ImageZoom } from './ImageZoom';
@@ -403,6 +403,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const readMention = (el: HTMLTextAreaElement) => setMention(el.selectionStart === el.selectionEnd ? mentionQuery(el.value, el.selectionStart) : null);
   // 완료 기준 태그 줄(v0.5.99): v0.6.0 소유자 "펼치는 버튼을 두고" — 입력창 아래 [● 기준] 버튼으로 펼치고 접는다
   const [critOpen, setCritOpen] = useState(false);
+  // 대화에서 기획서 바로 보기(v0.6.3 소유자 "채팅에서 기획서 보기 버튼, 팝업으로")
+  const [specFor, setSpecFor] = useState<string | null>(null);
   const pickCriterion = (tag: string) => {
     const el = inputRef.current;
     if (!el) return;
@@ -1156,6 +1158,58 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       {/* 스크롤 중에도 상자 위 모서리가 칩 줄 바로 아래에 보이게(v0.5.9, 그림만) */}
       <div className="inbox-cap" aria-hidden="true" />
       {zoom && <ImageZoom src={zoom.src} name={zoom.name} onClose={() => setZoom(null)} />}
+      {specFor &&
+        (() => {
+          const task = snap.tasks.find((t) => t.id === specFor);
+          const v = task ? deriveWorkflow(task, snap.workflow) : null;
+          const sp = v?.spec;
+          if (!task || !v || !sp) return null;
+          const canA = !v.aApproved && canApprove(v, 'A').ok && onApprove;
+          return (
+            <div className="archify-modal" role="dialog" aria-label="기획서" onClick={() => setSpecFor(null)}>
+              <div className="archify-box map-brief-box" onClick={(e) => e.stopPropagation()}>
+                <button type="button" className="archify-close" onClick={() => setSpecFor(null)} aria-label="닫기">
+                  ×
+                </button>
+                <div className="map-brief spec-pop">
+                  <p className="appmap-title">기획서 v{sp.revision}</p>
+                  <p className="muted small">{task.title}{v.aApproved ? ' · 기획 승인됨' : ''}</p>
+                  {sp.intent === 'question' ? <p className="spec-pop-text">{sp.answer}</p> : <p className="spec-pop-text">{sp.finalPrompt || '(내용 없음)'}</p>}
+                  {sp.changeScope && <p className="small"><b>바꿀 범위</b> {sp.changeScope}</p>}
+                  {sp.preserveConstraints && <p className="small"><b>지킬 것</b> {sp.preserveConstraints}</p>}
+                  {sp.testCriteria && (
+                    <>
+                      <p className="small"><b>완료 기준</b></p>
+                      <ul className="crit-list">
+                        {splitCriteria(sp.testCriteria).map((l, i) => {
+                          const c = CRITERIA_TAGS.find((x) => x.tag === l.tag);
+                          return (
+                            <li key={i}>
+                              <span className={`criteria-chip criteria-${c?.cls ?? 'none'}`}>
+                                <span aria-hidden="true">{c?.icon ?? '·'}</span> {l.tag ?? '보통'}
+                              </span>
+                              <span>{l.body}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  )}
+                  <span className="form-actions spec-pop-actions">
+                    <button type="button" className="btn btn-small btn-ghost" onClick={() => { setSpecFor(null); onShowTask?.(task.id); }}>
+                      업무 카드에서 고치기
+                    </button>
+                    {canA && (
+                      <button type="button" className="btn btn-small btn-primary" onClick={() => { setSpecFor(null); noticeAct({ id: '', from: 'office', text: '', taskId: task.id } as Msg, 'A'); }}>
+                        기획 승인
+                      </button>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       {/* 빈 대화창 인사말: 기본·프로젝트 대화창 모두(v0.5.13 소유자 "프로젝트별 빈 채팅에도 있는 게 맞다") */}
       {shown.length === 0 && (
         <div className="inbox-empty">
@@ -1216,9 +1270,19 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                 </ul>
               )}
               {!m.actions && m.taskId && onShowTask && snap.tasks.some((t) => t.id === m.taskId) && (
-                <button type="button" className="link-btn inbox-tasklink" onClick={() => onShowTask(m.taskId!)}>
-                  업무 보기 →
-                </button>
+                <span className="inbox-tasklinks">
+                  <button type="button" className="link-btn inbox-tasklink" onClick={() => onShowTask(m.taskId!)}>
+                    업무 보기 →
+                  </button>
+                  {(() => {
+                    const t = snap.tasks.find((x) => x.id === m.taskId);
+                    return t && deriveWorkflow(t, snap.workflow).spec ? (
+                      <button type="button" className="link-btn inbox-tasklink" onClick={() => setSpecFor(t.id)}>
+                        기획서 보기
+                      </button>
+                    ) : null;
+                  })()}
+                </span>
               )}
               {m.offer?.state === 'open' && (() => {
                 const o = m.offer;
@@ -1287,6 +1351,11 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                         {ACTION_LABEL[a]}
                       </button>
                     ))}
+                    {deriveWorkflow(task, snap.workflow).spec && (
+                      <button type="button" className="btn btn-small btn-ghost" onClick={() => setSpecFor(task.id)}>
+                        기획서 보기
+                      </button>
+                    )}
                   </span>
                 );
               })()}
@@ -1561,32 +1630,34 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             }
           }}
         />
+        {/* v0.6.3(소유자 "Claude 앱 입력창과 똑같이"): 왼쪽 [+ 첨부][●◐○ 기준][지우기], 오른쪽 [마이크][↑ 보내기], 글자 없이 아이콘만 */}
         <div className="inbox-tools">
-        <button type="button" className="inbox-attach" aria-label="사진·문서 첨부" title="사진·문서 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
-          {/* 이모지는 기기 글꼴마다 다르게 깨져 보여서 도트 그림 아이콘을 쓴다 */}
-          <svg className="pixel-icon" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
-            <path fill="currentColor" d="M1 3h14v1H1zM1 12h14v1H1zM1 4h1v8H1zM14 4h1v8h-1z" />
-            <path fill="currentColor" d="M10 5h2v2h-2zM3 11h1v-1h1V9h1V8h1v1h1v1h1V9h1V8h1v1h1v1h1v1h1v1H3z" opacity=".75" />
+        <button type="button" className="inbox-icon inbox-plus" aria-label="사진·문서 첨부" title="사진·문서 첨부(붙여넣기·끌어다 놓기도 됩니다)" disabled={busy} onClick={() => fileInput.current?.click()}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
-        <VoiceInput disabled={busy} onText={(t) => setInput((v) => (v.trim() ? `${v.trimEnd()} ${t}` : t))} />
         {pending?.kind !== 'naming' && (
           <button
             type="button"
             className={`criteria-toggle${critOpen ? ' is-on' : ''}`}
             aria-expanded={critOpen}
+            aria-label="완료 기준(필수·권장·선택) 넣기"
             title="완료 기준(필수·권장·선택) 넣기"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setCritOpen((v) => !v)}
           >
-            <span aria-hidden="true">●</span> 기준 {critOpen ? '▴' : '▾'}
+            <span className="crit-dot must" aria-hidden="true">●</span>
+            <span className="crit-dot nice" aria-hidden="true">◐</span>
+            <span className="crit-dot opt" aria-hidden="true">○</span>
           </button>
         )}
-      {shown.length > 0 && (
+        {shown.length > 0 && (
           <button
             type="button"
-            className="link-btn small inbox-clear"
-            title="이 대화창 화면에서만 지웁니다(접수된 업무·개발일지 기록은 그대로)"
+            className="inbox-icon inbox-clear"
+            aria-label={pending ? '화면 지우기·요청 취소' : '화면 지우기'}
+            title={`${pending ? '화면 지우기·요청 취소' : '화면 지우기'}: 이 대화창 화면에서만 지웁니다(접수된 업무·개발일지 기록은 그대로)`}
             onClick={() => {
               // 대화를 지우면 미니엉이 기다리던 요청(접수 확인·프로젝트 이름·저장소 만들기)도 취소한다.
               // 이미 접수된 업무는 기록이라 지우지 않는다(업무 카드에서 삭제).
@@ -1603,12 +1674,16 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
               ]);
             }}
           >
-            {pending ? '화면 지우기 · 요청 취소' : '화면 지우기'}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+            </svg>
           </button>
         )}
+        <span className="inbox-tools-gap" />
+        <VoiceInput disabled={busy} onText={(t) => setInput((v) => (v.trim() ? `${v.trimEnd()} ${t}` : t))} />
           <button type="submit" className="inbox-send" aria-label="보내기" title="보내기" disabled={busy || !input.trim()}>
-            <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
-              <path fill="currentColor" d="M7 3h2v11H7zM5 5h2v2H5zM9 5h2v2H9zM3 7h2v2H3zM11 7h2v2h-2z" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 19V5M6 11l6-6 6 6" />
             </svg>
           </button>
         </div>
