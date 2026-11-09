@@ -47,6 +47,7 @@ import { OfficeView } from './office/OfficeView';
 import { version } from '../package.json';
 import { HealthCheck } from './components/HealthCheck';
 import { DesignStandard } from './components/DesignStandard';
+import { serviceLamps } from './domain/serviceLamps';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -1493,6 +1494,7 @@ export function App() {
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}`}>
         <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`} aria-label="오피스">
           <OfficeView
+            lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
             tasks={snap.tasks}
             assignments={snap.workflow.assignments}
             workflow={snap.workflow}

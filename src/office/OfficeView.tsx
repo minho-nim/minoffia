@@ -9,6 +9,7 @@ import { badgeFor } from './marks';
 import { speechFor } from './speech';
 import { spriteFor } from './sprites';
 import { BACKGROUND_URL } from './assets';
+import type { Lamp } from '../domain/serviceLamps';
 
 interface Props {
   tasks: Task[];
@@ -22,6 +23,8 @@ interface Props {
   onOpenTask?: (taskId: string) => void;
   /** 휴가 중인 AI: 아래 문으로 나가 사라진다(v0.4.39) */
   leave?: AgentId[];
+  /** 서버실 불빛(v0.5.57): GitHub·Cloudflare·Supabase 상태 */
+  lamps?: Lamp[];
 }
 
 interface Mover {
@@ -35,7 +38,8 @@ interface Mover {
 const SPEED = 22; // 논리 픽셀/초. 천천히 걷는다.
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
 
-export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask, leave = [] }: Props) {
+export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask, leave = [], lamps = [] }: Props) {
+  const [lampOpen, setLampOpen] = useState<Lamp['id'] | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRefs = useRef(new Map<AgentId, HTMLButtonElement>());
   const movers = useRef(new Map<AgentId, Mover>());
@@ -189,6 +193,21 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
           {r.label}
         </span>
       ))}
+      {lamps.length > 0 && (() => {
+        const t = ROOMS.find((r) => r.id === 'terminal')!.rect;
+        const open = lamps.find((l) => l.id === lampOpen);
+        return (
+          <div className="lamp-panel" style={{ right: pct(W - (t.x + t.w) + 2, W), top: pct(t.y + 12, H) }}>
+            {lamps.map((l) => (
+              <button key={l.id} type="button" className={`lamp lamp-${l.state}`} aria-label={`${l.label}: ${l.detail}`} title={l.detail} onClick={() => setLampOpen(lampOpen === l.id ? null : l.id)}>
+                <i aria-hidden="true" />
+                {l.label}
+              </button>
+            ))}
+            {open && <p className="lamp-detail">{open.detail}</p>}
+          </div>
+        );
+      })()}
       <div
         className={`memo-board${memoOpen ? ' is-open' : ''}`}
         style={{
