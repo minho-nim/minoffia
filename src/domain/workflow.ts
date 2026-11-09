@@ -142,6 +142,8 @@ export function canApprove(view: WorkflowView, gate: Gate, workItemId = ''): Gat
       return { ok: true };
     case 'B':
       if (!view.result) return { ok: false, reason: '검토할 결과 패키지가 없습니다.' };
+      // v0.5.74: Gemini 개발이 중간에 멈춰 작업 브랜치를 못 올린 결과는 올릴 수 없다(올리면 PR을 영영 못 찾는다)
+      if (resultWithoutBranch(view.result)) return { ok: false, reason: '개발이 끝까지 못 가서 작업 브랜치가 올라가지 않은 결과예요. 작업의 "다시 하기"로 새로 해 주세요.' };
       if (view.pendingRevision || view.resultRevised) return { ok: false, reason: 'PM에 수정을 요청한 결과입니다. 새 결과를 받은 뒤 승인하세요.' };
       if (view.bApproved) return { ok: false, reason: '이 결과는 이미 업로드 승인했습니다.' };
       if (view.waitingWork.length)
@@ -161,6 +163,11 @@ export function canRequestRevision(view: WorkflowView): GateCheck {
   if (view.bApproved) return { ok: false, reason: '이미 GitHub 업로드를 승인한 결과입니다.' };
   if (view.pendingRevision || view.resultRevised) return { ok: false, reason: '이 결과에는 이미 수정 요청을 보냈습니다. 새 결과를 기다리세요.' };
   return { ok: true };
+}
+
+/** Gemini 개발 결과인데 작업 브랜치를 못 올린 것(워크플로가 끝까지 못 감, v0.5.74). 요약에 '작업 브랜치:' 줄이 없다. */
+export function resultWithoutBranch(result: Pick<ResultPackage, 'source' | 'summary'> | null | undefined): boolean {
+  return !!result && result.source === 'gemini_actions_auto' && !/작업 브랜치:/.test(result.summary);
 }
 
 /** 오피스 캐릭터가 쓰는 v0.1 상태로 옮긴다. 실제 기록이 없는 단계는 대기로 둔다. */
