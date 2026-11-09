@@ -4174,7 +4174,9 @@ a.project-site {
      입력창 뒤는 바탕색으로 완전히 가린다(흐림 효과 대신). */
   height: calc(var(--inbox-form-h, 110px) + 32px);
   /* 흐려지는 칸의 좌우는 입력창 가장자리에 맞춘다(v0.5.71 소유자 "좌우 여백 말고 내 채팅창 기준으로") */
-  margin: 0 calc(-1 * var(--inbox-pad) + 6px) calc(-1 * (var(--inbox-form-h, 110px) + 32px) - var(--inbox-gap));
+  /* 아래 바깥 여백(v0.6.8): 흐림 칸의 아래 끝이 입력창 아래 끝과 같게(위로 32px만 더 덮음). 전에는 32px 더 내려가
+     입력창 밑 여백이 작아지자 대화 판 밖으로 흰 띠가 삐져나왔다(소유자 사진) */
+  margin: 0 calc(-1 * var(--inbox-pad) + 6px) calc(-1 * (var(--inbox-form-h, 110px) + var(--inbox-gap)));
   pointer-events: none;
   background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 0%, transparent), var(--surface) 32px, var(--surface));
 }
