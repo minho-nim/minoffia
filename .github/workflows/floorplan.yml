@@ -56,7 +56,9 @@ jobs:
           # 쉬운 앱 지도를 먼저 만들어 자세한 지도(build)에도 같은 이름·설명이 들어가게 한다(v0.5.97)
           node scripts/app-map.mjs /tmp/target "${NAME:-$REPO}" /tmp/app-map.json || echo "앱 지도를 만들지 못했어요(점검은 계속)."
           node /tmp/fp/skills/floorplan/scripts/build.mjs /tmp/target | grep -E 'ASSIGNMENT|HEALTH|wrote' || true
-          node -e "const g=require('/tmp/target/floorplan/graph.json');const h=g.health||{summary:{high:0,medium:0,low:0},issues:[]};require('fs').writeFileSync('/tmp/health.json',JSON.stringify({checkedAt:new Date().toISOString(),head:(g.meta&&g.meta.repos&&g.meta.repos[0]&&g.meta.repos[0].head)||'',files:(g.files||[]).length,summary:h.summary,issues:(h.issues||[]).map(i=>({kind:i.kind,severity:i.severity,title:i.title,detail:i.detail,items:(i.items||[]).slice(0,20).map(x=>String(x).replace(/^[a-z]+:/,''))}))}))"
+          # 코드 파일이 없는 저장소(v0.5.98: TestRepo에서 멈춤)는 지도 대신 안내 한 장만 만든다
+          if [ ! -f /tmp/target/floorplan/index.html ]; then mkdir -p /tmp/target/floorplan; printf '<!doctype html><meta charset="utf-8"><p style="font:16px sans-serif;padding:24px">코드 파일이 없어 자세한 지도를 만들 수 없어요.</p>' > /tmp/target/floorplan/index.html; fi
+          node -e "const fs=require('fs');const gp='/tmp/target/floorplan/graph.json';const g=fs.existsSync(gp)?JSON.parse(fs.readFileSync(gp,'utf8')):{files:[]};const h=g.health||{summary:{high:0,medium:0,low:0},issues:[]};require('fs').writeFileSync('/tmp/health.json',JSON.stringify({checkedAt:new Date().toISOString(),head:(g.meta&&g.meta.repos&&g.meta.repos[0]&&g.meta.repos[0].head)||'',files:(g.files||[]).length,summary:h.summary,issues:(h.issues||[]).map(i=>({kind:i.kind,severity:i.severity,title:i.title,detail:i.detail,items:(i.items||[]).slice(0,20).map(x=>String(x).replace(/^[a-z]+:/,''))}))}))"
           node -e "const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));try{h.appMap=JSON.parse(fs.readFileSync('/tmp/app-map.json','utf8'))}catch{};fs.writeFileSync('/tmp/health.json',JSON.stringify(h))"
           echo "점검: $(node -e "console.log(JSON.stringify(require('/tmp/health.json').summary))")"
       - name: 올리기
