@@ -1,6 +1,7 @@
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
 import { insertMention, mentionOptions, mentionQuery } from '../domain/mention';
+import { CRITERIA_TAGS, insertCriterion } from '../domain/criteriaTag';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
@@ -324,7 +325,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     // v0.5.70(소유자 "스크롤할 때·올릴 때 흔들려"): 아이폰은 키보드가 뜬 채 스크롤하면 보이는 화면(offsetTop)이 조금씩 움직여
     // 그때마다 --kb가 바뀌어 입력창이 튀었다. 한 화면 그리기마다 한 번만 재고, 6px 안쪽 변화는 무시한다.
     // v0.5.93(소유자 "켜진 채로 스크롤 시 여전히 흔들"): 스크롤 중 따라 움직이는 값은 한 박자 늦어 늘 흔들린다.
-    // 이제 스크롤(vv scroll)에는 다시 재지 않고, 키보드가 열리고 닫힐 때(크기 바뀜·입력칸 들어가고 나옴)만 잰다.
+    // v0.5.99(소유자 "키보드에 안 붙음"): 스크롤을 아예 안 재니, 아이폰이 키보드를 띄운 뒤 화면을 한 번 더 옮기는 걸 놓쳤다.
+    // 이제 스크롤 중에는 그대로 두고 멈춘 뒤(0.16초) 한 번 재며, 키보드가 열리고 닫힌 직후에도 몇 번 다시 잰다.
     let last = -1;
     let frame = 0;
     const measure = () => {
@@ -341,19 +343,34 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     const setKb = () => {
       if (!frame) frame = window.requestAnimationFrame(measure);
     };
-    const onFocusChange = () => window.setTimeout(setKb, 0);
-    const onResize = () => {
+    const timers: number[] = [];
+    // 키보드가 올라오는 동안(아이폰 약 0.3~0.5초) 화면이 자리 잡을 때까지 몇 번 다시 잰다
+    const settle = () => {
       setKb();
+      for (const ms of [120, 320, 650]) timers.push(window.setTimeout(setKb, ms));
+    };
+    let scrollTimer = 0;
+    const onScroll = () => {
+      window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(setKb, 160);
+    };
+    const onFocusChange = () => window.setTimeout(settle, 0);
+    const onResize = () => {
+      settle();
       if (document.activeElement === inputRef.current) revealEnd();
     };
     setKb();
     vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onScroll);
     document.addEventListener('focusin', onFocusChange);
     document.addEventListener('focusout', onFocusChange);
     return () => {
       document.removeEventListener('focusin', onFocusChange);
       document.removeEventListener('focusout', onFocusChange);
       vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', onScroll);
+      window.clearTimeout(scrollTimer);
+      for (const t of timers) window.clearTimeout(t);
       if (frame) window.cancelAnimationFrame(frame);
       root.style.removeProperty('--kb');
       root.classList.remove('kb-open');
@@ -365,6 +382,18 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const mentionList = mention ? mentionOptions(mention.query) : [];
   const readMention = (el: HTMLTextAreaElement) => setMention(el.selectionStart === el.selectionEnd ? mentionQuery(el.value, el.selectionStart) : null);
+  // 완료 기준 태그 줄(v0.5.99): 입력칸에 있을 때만 보인다
+  const [typing, setTyping] = useState(false);
+  const pickCriterion = (tag: string) => {
+    const el = inputRef.current;
+    if (!el) return;
+    const next = insertCriterion(el.value, el.selectionStart ?? el.value.length, tag);
+    setInput(next.text);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+    });
+  };
   const pickMention = (tag: string) => {
     const el = inputRef.current;
     if (!el || !mention) return;
@@ -1449,6 +1478,15 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             e.target.value = '';
           }}
         />
+        {typing && !mentionList.length && pending?.kind !== 'naming' && (
+          <div className="criteria-row" role="group" aria-label="완료 기준 넣기">
+            {CRITERIA_TAGS.map((c) => (
+              <button key={c.tag} type="button" className={`criteria-chip criteria-${c.tag}`} title={c.desc} onMouseDown={(e) => e.preventDefault()} onClick={() => pickCriterion(c.tag)}>
+                <span aria-hidden="true">{c.icon}</span> {c.tag}
+              </button>
+            ))}
+          </div>
+        )}
         {mentionList.length > 0 && (
           <ul className="mention-pop" role="listbox" aria-label="맡길 AI 고르기">
             {mentionList.map((o) => (
@@ -1476,6 +1514,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일 (@로 맡길 AI 지정)` : '묻거나 시킬 일을 적으세요 (@로 AI 지정)'}
           aria-label="묻기·요청"
           onFocus={() => {
+            setTyping(true);
             if (canAskGemini) onWarmGemini?.();
             // 휴대폰 키보드가 올라온 뒤(애니메이션 끝) 마지막 말이 입력창 위에 보이게
             window.setTimeout(revealEnd, 350);
@@ -1485,7 +1524,10 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             readMention(e.target);
           }}
           onSelect={(e) => readMention(e.currentTarget)}
-          onBlur={() => setMention(null)}
+          onBlur={() => {
+            setMention(null);
+            setTyping(false);
+          }}
           onKeyDown={(e) => {
             // @ 목록이 떠 있으면 Enter·Tab은 첫 번째 AI를 넣고, Esc는 닫는다
             if (mentionList.length && (e.key === 'Enter' || e.key === 'Tab') && !e.nativeEvent.isComposing) {

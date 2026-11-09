@@ -4973,3 +4973,40 @@ a.project-site {
   top: 4px;
   z-index: 1;
 }
+
+/* 완료 기준 태그 줄(v0.5.99): 입력창 바로 위, 입력 중에만 */
+.criteria-row {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+}
+.criteria-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 3px 10px -6px rgba(0, 0, 0, 0.35);
+}
+.criteria-chip span {
+  font-size: 12px;
+}
+.criteria-꼭 span {
+  color: var(--danger);
+}
+.criteria-좋음 span {
+  color: var(--accent);
+}
+.criteria-선택 span {
+  color: var(--muted);
+}
