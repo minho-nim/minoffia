@@ -80,17 +80,7 @@ Deno.serve(async (req) => {
     return reply(500, { ok: false, error: '서버 설정이 빠졌습니다. CLAUDE_ROUTINE_* / OFFICE_OWNER_EMAIL secrets를 확인하세요.' });
   }
 
-  // 1. 로그인한 소유자인지 확인
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const userClient = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: auth } = await userClient.auth.getUser();
-  const user = auth?.user;
-  if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
-  if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 실행할 수 있습니다.' });
-
-  let body: { taskId?: string; acknowledgeRetry?: boolean };
+  let body: { taskId?: string; acknowledgeRetry?: boolean; ownerId?: string };
   try {
     body = await req.json();
   } catch {
@@ -98,11 +88,30 @@ Deno.serve(async (req) => {
   }
   if (!body.taskId) return reply(400, { ok: false, error: 'taskId가 없습니다.' });
 
-  // 2. RLS를 거쳐 내 업무만 읽는다.
+  // 1. 로그인한 소유자인지 확인. v0.6.12: 채점이 '다시 개발'이면 서버(review-result·submit-review)가 서버 키로 부른다
+  //    (앱이 닫혀 있어도 재계획). 이때는 업무 주인을 직접 확인하고, 읽기는 서버 키로 하되 늘 그 업무만 읽는다.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  const internal = Boolean(serviceKey) && authHeader === `Bearer ${serviceKey}`;
+  const userClient = internal
+    ? createClient(env('SUPABASE_URL'), serviceKey)
+    : createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { global: { headers: { Authorization: authHeader } } });
+  let user: { id: string; email?: string };
+  if (internal) {
+    user = { id: String(body.ownerId ?? ''), email: ownerEmail };
+  } else {
+    const { data: auth } = await userClient.auth.getUser();
+    if (!auth?.user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
+    if ((auth.user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 실행할 수 있습니다.' });
+    user = auth.user;
+  }
+
+  // 2. 내 업무만 읽는다(앱은 RLS, 서버 호출은 주인 조건)
   const { data: task } = await userClient
     .from('tasks')
     .select('id, title, description, type, priority, assignee, status, dispatch_state, dispatch_at, project_id, projects(name, repo)')
     .eq('id', body.taskId)
+    .eq('owner_id', user.id)
     .maybeSingle();
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
   // PM은 업무의 처음 배정과 상관없이 늘 Claude다(실제 담당은 PM 계획이 정한다, 0018).
