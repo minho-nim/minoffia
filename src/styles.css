@@ -2849,7 +2849,8 @@ a.project-site {
   gap: 2px;
   padding: 6px 5px 4px;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  /* 바깥 대화 상자 모서리와 같은 중심의 곡선(v0.6.3 소유자 "라운드를 바깥쪽에 맞춰"): 바깥 반지름 - 사이 간격 */
+  border-radius: calc(var(--inbox-r, 14px) - 4px);
   background: var(--bg);
   box-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.3);
 }
