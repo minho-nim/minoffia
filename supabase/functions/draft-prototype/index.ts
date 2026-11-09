@@ -4,6 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { extractHtml, PROTOTYPE_SYSTEM, stripActive } from './prototype.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
+import { homepageStart } from './homepage.ts';
 
 const HARD_DAILY_CAP = 20;
 const DEFAULT_DAILY_CAP = 10;
@@ -93,7 +94,7 @@ Deno.serve(async (req) => {
     slots.map(async ({ key, i }) => {
       let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
       try {
-        r = await callGemini(key, model, text);
+        r = await callGemini(key, model, `${text}${homepageStart(text, task.id, i)}`);
       } catch (e) {
         r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
       }
