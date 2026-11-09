@@ -34,3 +34,13 @@ describe('CI 실패 다시 맡기기(v0.5.75)', () => {
     expect(ciFixDone('작은 일', 'abcdef1234')).toBe(false);
   });
 });
+
+describe('한도 자동 넘기기(v0.5.81)', () => {
+  it('다음 AI를 순서대로 고르고 휴가·지금 담당·AI Office Gemini는 뺀다', async () => {
+    const { nextAgent } = await import('./reassign');
+    expect(nextAgent('codex', {}, false)).toBe('gemini_dev');
+    expect(nextAgent('codex', {}, true)).toBe('claude_support');
+    expect(nextAgent('gemini', { claude: true }, false)).toBe('codex_primary');
+    expect(nextAgent('claude', { gemini: true, codex: true }, false)).toBeNull();
+  });
+});
