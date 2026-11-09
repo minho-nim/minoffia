@@ -4124,6 +4124,10 @@ a.project-site {
   /* 키보드가 뜨면(--kb) 그만큼 아래 여백을 늘려, 끝까지 내려도 마지막 말이 키보드 위 입력창 위로 올라온다 */
   padding-bottom: calc(var(--inbox-low) + var(--kb, 0px));
 }
+/* 키보드가 떠 있으면 홈 막대 여백 없이 입력창을 키보드에 붙인다(v0.5.93) */
+.kb-open .inbox {
+  --inbox-low: 6px;
+}
 .inbox > .inbox-form {
   bottom: calc(var(--inbox-low) + 1px + var(--kb, 0px));
 }
@@ -4150,13 +4154,14 @@ a.project-site {
 .inbox-fade {
   position: sticky;
   z-index: 3;
-  bottom: calc(1px + var(--kb, 0px));
+  /* 입력창과 같은 높이에서 끝난다(v0.5.93 소유자 "채팅창 아래가 어색"): 전에는 입력창 밑 여백까지 내려가 상자 밖에 밝은 띠가 보였다 */
+  bottom: calc(var(--inbox-low) + 1px + var(--kb, 0px));
   flex: none;
   /* v0.5.70(소유자 "입력칸 뒤는 글씨가 안 보이게, 위로는 투명하게 내려가는 느낌"): 입력창 위 32px는 점점 진해지는 그라데이션,
      입력창 뒤는 바탕색으로 완전히 가린다(흐림 효과 대신). */
-  height: calc(var(--inbox-form-h, 110px) + var(--inbox-low) + 32px);
+  height: calc(var(--inbox-form-h, 110px) + 32px);
   /* 흐려지는 칸의 좌우는 입력창 가장자리에 맞춘다(v0.5.71 소유자 "좌우 여백 말고 내 채팅창 기준으로") */
-  margin: 0 calc(-1 * var(--inbox-pad) + 6px) calc(-1 * (var(--inbox-form-h, 110px) + var(--inbox-low) + 32px) - var(--inbox-gap));
+  margin: 0 calc(-1 * var(--inbox-pad) + 6px) calc(-1 * (var(--inbox-form-h, 110px) + 32px) - var(--inbox-gap));
   pointer-events: none;
   background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 0%, transparent), var(--surface) 32px, var(--surface));
 }

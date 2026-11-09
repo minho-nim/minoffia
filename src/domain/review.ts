@@ -201,7 +201,43 @@ const HAS_GROUND = /[\w-]+\.[a-z]{1,5}\b|:\d+|`[^`]+`|근거|line \d+|L\d+/i;
 /** 완료 기준 앞의 중요도 표시(v0.5.80): (꼭)·(좋음)·(선택). 없으면 보통 */
 export const mustCriterion = (text: string) => /^\s*(?:[-*]\s*)?(?:R\d+[.):]?\s*)?[([]꼭[)\]]/.test(text);
 
-export function verdictOf(gates: Gate[], score: Score | null, autoRedos: number): { verdict: Verdict; reasons: string[] } {
+/** 시험·화면 확인을 실제로 돌린 기록이 있는지(v0.5.93, productdesign_harness "실행 검증 없으면 Pass 단정 안 함") */
+export function ranChecks(testLog: string): boolean {
+  const t = testLog.replace(/\(시험 로그 없음\)|package\.json 없음: 시험 건너뜀/g, '').trim();
+  return t.length > 0;
+}
+
+/** 지적 문장을 비교용으로(숫자·공백 정리) */
+const issueKey = (r: string) => r.replace(/\s+/g, ' ').replace(/\d+/g, '#').trim();
+/** 지난 '다시 개발' 때와 같은 지적(점수 줄 제외). 같은 문제가 또 나오면 고치는 방향이 틀린 것(v0.5.93) */
+export function repeatedIssues(previous: string[], now: string[]): string[] {
+  const before = new Set(previous.filter((r) => !r.startsWith('점수 ')).map(issueKey));
+  return now.filter((r) => !r.startsWith('점수 ') && before.has(issueKey(r)));
+}
+
+/** 시험 로그 줄이기(v0.5.93, vicem 방식): 색 코드·통과 줄·반복 줄을 빼고 앞뒤만 남겨 채점 AI에 보내는 양을 줄인다 */
+export function slimLog(log: string, max = 4500): string {
+  const lines: string[] = [];
+  let prev = '';
+  for (const raw of log.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').split('\n')) {
+    const l = raw.trimEnd();
+    if (!l.trim() || l === prev) continue;
+    if (/^\s*(✓|√|PASS\b|ok \d)|^\s*\d+\s+passing\b/.test(l)) continue;
+    lines.push(l);
+    prev = l;
+  }
+  const text = lines.join('\n');
+  if (text.length <= max) return text;
+  const head = Math.floor(max / 3);
+  return `${text.slice(0, head)}\n…(가운데 ${text.length - max}자 줄임)…\n${text.slice(-(max - head))}`;
+}
+
+export function verdictOf(
+  gates: Gate[],
+  score: Score | null,
+  autoRedos: number,
+  opts: { executed?: boolean; previousReasons?: string[] } = {},
+): { verdict: Verdict; reasons: string[] } {
   const reasons: string[] = [];
   for (const g of gates) if (g.blocking && !g.ok) reasons.push(`${g.label}: ${g.detail}`);
   if (!reasons.length && !score) return { verdict: 'owner', reasons: ['AI 점수를 받지 못해 사람이 봐야 해요.'] };
@@ -212,7 +248,14 @@ export function verdictOf(gates: Gate[], score: Score | null, autoRedos: number)
     const t = total(score);
     if (t < PASS_SCORE) reasons.push(`점수 ${t}점(통과 ${PASS_SCORE}점)`);
   }
-  if (!reasons.length) return { verdict: 'pass', reasons: [] };
+  if (!reasons.length) {
+    // 시험·화면 확인을 못 돌렸으면 점수가 높아도 통과로 단정하지 않는다(v0.5.93)
+    if (opts.executed === false) return { verdict: 'owner', reasons: ['실행 확인 없음: 시험·화면 확인 기록이 없어 통과를 확정하지 않았어요(점수는 통과권).'] };
+    return { verdict: 'pass', reasons: [] };
+  }
+  // 지난번 다시 개발 때와 같은 지적이 또 나오면 자동으로 돌리지 않고 사장님께(v0.5.93)
+  const again = repeatedIssues(opts.previousReasons ?? [], reasons);
+  if (again.length) return { verdict: 'owner', reasons: [...reasons, `같은 지적 반복(고치는 방향 확인 필요): ${again[0].slice(0, 120)}`] };
   return { verdict: autoRedos < MAX_AUTO_REDO ? 'redo' : 'owner', reasons };
 }
 
@@ -277,7 +320,7 @@ export function buildReviewPrompt(p: {
     ...p.gates.map((g) => `- ${g.label}: ${g.ok ? '통과' : '문제'} — ${g.detail}`),
     p.remainingIssues ? `\n## 개발 AI가 적은 남은 문제\n${p.remainingIssues.slice(0, 2000)}` : '',
     '\n## 시험 로그',
-    p.testLog.slice(-8000) || '(없음)',
+    slimLog(p.testLog) || '(없음)',
     '\n## 변경 내용(diff)',
     p.diff.length > 60000 ? `${p.diff.slice(0, 60000)}\n…(뒤는 길어서 잘림)` : p.diff,
   ]

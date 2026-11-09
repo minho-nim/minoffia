@@ -323,6 +323,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     // 입력창이 공중에 떠서 그 아래로 대화가 비치던 것.
     // v0.5.70(소유자 "스크롤할 때·올릴 때 흔들려"): 아이폰은 키보드가 뜬 채 스크롤하면 보이는 화면(offsetTop)이 조금씩 움직여
     // 그때마다 --kb가 바뀌어 입력창이 튀었다. 한 화면 그리기마다 한 번만 재고, 6px 안쪽 변화는 무시한다.
+    // v0.5.93(소유자 "켜진 채로 스크롤 시 여전히 흔들"): 스크롤 중 따라 움직이는 값은 한 박자 늦어 늘 흔들린다.
+    // 이제 스크롤(vv scroll)에는 다시 재지 않고, 키보드가 열리고 닫힐 때(크기 바뀜·입력칸 들어가고 나옴)만 잰다.
     let last = -1;
     let frame = 0;
     const measure = () => {
@@ -333,6 +335,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       if (last >= 0 && Math.abs(kb - last) < 6 && kb !== 0 && last !== 0) return;
       last = kb;
       root.style.setProperty('--kb', `${kb}px`);
+      // 키보드가 떠 있으면 아이폰 홈 막대 여백(safe-area)이 필요 없다(v0.5.93): 그 여백만큼 입력창 밑에 빈 띠가 생겼다
+      root.classList.toggle('kb-open', kb > 0);
     };
     const setKb = () => {
       if (!frame) frame = window.requestAnimationFrame(measure);
@@ -344,16 +348,15 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     };
     setKb();
     vv.addEventListener('resize', onResize);
-    vv.addEventListener('scroll', setKb);
     document.addEventListener('focusin', onFocusChange);
     document.addEventListener('focusout', onFocusChange);
     return () => {
       document.removeEventListener('focusin', onFocusChange);
       document.removeEventListener('focusout', onFocusChange);
       vv.removeEventListener('resize', onResize);
-      vv.removeEventListener('scroll', setKb);
       if (frame) window.cancelAnimationFrame(frame);
       root.style.removeProperty('--kb');
+      root.classList.remove('kb-open');
     };
   }, []);
   const fileInput = useRef<HTMLInputElement>(null);
