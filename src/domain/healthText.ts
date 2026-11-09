@@ -1,4 +1,4 @@
-// 앱 건강 검진(floorplan 1단계, v0.5.53): 검사기가 영어로 낸 결과를 종류별로 쉬운 한국어로 바꾼다(규칙, 모델 호출 없음).
+// 앱 점검(floorplan 1단계, v0.5.53): 검사기가 영어로 낸 결과를 종류별로 쉬운 한국어로 바꾼다(규칙, 모델 호출 없음).
 export type HealthIssue = { kind: string; severity: 'high' | 'medium' | 'low' | string; title: string; detail: string; items: string[] };
 export type HealthReport = { checkedAt: string; head: string; files: number | null; summary: { high: number; medium: number; low: number }; issues: HealthIssue[] };
 
@@ -22,7 +22,7 @@ export function koIssue(i: HealthIssue): { title: string; detail: string; severi
   return { title, detail, severity: SEVERITY_KO[i.severity] ?? '참고' };
 }
 
-/** 받은 JSON이 검진 결과 모양인지 확인(이상하면 null) */
+/** 받은 JSON이 점검 결과 모양인지 확인(이상하면 null) */
 export function parseHealth(raw: unknown): HealthReport | null {
   const r = raw as Partial<HealthReport> | null;
   if (!r || typeof r !== 'object' || typeof r.checkedAt !== 'string' || !r.summary || !Array.isArray(r.issues)) return null;

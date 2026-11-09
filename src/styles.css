@@ -4643,7 +4643,7 @@ a {
   justify-content: flex-end;
 }
 
-/* 앱 건강 검진(v0.5.53) */
+/* 앱 점검(v0.5.53) */
 .health {
   display: flex;
   flex-direction: column;

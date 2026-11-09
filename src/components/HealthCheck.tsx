@@ -1,5 +1,5 @@
-// 앱 건강 검진·기본 지도(floorplan 1단계, v0.5.53, 소유자 목록 28번): 프로젝트 카드에서 검진을 시작하고 결과를 쉬운 한국어로 본다.
-// 검진은 GitHub Actions가 AI 없이 돌린다(2~5분). 지도는 floorplan이 만든 HTML이라 앱과 분리된 창(sandbox, 같은 출처 권한 없음)에서만 연다.
+// 앱 점검·기본 지도(floorplan 1단계, v0.5.53, 소유자 목록 28번): 프로젝트 카드에서 점검을 시작하고 결과를 쉬운 한국어로 본다.
+// 점검은 GitHub Actions가 AI 없이 돌린다(2~5분). 지도는 floorplan이 만든 HTML이라 앱과 분리된 창(sandbox, 같은 출처 권한 없음)에서만 연다.
 import { useEffect, useRef, useState } from 'react';
 import { koIssue, type HealthReport } from '../domain/healthText';
 
@@ -52,7 +52,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
       poll(since);
     } catch (e) {
       setState('error');
-      setMsg((e as Error).message || '검진을 시작하지 못했어요.');
+      setMsg((e as Error).message || '점검을 시작하지 못했어요.');
     }
   };
 
@@ -60,7 +60,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
     try {
       const html = await api.map();
       if (html) setMapHtml(html);
-      else setMsg('지도가 아직 없어요. 검진을 먼저 해 주세요.');
+      else setMsg('지도가 아직 없어요. 점검을 먼저 해 주세요.');
     } catch (e) {
       setMsg((e as Error).message || '지도를 열지 못했어요.');
     }
@@ -72,7 +72,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
       {report ? (
         <>
           <p className="small">
-            {when(report.checkedAt)} 검진 · <b className={report.summary.high ? 'health-high' : ''}>중요 {report.summary.high}</b> · 고칠 만함 {report.summary.medium} · 사소 {report.summary.low}
+            {when(report.checkedAt)} 점검 · <b className={report.summary.high ? 'health-high' : ''}>중요 {report.summary.high}</b> · 고칠 만함 {report.summary.medium} · 사소 {report.summary.low}
             {report.files ? <span className="muted"> · 코드 {report.files}개</span> : null}
           </p>
           {report.issues.length === 0 ? (
@@ -93,7 +93,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
           )}
         </>
       ) : (
-        state !== 'checking' && <p className="muted small">아직 검진한 적이 없어요. 비밀 열쇠 노출·아무나 부를 수 있는 서버 주소·DB 규칙 실수·안 쓰는 파일 등을 AI 없이 찾아요.</p>
+        state !== 'checking' && <p className="muted small">아직 점검한 적이 없어요. 비밀 열쇠 노출·아무나 부를 수 있는 서버 주소·DB 규칙 실수·안 쓰는 파일 등을 AI 없이 찾아요.</p>
       )}
       <div className="health-actions">
         <button type="button" className="btn btn-small" disabled={state === 'checking'} onClick={() => void start()}>

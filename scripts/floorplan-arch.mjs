@@ -1,4 +1,4 @@
-// 건강 검진용 기본 지도 틀(v0.5.53, 소유자 목록 28번 1단계): floorplan이 훑은 scan.json의 코드 파일을 폴더별로 묶어
+// 점검용 기본 지도 틀(v0.5.53, 소유자 목록 28번 1단계): floorplan이 훑은 scan.json의 코드 파일을 폴더별로 묶어
 // architecture.json을 만든다(AI 없음). 쉬운 이름·설명은 2단계(Claude 보조 세션)에서 쓴다.
 // 사용: node scripts/floorplan-arch.mjs <저장소 폴더> <프로젝트 이름>
 import fs from 'node:fs';

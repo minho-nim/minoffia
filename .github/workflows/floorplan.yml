@@ -1,7 +1,7 @@
-# 앱 건강 검진·기본 지도(floorplan 1단계, v0.5.53): 서버 함수 health-check가 시작한다. 모델 호출 없음.
-# 대상 저장소를 읽기 전용으로 받아(TARGET_REPO_TOKEN) floorplan(MIT, 고정 커밋)으로 훑고, 폴더별 기본 지도와 검진 결과를 만든다.
-# 결과 두 개(지도 HTML·검진 JSON)는 함께 받은 1회용 업로드 주소(그 파일만, 2시간)로 올린다. 대상 저장소 코드는 올리지 않는다.
-name: 앱 건강 검진(floorplan)
+# 앱 점검·기본 지도(floorplan 1단계, v0.5.53): 서버 함수 health-check가 시작한다. 모델 호출 없음.
+# 대상 저장소를 읽기 전용으로 받아(TARGET_REPO_TOKEN) floorplan(MIT, 고정 커밋)으로 훑고, 폴더별 기본 지도와 점검 결과를 만든다.
+# 결과 두 개(지도 HTML·점검 JSON)는 함께 받은 1회용 업로드 주소(그 파일만, 2시간)로 올린다. 대상 저장소 코드는 올리지 않는다.
+name: 앱 점검(floorplan)
 on:
   workflow_dispatch:
     inputs:
@@ -15,7 +15,7 @@ on:
         description: '지도 HTML 1회용 업로드 주소'
         required: true
       health_url:
-        description: '검진 JSON 1회용 업로드 주소'
+        description: '점검 JSON 1회용 업로드 주소'
         required: true
 permissions:
   contents: read
@@ -52,7 +52,7 @@ jobs:
           node scripts/floorplan-arch.mjs /tmp/target "${NAME:-$REPO}"
           node /tmp/fp/skills/floorplan/scripts/build.mjs /tmp/target | grep -E 'ASSIGNMENT|HEALTH|wrote' || true
           node -e "const g=require('/tmp/target/floorplan/graph.json');const h=g.health||{summary:{high:0,medium:0,low:0},issues:[]};require('fs').writeFileSync('/tmp/health.json',JSON.stringify({checkedAt:new Date().toISOString(),head:(g.meta&&g.meta.repos&&g.meta.repos[0]&&g.meta.repos[0].head)||'',files:(g.files||[]).length,summary:h.summary,issues:(h.issues||[]).map(i=>({kind:i.kind,severity:i.severity,title:i.title,detail:i.detail,items:(i.items||[]).slice(0,20).map(x=>String(x).replace(/^[a-z]+:/,''))}))}))"
-          echo "검진: $(node -e "console.log(JSON.stringify(require('/tmp/health.json').summary))")"
+          echo "점검: $(node -e "console.log(JSON.stringify(require('/tmp/health.json').summary))")"
       - name: 올리기
         env:
           MAP_URL: ${{ inputs.map_url }}
@@ -66,7 +66,7 @@ jobs:
             code=$(curl -sS -o /tmp/up.txt -w '%{http_code}' -X PUT -H "Content-Type: $type" -H 'x-upsert: true' --data-binary @"$f" "$url")
             echo "올리기 응답: $code"; [ "$code" -lt 300 ] || { head -c 300 /tmp/up.txt; exit 1; }
           done
-      # 옵시디언 노트 보관함에도(v0.5.62): 검진 결과 노트 + 지도 그림. 실패해도 검진은 성공으로 둔다.
+      # 옵시디언 노트 보관함에도(v0.5.62): 점검 결과 노트 + 지도 그림. 실패해도 점검은 성공으로 둔다.
       - name: 옵시디언 노트에 올리기
         continue-on-error: true
         env:
@@ -76,4 +76,4 @@ jobs:
         run: |
           mkdir -p /tmp/shot && cd /tmp/shot && npm init -y > /dev/null && npm i -s playwright@1.49.1 && npx playwright install --with-deps chromium > /dev/null
           cp "$GITHUB_WORKSPACE/scripts/html-shot.mjs" /tmp/shot/ && node /tmp/shot/html-shot.mjs /tmp/target/floorplan/index.html /tmp/map.png 1400 || true
-          cd "$GITHUB_WORKSPACE" && bash scripts/notes-run.sh "건강 검진: $PROJECT" health "$PROJECT" /tmp/health.json /tmp/map.png /tmp/target/floorplan/index.html
+          cd "$GITHUB_WORKSPACE" && bash scripts/notes-run.sh "점검: $PROJECT" health "$PROJECT" /tmp/health.json /tmp/map.png /tmp/target/floorplan/index.html
