@@ -955,6 +955,7 @@ export function App() {
       return true;
     },
     designCheck: store.designCheck,
+    siteCheck: store.siteCheck,
     draftSpec: (task) => draftSpec(task.id),
     makePrototype: (task) => makePrototype(task.id),
     // step은 성공 여부(boolean)를 돌려주지만 패널은 완료만 기다린다.
@@ -1351,7 +1352,9 @@ export function App() {
                 return true;
               }
               deployWait.current.delete(task.id);
-              say('ok', r.updated ? `운영 배포를 시작했습니다: release를 ${r.to.slice(0, 7)}로 앞당겼습니다. Cloudflare 빌드가 끝나면(1~2분) 사이트에 반영됩니다.` : `release가 이미 최신(${r.to.slice(0, 7)})입니다. 다시 배포할 것이 없습니다.`);
+              say('ok', r.updated ? `운영 배포를 시작했습니다: release를 ${r.to.slice(0, 7)}로 앞당겼습니다. Cloudflare 빌드가 끝나면(1~2분) 사이트에 반영되고, 운영 화면을 자동으로 찍어 확인해요.` : `release가 이미 최신(${r.to.slice(0, 7)})입니다. 다시 배포할 것이 없습니다.`);
+              // 배포 뒤 운영 화면 확인(v0.6.9): 운영 주소가 있는 프로젝트만. 실패해도 배포는 그대로
+              if (r.updated) void store.siteCheck?.start(task.id, 'production').catch(() => undefined);
               return true;
             } catch (e) {
               deployWait.current.delete(task.id);

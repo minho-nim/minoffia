@@ -8,6 +8,7 @@ import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
 import type { OfficeStore, ResultInboxItem } from './store';
 import { parseHealth } from '../domain/healthText';
+import { parseSiteCheck } from '../domain/siteCheck';
 import { parseDesignReport } from '../domain/designCheck';
 
 /** ai_calls의 토큰 세 칸 합(하나도 없으면 null, v0.5.50) */
@@ -640,6 +641,20 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       },
       async start(taskId, revision) {
         await invoke('design-check', { taskId, revision });
+      },
+    },
+    siteCheck: {
+      async load(taskId) {
+        const data = await invoke('site-check', { action: 'load', taskId });
+        const out: import('../domain/siteCheck').SiteChecks = {};
+        for (const k of ['preview', 'production'] as const) {
+          const c = parseSiteCheck(data[k]);
+          if (c) out[k] = c;
+        }
+        return out;
+      },
+      async start(taskId, kind) {
+        await invoke('site-check', { taskId, kind });
       },
     },
     healthCheck: {
