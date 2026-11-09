@@ -36,6 +36,11 @@ export interface ProjectRule {
 
 export const RULE_SOURCE_LABEL: Record<ProjectRule['source'], string> = { spec: '기획서', plan: 'PM 계획', result: '개발 결과', owner: '내가 적음' };
 export const PREVIEW_HOST_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+/** 운영 사이트 주소(v0.5.89): 프로젝트에 적은 미리보기 주소(Cloudflare Pages)의 운영 주소. 없거나 형식이 틀리면 null */
+export function siteUrl(p: Pick<Project, 'previewHost'> | null | undefined): string | null {
+  const host = p?.previewHost?.trim().toLowerCase();
+  return host && PREVIEW_HOST_PATTERN.test(host) ? `https://${host}/` : null;
+}
 
 export interface Dispatch {
   state: DispatchState;

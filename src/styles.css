@@ -2020,6 +2020,17 @@ a {
   justify-content: flex-end;
 }
 
+/* 운영 사이트 열기(v0.5.89): 링크도 버튼과 같은 모양 */
+a.project-site {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.project-deploy {
+  margin: 0;
+}
+
 /* 프로젝트에서 지켜야 할 것(v0.4.57) */
 .project-rules {
   border-top: 1px dashed var(--line);

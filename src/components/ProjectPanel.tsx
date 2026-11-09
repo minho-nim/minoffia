@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import { repeatIssues } from '../domain/repeatIssues';
-import type { ResultReview } from '../domain/workflow-types';
+import type { Deployment, ResultReview } from '../domain/workflow-types';
 import type { Shortcut } from '../domain/shortcuts';
 import { BASE_RULES } from '../domain/baseRules';
 import { useState } from 'react';
 import type { Project, ProjectRule, Task } from '../domain/types';
 import { RepoCreate } from './RepoCreate';
-import { PREVIEW_HOST_PATTERN, REPO_PATTERN, RULE_SOURCE_LABEL } from '../domain/types';
+import { PREVIEW_HOST_PATTERN, REPO_PATTERN, RULE_SOURCE_LABEL, siteUrl } from '../domain/types';
 
 interface Props {
   projects: Project[];
@@ -41,13 +41,15 @@ interface Props {
   /** 미뤄 둔 일(개발 AI가 남긴 shortcut 주석, v0.4.97) */
   shortcutsOf?: (projectId: string) => Shortcut[];
   onOpenTask?: (taskId: string) => void;
+  /** 이 프로젝트의 마지막 운영 배포(v0.5.89) */
+  lastDeployOf?: (project: Project) => Deployment | null;
 }
 
 /**
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
@@ -140,7 +142,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
             <input id="project-description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={200} />
           </label>
           <label className="field">
-            <span>미리보기 주소(선택)</span>
+            <span>운영·미리보기 주소(선택)</span>
             <input
               id="project-preview"
               value={previewHost}
@@ -157,7 +159,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 ? 'owner/repo 형식으로 입력하세요. 예: minho-nim/minoffia'
                 : !hostValid
                   ? '미리보기 주소는 my-app.pages.dev처럼 주소 이름만 적어요.'
-                  : '저장소는 owner/repo 형식. 미리보기 주소(Cloudflare Pages)를 적으면 Claude 결과에 "미리보기 열기"가 붙어요.'}
+                  : '저장소는 owner/repo 형식. 주소(Cloudflare Pages)를 적으면 이 카드에 "운영 사이트 열기", 개발 결과에 "미리보기 열기"가 붙어요.'}
             </p>
             <span className="form-actions">
               <button type="button" className="btn btn-ghost" onClick={reset}>
@@ -203,6 +205,8 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
           const turn = turnsByProject.get(p.id) ?? 0;
           const mineRules = rules.filter((r) => r.projectId === p.id);
           const draft = ruleDraft[p.id] ?? '';
+          const site = siteUrl(p);
+          const deploy = lastDeployOf?.(p) ?? null;
           return (
             <li key={p.id} className="project-card">
               <button type="button" className="project-open" onClick={() => onOpen(p.id)} aria-label={`${p.name} 업무 보기`}>
@@ -226,6 +230,11 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 <button type="button" className="btn btn-small btn-ghost" onClick={() => onOpen(p.id)}>
                   업무 보기
                 </button>
+                {site && (
+                  <a className="btn btn-small btn-ghost project-site" href={site} target="_blank" rel="noopener noreferrer" aria-label={`${p.name} 운영 사이트 새 창으로 열기`}>
+                    운영 사이트 열기 ↗
+                  </a>
+                )}
                 {onAsk && (
                   <button type="button" className="btn btn-small btn-primary" onClick={() => onAsk(p.id)}>
                     요청하기
@@ -240,6 +249,13 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   수정
                 </button>
               </span>
+              {deploy && (
+                <p className="muted small project-deploy">
+                  {deploy.ok ? '마지막 운영 배포' : '마지막 배포 실패'} · {new Date(deploy.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {deploy.ok ? ` · ${deploy.toSha.slice(0, 7)}` : ''}
+                  {!site && deploy.ok ? ' · 수정에서 주소를 적으면 바로 열 수 있어요' : ''}
+                </p>
+              )}
               {renderHistory && (
                 <details className="project-rules project-history-box" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHistoryOpen((o) => ({ ...o, [p.id]: open })); }}>
                   <summary>한 일 기록</summary>
