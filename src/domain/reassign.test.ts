@@ -44,3 +44,15 @@ describe('한도 자동 넘기기(v0.5.81)', () => {
     expect(nextAgent('claude', { gemini: true, codex: true }, false)).toBeNull();
   });
 });
+
+describe('지시 받음 확인(v0.5.84)', () => {
+  it('시작 요청이 5분 넘게 안 끝나거나, 시작 뒤 너무 오래 소식이 없으면 경고', async () => {
+    const { staleStart } = await import('./reassign');
+    const now = Date.parse('2026-11-09T10:00:00Z');
+    expect(staleStart({ assignee: 'gemini', dispatchStatus: 'starting', startedAt: null, updatedAt: '2026-11-09T09:54:00Z' }, now)).toContain('6분');
+    expect(staleStart({ assignee: 'gemini', dispatchStatus: 'started', startedAt: '2026-11-09T09:30:00Z', updatedAt: '' }, now)).toBeNull();
+    expect(staleStart({ assignee: 'gemini', dispatchStatus: 'started', startedAt: '2026-11-09T09:20:00Z', updatedAt: '' }, now)).toContain('40분째');
+    expect(staleStart({ assignee: 'codex', dispatchStatus: 'started', startedAt: '2026-11-09T09:00:00Z', updatedAt: '' }, now)).toBeNull();
+    expect(staleStart({ assignee: 'claude', dispatchStatus: 'completed', startedAt: '2026-11-09T01:00:00Z', updatedAt: '' }, now)).toBeNull();
+  });
+});

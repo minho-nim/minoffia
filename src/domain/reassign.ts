@@ -64,3 +64,15 @@ export function nextAgent(current: AgentAssignment['assignee'], away: { claude?:
   ];
   return order.find(([, ok]) => ok)?.[0] ?? null;
 }
+
+/** 시작했는데 소식이 없는 작업(v0.5.84, '지시 받음' 확인): 시작 요청이 안 끝났거나, 시작 뒤 너무 오래 결과가 없으면 경고 글 */
+const STALE_MIN: Record<string, number> = { gemini: 35, claude: 60, codex: 120 };
+export function staleStart(a: Pick<AgentAssignment, 'assignee' | 'dispatchStatus' | 'startedAt' | 'updatedAt'>, now = Date.now()): string | null {
+  const since = Date.parse(a.startedAt ?? a.updatedAt);
+  if (!Number.isFinite(since)) return null;
+  const min = Math.floor((now - since) / 60_000);
+  if (a.dispatchStatus === 'starting' && min >= 5) return `시작 요청을 보낸 지 ${min}분이 지났는데 시작됐다는 확인이 없어요. 지시가 전달되지 않았을 수 있어요.`;
+  const limit = STALE_MIN[a.assignee] ?? 60;
+  if (a.dispatchStatus === 'started' && min >= limit) return `시작한 지 ${min}분째 결과 소식이 없어요(보통 ${limit}분 안에 와요). 멈췄을 수 있어요.`;
+  return null;
+}
