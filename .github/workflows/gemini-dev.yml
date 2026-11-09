@@ -96,6 +96,7 @@ jobs:
           sparse-checkout: |
             scripts/repo-map.mjs
             scripts/change-tree.mjs
+            scripts/gemini-oneshot.py
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -119,7 +120,7 @@ jobs:
           git rev-parse HEAD > /tmp/base.sha
           git checkout -b "$BRANCH"
 
-      - name: Gemini CLI로 고치기
+      - name: Gemini 한 번에 고치기
         working-directory: work
         env:
           KEY_A: ${{ secrets.GEMINI_API_KEY }}
@@ -154,31 +155,15 @@ jobs:
             echo "## 할 일"
             printf '%s\n' "$INSTRUCTIONS"
           } > /tmp/task.md
-          # 키 순서: auto·A면 A→B, B면 B→A. 한도(429)·오류로 실패하면 고친 것을 되돌리고 다른 키로 한 번 더(v0.4.81).
-          if [ "$FIRST" = "B" ]; then order="B A"; else order="A B"; fi
-          used=""
-          for slot in $order; do
-            if [ "$slot" = "A" ]; then key="$KEY_A"; else key="$KEY_B"; fi
-            [ -n "$key" ] || continue
-            echo "### Gemini 키 ${slot}로 시작" | tee -a /tmp/gemini.log
-            set +e
-            # v0.5.72: 진행이 로그에 바로 보이게(tee), 한 키에 최대 12분. 무료 한도(분당 입력 토큰)에 걸리면 CLI가 기다렸다 다시 하므로
-            # 로그에 한도 글이 있어도 정상 종료하고 고친 것이 있으면 성공으로 본다(전에는 성공한 것을 버리고 다른 키로 다시 했다).
-            timeout 720 env GEMINI_API_KEY="$key" npx -y @google/gemini-cli@0.64.0 -m "$MODEL" --approval-mode yolo -p "$(cat /tmp/task.md)" 2>&1 | tee /tmp/gemini-run.log
-            code=${PIPESTATUS[0]}
-            set -e
-            cat /tmp/gemini-run.log >> /tmp/gemini.log
-            changed=$(git status --porcelain | wc -l)
-            if [ "$code" -eq 0 ] && [ "$changed" -gt 0 ]; then used="$slot"; break; fi
-            if [ "$code" -eq 0 ] && ! grep -qiE 'RESOURCE_EXHAUSTED|status 429|"code": ?429' /tmp/gemini-run.log; then used="$slot"; break; fi
-            [ "$code" -eq 124 ] && echo "::warning::키 ${slot}가 12분 안에 끝나지 않았어요(무료 한도 기다림)."
-            echo "::warning::키 ${slot} 실패(종료 코드 ${code}). 고친 것을 되돌리고 다른 키로 해 봅니다."
-            git reset -q --hard && git clean -qfd
-          done
-          rm -f /tmp/task.md /tmp/gemini-run.log
-          if [ -z "$used" ]; then echo "::error::두 키 모두 실패했습니다(한도·키 오류). 위 로그를 확인하세요."; exit 1; fi
-          echo "GEMINI_KEY_USED=$used" >> "$GITHUB_ENV"
-          echo "Gemini 키 ${used}로 끝냈습니다." | tee -a /tmp/gemini.log
+          # v0.5.87 한 번에 고치기: Gemini CLI(여러 번 호출) 대신 ① 고칠 파일 고르기 ② 고친 파일 받기, 두 번만 부른다(무료 분당 한도 회피).
+          echo "### Gemini 한 번에 고치기" | tee -a /tmp/gemini.log
+          set +e
+          timeout 900 python3 ../office/scripts/gemini-oneshot.py /tmp/task.md 2>&1 | tee -a /tmp/gemini.log
+          code=${PIPESTATUS[0]}
+          set -e
+          rm -f /tmp/task.md
+          if [ "$code" -ne 0 ]; then echo "::error::Gemini가 고치지 못했어요(종료 코드 ${code}). 위 로그를 확인하세요."; exit 1; fi
+          echo "Gemini 키 ${GEMINI_KEY_USED:-?}로 끝냈습니다." | tee -a /tmp/gemini.log
 
       - name: 시험
         working-directory: work
