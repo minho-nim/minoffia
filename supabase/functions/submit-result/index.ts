@@ -120,8 +120,18 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ taskId: ticket.task_id, resultRevision: imported.revision, ownerId: ticket.owner_id }),
         signal: AbortSignal.timeout(140_000),
       }).catch(() => undefined);
-      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(scoring);
-      else await scoring;
+      // 화면 확인(v0.6.9): 미리보기 주소가 있으면 실제 미리보기·운영 화면을 찍어 승인 전에 보게 한다
+      const shots = saved.preview_url
+        ? fetch(`${env('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/site-check`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId: ticket.task_id, kind: 'preview', ownerId: ticket.owner_id }),
+            signal: AbortSignal.timeout(30_000),
+          }).catch(() => undefined)
+        : Promise.resolve(undefined);
+      const both = Promise.all([scoring, shots]);
+      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(both);
+      else await both;
     }
   } catch {
     // 앱이 열릴 때 다시 처리한다
