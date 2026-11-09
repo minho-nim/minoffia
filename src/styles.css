@@ -4102,17 +4102,30 @@ a {
    양옆 띠(테두리+안쪽 여백 폭)만 바탕색으로 칠해 진짜 세로 테두리를 가리고, 가운데는 비워 둔다. */
 .inbox {
   --inbox-r: 14px;
-  --inbox-low: max(8px, env(safe-area-inset-bottom));
+  --inbox-low: max(6px, env(safe-area-inset-bottom));
   /* 키보드가 뜨면(--kb) 그만큼 아래 여백을 늘려, 끝까지 내려도 마지막 말이 키보드 위 입력창 위로 올라온다 */
   padding-bottom: calc(var(--inbox-low) + var(--kb, 0px));
 }
 .inbox > .inbox-form {
   bottom: calc(var(--inbox-low) + 1px + var(--kb, 0px));
 }
+/* 키보드 높이가 바뀔 때 툭 튀지 않고 부드럽게(v0.5.70) */
+.inbox > .inbox-form,
+.inbox-fade {
+  transition: bottom 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .inbox > .inbox-form,
+  .inbox-fade {
+    transition: none;
+  }
+}
 /* 입력창 뒤: 대화가 입력창 윗선에서부터 뒤로 들어가며 흐려진다(v0.5.14 소유자 "가려지는 뒤쪽이 약간 흐려지면서",
    "입력창이 시작되는 데부터"). 입력창 폭이 아니라 상자 안쪽 폭 전체를 덮어 입력창 모서리 옆으로 글이 삐져나오지 않는다. */
 .inbox > .inbox-form {
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  /* 입력창을 바깥 상자에 더 붙인다(v0.5.70 소유자 "겉쪽 칸에 좀 더 타이트하게") */
+  margin: 0 calc(-1 * var(--inbox-pad) + 6px);
+  background: var(--bg);
   /* 입력창 밑 그림자가 흐린 바탕 위에서 모서리 밑 곡선처럼 보여 뺀다(v0.5.16) */
   box-shadow: none;
 }
@@ -4121,13 +4134,12 @@ a {
   z-index: 3;
   bottom: calc(1px + var(--kb, 0px));
   flex: none;
-  height: calc(var(--inbox-form-h, 110px) + var(--inbox-low));
-  margin: 0 calc(-1 * var(--inbox-pad)) calc(-1 * (var(--inbox-form-h, 110px) + var(--inbox-low)) - var(--inbox-gap));
+  /* v0.5.70(소유자 "입력칸 뒤는 글씨가 안 보이게, 위로는 투명하게 내려가는 느낌"): 입력창 위 32px는 점점 진해지는 그라데이션,
+     입력창 뒤는 바탕색으로 완전히 가린다(흐림 효과 대신). */
+  height: calc(var(--inbox-form-h, 110px) + var(--inbox-low) + 32px);
+  margin: 0 calc(-1 * var(--inbox-pad)) calc(-1 * (var(--inbox-form-h, 110px) + var(--inbox-low) + 32px) - var(--inbox-gap));
   pointer-events: none;
-  /* 뒤 글·말풍선 테두리가 또렷하게 비치지 않을 만큼 흐리게(v0.5.16 소유자 "좌측 하단 이상") */
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 0%, transparent), var(--surface) 32px, var(--surface));
 }
 .inbox > .inbox-form::before,
 .inbox > .inbox-form::after,
@@ -4159,6 +4171,18 @@ a {
 }
 .inbox > .inbox-form::after {
   z-index: 0;
+}
+/* 입력창을 바깥 상자에 붙였으니(v0.5.70) 아래 모서리 덮개도 입력창~상자 테두리 거리(6px)에 맞춘다 */
+.inbox > .inbox-form::before,
+.inbox > .inbox-form::after {
+  left: -8px;
+  right: -8px;
+}
+.inbox > .inbox-form::after {
+  background:
+    linear-gradient(var(--surface), var(--surface)) left / 7px 100% no-repeat,
+    linear-gradient(var(--surface), var(--surface)) right / 7px 100% no-repeat,
+    linear-gradient(var(--surface), var(--surface)) bottom / 100% calc(var(--inbox-low) + 1px) no-repeat;
 }
 .inbox-cap {
   position: relative;
