@@ -105,11 +105,13 @@ describe('근거 없는 지적·꼭 완료 기준(v0.5.80)', () => {
   it('(꼭) 기준이 미충족이면 점수와 상관없이 다시 개발', async () => {
     const { mustCriterion, verdictOf } = await import('./review');
     expect(mustCriterion('R1. (꼭) 버튼 16px')).toBe(true);
+    expect(mustCriterion('- (필수) 버튼 16px')).toBe(true);
+    expect(mustCriterion('(권장) 그림자')).toBe(false);
     expect(mustCriterion('(좋음) 그림자')).toBe(false);
     const score = { parts: { acceptance: 40, spec: 25, constraints: 15, scope: 10, quality: 10 }, criteria: [{ text: 'R1 (꼭) 버튼 16px', status: 'unmet' as const, evidence: '' }], violations: [], fixes: [], summary: '' };
     const v = verdictOf([], score, 0);
     expect(v.verdict).toBe('redo');
-    expect(v.reasons[0]).toContain('꼭 지킬 완료 기준 미충족');
+    expect(v.reasons[0]).toContain('필수 완료 기준 미충족');
   });
 });
 

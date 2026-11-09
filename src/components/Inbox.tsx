@@ -334,9 +334,14 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       const typing = document.activeElement === inputRef.current;
       const raw = typing ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
       const kb = raw > 40 ? raw : 0;
+      // 입력 중 전체 화면(v0.6.0): 보이는 화면의 위치·높이. 대화 상자가 이 칸에 딱 맞춰 떠서 스크롤해도 입력창이 키보드에 붙어 있다
+      root.style.setProperty('--vv-top', `${Math.round(vv.offsetTop)}px`);
+      root.style.setProperty('--vv-h', `${Math.round(vv.height)}px`);
       if (last >= 0 && Math.abs(kb - last) < 6 && kb !== 0 && last !== 0) return;
+      const opened = kb > 0 && last <= 0;
       last = kb;
       root.style.setProperty('--kb', `${kb}px`);
+      if (opened) requestAnimationFrame(() => listRef.current?.lastElementChild?.scrollIntoView({ block: 'end' }));
       // 키보드가 떠 있으면 아이폰 홈 막대 여백(safe-area)이 필요 없다(v0.5.93): 그 여백만큼 입력창 밑에 빈 띠가 생겼다
       root.classList.toggle('kb-open', kb > 0);
     };
@@ -351,6 +356,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     };
     let scrollTimer = 0;
     const onScroll = () => {
+      // 입력 중 전체 화면이면 바로 따라가고(화면 자체는 거의 안 움직임), 아니면 스크롤이 멈춘 뒤 한 번만 잰다
+      if (root.classList.contains('kb-open')) return setKb();
       window.clearTimeout(scrollTimer);
       scrollTimer = window.setTimeout(setKb, 160);
     };
@@ -373,6 +380,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       for (const t of timers) window.clearTimeout(t);
       if (frame) window.cancelAnimationFrame(frame);
       root.style.removeProperty('--kb');
+      root.style.removeProperty('--vv-top');
+      root.style.removeProperty('--vv-h');
       root.classList.remove('kb-open');
     };
   }, []);
@@ -382,8 +391,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const mentionList = mention ? mentionOptions(mention.query) : [];
   const readMention = (el: HTMLTextAreaElement) => setMention(el.selectionStart === el.selectionEnd ? mentionQuery(el.value, el.selectionStart) : null);
-  // 완료 기준 태그 줄(v0.5.99): 입력칸에 있을 때만 보인다
-  const [typing, setTyping] = useState(false);
+  // 완료 기준 태그 줄(v0.5.99): v0.6.0 소유자 "펼치는 버튼을 두고" — 입력창 아래 [● 기준] 버튼으로 펼치고 접는다
+  const [critOpen, setCritOpen] = useState(false);
   const pickCriterion = (tag: string) => {
     const el = inputRef.current;
     if (!el) return;
@@ -1478,10 +1487,10 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             e.target.value = '';
           }}
         />
-        {typing && !mentionList.length && pending?.kind !== 'naming' && (
+        {critOpen && !mentionList.length && pending?.kind !== 'naming' && (
           <div className="criteria-row" role="group" aria-label="완료 기준 넣기">
             {CRITERIA_TAGS.map((c) => (
-              <button key={c.tag} type="button" className={`criteria-chip criteria-${c.tag}`} title={c.desc} onMouseDown={(e) => e.preventDefault()} onClick={() => pickCriterion(c.tag)}>
+              <button key={c.tag} type="button" className={`criteria-chip criteria-${c.cls}`} title={c.desc} onMouseDown={(e) => e.preventDefault()} onClick={() => pickCriterion(c.tag)}>
                 <span aria-hidden="true">{c.icon}</span> {c.tag}
               </button>
             ))}
@@ -1514,7 +1523,6 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           placeholder={pending?.kind === 'naming' ? '새 프로젝트 이름' : currentProject ? `${currentProject.name}: 묻거나 시킬 일 (@로 맡길 AI 지정)` : '묻거나 시킬 일을 적으세요 (@로 AI 지정)'}
           aria-label="묻기·요청"
           onFocus={() => {
-            setTyping(true);
             if (canAskGemini) onWarmGemini?.();
             // 휴대폰 키보드가 올라온 뒤(애니메이션 끝) 마지막 말이 입력창 위에 보이게
             window.setTimeout(revealEnd, 350);
@@ -1524,10 +1532,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             readMention(e.target);
           }}
           onSelect={(e) => readMention(e.currentTarget)}
-          onBlur={() => {
-            setMention(null);
-            setTyping(false);
-          }}
+          onBlur={() => setMention(null)}
           onKeyDown={(e) => {
             // @ 목록이 떠 있으면 Enter·Tab은 첫 번째 AI를 넣고, Esc는 닫는다
             if (mentionList.length && (e.key === 'Enter' || e.key === 'Tab') && !e.nativeEvent.isComposing) {
@@ -1555,6 +1560,18 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           </svg>
         </button>
         <VoiceInput disabled={busy} onText={(t) => setInput((v) => (v.trim() ? `${v.trimEnd()} ${t}` : t))} />
+        {pending?.kind !== 'naming' && (
+          <button
+            type="button"
+            className={`criteria-toggle${critOpen ? ' is-on' : ''}`}
+            aria-expanded={critOpen}
+            title="완료 기준(필수·권장·선택) 넣기"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setCritOpen((v) => !v)}
+          >
+            <span aria-hidden="true">●</span> 기준 {critOpen ? '▴' : '▾'}
+          </button>
+        )}
       {shown.length > 0 && (
           <button
             type="button"

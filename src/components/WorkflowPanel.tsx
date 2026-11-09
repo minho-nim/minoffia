@@ -13,6 +13,7 @@ import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { siteUrl } from '../domain/types';
+import { CRITERIA_TAGS, joinCriteria, nextTag, splitCriteria, type CriterionLine } from '../domain/criteriaTag';
 import { startBlocker, waitingOn } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, resultWithoutBranch, type WorkflowView } from '../domain/workflow';
 import { WaitMap } from './WaitMap';
@@ -160,6 +161,63 @@ function stepIndex(view: WorkflowView): number {
 }
 
 const EMPTY_SPEC: SpecFields = { intent: 'change_request', finalPrompt: '', changeScope: '', preserveConstraints: '', testCriteria: '', answer: '' };
+
+/**
+ * 기획서의 완료 기준(v0.6.0, 소유자 "기획 승인 화면에서 태그 눌러 바꾸기"): 줄마다 [● 필수] 태그를 누르면 필수 → 권장 → 선택.
+ * 기획 승인(A) 전에만 바꿀 수 있고, 바꾼 뒤 '중요도 저장'을 누르면 기획서 새 버전이 된다(감사 기록 유지).
+ */
+function CriteriaList({ text, editable, onSave }: { text: string; editable: boolean; onSave: (next: string) => Promise<void> }) {
+  const [draft, setDraft] = useState<CriterionLine[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const lines = draft ?? splitCriteria(text);
+  const icon = (tag: string | null) => CRITERIA_TAGS.find((c) => c.tag === tag);
+  return (
+    <div className="small">
+      완료 기준{editable ? <span className="muted"> · 태그를 누르면 필수 → 권장 → 선택</span> : null}
+      <ul className="crit-list">
+        {lines.map((l, i) => {
+          const c = icon(l.tag);
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                className={`criteria-chip criteria-${c?.cls ?? 'none'}`}
+                disabled={!editable || saving}
+                title={c?.desc ?? '중요도 없음'}
+                aria-label={`${l.body} 중요도: ${l.tag ?? '없음'}${editable ? ', 눌러서 바꾸기' : ''}`}
+                onClick={() => setDraft(lines.map((x, j) => (j === i ? { ...x, tag: nextTag(x.tag) } : x)))}
+              >
+                <span aria-hidden="true">{c?.icon ?? '·'}</span> {l.tag ?? '보통'}
+              </button>
+              <span>{l.body}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {draft && joinCriteria(draft) !== text && (
+        <span className="form-actions">
+          <button type="button" className="btn btn-small btn-ghost" disabled={saving} onClick={() => setDraft(null)}>
+            되돌리기
+          </button>
+          <button
+            type="button"
+            className="btn btn-small btn-primary"
+            disabled={saving}
+            onClick={() => {
+              setSaving(true);
+              void onSave(joinCriteria(draft)).finally(() => {
+                setSaving(false);
+                setDraft(null);
+              });
+            }}
+          >
+            중요도 저장(새 버전)
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
@@ -400,7 +458,17 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 <p className="wf-pre">{view.spec.finalPrompt || '(프롬프트 없음)'}</p>
                 {view.spec.changeScope && <p className="small">변경 범위: {view.spec.changeScope}</p>}
                 {view.spec.preserveConstraints && <p className="small">유지 조건: {view.spec.preserveConstraints}</p>}
-                {view.spec.testCriteria && <p className="small">테스트 기준: {view.spec.testCriteria}</p>}
+                {view.spec.testCriteria && (
+                  <CriteriaList
+                    key={view.spec.revision}
+                    text={view.spec.testCriteria}
+                    editable={!view.aApproved && !busy}
+                    onSave={async (next) => {
+                      const sp = view.spec!;
+                      await run(() => actions.saveSpec(task, { intent: sp.intent, finalPrompt: sp.finalPrompt, changeScope: sp.changeScope, preserveConstraints: sp.preserveConstraints, testCriteria: next, answer: sp.answer }));
+                    }}
+                  />
+                )}
               </>
             )}
           </div>
