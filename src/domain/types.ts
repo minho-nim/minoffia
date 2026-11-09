@@ -16,6 +16,8 @@ export interface Project {
   description: string;
   /** 브랜치 미리보기 주소의 호스트(예: minlab-ai-office.pages.dev, Cloudflare Pages). 있으면 Claude 결과에 미리보기 링크가 붙는다(v0.4.57) */
   previewHost?: string | null;
+  /** 데모 주소(v0.5.92, 예: https://minho-nim.github.io/repo/). 칸이 없는 DB면 undefined */
+  demoUrl?: string | null;
   /** 확정된 디자인 기준(DESIGN.md)과 Gemini 초안(v0.5.56). 칸이 없는 DB면 undefined */
   designMd?: string;
   designDraft?: string;
@@ -36,6 +38,18 @@ export interface ProjectRule {
 
 export const RULE_SOURCE_LABEL: Record<ProjectRule['source'], string> = { spec: '기획서', plan: 'PM 계획', result: '개발 결과', owner: '내가 적음' };
 export const PREVIEW_HOST_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+/** 데모 주소 형식(v0.5.92, DB check와 같음) */
+export const DEMO_URL_PATTERN = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(\/[A-Za-z0-9._~/-]*)?$/;
+/** 적은 글을 데모 주소로: 앞뒤 공백 제거, https:// 없으면 붙이고 호스트는 소문자. 틀리면 null */
+export function normalizeDemoUrl(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  const withScheme = /^https?:\/\//i.test(t) ? t.replace(/^http:\/\//i, 'https://') : `https://${t}`;
+  const m = /^https:\/\/([^/]+)(\/.*)?$/i.exec(withScheme);
+  if (!m) return null;
+  const url = `https://${m[1].toLowerCase()}${m[2] ?? '/'}`;
+  return DEMO_URL_PATTERN.test(url) ? url : null;
+}
 /** 운영 사이트 주소(v0.5.89): 프로젝트에 적은 미리보기 주소(Cloudflare Pages)의 운영 주소. 없거나 형식이 틀리면 null */
 export function siteUrl(p: Pick<Project, 'previewHost'> | null | undefined): string | null {
   const host = p?.previewHost?.trim().toLowerCase();
