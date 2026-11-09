@@ -5076,3 +5076,27 @@ a.project-site {
     display: none;
   }
 }
+/* 완료 기준 펼치기 단추(v0.6.0): 첨부·음성 옆 */
+.criteria-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.criteria-toggle span {
+  color: var(--danger);
+  font-size: 11px;
+}
+.criteria-toggle.is-on {
+  background: var(--bg);
+  border-color: var(--accent);
+}
