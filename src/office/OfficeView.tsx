@@ -37,6 +37,12 @@ interface Mover {
 
 const SPEED = 22; // 논리 픽셀/초. 천천히 걷는다.
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
+/** 터미널실 배경 서버 랙(2~4번째) 가운데 x와 크기(논리 좌표) */
+const RACK_X = [235.7, 250.6, 265.8];
+const RACK_W = 13;
+const RACK_TOP = 15;
+const RACK_H = 29;
+const RACK_TAG: Record<string, string> = { github: 'GH', cloudflare: 'CF', supabase: 'SB' };
 
 export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask, leave = [], lamps = [] }: Props) {
   const [lampOpen, setLampOpen] = useState<Lamp['id'] | null>(null);
@@ -194,18 +200,31 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         </span>
       ))}
       {lamps.length > 0 && (() => {
-        const t = ROOMS.find((r) => r.id === 'terminal')!.rect;
+        // 서버실 불빛(v0.5.59, 소유자 "가구에 하나씩"): 터미널실 배경의 서버 랙 2~4번째를 GitHub·Cloudflare·Supabase 랙으로 쓴다.
+        // 랙마다 꼭대기에 불빛, 아래에 짧은 이름표. 누르면 그 서비스 설명이 뜬다.
         const open = lamps.find((l) => l.id === lampOpen);
         return (
-          <div className="lamp-panel" style={{ right: pct(W - (t.x + t.w) + 2, W), top: pct(t.y + 12, H) }}>
-            {lamps.map((l) => (
-              <button key={l.id} type="button" className={`lamp lamp-${l.state}`} aria-label={`${l.label}: ${l.detail}`} title={l.detail} onClick={() => setLampOpen(lampOpen === l.id ? null : l.id)}>
+          <>
+            {lamps.map((l, i) => (
+              <button
+                key={l.id}
+                type="button"
+                className={`rack lamp-${l.state}${lampOpen === l.id ? ' is-open' : ''}`}
+                style={{ left: pct(RACK_X[i] - RACK_W / 2, W), top: pct(RACK_TOP, H), width: pct(RACK_W, W), height: pct(RACK_H, H) }}
+                aria-label={`${l.label} 서버: ${l.detail}`}
+                title={`${l.label}: ${l.detail}`}
+                onClick={() => setLampOpen(lampOpen === l.id ? null : l.id)}
+              >
                 <i aria-hidden="true" />
-                {l.label}
+                <span>{RACK_TAG[l.id]}</span>
               </button>
             ))}
-            {open && <p className="lamp-detail">{open.detail}</p>}
-          </div>
+            {open && (
+              <p className="lamp-detail" style={{ right: pct(W - 290, W), top: pct(RACK_TOP + RACK_H + 3, H) }}>
+                <b>{open.label}</b> {open.detail}
+              </p>
+            )}
+          </>
         );
       })()}
       <div
