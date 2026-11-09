@@ -302,6 +302,39 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     const need = end.getBoundingClientRect().bottom + (formRef.current?.offsetHeight ?? 0) + 16 - viewBottom;
     if (need > 1) window.scrollBy({ top: need });
   };
+  // 맨 아래로 단추(v0.6.5 소유자 "Claude처럼 위로 스크롤하면 맨 아래로 내려가는 화살표"): 마지막 말이 입력창 위로 안 보이면 뜬다
+  const [awayFromEnd, setAwayFromEnd] = useState(false);
+  useEffect(() => {
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const end = endRef.current;
+      if (!end) return;
+      const vv = window.visualViewport;
+      const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const covered = (formRef.current?.offsetHeight ?? 0) + 24;
+      setAwayFromEnd(end.getBoundingClientRect().top > viewBottom - covered + 120);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+  const toEnd = () => {
+    const end = endRef.current;
+    if (!end) return;
+    const vv = window.visualViewport;
+    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const need = end.getBoundingClientRect().bottom + (formRef.current?.offsetHeight ?? 0) + 16 - viewBottom;
+    window.scrollBy({ top: need, behavior: 'smooth' });
+  };
   // 입력창 높이를 CSS 변수(--inbox-form-h)로: 빈 대화의 인사말을 입력창 바로 위에 붙이는 데 쓴다(v0.4.78).
   useEffect(() => {
     const form = formRef.current;
@@ -1566,6 +1599,13 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             e.target.value = '';
           }}
         />
+        {awayFromEnd && shown.length > 0 && (
+          <button type="button" className="inbox-to-end" aria-label="맨 아래로" title="맨 아래로" onMouseDown={(e) => e.preventDefault()} onClick={toEnd}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14M6 13l6 6 6-6" />
+            </svg>
+          </button>
+        )}
         {critOpen && !mentionList.length && pending?.kind !== 'naming' && (
           <div className="criteria-row" role="group" aria-label="완료 기준 넣기">
             {CRITERIA_TAGS.map((c) => (
