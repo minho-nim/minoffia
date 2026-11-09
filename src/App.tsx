@@ -418,6 +418,15 @@ export function App() {
   }, [snap]);
 
   // 훅은 아래 '일찍 끝내기' 줄보다 먼저 둔다(v0.5.82: 로그인 뒤 훅 수가 달라져 화면이 하얗게 멈추던 것)
+  // 데모 주소(v0.5.91): 프로젝트 탭을 열 때 저장소 있는 프로젝트만 한 번 묻는다(실패하면 데모 버튼만 안 보임)
+  const [demoUrls, setDemoUrls] = useState<Record<string, string>>({});
+  const repoProjectKey = snap.projects.filter((p) => p.repo && !p.sample).map((p) => `${p.id}:${p.repo}`).join(',');
+  useEffect(() => {
+    if (tab !== 'projects' || !repoProjectKey || !store?.pagesUrls) return;
+    let alive = true;
+    void store.pagesUrls(repoProjectKey.split(',').map((x) => x.split(':')[0])).then((m) => alive && setDemoUrls(m)).catch(() => undefined);
+    return () => { alive = false; };
+  }, [tab, repoProjectKey, store]);
   const ciFixTried = useRef(new Set<string>());
   const handoffTried = useRef(new Set<string>());
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
@@ -1860,6 +1869,7 @@ export function App() {
               onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
               shortcutsOf={(id) => projectShortcuts(id, snap.tasks, snap.workflow.results)}
               onOpenTask={(id) => showTask(id)}
+              demoUrlOf={(p) => demoUrls[p.id] ?? null}
               lastDeployOf={(p) => (p.repo ? snap.workflow.deployments.filter((d) => d.repo.toLowerCase() === p.repo!.toLowerCase()).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null : null)}
               renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
               renderHealth={store.healthCheck ? (p) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id), graph: store.notes ? () => store.notes!.graph(p.id) : undefined }} /> : undefined}

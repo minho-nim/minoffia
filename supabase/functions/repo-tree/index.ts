@@ -5,6 +5,13 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 const MAX_PATHS = 3000;
 const SKIP = /(^|\/)(node_modules|dist|build|vendor|\.git|coverage|\.next|\.turbo|\.cache)\//;
 
+/** GitHub Pages 기본 주소: owner.github.io/repo/ (저장소 이름이 owner.github.io면 그 주소 그대로) */
+function demoUrl(repo: string): string {
+  const [owner, name] = repo.split('/');
+  const host = `${owner.toLowerCase()}.github.io`;
+  return name.toLowerCase() === host ? `https://${host}/` : `https://${host}/${name}/`;
+}
+
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 const cors = {
   'Access-Control-Allow-Origin': env('OFFICE_ALLOWED_ORIGIN') || '*',
@@ -30,11 +37,34 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { projectId?: string };
+  let body: { projectId?: string; action?: string; projectIds?: string[] };
   try {
     body = await req.json();
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
+  }
+  // 데모 주소(v0.5.91, 소유자 "운영은 Cloudflare, 데모는 github.io"): GitHub Pages가 켜진 저장소만 데모 주소를 돌려준다.
+  if (body.action === 'pages') {
+    const ids = (Array.isArray(body.projectIds) ? body.projectIds : []).filter((x) => typeof x === 'string').slice(0, 30);
+    const { data: rows } = await userClient.from('projects').select('id, repo').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minlab-ai-office' };
+    const pages: Record<string, string> = {};
+    await Promise.all(
+      (rows ?? []).map(async (r: { id: string; repo: string | null }) => {
+        const repo = (r.repo ?? '').trim();
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return;
+        try {
+          const info = await fetch(`https://api.github.com/repos/${repo}`, { headers, signal: AbortSignal.timeout(10_000) });
+          if (!info.ok || !((await info.json()) as { has_pages?: boolean }).has_pages) return;
+          const pg = await fetch(`https://api.github.com/repos/${repo}/pages`, { headers, signal: AbortSignal.timeout(10_000) });
+          const url = pg.ok ? String(((await pg.json()) as { html_url?: string }).html_url ?? '') : '';
+          pages[r.id] = /^https:\/\/[\w.-]+(\/[\w./-]*)?$/.test(url) ? url : demoUrl(repo);
+        } catch {
+          // 못 읽으면 데모 버튼을 안 보인다
+        }
+      }),
+    );
+    return reply(200, { ok: true, pages });
   }
   const { data: project } = await userClient.from('projects').select('repo').eq('id', body.projectId ?? '').maybeSingle();
   const repo = (project?.repo ?? '').trim();
