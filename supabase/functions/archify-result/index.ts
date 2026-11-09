@@ -41,9 +41,9 @@ Deno.serve(async (req) => {
   if (!body.taskId || !Number.isInteger(revision) || revision < 1) return reply(400, { ok: false, error: 'taskId·revision이 필요합니다.' });
 
   // RLS를 거쳐 내 결과만
-  const { data: result } = await userClient.from('result_packages').select('diff').eq('task_id', body.taskId).eq('revision', revision).maybeSingle();
+  const { data: result } = await userClient.from('result_packages').select('diff, summary').eq('task_id', body.taskId).eq('revision', revision).maybeSingle();
   if (!result) return reply(404, { ok: false, error: '결과를 찾을 수 없습니다.' });
-  const { data: task } = await userClient.from('tasks').select('projects(repo, name)').eq('id', body.taskId).maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('title, projects(repo, name)').eq('id', body.taskId).maybeSingle();
   const project = task?.projects as unknown as { repo: string | null; name: string } | null;
   const files = statsFromDiff(String(result.diff ?? ''));
   if (!files.length) return reply(409, { ok: false, error: '바뀐 파일이 없는 결과라 구조도를 그리지 않습니다.' });
@@ -66,7 +66,18 @@ Deno.serve(async (req) => {
       'User-Agent': 'minoffia',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ref: 'main', inputs: { tree, upload_url: signed.signedUrl } }),
+    // 옵시디언 노트 보관함에도 같은 그림을 쌓는다(v0.5.62): 프로젝트·업무 이름과 짧은 요약만 넘긴다
+    body: JSON.stringify({
+      ref: 'main',
+      inputs: {
+        tree,
+        upload_url: signed.signedUrl,
+        project: String(project?.name ?? '').slice(0, 80),
+        task: String(task?.title ?? '').slice(0, 80),
+        revision: String(revision),
+        summary: String(result.summary ?? '').split('\n')[0].slice(0, 300),
+      },
+    }),
     signal: AbortSignal.timeout(15_000),
   }).catch(() => null);
   if (!res || !res.ok) return reply(502, { ok: false, error: `구조도 작업을 시작하지 못했습니다(GitHub ${res?.status ?? '응답 없음'}).` });

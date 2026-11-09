@@ -1,0 +1,51 @@
+# 코드 그래프(Graphify, v0.5.62): 서버 함수 notes(action graph)가 시작한다. 모델 호출 없음(코드만 읽는 방식, graphify update).
+# 대상 저장소를 읽기 전용으로 받아 graphifyy(Apache-2.0, 고정 버전 0.9.95)로 그래프를 만들고, 옵시디언 노트 보관함에 올린다.
+name: 코드 그래프(Graphify → 옵시디언)
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '대상 저장소(owner/repo)'
+        required: true
+      name:
+        description: '프로젝트 이름(노트 폴더)'
+        required: true
+permissions:
+  contents: read
+jobs:
+  graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 대상 저장소 확인
+        env:
+          REPO: ${{ inputs.repo }}
+        run: |
+          echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
+          [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 받기·그래프 만들기
+        env:
+          REPO: ${{ inputs.repo }}
+          TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          if [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" = "$(echo "$GITHUB_REPOSITORY" | tr 'A-Z' 'a-z')" ]; then cp -r "$GITHUB_WORKSPACE" /tmp/target
+          else git clone -q --depth 1 "https://x-access-token:${TOKEN}@github.com/${REPO}.git" /tmp/target; fi
+          git -C /tmp/target remote set-url origin "https://github.com/${REPO}.git"
+          # 문서·설정·시험은 빼고 코드만(노트가 너무 많아지지 않게). 저장소에 .graphifyignore가 있으면 그것을 쓴다.
+          [ -f /tmp/target/.graphifyignore ] || printf '*.md\n*.sql\n*.json\n*.css\n*.html\n*.lock\n**/*.test.*\n**/*.spec.*\ndocs/\narchive/\npublic/\ndist/\n' > /tmp/target/.graphifyignore
+          pip install -q graphifyy==0.9.95
+          cd /tmp/target && graphify update . | tail -3
+          graphify export obsidian --graph graphify-out/graph.json --dir /tmp/gvault | tail -2
+      - name: 옵시디언 노트에 올리기
+        env:
+          NOTES_REPO: ${{ vars.NOTES_REPO || 'minho-nim/minoffia-notes' }}
+          NOTES_TOKEN: ${{ secrets.NOTES_REPO_TOKEN || secrets.TARGET_REPO_TOKEN }}
+          PROJECT: ${{ inputs.name }}
+        run: |
+          bash scripts/notes-run.sh "코드 그래프: $PROJECT" graph "$PROJECT" /tmp/gvault

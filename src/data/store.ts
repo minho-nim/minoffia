@@ -126,6 +126,8 @@ export interface OfficeStore {
     load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>;
     start(taskId: string, revision: number): Promise<void>;
   };
+  /** 옵시디언 노트 보관함(v0.5.62, Supabase 모드에서만): 코드 그래프 다시 만들기, 지운 프로젝트·업무 노트 지우기 */
+  notes?: { graph(projectId: string): Promise<void>; remove(project: string, task?: string): Promise<void> };
   /** 앱 건강 검진(floorplan 1단계, v0.5.53, Supabase 모드에서만) */
   healthCheck?: {
     load(projectId: string): Promise<import('../domain/healthText').HealthReport | null>;
