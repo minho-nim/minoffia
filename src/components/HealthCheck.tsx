@@ -97,7 +97,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
       )}
       <div className="health-actions">
         <button type="button" className="btn btn-small" disabled={state === 'checking'} onClick={() => void start()}>
-          {state === 'checking' ? '검진 중… (2~5분)' : report ? '다시 검진' : '검진 시작'}
+          {state === 'checking' ? '점검 중… (2~5분)' : report ? '다시 점검' : '점검하기'}
         </button>
         {report && (
           <button type="button" className="btn btn-small btn-ghost" onClick={() => void openMap()}>
