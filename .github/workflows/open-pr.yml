@@ -1,0 +1,42 @@
+# Gemini 개발 결과의 PR 자동 열기(v0.5.85, 소유자 "이거 자동 안돼?"): 올리기 승인(B) 뒤 서버 함수 open-pr이 시작한다. 모델 호출 없음.
+# 이미 올라간 작업 브랜치(ai/gemini/…)에서 main으로 PR만 연다(병합은 배포 승인 뒤 서버가). 쓰기 토큰은 Actions secret(TARGET_REPO_TOKEN)에만.
+name: PR 열기(올리기 승인 뒤)
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '대상 저장소(owner/repo)'
+        required: true
+      head:
+        description: '작업 브랜치(ai/gemini/…)'
+        required: true
+      title:
+        description: 'PR 제목'
+        required: true
+      body:
+        description: 'PR 본문'
+        required: false
+permissions:
+  contents: read
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: PR 열기
+        env:
+          REPO: ${{ inputs.repo }}
+          HEAD: ${{ inputs.head }}
+          TITLE: ${{ inputs.title }}
+          BODY: ${{ inputs.body }}
+          GH_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
+          [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; }
+          echo "$HEAD" | grep -Eq '^ai/gemini/[a-z0-9-]+$' || { echo "::error::작업 브랜치 이름이 이상합니다"; exit 1; }
+          owner=${REPO%%/*}
+          existing=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$HEAD" --jq '.[0].html_url // empty')
+          if [ -n "$existing" ]; then echo "이미 열린 PR: $existing"; exit 0; fi
+          base=$(gh api "repos/$REPO" --jq .default_branch)
+          url=$(gh api -X POST "repos/$REPO/pulls" -f title="$TITLE" -f head="$HEAD" -f base="$base" -f body="$BODY" --jq .html_url)
+          echo "PR 열림: $url"

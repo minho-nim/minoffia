@@ -101,7 +101,7 @@ describe('officeStatus', () => {
 });
 
 describe('수정 루프', () => {
-  const result = (revision: number) => ({ id: `r${revision}`, taskId: 't1', revision, planRevision: 1, workItemId: '', source: 'manual' as const, summary: '', diff: '', testLog: '', remainingIssues: '', sha256: '', createdAt: '' });
+  const result = (revision: number) => ({ id: `r${revision}`, taskId: 't1', revision, planRevision: revision, workItemId: '', source: 'manual' as const, summary: '', diff: '', testLog: '', remainingIssues: '', sha256: '', createdAt: '' });
   const rejectA = (revision: number, feedback: string): Approval => ({ ...ok('A', revision), id: `xA${revision}`, decision: 'rejected', scope: { feedback }, createdAt: '2026-10-29T10:00:00Z' });
 
   it('A에서 수정 요청하면 ChatGPT 재기획(planning)으로 돌아가고 내용을 기억한다', () => {

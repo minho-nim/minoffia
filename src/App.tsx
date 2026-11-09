@@ -1023,8 +1023,14 @@ export function App() {
           // Gemini 개발 결과(v0.4.82): 작업 브랜치가 이미 올라가 있어 GitHub에서 PR만 만들면 된다(병합은 배포 승인 뒤 서버가).
           const repo = projectById.get(task.projectId)?.repo;
           if (r?.source === 'gemini_actions_auto' && repo) {
+            // v0.5.85(소유자 "이거 자동 안돼?"): Gemini 결과도 PR을 자동으로 연다(GitHub Actions). 안 되면 직접 여는 주소를 알려 준다.
             const branch = codexBranch(task, r.workItemId, 'gemini');
-            say('ok', `올리기 승인했어요. GitHub에서 PR을 만들어 주세요: https://github.com/${repo}/compare/main...${branch}?expand=1 (PR이 생기면 CI를 자동으로 확인합니다)`);
+            try {
+              await store.openPr?.(task.id);
+              say('ok', `올리기 승인했어요. ${branch} 브랜치로 PR을 자동으로 여는 중이에요(1분 안팎, 병합 안 함). PR이 생기면 CI를 자동으로 확인합니다.`);
+            } catch (e) {
+              say('error', `PR 자동 열기 실패: ${(e as Error).message} — 직접 열기: https://github.com/${repo}/compare/main...${branch}?expand=1`);
+            }
           }
           if (r && (r.source === 'claude_session_auto' || r.source === 'claude_manual')) {
             try {
