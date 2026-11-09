@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { koIssue, parseHealth } from './healthText';
 
-describe('앱 건강 검진 결과(v0.5.53)', () => {
+describe('앱 점검 결과(v0.5.53)', () => {
   it('종류별로 한국어로 바꾸고 모르는 종류는 원문', () => {
     expect(koIssue({ kind: 'large-file', severity: 'low', title: '3 files are very large', detail: 'x', items: [] })).toMatchObject({ title: '너무 큰 파일이 있어요', severity: '사소' });
     expect(koIssue({ kind: 'new-kind', severity: 'high', title: 'Something', detail: 'd', items: [] })).toEqual({ title: 'Something', detail: 'd', severity: '중요' });

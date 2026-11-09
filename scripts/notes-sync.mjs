@@ -1,4 +1,4 @@
-// 옵시디언 노트 보관함 쌓기(v0.5.62, 소유자 2026-11-09 "Graphify·건강 검진·앱 지도·Archify를 옵시디언에"): GitHub Actions가 부른다. AI 없음.
+// 옵시디언 노트 보관함 쌓기(v0.5.62, 소유자 2026-11-09 "Graphify·점검·앱 지도·Archify를 옵시디언에"): GitHub Actions가 부른다. AI 없음.
 // 보관함 = 비공개 GitHub 저장소(기본 minho-nim/minoffia-notes). 자동으로 만드는 파일만 덮어쓰고 지우며, '내 메모/'는 절대 건드리지 않는다.
 // 사용:
 //   node scripts/notes-sync.mjs health  <notes> <프로젝트> <health.json> [지도.png] [지도.html]
@@ -20,20 +20,20 @@ export function safeName(s) {
 
 const SEV = { high: '중요', medium: '고칠 만함', low: '사소' };
 
-/** 건강 검진 노트: 최신 결과를 위에, 지난 결과는 '지난 검진'에 날짜별로 쌓는다(최대 20번) */
+/** 점검 노트: 최신 결과를 위에, 지난 결과는 '지난 점검'에 날짜별로 쌓는다(최대 20번) */
 export function healthNote(project, report, previous = '') {
   const date = String(report.checkedAt ?? '').slice(0, 16).replace('T', ' ');
   const s = report.summary ?? {};
   const line = `- ${date} · 중요 ${s.high ?? 0} · 고칠 만함 ${s.medium ?? 0} · 사소 ${s.low ?? 0}`;
-  const old = (previous.split('## 지난 검진')[1] ?? '').split('\n').filter((l) => l.startsWith('- ')).filter((l) => l !== line);
+  const old = (previous.split('## 지난 점검')[1] ?? '').split('\n').filter((l) => l.startsWith('- ')).filter((l) => l !== line);
   const issues = (report.issues ?? []).map((i) => `| ${SEV[i.severity] ?? '참고'} | ${String(i.title ?? i.kind).replace(/\|/g, '/')} | ${(i.items ?? []).slice(0, 5).join(', ').replace(/\|/g, '/')} |`);
   return [
-    '---', `프로젝트: "${project}"`, 'tags: [minoffia/건강검진]', '---',
-    `# ${project} 건강 검진`, '',
-    `> [!summary] 최근 검진 ${date}`, `> 중요 **${s.high ?? 0}** · 고칠 만함 **${s.medium ?? 0}** · 사소 **${s.low ?? 0}**${report.files ? ` · 코드 ${report.files}개` : ''}`, '',
+    '---', `프로젝트: "${project}"`, 'tags: [minoffia/점검]', '---',
+    `# ${project} 점검`, '',
+    `> [!summary] 최근 점검 ${date}`, `> 중요 **${s.high ?? 0}** · 고칠 만함 **${s.medium ?? 0}** · 사소 **${s.low ?? 0}**${report.files ? ` · 코드 ${report.files}개` : ''}`, '',
     issues.length ? ['| 정도 | 내용 | 파일 |', '|---|---|---|', ...issues].join('\n') : '걱정할 문제가 없어요.', '',
     '## 앱 지도', `![[${project}/앱 지도.png]]`, `[[${project}/앱 지도.html|원본 지도(PC에서 열기)]] · [미노피아에서 크게 보기](${APP_URL})`, '',
-    '## 지난 검진', line, ...old.slice(0, 19), '',
+    '## 지난 점검', line, ...old.slice(0, 19), '',
   ].join('\n');
 }
 
@@ -42,7 +42,7 @@ export function archifyNote(project, task, revision, image, summary = '', previo
   const head = `## 결과 v${revision}`;
   const block = [head, summary.trim() ? `> ${summary.trim().slice(0, 600).replace(/\n/g, '\n> ')}` : '', `![[${project}/업무/${image}]]`, `[미노피아에서 크게 보기](${APP_URL})`, ''].filter((x) => x !== '').join('\n');
   const rest = previous.includes('## 결과 v') ? previous.slice(previous.indexOf('## 결과 v')).split(/(?=^## 결과 v)/m).filter((b) => !b.startsWith(`${head}\n`)) : [];
-  return ['---', `프로젝트: "${project}"`, 'tags: [minoffia/업무]', '---', `# ${task}`, `[[${project}/건강 검진|${project}]]의 업무`, '', block, '', ...rest].join('\n').replace(/\n{3,}/g, '\n\n');
+  return ['---', `프로젝트: "${project}"`, 'tags: [minoffia/업무]', '---', `# ${task}`, `[[${project}/점검|${project}]]의 업무`, '', block, '', ...rest].join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 /** Graphify 노트의 [[링크]]를 이 프로젝트 폴더 안으로 고정(프로젝트끼리 같은 이름이 섞이지 않게) */
@@ -62,9 +62,9 @@ export function homeNote(projects) {
   return [
     '# minoffia 노트', '',
     '> [!info] 자동으로 만든 노트예요. 직접 쓰는 메모는 **내 메모** 폴더에 두세요(자동으로 건드리지 않아요).', '',
-    '| 프로젝트 | 건강 검진 | 코드 그래프 | 업무 |', '|---|---|---|---|',
+    '| 프로젝트 | 점검 | 코드 그래프 | 업무 |', '|---|---|---|---|',
     // 표 안의 링크는 | 를 \| 로(옵시디언 표 규칙)
-    ...projects.map((p) => `| ${p.name} | ${p.health ? `[[${p.name}/건강 검진\\|보기]]` : '-'} | ${p.graph ? `[[${p.name}/코드 그래프/graph.canvas\\|그래프]]` : '-'} | ${p.tasks} |`),
+    ...projects.map((p) => `| ${p.name} | ${p.health ? `[[${p.name}/점검\\|보기]]` : '-'} | ${p.graph ? `[[${p.name}/코드 그래프/graph.canvas\\|그래프]]` : '-'} | ${p.tasks} |`),
     '', `[미노피아 열기](${APP_URL})`, '',
   ].join('\n');
 }
@@ -75,7 +75,7 @@ function scanProjects(notes) {
     .map((d) => {
       const dir = path.join(notes, d.name);
       const tasks = fs.existsSync(path.join(dir, '업무')) ? fs.readdirSync(path.join(dir, '업무')).filter((f) => f.endsWith('.md')).length : 0;
-      return { name: d.name, health: fs.existsSync(path.join(dir, '건강 검진.md')), graph: fs.existsSync(path.join(dir, '코드 그래프')), tasks };
+      return { name: d.name, health: fs.existsSync(path.join(dir, '점검.md')), graph: fs.existsSync(path.join(dir, '코드 그래프')), tasks };
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 }
@@ -91,7 +91,7 @@ function finish(notes) {
     fs.writeFileSync(graphCfg, JSON.stringify({ colorGroups: [
       { query: 'path:"코드 그래프"', color: color('5b8def') },
       { query: 'path:"업무"', color: color('e0913a') },
-      { query: 'tag:#minoffia/건강검진', color: color('4cb87a') },
+      { query: 'tag:#minoffia/점검', color: color('4cb87a') },
       { query: `path:"${MY_NOTES}"`, color: color('b06bd6') },
     ] }, null, 1));
   }
@@ -108,7 +108,7 @@ function main([cmd, notes, projectRaw, ...rest]) {
   if (cmd === 'health') {
     const [reportFile, png, html] = rest;
     fs.mkdirSync(dir, { recursive: true });
-    const note = path.join(dir, '건강 검진.md');
+    const note = path.join(dir, '점검.md');
     fs.writeFileSync(note, healthNote(project, JSON.parse(fs.readFileSync(reportFile, 'utf8')), read(note)));
     copyIf(png, path.join(dir, '앱 지도.png'));
     copyIf(html, path.join(dir, '앱 지도.html'));

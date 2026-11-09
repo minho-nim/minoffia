@@ -34,7 +34,7 @@ interface Props {
   renderHistory?: (project: Project) => ReactNode;
   /** 구조도(v0.5.24): 펼쳤을 때만 그린다 */
   renderStructure?: (project: Project) => ReactNode;
-  /** 앱 건강 검진(v0.5.53): 저장소가 있는 프로젝트만, 펼쳤을 때만 그린다 */
+  /** 앱 점검(v0.5.53): 저장소가 있는 프로젝트만, 펼쳤을 때만 그린다 */
   renderHealth?: (project: Project) => ReactNode;
   /** 디자인 기준(v0.5.56): 저장소가 있는 프로젝트만, 펼쳤을 때만 그린다 */
   renderDesign?: (project: Project) => ReactNode;
@@ -254,7 +254,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               )}
               {renderHealth && p.repo && (
                 <details className="project-rules project-health" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHealthOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>건강 검진·앱 지도</summary>
+                  <summary>점검·앱 지도</summary>
                   {healthOpen[p.id] && renderHealth(p)}
                 </details>
               )}
