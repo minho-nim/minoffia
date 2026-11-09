@@ -5103,3 +5103,24 @@ a.project-site {
     --inbox-pad: 10px;
   }
 }
+
+/* 맨 아래로 단추(v0.6.5): 입력창 바로 위 가운데, Claude 앱처럼 */
+.inbox-to-end {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 3px 10px -4px rgba(0, 0, 0, 0.35);
+  transform: translateX(-50%);
+  cursor: pointer;
+}
