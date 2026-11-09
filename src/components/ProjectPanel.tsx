@@ -43,13 +43,15 @@ interface Props {
   onOpenTask?: (taskId: string) => void;
   /** 이 프로젝트의 마지막 운영 배포(v0.5.89) */
   lastDeployOf?: (project: Project) => Deployment | null;
+  /** GitHub Pages 데모 주소(v0.5.91), Pages가 켜진 저장소만 */
+  demoUrlOf?: (project: Project) => string | null;
 }
 
 /**
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
@@ -159,7 +161,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 ? 'owner/repo 형식으로 입력하세요. 예: minho-nim/minoffia'
                 : !hostValid
                   ? '미리보기 주소는 my-app.pages.dev처럼 주소 이름만 적어요.'
-                  : '저장소는 owner/repo 형식. 주소(Cloudflare Pages)를 적으면 이 카드에 "운영 사이트 열기", 개발 결과에 "미리보기 열기"가 붙어요.'}
+                  : '저장소는 owner/repo 형식. 운영 주소(Cloudflare Pages)를 적으면 카드에 "운영", 개발 결과에 "미리보기 열기"가 붙어요. 데모(github.io)는 GitHub Pages가 켜져 있으면 자동으로 붙어요.'}
             </p>
             <span className="form-actions">
               <button type="button" className="btn btn-ghost" onClick={reset}>
@@ -206,6 +208,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
           const mineRules = rules.filter((r) => r.projectId === p.id);
           const draft = ruleDraft[p.id] ?? '';
           const site = siteUrl(p);
+          const demo = demoUrlOf?.(p) ?? null;
           const deploy = lastDeployOf?.(p) ?? null;
           return (
             <li key={p.id} className="project-card">
@@ -232,7 +235,12 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 </button>
                 {site && (
                   <a className="btn btn-small btn-ghost project-site" href={site} target="_blank" rel="noopener noreferrer" aria-label={`${p.name} 운영 사이트 새 창으로 열기`}>
-                    운영 사이트 열기 ↗
+                    운영 ↗
+                  </a>
+                )}
+                {demo && (
+                  <a className="btn btn-small btn-ghost project-site" href={demo} target="_blank" rel="noopener noreferrer" aria-label={`${p.name} 데모(GitHub Pages) 새 창으로 열기`}>
+                    데모 ↗
                   </a>
                 )}
                 {onAsk && (
