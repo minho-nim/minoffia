@@ -34,7 +34,7 @@ import { preparePlanImport } from './workflow/planImport';
 import { createResultReviewer } from './workflow/resultReview';
 import { RepoStructure } from './components/FileTreeView';
 import { projectChanges } from './domain/fileTree';
-import { checkSmallTask, smallPlanText } from './domain/smallTask';
+import { checkSmallTask, OFFICE_REPOS, smallPlanText } from './domain/smallTask';
 import { mentionedAssignee } from './domain/mention';
 import { maskSecrets } from './domain/maskSecrets';
 import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, resultWithoutBranch, sha256Hex } from './domain/workflow';
@@ -48,7 +48,7 @@ import { version } from '../package.json';
 import { HealthCheck } from './components/HealthCheck';
 import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
-import { ciFixDone, ciFixWhy, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
+import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -706,6 +706,7 @@ export function App() {
 
   /** PM 계획 글을 검증해 계획·배정으로 저장한다. 손으로 붙여넣기와 PM 세션 자동 전송이 같은 규칙을 쓴다. 문제가 있으면 이유 목록. */
   const ciFixTried = useRef(new Set<string>());
+  const handoffTried = useRef(new Set<string>());
   // 시작이 한도(사용량·요청 수) 때문에 실패하면 작업을 '한도 대기'로 표시해 업무 카드에서 다른 AI로 넘길 수 있게 한다(v0.5.73).
   const markQuota = async (a: AgentAssignment, message: string) => {
     if (!quotaHit({ dispatchStatus: a.dispatchStatus, actualProviderStatus: message })) return;
@@ -781,6 +782,22 @@ export function App() {
           }
         }
         if (checked) setSnap(await store.load());
+        // 한도에 걸린 작업은 다음 AI로 넘기는 새 계획을 자동으로 만든다(v0.5.81, 작업마다 한 번). 실행 승인(E)은 소유자가 한다.
+        for (const t of snap.tasks) {
+          const v = deriveWorkflow(t, snap.workflow);
+          if (!v.plan || !v.spec || t.status === 'done') continue;
+          for (const a of v.assignments) {
+            if (a.dispatchStatus !== 'blocked_quota' || handoffTried.current.has(a.id)) continue;
+            handoffTried.current.add(a.id);
+            const repo = (snap.projects.find((p) => p.id === t.projectId)?.repo ?? '').toLowerCase();
+            const away = new Set(snap.leave ?? []);
+            const to = nextAgent(a.assignee, { claude: away.has('claude'), codex: away.has('codex'), gemini: away.has('studioA') && away.has('studioB') }, OFFICE_REPOS.includes(repo));
+            if (!to) continue;
+            const failed = await importPlanText(t, reassignPlanText(v.plan, a.workItemId, to, `${a.assignee} 한도`), 'manual', snap, v.spec.revision);
+            if (!failed) say('ok', `[${t.title}] ${a.workItemId}이 한도에 걸려 ${PREF_LABEL[to as keyof typeof PREF_LABEL]}에게 넘기는 계획을 만들었어요. 실행 승인하면 이어서 해요.`);
+            break;
+          }
+        }
         // CI(PR 검사)가 실패하면 같은 AI에게 다시 맡기는 새 계획을 자동으로 만든다(v0.5.75, 커밋마다 한 번). 실행 승인(E)은 소유자가 한다.
         for (const t of snap.tasks) {
           const v = deriveWorkflow(t, snap.workflow);
