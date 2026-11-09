@@ -66,3 +66,14 @@ jobs:
             code=$(curl -sS -o /tmp/up.txt -w '%{http_code}' -X PUT -H "Content-Type: $type" -H 'x-upsert: true' --data-binary @"$f" "$url")
             echo "올리기 응답: $code"; [ "$code" -lt 300 ] || { head -c 300 /tmp/up.txt; exit 1; }
           done
+      # 옵시디언 노트 보관함에도(v0.5.62): 검진 결과 노트 + 지도 그림. 실패해도 검진은 성공으로 둔다.
+      - name: 옵시디언 노트에 올리기
+        continue-on-error: true
+        env:
+          NOTES_REPO: ${{ vars.NOTES_REPO || 'minho-nim/minoffia-notes' }}
+          NOTES_TOKEN: ${{ secrets.NOTES_REPO_TOKEN || secrets.TARGET_REPO_TOKEN }}
+          PROJECT: ${{ inputs.name || inputs.repo }}
+        run: |
+          mkdir -p /tmp/shot && cd /tmp/shot && npm init -y > /dev/null && npm i -s playwright@1.49.1 && npx playwright install --with-deps chromium > /dev/null
+          cp "$GITHUB_WORKSPACE/scripts/html-shot.mjs" /tmp/shot/ && node /tmp/shot/html-shot.mjs /tmp/target/floorplan/index.html /tmp/map.png 1400 || true
+          cd "$GITHUB_WORKSPACE" && bash scripts/notes-run.sh "건강 검진: $PROJECT" health "$PROJECT" /tmp/health.json /tmp/map.png /tmp/target/floorplan/index.html

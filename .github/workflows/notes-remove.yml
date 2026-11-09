@@ -1,0 +1,30 @@
+# 옵시디언 노트 지우기(v0.5.62): 앱에서 프로젝트·업무를 지우면 서버 함수 notes(action remove)가 시작한다. '내 메모'는 건드리지 않는다.
+name: 옵시디언 노트 지우기
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: '프로젝트 이름'
+        required: true
+      task:
+        description: '업무 제목(없으면 프로젝트 폴더 전체)'
+        required: false
+permissions:
+  contents: read
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 지우기
+        env:
+          NOTES_REPO: ${{ vars.NOTES_REPO || 'minho-nim/minoffia-notes' }}
+          NOTES_TOKEN: ${{ secrets.NOTES_REPO_TOKEN || secrets.TARGET_REPO_TOKEN }}
+          PROJECT: ${{ inputs.project }}
+          TASK: ${{ inputs.task }}
+        run: |
+          if [ -n "$TASK" ]; then bash scripts/notes-run.sh "업무 지움: $PROJECT / $TASK" remove "$PROJECT" "$TASK"
+          else bash scripts/notes-run.sh "프로젝트 지움: $PROJECT" remove "$PROJECT"; fi

@@ -10,6 +10,18 @@ on:
       upload_url:
         description: '1회용 업로드 주소(서버가 만듦)'
         required: true
+      project:
+        description: '옵시디언 노트용 프로젝트 이름(없으면 노트 안 씀)'
+        required: false
+      task:
+        description: '옵시디언 노트용 업무 제목'
+        required: false
+      revision:
+        description: '결과 버전'
+        required: false
+      summary:
+        description: '결과 요약(짧게)'
+        required: false
 permissions:
   contents: read
 jobs:
@@ -31,3 +43,23 @@ jobs:
           [ "$size" -lt 20000000 ] || { echo "::error::그림이 너무 큽니다"; exit 1; }
           code=$(curl -sS -o /tmp/up.txt -w '%{http_code}' -X PUT -H 'Content-Type: text/plain;charset=UTF-8' -H 'x-upsert: true' --data-binary @/tmp/change-tree.html "$UPLOAD_URL")
           echo "올리기 응답: $code"; [ "$code" -lt 300 ] || { cat /tmp/up.txt | head -c 300; exit 1; }
+      # 옵시디언 노트 보관함에도 그림으로(v0.5.62). 실패해도 구조도 작업은 성공으로 둔다.
+      - uses: actions/checkout@v4
+        if: inputs.project != ''
+        with:
+          persist-credentials: false
+      - name: 옵시디언 노트에 올리기
+        if: inputs.project != ''
+        continue-on-error: true
+        env:
+          NOTES_REPO: ${{ vars.NOTES_REPO || 'minho-nim/minoffia-notes' }}
+          NOTES_TOKEN: ${{ secrets.NOTES_REPO_TOKEN || secrets.TARGET_REPO_TOKEN }}
+          PROJECT: ${{ inputs.project }}
+          TASK: ${{ inputs.task }}
+          REV: ${{ inputs.revision }}
+          SUMMARY: ${{ inputs.summary }}
+        run: |
+          mkdir -p /tmp/shot && cd /tmp/shot && npm init -y > /dev/null && npm i -s playwright@1.49.1 && npx playwright install --with-deps chromium > /dev/null
+          cp "$GITHUB_WORKSPACE/scripts/html-shot.mjs" /tmp/shot/ && node /tmp/shot/html-shot.mjs /tmp/change-tree.html /tmp/change-tree.png 1400
+          printf '%s' "$SUMMARY" > /tmp/summary.txt
+          cd "$GITHUB_WORKSPACE" && bash scripts/notes-run.sh "구조도: $PROJECT / $TASK v$REV" archify "$PROJECT" "$TASK" "$REV" /tmp/change-tree.png /tmp/change-tree.html /tmp/summary.txt
