@@ -5,6 +5,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildGeminiTask, geminiBranch } from './payload.ts';
 import { loadRules } from './projectRules.ts';
+import { appMapSection } from './appMap.ts';
 
 const HARD_DAILY_CAP = 20;
 const DEFAULT_DAILY_CAP = 10;
@@ -22,6 +23,17 @@ const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : []);
+
+/** 점검 때 만든 앱 지도(v0.5.95). 없거나 못 읽으면 빈칸 */
+// deno-lint-ignore no-explicit-any
+async function loadAppMap(admin: any, ownerId: string, projectId: string): Promise<string> {
+  try {
+    const { data } = await admin.storage.from('attachments').download(`${ownerId}/projects/${projectId}/health.json`);
+    return data ? appMapSection(JSON.parse(await data.text()).appMap) : '';
+  } catch {
+    return '';
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -131,7 +143,8 @@ Deno.serve(async (req) => {
   });
   if (ticketError) return fail('결과 제출표를 만들지 못했습니다.', 500);
 
-  const instructions = buildGeminiTask({
+  const appMap = await loadAppMap(admin, user.id, String(task.project_id));
+  const instructionsBase = buildGeminiTask({
     title: String(item.title ?? a.title ?? ''),
     goal: String(item.goal ?? ''),
     finalPrompt: String(spec.final_prompt ?? ''),
@@ -141,6 +154,7 @@ Deno.serve(async (req) => {
     projectRules: await loadRules(userClient, task.project_id),
     bug: (spec.size_hint as { bug?: boolean } | null)?.bug,
   });
+  const instructions = appMap ? `${instructionsBase}\n\n${appMap}` : instructionsBase;
   const branch = geminiBranch(a.task_id, String(item.id));
 
   let res: Response;
