@@ -2691,10 +2691,10 @@ a {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-height: 52vh;
+  /* v0.5.86(소유자 "채팅 칸 고쳐줘"): PC도 휴대폰처럼 목록을 따로 스크롤하지 않고 화면과 함께 내린다.
+     작은 상자 안 스크롤바(위아래 화살표)가 생기고 입력창 뒤 흐려짐이 휴대폰과 달랐다. */
   margin: 0;
   padding: 4px 2px;
-  overflow-y: auto;
   list-style: none;
 }
 
