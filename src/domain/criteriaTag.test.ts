@@ -3,17 +3,17 @@ import { insertCriterion, joinCriteria, nextTag, splitCriteria } from './criteri
 
 describe('완료 기준 태그 넣기(v0.5.99)', () => {
   it('빈 칸이면 맨 앞에', () => {
-    expect(insertCriterion('', 0, '필수')).toEqual({ text: '(필수) ', caret: 5 });
+    expect(insertCriterion('', 0, '필수')).toEqual({ text: '● ', caret: 2 });
   });
   it('줄 중간·끝이면 새 줄을 열고', () => {
-    expect(insertCriterion('@제미나이 바꿔줘 ', 10, '필수')).toEqual({ text: '@제미나이 바꿔줘\n(필수) ', caret: 15 });
+    expect(insertCriterion('@제미나이 바꿔줘 ', 10, '필수')).toEqual({ text: '@제미나이 바꿔줘\n● ', caret: 12 });
   });
   it('이미 새 줄 첫머리면 그 자리에', () => {
-    const r = insertCriterion('요청\n', 3, '좋음');
-    expect(r.text).toBe('요청\n(좋음) ');
+    const r = insertCriterion('요청\n', 3, '권장');
+    expect(r.text).toBe('요청\n◐ ');
   });
   it('뒤에 글이 있어도 이어 붙는다', () => {
-    expect(insertCriterion('요청 끝', 2, '선택').text).toBe('요청\n(선택) 끝');
+    expect(insertCriterion('요청 끝', 2, '선택').text).toBe('요청\n○ 끝');
   });
 });
 
@@ -25,5 +25,11 @@ describe('기획서 완료 기준 중요도 바꾸기(v0.6.0)', () => {
   });
   it('누를 때마다 필수 → 권장 → 선택 → 필수', () => {
     expect([nextTag(null), nextTag('필수'), nextTag('권장'), nextTag('선택')]).toEqual(['필수', '권장', '선택', '필수']);
+  });
+});
+
+describe('아이콘 표시(v0.6.1)', () => {
+  it('●·◐·○ 줄도 필수·권장·선택으로 읽는다', () => {
+    expect(splitCriteria('● 안 잘림\n◐ 흐리게\n○ 그림자').map((l) => [l.tag, l.body])).toEqual([['필수', '안 잘림'], ['권장', '흐리게'], ['선택', '그림자']]);
   });
 });
