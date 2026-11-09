@@ -3,7 +3,7 @@
 // 판정만 기록하고, 다시 개발 보내기는 앱이 기존 수정 요청 길(PM 재계획 → 실행 승인)로 한다. 올리기 승인(B)은 늘 소유자가 한다.
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않는다. 글은 저장하지 않고 점수·이유만 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, redoFeedback, REVIEW_SYSTEM, SECOND_OPINION_NOTE, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
+import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, ranChecks, redoFeedback, REVIEW_SYSTEM, SECOND_OPINION_NOTE, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
 import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
@@ -248,7 +248,10 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { verdict, reasons } = verdictOf(gates, score, redos ?? 0);
+  // v0.5.93: 지난 '다시 개발' 판정의 지적(같은 문제가 또 나오면 자동으로 돌리지 않음)과 시험·화면 확인 기록 유무
+  const { data: lastRedo } = await admin.from('result_reviews').select('reasons').eq('task_id', taskId).eq('verdict', 'redo').lt('result_revision', revision).order('result_revision', { ascending: false }).limit(1).maybeSingle();
+  const previousReasons = Array.isArray(lastRedo?.reasons) ? (lastRedo.reasons as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+  const { verdict, reasons } = verdictOf(gates, score, redos ?? 0, { executed: ranChecks(String(result.test_log ?? '')), previousReasons });
   const feedback = verdict === 'pass' ? '' : redoFeedback(gates, score, reasons);
   const { data: saved, error } = await admin
     .from('result_reviews')

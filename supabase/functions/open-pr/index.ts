@@ -42,6 +42,17 @@ Deno.serve(async (req) => {
   if (!branch) return reply(409, { ok: false, error: '작업 브랜치가 올라가지 않은 결과예요.' });
   const { data: b } = await userClient.from('approvals').select('id').eq('task_id', task.id).eq('gate', 'B').eq('decision', 'approved').eq('approved_revision', result.revision).limit(1).maybeSingle();
   if (!b) return reply(409, { ok: false, error: '이 결과는 아직 올리기 승인(B) 전이에요.' });
+  // 승인한 커밋과 지금 브랜치 끝이 같은지(v0.5.93, vicem "검토 뒤 바뀐 것은 내보내지 않음"). 커밋 줄이 없는 옛 결과·읽기 실패는 그대로 진행.
+  const approvedSha = /커밋:\s*([0-9a-f]{40})/.exec(String(result.summary ?? ''))?.[1];
+  const readToken = env('GITHUB_REPO_TOKEN');
+  if (approvedSha && readToken) {
+    const head = await fetch(`https://api.github.com/repos/${repo}/branches/${branch}`, {
+      headers: { Authorization: `Bearer ${readToken}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minoffia' },
+      signal: AbortSignal.timeout(10_000),
+    }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as { commit?: { sha?: string } } | null;
+    const now = head?.commit?.sha;
+    if (now && now !== approvedSha) return reply(409, { ok: false, error: `올리기 승인한 뒤 작업 브랜치가 바뀌었어요(승인 ${approvedSha.slice(0, 7)}, 지금 ${now.slice(0, 7)}). 결과를 다시 받아 확인하세요.` });
+  }
   const title = `${String(task.title ?? '').slice(0, 80)} (minoffia 결과 v${result.revision})`;
   const prBody = `minoffia에서 올리기 승인(B)한 Gemini 개발 결과입니다. 병합은 배포 승인(C) 뒤에 합니다.\n\n${String(result.summary ?? '').slice(0, 3000)}`;
   const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/open-pr.yml/dispatches`, {
