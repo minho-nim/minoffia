@@ -13,7 +13,7 @@
 
 - 2026-11-08 이름은 minoffia(저장소 minho-nim/minoffia)로 바꿨지만 운영 주소는 minlab-ai-office.pages.dev를 그대로 쓴다(새 Pages 프로젝트 minoffia1은 지움). 지운 Worker의 'Workers Builds: minoffia' 실패 표시는 남아 있으나 배포와 무관하다.
 
-- 2026-11-09 옵시디언 노트 보관함(v0.5.62) 코드 반영. **소유자가 할 일:** 노트 저장소(minho-nim/minoffia-notes) 만들기(앱 저장소 만들기 버튼, 비공개), 그 저장소에 쓸 수 있는 토큰을 Actions secret `NOTES_REPO_TOKEN`으로(없으면 TARGET_REPO_TOKEN을 씀), 옵시디언 + Obsidian Git 연결. 저장소가 없으면 노트 단계는 알림만 남기고 건너뛴다.
+- 2026-11-09 옵시디언 노트 보관함(v0.5.62) 코드 반영. v0.5.94부터 보관함에는 프로젝트별 '앱 지도'만 둔다(점검을 다시 돌린 프로젝트부터). **소유자가 할 일:** 노트 저장소(minho-nim/minoffia-notes) 만들기(앱 저장소 만들기 버튼, 비공개), 그 저장소에 쓸 수 있는 토큰을 Actions secret `NOTES_REPO_TOKEN`으로(없으면 TARGET_REPO_TOKEN을 씀), 옵시디언 + Obsidian Git 연결. 저장소가 없으면 노트 단계는 알림만 남기고 건너뛴다.
 
 ## 구현된 경로와 남은 확인
 

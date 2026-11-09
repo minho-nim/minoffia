@@ -37,6 +37,29 @@ export function healthNote(project, report, previous = '') {
   ].join('\n');
 }
 
+/** 앱 지도 노트(v0.5.94 소유자 "옵시디언에서는 앱 지도만 프로젝트별로"): 쉬운 지도 + 파일 위치. 나중에 개발 AI도 참고한다 */
+export const MAP_KINDS = ['화면', '기능', '서버', '데이터', '설정'];
+export function appMapNote(project, report) {
+  const map = report.appMap;
+  const date = String(report.checkedAt ?? '').slice(0, 16).replace('T', ' ');
+  const cell = (t) => String(t ?? '').replace(/\|/g, '/').replace(/\n/g, ' ');
+  const body = map?.parts?.length
+    ? MAP_KINDS.flatMap((kind) => {
+        const parts = map.parts.filter((p) => p.kind === kind);
+        if (!parts.length) return [];
+        return [`## ${kind}`, '| 부분 | 하는 일 | 위치 |', '|---|---|---|', ...parts.map((p) => `| **${cell(p.name)}** | ${cell(p.what)} | ${cell(p.folder ? `${p.folder}/` : p.files[0] ?? '')} |`), ''];
+      })
+    : ['아직 쉬운 지도가 없어요. 미노피아 프로젝트 탭의 "앱 지도·점검"에서 다시 점검하세요.', ''];
+  return [
+    '---', `프로젝트: "${project}"`, 'tags: [minoffia/앱지도]', `점검: "${date}"`, '---',
+    `# ${project} 앱 지도`, '',
+    map?.summary ? `> [!summary] ${cell(map.summary)}` : '', '',
+    ...body,
+    `![[${project}/앱 지도.png]]`, '',
+    `${date} 점검 기준 · [미노피아 열기](${APP_URL})`, '',
+  ].join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
 /** 업무 노트: 결과 버전마다 구조도 그림을 위에서부터 쌓는다 */
 export function archifyNote(project, task, revision, image, summary = '', previous = '') {
   const head = `## 결과 v${revision}`;
@@ -60,22 +83,23 @@ export function scopeCanvas(text, prefix) {
 /** 홈 노트: 프로젝트 목록과 각 노트로 가는 링크 */
 export function homeNote(projects) {
   return [
-    '# minoffia 노트', '',
-    '> [!info] 자동으로 만든 노트예요. 직접 쓰는 메모는 **내 메모** 폴더에 두세요(자동으로 건드리지 않아요).', '',
-    '| 프로젝트 | 점검 | 코드 그래프 | 업무 |', '|---|---|---|---|',
-    // 표 안의 링크는 | 를 \| 로(옵시디언 표 규칙)
-    ...projects.map((p) => `| ${p.name} | ${p.health ? `[[${p.name}/점검\\|보기]]` : '-'} | ${p.graph ? `[[${p.name}/코드 그래프/graph.canvas\\|그래프]]` : '-'} | ${p.tasks} |`),
+    '# minoffia 앱 지도', '',
+    '> [!info] 프로젝트마다 앱 지도 하나씩 자동으로 만들어요. 직접 쓰는 메모는 **내 메모** 폴더에 두세요(자동으로 건드리지 않아요).', '',
+    ...projects.map((p) => (p.map ? `- [[${p.name}/앱 지도|${p.name}]]` : `- ${p.name} (아직 지도 없음)`)),
     '', `[미노피아 열기](${APP_URL})`, '',
   ].join('\n');
 }
+
+/** 앱 지도 말고 예전에 자동으로 만든 것(점검·업무 구조도·코드 그래프·원본 지도)을 지운다(v0.5.94). 내 메모는 건드리지 않는다 */
+export const OLD_AUTO = ['점검.md', '업무', '코드 그래프', '앱 지도.html'];
 
 function scanProjects(notes) {
   return fs.readdirSync(notes, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== MY_NOTES)
     .map((d) => {
       const dir = path.join(notes, d.name);
-      const tasks = fs.existsSync(path.join(dir, '업무')) ? fs.readdirSync(path.join(dir, '업무')).filter((f) => f.endsWith('.md')).length : 0;
-      return { name: d.name, health: fs.existsSync(path.join(dir, '점검.md')), graph: fs.existsSync(path.join(dir, '코드 그래프')), tasks };
+      for (const old of OLD_AUTO) fs.rmSync(path.join(dir, old), { recursive: true, force: true });
+      return { name: d.name, map: fs.existsSync(path.join(dir, '앱 지도.md')) };
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 }
@@ -89,9 +113,7 @@ function finish(notes) {
     fs.mkdirSync(path.dirname(graphCfg), { recursive: true });
     const color = (hex) => ({ a: 1, rgb: parseInt(hex, 16) });
     fs.writeFileSync(graphCfg, JSON.stringify({ colorGroups: [
-      { query: 'path:"코드 그래프"', color: color('5b8def') },
-      { query: 'path:"업무"', color: color('e0913a') },
-      { query: 'tag:#minoffia/점검', color: color('4cb87a') },
+      { query: 'tag:#minoffia/앱지도', color: color('4cb87a') },
       { query: `path:"${MY_NOTES}"`, color: color('b06bd6') },
     ] }, null, 1));
   }
@@ -108,10 +130,9 @@ function main([cmd, notes, projectRaw, ...rest]) {
   if (cmd === 'health') {
     const [reportFile, png, html] = rest;
     fs.mkdirSync(dir, { recursive: true });
-    const note = path.join(dir, '점검.md');
-    fs.writeFileSync(note, healthNote(project, JSON.parse(fs.readFileSync(reportFile, 'utf8')), read(note)));
+    void html; // 원본 지도(HTML)는 옵시디언에 올리지 않는다(v0.5.94)
+    fs.writeFileSync(path.join(dir, '앱 지도.md'), appMapNote(project, JSON.parse(fs.readFileSync(reportFile, 'utf8'))));
     copyIf(png, path.join(dir, '앱 지도.png'));
-    copyIf(html, path.join(dir, '앱 지도.html'));
   } else if (cmd === 'archify') {
     const [taskRaw, revision, png, html, summaryFile] = rest;
     const task = safeName(taskRaw);

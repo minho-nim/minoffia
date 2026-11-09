@@ -42,6 +42,9 @@ jobs:
           REPO: ${{ inputs.repo }}
           NAME: ${{ inputs.name }}
           TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+          # 쉬운 앱 지도(v0.5.94): 파일 이름만 Gemini 무료에 한 번 보낸다. 키는 출력하지 않는다.
+          KEY_A: ${{ secrets.GEMINI_API_KEY }}
+          KEY_B: ${{ secrets.GEMINI_API_KEY2 }}
         run: |
           git clone -q --filter=blob:none https://github.com/haydenschmitty/floorplan.git /tmp/fp
           git -C /tmp/fp checkout -q 70be3f40f9c2e061290b76027f180d9ff892edd6
@@ -52,6 +55,8 @@ jobs:
           node scripts/floorplan-arch.mjs /tmp/target "${NAME:-$REPO}"
           node /tmp/fp/skills/floorplan/scripts/build.mjs /tmp/target | grep -E 'ASSIGNMENT|HEALTH|wrote' || true
           node -e "const g=require('/tmp/target/floorplan/graph.json');const h=g.health||{summary:{high:0,medium:0,low:0},issues:[]};require('fs').writeFileSync('/tmp/health.json',JSON.stringify({checkedAt:new Date().toISOString(),head:(g.meta&&g.meta.repos&&g.meta.repos[0]&&g.meta.repos[0].head)||'',files:(g.files||[]).length,summary:h.summary,issues:(h.issues||[]).map(i=>({kind:i.kind,severity:i.severity,title:i.title,detail:i.detail,items:(i.items||[]).slice(0,20).map(x=>String(x).replace(/^[a-z]+:/,''))}))}))"
+          node scripts/app-map.mjs /tmp/target "${NAME:-$REPO}" /tmp/app-map.json || echo "앱 지도를 만들지 못했어요(점검은 계속)."
+          node -e "const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));try{h.appMap=JSON.parse(fs.readFileSync('/tmp/app-map.json','utf8'))}catch{};fs.writeFileSync('/tmp/health.json',JSON.stringify(h))"
           echo "점검: $(node -e "console.log(JSON.stringify(require('/tmp/health.json').summary))")"
       - name: 올리기
         env:
