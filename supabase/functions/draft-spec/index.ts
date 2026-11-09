@@ -6,6 +6,7 @@ import { autoTitle, DRAFT_SYSTEM, parseDraft } from './draft.ts';
 import { loadRules, rulesSection, saveRules } from './projectRules.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { codePaths, NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
+import { appMapSection } from './appMap.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -106,7 +107,15 @@ Deno.serve(async (req) => {
   const repo = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
   const canRead = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) && repo.toLowerCase() !== 'minho-nim/minlab';
   const files = canRead ? await repoFiles(repo) : [];
-  const firstAsk = files.length ? `${prompt}\n\n[저장소 코드 파일 목록(이름만)]\n${files.join('\n')}\n\n${NEED_FILES_ASK}` : prompt;
+  // 앱 지도(v0.6.4): 어느 화면이 어느 폴더에 있는지. 점검을 안 했으면 빈칸
+  let appMap = '';
+  try {
+    const { data: mapFile } = await admin.storage.from('attachments').download(`${user.id}/projects/${task.project_id}/health.json`);
+    appMap = mapFile ? appMapSection(JSON.parse(await mapFile.text()).appMap) : '';
+  } catch {
+    appMap = '';
+  }
+  const firstAsk = files.length ? `${prompt}\n\n[저장소 코드 파일 목록(이름만)]\n${files.join('\n')}${appMap ? `\n\n${appMap}` : ''}\n\n${NEED_FILES_ASK}` : prompt;
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   let last = { status: 0, message: '' };
   // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
