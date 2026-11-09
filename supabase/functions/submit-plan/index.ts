@@ -4,6 +4,7 @@
 // verify_jwt = false(세션에 Supabase 로그인이 없다). 대신 제출표가 맞아야만 한 줄을 넣을 수 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { saveRules } from './projectRules.ts';
+import { importOnServer } from './importPlan.ts';
 
 const MAX_PLAN = 65_000;
 const MAX_USES = 3;
@@ -55,11 +56,15 @@ Deno.serve(async (req) => {
     .select('id');
   if (!bumped?.length) return reply(409, { ok: false, error: 'retry' });
 
+  // v0.6.11: 서버가 먼저 계획·작업으로 저장해 본다(앱이 닫혀 있어도 진행). 저장했으면 받은 줄을 '받음'으로 넣어
+  // 앱이 같은 계획을 또 저장하지 않게 하고, 못 했으면 예전처럼 '새 줄'로 넣어 앱이 이유와 함께 처리한다.
+  const server = await importOnServer(admin, ticket.owner_id, ticket.task_id, ticket.spec_revision, planText).catch((e) => ({ saved: false as const, reason: String((e as Error).message) }));
   const { error } = await admin.from('pm_plan_inbox').insert({
     owner_id: ticket.owner_id,
     task_id: ticket.task_id,
     spec_revision: ticket.spec_revision,
     plan_text: planText,
+    ...(server.saved ? { status: 'imported', note: `서버가 바로 저장(계획 v${server.planRevision})` } : {}),
   });
   if (error) return reply(500, { ok: false, error: 'could not save plan' });
   // v0.4.57: PM이 적어 보낸 "앞으로도 지켜야 할 것"은 프로젝트에 쌓는다(계획 검증과 별개, 실패해도 계획은 저장됨).

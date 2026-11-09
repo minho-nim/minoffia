@@ -749,6 +749,14 @@ export function App() {
     for (const task of snap.tasks) {
       if (task.status === 'done' || !task.dispatch.at) continue;
       const view = deriveWorkflow(task, snap.workflow);
+      // v0.6.12: 서버가 '다시 개발' 수정 요청은 기록했는데 PM 전송이 실패했으면(휴가·한도 등) 앱이 기존 대체 경로로 한 번 다시 보낸다
+      const lastRev = snap.workflow.revisionRequests.filter((r) => r.taskId === task.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      const latestPlanAt = snap.workflow.plans.filter((p) => p.taskId === task.id).reduce((m, p) => (p.createdAt > m ? p.createdAt : m), '');
+      if (lastRev && lastRev.createdAt > latestPlanAt && task.dispatch.state === 'failed' && !planRetried.current.has(`rev:${lastRev.id}`)) {
+        planRetried.current.add(`rev:${lastRev.id}`);
+        void planTask(task, true, { skipSmall: true });
+        continue;
+      }
       if (!view.spec || !view.aApproved || snap.workflow.plans.some((p) => p.taskId === task.id && p.approvedSpecRevision === view.spec!.revision)) continue;
       const key = `${task.id}:${view.spec.revision}`;
       if (planRetried.current.has(key)) continue;

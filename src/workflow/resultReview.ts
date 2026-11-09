@@ -13,6 +13,7 @@ type Context = {
 const RETRY_MS = 30_000;
 const MAX_RETRY_MS = 300_000;
 const WAIT_POLL_MS = 60_000;
+const SERVER_FIRST_MS = 120_000;
 
 /** 요청 중에만 잠그고, 실패하면 쉬었다 다시 시도한다. Claude 대기도 서버의 만료 판단을 주기적으로 확인한다. */
 export function createResultReviewer(clock: () => number = Date.now) {
@@ -37,6 +38,8 @@ export function createResultReviewer(clock: () => number = Date.now) {
         if (review) {
           requests.delete(key);
           if (waiting.delete(key)) announce(ctx, task, result.revision, review);
+          // v0.6.12: 서버가 먼저 수정 요청·재계획을 보낸다. 앱은 2분 기다려도 수정 요청이 안 생겼을 때만(서버 실패) 대신 보낸다
+          if (review.verdict === 'redo' && review.feedback && !redo.has(key)) redo.set(key, clock() + SERVER_FIRST_MS);
           if (review.verdict === 'redo' && review.feedback && (redo.get(key) ?? 0) <= clock()) {
             redo.set(key, Infinity);
             void ctx.requestRevision(task, review.feedback).then((ok) => {
