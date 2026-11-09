@@ -1860,6 +1860,7 @@ export function App() {
               onAddRepoRules={store.mode === 'supabase' ? addRepoRules : undefined}
               shortcutsOf={(id) => projectShortcuts(id, snap.tasks, snap.workflow.results)}
               onOpenTask={(id) => showTask(id)}
+              lastDeployOf={(p) => (p.repo ? snap.workflow.deployments.filter((d) => d.repo.toLowerCase() === p.repo!.toLowerCase()).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null : null)}
               renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
               renderHealth={store.healthCheck ? (p) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id), graph: store.notes ? () => store.notes!.graph(p.id) : undefined }} /> : undefined}
               renderStructure={(p) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />}
