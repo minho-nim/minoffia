@@ -5,6 +5,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { previewUrl, saveRules } from './projectRules.ts';
 import { maskSecrets } from './maskSecrets.ts';
+import { importOnServer, type InboxRow } from './importResult.ts';
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 const MAX_USES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -91,7 +94,7 @@ Deno.serve(async (req) => {
   // 앞으로도 지켜야 할 것(AI가 적어 보냄)은 프로젝트에 쌓는다. 실패해도 결과 저장은 막지 않는다.
   await saveRules(admin, ticket.owner_id, ticket.task_id, 'result', r.project_rules);
 
-  const { error } = await admin.from('dev_result_inbox').insert({
+  const { data: saved, error } = await admin.from('dev_result_inbox').insert({
     owner_id: ticket.owner_id,
     task_id: ticket.task_id,
     assignment_id: ticket.assignment_id,
@@ -104,7 +107,24 @@ Deno.serve(async (req) => {
     branch,
     preview_url: preview,
     screenshots: shots,
-  });
-  if (error) return reply(500, { ok: false, error: 'could not save result' });
+  }).select('*').single();
+  if (error || !saved) return reply(500, { ok: false, error: 'could not save result' });
+  // v0.5.90: 앱이 닫혀 있어도 진행되게 서버가 바로 결과 패키지로 옮기고 채점을 부른다. 실패하면 받은 줄이 남아 앱이 나중에 처리한다.
+  try {
+    const imported = await importOnServer(admin, saved as InboxRow);
+    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+    if (imported && serviceKey) {
+      const scoring = fetch(`${env('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/review-result`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: ticket.task_id, resultRevision: imported.revision, ownerId: ticket.owner_id }),
+        signal: AbortSignal.timeout(140_000),
+      }).catch(() => undefined);
+      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(scoring);
+      else await scoring;
+    }
+  } catch {
+    // 앱이 열릴 때 다시 처리한다
+  }
   return reply(200, { ok: true, message: 'AI Office에 결과를 보냈습니다. 사용자가 올리기 승인(B)을 할 때까지 GitHub에 올리지 않습니다.' });
 });

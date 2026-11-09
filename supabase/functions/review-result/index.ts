@@ -67,15 +67,7 @@ Deno.serve(async (req) => {
   const ownerEmail = env('OFFICE_OWNER_EMAIL').toLowerCase();
   if (!ownerEmail) return reply(500, { ok: false, error: '서버 설정(OFFICE_OWNER_EMAIL)이 빠졌습니다.' });
 
-  const userClient = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
-    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
-  });
-  const { data: auth } = await userClient.auth.getUser();
-  const user = auth?.user;
-  if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
-  if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
-
-  let body: { taskId?: string; resultRevision?: number };
+  let body: { taskId?: string; resultRevision?: number; ownerId?: string };
   try {
     body = await req.json();
   } catch {
@@ -83,6 +75,25 @@ Deno.serve(async (req) => {
   }
   const taskId = String(body.taskId ?? '');
   const revision = Number(body.resultRevision);
+
+  // v0.5.90: submit-result가 결과를 서버에서 바로 받은 뒤 서버 키로 부른다(앱이 닫혀 있어도 채점). 이때는 업무 주인이 맞는지 직접 확인한다.
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  const internal = Boolean(serviceKey) && req.headers.get('Authorization') === `Bearer ${serviceKey}`;
+  const userClient = internal
+    ? createClient(env('SUPABASE_URL'), serviceKey)
+    : createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
+  let user: { id: string };
+  if (internal) {
+    const ownerId = String(body.ownerId ?? '');
+    const { data: owned } = await userClient.from('tasks').select('id').eq('id', taskId).eq('owner_id', ownerId).maybeSingle();
+    if (!owned) return reply(403, { ok: false, error: '업무 주인이 맞지 않습니다.' });
+    user = { id: ownerId };
+  } else {
+    const { data: auth } = await userClient.auth.getUser();
+    if (!auth?.user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
+    if ((auth.user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
+    user = auth.user;
+  }
 
   // RLS를 거쳐 내 업무만 읽는다.
   const { data: existing } = await userClient.from('result_reviews').select('*').eq('task_id', taskId).eq('result_revision', revision).maybeSingle();
