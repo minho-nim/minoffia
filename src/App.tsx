@@ -1733,7 +1733,11 @@ export function App() {
                     }
                     onStatus={setStatus}
                     onAssign={assignTask}
-                    onDelete={(task) => void mutate(() => store.deleteTask(task.id), '업무를 삭제했습니다.')}
+                    onDelete={(task) => void mutate(() => store.deleteTask(task.id), '업무를 삭제했습니다.').then((ok) => {
+                      // 옵시디언 노트도 지운다(v0.5.62, 실패해도 업무 삭제는 그대로)
+                      const project = projectById.get(task.projectId);
+                      if (ok && project) void store.notes?.remove(project.name, task.title).catch(() => undefined);
+                    })}
                     onCopy={copyHandoff}
                   />
                 ))
@@ -1763,7 +1767,7 @@ export function App() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               onSave={saveProject}
-              onDelete={(p) => void mutate(() => store.deleteProject(p.id), `${p.name} 프로젝트를 삭제했습니다.`)}
+              onDelete={(p) => void mutate(() => store.deleteProject(p.id), `${p.name} 프로젝트를 삭제했습니다.`).then((ok) => ok && void store.notes?.remove(p.name).catch(() => undefined))}
               rules={snap.projectRules ?? []}
               reviews={snap.workflow.reviews ?? []}
               onAddRule={(projectId, rule) => void mutate(() => store.addProjectRule(projectId, rule), '지켜야 할 것에 적었어요. 다음 지시서부터 함께 들어가요.')}
@@ -1773,7 +1777,7 @@ export function App() {
               shortcutsOf={(id) => projectShortcuts(id, snap.tasks, snap.workflow.results)}
               onOpenTask={(id) => showTask(id)}
               renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
-              renderHealth={store.healthCheck ? (p) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id) }} /> : undefined}
+              renderHealth={store.healthCheck ? (p) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id), graph: store.notes ? () => store.notes!.graph(p.id) : undefined }} /> : undefined}
               renderStructure={(p) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />}
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
