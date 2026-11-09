@@ -4816,3 +4816,28 @@ a {
   font-size: max(9px, 1.1cqw);
   line-height: 1.35;
 }
+
+/* 담당 바꾸기·한도 넘기기(v0.5.73) */
+.wf-reassign {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 4px 0;
+}
+
+.wf-reassign p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.wf-reassign.is-quota {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f2c14e 18%, transparent);
+}
+
+.chip-strong {
+  border-color: var(--accent);
+  font-weight: 700;
+}
