@@ -2846,8 +2846,8 @@ a.project-site {
   display: flex;
   flex-direction: column;
   /* v0.6.3 소유자 "위아래 간격 조금 좁게, 좌우도 바깥쪽으로": 아이콘 줄이 상자 가장자리에 더 붙게 */
-  gap: 4px;
-  padding: 8px 6px 6px;
+  gap: 2px;
+  padding: 6px 5px 4px;
   border: 1px solid var(--line);
   border-radius: 22px;
   background: var(--bg);
