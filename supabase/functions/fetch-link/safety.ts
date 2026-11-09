@@ -117,6 +117,11 @@ function decode(s: string): string {
 }
 
 /** HTML에서 제목·설명·본문 글자만 뽑는다. 스크립트·스타일은 버린다. */
+/** hidden 속성·aria-hidden="true"·display:none·visibility:hidden인 요소(안쪽 글까지) */
+export const HIDDEN_ELEMENT = /<([a-z][a-z0-9]*)\b[^>]*?(?:\shidden(?=[\s>=/])|aria-hidden\s*=\s*["']?true|style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px)?\s*[;"']))[^>]*>[\s\S]*?<\/\1>/gi;
+/** 폭 없는 글자·방향 바꾸는 글자(눈에 안 보이게 지시를 숨기는 데 쓰임) */
+export const INVISIBLE_CHARS = /[\u200B-\u200F\u2060-\u2064\uFEFF\u202A-\u202E\u2066-\u2069]/g;
+
 export function extractHtml(html: string): { title: string; description: string; text: string } {
   const title = decode((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '').replace(/\s+/g, ' ').trim()).slice(0, 300);
   const metaDesc =
@@ -127,9 +132,12 @@ export function extractHtml(html: string): { title: string; description: string;
   const body = html
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<(script|style|noscript|template|svg|iframe|head)\b[\s\S]*?<\/\1>/gi, ' ')
+    // 화면에 안 보이는 글(v0.6.6, Scrapling 착안): 숨긴 칸에 AI에게 하는 지시를 몰래 넣는 것을 막는다
+    .replace(HIDDEN_ELEMENT, ' ')
     .replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|tr|section|article)>/gi, '\n')
     .replace(/<[^>]+>/g, ' ');
   const text = decode(body)
+    .replace(INVISIBLE_CHARS, '')
     .split('\n')
     .map((l) => l.replace(/[ \t\f\v\r]+/g, ' ').trim())
     .filter(Boolean)
