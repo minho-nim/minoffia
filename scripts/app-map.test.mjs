@@ -28,3 +28,16 @@ describe('쉬운 앱 지도(v0.5.94)', () => {
     expect(p).toContain('src/components: Workout.tsx, Login.tsx');
   });
 });
+
+import { applyToArch } from './app-map.mjs';
+describe('자세한 지도에도 설명(v0.5.97)', () => {
+  it('폴더가 같은 칸에 쉬운 이름·설명, 모르는 칸은 그대로', () => {
+    const arch = { project: { name: 'P', summary: '기본' }, nodes: [{ id: 'a', label: 'src/components', summary: 'src/components 폴더' }, { id: 'b', label: 'etc', summary: 'etc 폴더' }, { id: 'root', label: '맨 위 파일', summary: '' }] };
+    const map = { summary: '운동 앱', parts: [{ name: '화면 부품', what: '화면을 그려요', folder: 'src/components' }, { name: '설정', what: '앱 설정', folder: '' }], by: 'ai' };
+    const out = applyToArch(arch, map);
+    expect(out.project.summary).toBe('운동 앱');
+    expect(out.nodes[0]).toMatchObject({ id: 'a', label: '화면 부품', summary: '화면을 그려요 (src/components)' });
+    expect(out.nodes[1].label).toBe('etc');
+    expect(out.nodes[2]).toMatchObject({ label: '설정', summary: '앱 설정 (맨 위)' });
+  });
+});

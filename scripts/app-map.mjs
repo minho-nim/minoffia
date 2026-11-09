@@ -58,6 +58,17 @@ export const MAP_SYSTEM = [
   '- parts는 사용자에게 중요한 화면·기능부터, 최대 16개. 시험·설정 파일은 하나로 묶는다.',
 ].join('\n');
 
+/** 자세한 지도(floorplan architecture.json)의 폴더 칸에도 쉬운 이름·설명을 넣는다(v0.5.97 소유자 "자세한 지도에도 설명") */
+export function applyToArch(arch, map) {
+  const byFolder = new Map(map.parts.filter((p) => p.folder !== undefined).map((p) => [p.folder, p]));
+  const nodes = (arch.nodes ?? []).map((n) => {
+    const folder = n.label === '맨 위 파일' ? '' : n.label;
+    const p = byFolder.get(folder);
+    return p ? { ...n, label: `${p.name}`, summary: `${p.what} (${folder || '맨 위'})` } : n;
+  });
+  return { ...arch, project: { ...arch.project, summary: map.summary || arch.project?.summary }, nodes };
+}
+
 async function askGemini(key, prompt) {
   const model = process.env.MODEL || 'gemini-3.5-flash-lite';
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -93,6 +104,8 @@ async function main([root, name, out]) {
   }
   map ??= ruleMap(groups, name);
   fs.writeFileSync(out, JSON.stringify(map));
+  const archFile = path.join(root, 'floorplan/architecture.json');
+  if (map.by === 'ai' && fs.existsSync(archFile)) fs.writeFileSync(archFile, JSON.stringify(applyToArch(JSON.parse(fs.readFileSync(archFile, 'utf8')), map), null, 1));
   console.log(`앱 지도: ${map.parts.length}부분 (${map.by === 'ai' ? 'AI 설명' : '규칙'})`);
 }
 

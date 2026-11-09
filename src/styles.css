@@ -4574,8 +4574,17 @@ a.project-site {
   padding: max(12px, env(safe-area-inset-top, 0px)) 12px 12px;
   background: rgba(0, 0, 0, 0.55);
 }
+/* 휴대폰: 위의 minoffia 줄(36px)을 가리지 않게 그 아래부터(v0.5.97) */
+@media (max-width: 1039px) {
+  .archify-modal {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 44px);
+  }
+}
 .archify-box {
   position: relative;
+  /* 닫기 단추는 지도 위에 겹치지 않게 맨 위 줄에 따로(v0.5.97 소유자 "돋보기랑 X가 겹침") */
+  display: flex;
+  flex-direction: column;
   width: min(1200px, 100%);
   height: min(860px, 100%);
   border-radius: var(--radius);
@@ -4583,17 +4592,17 @@ a.project-site {
   background: #fff;
 }
 .archify-frame {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   border: 0;
 }
 .archify-close {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 1;
-  width: 34px;
-  height: 34px;
+  flex: none;
+  align-self: flex-end;
+  margin: 4px 6px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.6);
@@ -4952,9 +4961,15 @@ a.project-site {
   color: var(--ink);
 }
 .map-brief {
-  padding: 14px 14px 18px;
+  padding: 0 14px 18px;
 }
 .map-brief > .appmap-title {
-  margin: 2px 40px 8px 0;
+  margin: -30px 44px 8px 0;
   font-size: 16px;
+}
+/* 간략 지도는 내용이 길어 스크롤되므로 닫기 단추를 위에 붙여 둔다 */
+.map-brief-box .archify-close {
+  position: sticky;
+  top: 4px;
+  z-index: 1;
 }
