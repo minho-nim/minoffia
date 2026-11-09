@@ -4720,49 +4720,63 @@ a {
   overflow-wrap: anywhere;
 }
 
-/* 서버실 불빛(v0.5.57) */
-.lamp-panel {
+/* 서버실 불빛(v0.5.59): 터미널실 서버 랙 하나에 서비스 하나 */
+.rack {
   position: absolute;
   z-index: 7;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  max-width: 40%;
-}
-
-.lamp {
-  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 6px 1px 4px;
+  justify-content: space-between;
+  padding: 1px 0;
   border: 0;
-  border-radius: 999px;
-  background: rgba(20, 16, 12, 0.72);
-  color: #f4ead8;
-  font: 600 max(8px, 1.1cqw) / 1.3 var(--font-display, sans-serif);
+  border-radius: 2px;
+  background: transparent;
   cursor: pointer;
 }
 
-.lamp i {
-  width: 7px;
-  height: 7px;
+.rack:hover,
+.rack.is-open {
+  outline: 2px solid rgba(255, 240, 200, 0.7);
+}
+
+.rack i {
+  width: max(5px, 0.9cqw);
+  height: max(5px, 0.9cqw);
   border-radius: 50%;
   background: #8a8a8a;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.rack span {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: rgba(20, 16, 12, 0.8);
+  color: #f4ead8;
+  font: 700 max(6px, 0.95cqw) / 1.2 var(--font-display, sans-serif);
 }
 
 .lamp-ok i { background: #4cd07d; box-shadow: 0 0 6px #4cd07d; }
-.lamp-bad i { background: #ff5a4f; box-shadow: 0 0 6px #ff5a4f; }
+.lamp-bad i { background: #ff5a4f; box-shadow: 0 0 6px #ff5a4f; animation: lamp-blink 1.2s steps(2) infinite; }
 .lamp-wait i { background: #f2c14e; }
 
+@keyframes lamp-blink {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lamp-bad i { animation: none; }
+}
+
 .lamp-detail {
-  margin: 2px 0 0;
+  position: absolute;
+  z-index: 8;
+  max-width: 45%;
+  margin: 0;
   padding: 4px 6px;
   border-radius: 6px;
-  background: rgba(20, 16, 12, 0.85);
+  background: rgba(20, 16, 12, 0.88);
   color: #f4ead8;
   font-size: max(9px, 1.1cqw);
   line-height: 1.35;
-  text-align: right;
 }
