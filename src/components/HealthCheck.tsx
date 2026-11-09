@@ -1,15 +1,51 @@
 // 앱 점검·기본 지도(floorplan 1단계, v0.5.53, 소유자 목록 28번): 프로젝트 카드에서 점검을 시작하고 결과를 쉬운 한국어로 본다.
 // 점검은 GitHub Actions가 AI 없이 돌린다(2~5분). 지도는 floorplan이 만든 HTML이라 앱과 분리된 창(sandbox, 같은 출처 권한 없음)에서만 연다.
 import { useEffect, useRef, useState } from 'react';
-import { koIssue, type HealthReport } from '../domain/healthText';
+import { APP_MAP_KINDS, koIssue, type AppMap, type HealthReport } from '../domain/healthText';
 
 export type HealthApi = {
   load: () => Promise<HealthReport | null>;
   start: () => Promise<void>;
   map: () => Promise<string | null>;
-  /** 옵시디언 노트 보관함에 코드 그래프(Graphify) 다시 만들기(v0.5.62) */
-  graph?: () => Promise<void>;
 };
+
+/** 쉬운 앱 지도(v0.5.94): 화면·기능·서버·데이터·설정 순서로 카드. 파일 이름은 눌러야 보인다(코딩 안 하는 사람 기준) */
+export function AppMapView({ map }: { map: AppMap }) {
+  return (
+    <div className="appmap">
+      {map.summary && <p className="appmap-summary">{map.summary}</p>}
+      {APP_MAP_KINDS.map((kind) => {
+        const parts = map.parts.filter((p) => p.kind === kind);
+        if (!parts.length) return null;
+        return (
+          <section key={kind} className="appmap-group">
+            <h4 className="appmap-kind">
+              {kind} <span className="muted small">{parts.length}</span>
+            </h4>
+            <ul className="appmap-list">
+              {parts.map((p) => (
+                <li key={`${p.name}-${p.folder}`} className="appmap-card">
+                  <b>{p.name}</b>
+                  <span className="appmap-what">{p.what}</span>
+                  {(p.folder || p.files.length > 0) && (
+                    <details className="appmap-files">
+                      <summary>파일 위치</summary>
+                      {p.folder && <code>{p.folder}/</code>}
+                      {p.files.map((f) => (
+                        <code key={f}>{f}</code>
+                      ))}
+                    </details>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+      {map.by === 'rule' && <p className="muted small">AI 설명 없이 폴더로만 나눈 지도예요. 다시 점검하면 쉬운 설명이 붙어요.</p>}
+    </div>
+  );
+}
 
 const when = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -18,7 +54,6 @@ export function HealthCheck({ api }: { api: HealthApi }) {
   const [state, setState] = useState<'loading' | 'idle' | 'checking' | 'error'>('loading');
   const [msg, setMsg] = useState('');
   const [mapHtml, setMapHtml] = useState<string | null>(null);
-  const [graphMsg, setGraphMsg] = useState('');
   const timer = useRef<number | null>(null);
   useEffect(() => {
     api.load().then((r) => {
@@ -69,6 +104,13 @@ export function HealthCheck({ api }: { api: HealthApi }) {
   if (state === 'loading') return <p className="muted small">불러오는 중…</p>;
   return (
     <div className="health">
+      {report && (
+        <>
+          <p className="appmap-title">앱 지도</p>
+          {report.appMap ? <AppMapView map={report.appMap} /> : <p className="muted small">쉬운 앱 지도는 다음 점검 때 만들어져요. 아래 '다시 점검'을 눌러 주세요.</p>}
+          <p className="appmap-title">점검 결과</p>
+        </>
+      )}
       {report ? (
         <>
           <p className="small">
@@ -93,7 +135,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
           )}
         </>
       ) : (
-        state !== 'checking' && <p className="muted small">아직 점검한 적이 없어요. 비밀 열쇠 노출·아무나 부를 수 있는 서버 주소·DB 규칙 실수·안 쓰는 파일 등을 AI 없이 찾아요.</p>
+        state !== 'checking' && <p className="muted small">아직 점검한 적이 없어요. '점검하기'를 누르면 앱이 어떤 화면·기능으로 되어 있는지 쉬운 지도를 만들고, 비밀 열쇠 노출·DB 규칙 실수·안 쓰는 파일 등도 찾아요(2~5분).</p>
       )}
       <div className="health-actions">
         <button type="button" className="btn btn-small" disabled={state === 'checking'} onClick={() => void start()}>
@@ -101,28 +143,11 @@ export function HealthCheck({ api }: { api: HealthApi }) {
         </button>
         {report && (
           <button type="button" className="btn btn-small btn-ghost" onClick={() => void openMap()}>
-            앱 지도 보기
-          </button>
-        )}
-        {api.graph && (
-          <button
-            type="button"
-            className="btn btn-small btn-ghost"
-            title="코드 연결 그래프(Graphify)를 다시 만들어 옵시디언 노트 보관함에 올려요. AI 없음, 3~8분."
-            onClick={() => {
-              setGraphMsg('');
-              api.graph!().then(
-                () => setGraphMsg('코드 그래프를 만드는 중이에요(3~8분). 다 되면 옵시디언에 자동으로 들어가요.'),
-                (e: Error) => setGraphMsg(e.message || '시작하지 못했어요.'),
-              );
-            }}
-          >
-            코드 그래프 → 옵시디언
+            자세한 지도(PC용)
           </button>
         )}
       </div>
       {msg && <p className="task-error small">{msg}</p>}
-      {graphMsg && <p className="muted small">{graphMsg}</p>}
       {mapHtml && (
         <div className="archify-modal" role="dialog" aria-label="앱 지도" onClick={() => setMapHtml(null)}>
           <div className="archify-box" onClick={(e) => e.stopPropagation()}>

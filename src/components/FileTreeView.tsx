@@ -1,4 +1,4 @@
-// 구조도 보기(v0.5.24): 폴더 나무. 바뀐 파일은 강조하고 +/− 줄 수, 바뀐 파일이 든 폴더는 펼쳐 둔다.
+// 구조도 보기(v0.5.24): 폴더 나무. 바뀐 파일은 강조하고 +/− 줄 수. 폴더는 처음에 모두 닫아 둔다(v0.5.94 소유자 "처음에 다 열려 있음").
 import { useEffect, useState } from 'react';
 import { buildTree, type FileChange, type TreeNode } from '../domain/fileTree';
 
@@ -18,7 +18,8 @@ function Node({ n, depth, onlyChanged }: { n: TreeNode; depth: number; onlyChang
   }
   return (
     <li className="ft-dir">
-      <details open={n.changed > 0 || depth === 0}>
+      {/* '바뀐 곳만'을 켜면 남은 폴더를 펼쳐 바로 보이게 */}
+      <details open={onlyChanged || undefined}>
         <summary>
           {n.name}/{n.changed > 0 && <span className="num num-turn">{n.changed}</span>}
         </summary>
