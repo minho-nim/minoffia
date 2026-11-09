@@ -5032,50 +5032,6 @@ a.project-site {
 .crit-list .criteria-chip:disabled {
   cursor: default;
 }
-
-/* 입력 중 전체 화면(v0.6.0 소유자 "스크롤할 때도 키보드에 붙어야 예쁜데"): 휴대폰에서 키보드가 뜨면 대화 상자가
-   보이는 화면(키보드 위)에 딱 맞춰 뜨고, 대화 목록만 그 안에서 스크롤한다. 페이지가 움직이지 않으니 입력창이 늘 키보드에 붙어 있다. */
-@media (max-width: 1039px) {
-  html.kb-open,
-  html.kb-open body {
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
-  .kb-open .inbox {
-    --kb: 0px;
-    position: fixed;
-    z-index: 65;
-    left: 0;
-    right: 0;
-    top: var(--vv-top, 0px);
-    height: var(--vv-h, 100dvh);
-    margin: 0;
-    border: 0;
-    border-radius: 0;
-    overflow: hidden;
-  }
-  .kb-open .inbox > .inbox-log,
-  .kb-open .inbox > .inbox-empty {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-  .kb-open .inbox > .inbox-form {
-    position: relative;
-    bottom: auto;
-    flex: none;
-    transition: none;
-  }
-  /* 전체 화면에서는 목록이 입력창 뒤로 들어가지 않으니 흐림 칸·상자 모서리 그림이 필요 없다 */
-  .kb-open .inbox-fade,
-  .kb-open .inbox-cap,
-  .kb-open .inbox > .inbox-form::before,
-  .kb-open .inbox > .inbox-form::after {
-    display: none;
-  }
-}
 /* 완료 기준 펼치기 단추(v0.6.0): 첨부·음성 옆 */
 .criteria-toggle {
   display: inline-flex;

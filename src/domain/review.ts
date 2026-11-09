@@ -199,7 +199,7 @@ export function averageScores(a: Score, b: Score): Score {
 const HAS_GROUND = /[\w-]+\.[a-z]{1,5}\b|:\d+|`[^`]+`|근거|line \d+|L\d+/i;
 
 /** 완료 기준 앞의 중요도 표시(v0.5.80): (필수)·(권장)·(선택). 예전 (꼭)도 필수로 읽는다(v0.6.0). 없으면 보통 */
-export const mustCriterion = (text: string) => /^\s*(?:[-*]\s*)?(?:R\d+[.):]?\s*)?[([](?:꼭|필수)[)\]]/.test(text);
+export const mustCriterion = (text: string) => /^\s*(?:[-*]\s*)?(?:R\d+[.):]?\s*)?(?:[([](?:꼭|필수)[)\]]|●)/.test(text);
 
 /** 시험·화면 확인을 실제로 돌린 기록이 있는지(v0.5.93, productdesign_harness "실행 검증 없으면 Pass 단정 안 함") */
 export function ranChecks(testLog: string): boolean {
