@@ -4,6 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildDevPayload, claudeBranch } from './payload.ts';
 import { loadRules, previewUrl } from './projectRules.ts';
+import { appMapSection } from './appMap.ts';
 
 const HARD_DAILY_CAP = 20;
 const FIRE_TIMEOUT_MS = 20_000;
@@ -21,6 +22,17 @@ const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const ROLE: Record<string, string> = { current: '현재 화면', target: '목표·참고 디자인', error: '오류 화면', reference: '기타 참고', document: '문서·자료', prototype: '견본' };
+
+/** 점검 때 만든 앱 지도(v0.5.95). 없거나 못 읽으면 빈칸 */
+// deno-lint-ignore no-explicit-any
+async function loadAppMap(admin: any, ownerId: string, projectId: string): Promise<string> {
+  try {
+    const { data } = await admin.storage.from('attachments').download(`${ownerId}/projects/${projectId}/health.json`);
+    return data ? appMapSection(JSON.parse(await data.text()).appMap) : '';
+  } catch {
+    return '';
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -136,7 +148,8 @@ Deno.serve(async (req) => {
     assignment_id: a.id,
   });
 
-  const text = buildDevPayload({
+  const appMap = await loadAppMap(admin, user.id, String(task.project_id));
+  const textBase = buildDevPayload({
     bug: (spec.size_hint as { bug?: boolean } | null)?.bug,
     taskId: a.task_id,
     repo: project.repo,
@@ -161,6 +174,7 @@ Deno.serve(async (req) => {
     projectRules: await loadRules(userClient, task.project_id),
     previewUrl: previewUrl(project.preview_host, claudeBranch(a.task_id, String(item.id))),
   });
+  const text = appMap ? `${textBase}\n\n${appMap}` : textBase;
 
   const fail = async (message: string, status: number) => {
     await admin.from('agent_assignments').update({ dispatch_status: 'failed', actual_provider_status: message.slice(0, 300) }).eq('id', a.id);
