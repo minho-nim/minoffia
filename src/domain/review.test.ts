@@ -75,3 +75,19 @@ describe('결과 평가 2단계: 점수와 판정', () => {
     expect(p.length).toBeLessThan(62000);
   });
 });
+
+describe('지켜야 할 것 자동 검사(v0.5.76)', () => {
+  it('금지는 다시 개발, 주의는 경고만, 파일 규칙은 바뀐 파일로', async () => {
+    const { parseRuleChecks, ruleCheck } = await import('./review');
+    expect(parseRuleChecks(['금지: console.log', '주의 파일: CLAUDE.md', '버튼은 크게'])).toHaveLength(2);
+    const diff = 'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n+console.log(1)\ndiff --git a/CLAUDE.md b/CLAUDE.md\n--- /dev/null\n+++ b/CLAUDE.md\n+규칙';
+    const g = ruleCheck({ diff, testLog: 'ok', changeScope: '', rules: ['금지: console.log', '주의 파일: CLAUDE.md', '금지: debugger'] }).find((x) => x.id === 'rules')!;
+    expect(g.ok).toBe(false);
+    expect(g.blocking).toBe(true);
+    expect(g.detail).toContain('금지: console.log');
+    expect(g.detail).toContain('주의 파일: CLAUDE.md');
+    const warnOnly = ruleCheck({ diff, testLog: 'ok', changeScope: '', rules: ['주의: console.log'] }).find((x) => x.id === 'rules')!;
+    expect(warnOnly.blocking).toBe(false);
+    expect(ruleCheck({ diff, testLog: 'ok', changeScope: '', rules: ['버튼은 크게'] }).some((x) => x.id === 'rules')).toBe(false);
+  });
+});
