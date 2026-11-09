@@ -4719,3 +4719,50 @@ a {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* 서버실 불빛(v0.5.57) */
+.lamp-panel {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  max-width: 40%;
+}
+
+.lamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 12, 0.72);
+  color: #f4ead8;
+  font: 600 max(8px, 1.1cqw) / 1.3 var(--font-display, sans-serif);
+  cursor: pointer;
+}
+
+.lamp i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8a8a8a;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.lamp-ok i { background: #4cd07d; box-shadow: 0 0 6px #4cd07d; }
+.lamp-bad i { background: #ff5a4f; box-shadow: 0 0 6px #ff5a4f; }
+.lamp-wait i { background: #f2c14e; }
+
+.lamp-detail {
+  margin: 2px 0 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(20, 16, 12, 0.85);
+  color: #f4ead8;
+  font-size: max(9px, 1.1cqw);
+  line-height: 1.35;
+  text-align: right;
+}
