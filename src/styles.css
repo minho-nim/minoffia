@@ -2201,9 +2201,9 @@ a.project-site {
 
 .panel-foot {
   /* 위 선은 없앤다: 대화 상자 아랫선과 두 줄로 겹쳐 보이던 것(v0.5.11) */
-  padding-top: 6px;
-  margin-top: -6px;
-  margin-bottom: -6px;
+  /* v0.6.10 소유자 "위 공백 지워서 칸 안에 들어오게": 위 간격을 줄이고(판 사이 간격 14px를 거의 상쇄), 아래로 삐져나오지 않게 판 안 여백을 둔다 */
+  padding: 0 0 10px;
+  margin-top: -10px;
   line-height: 1.2;
 }
 
