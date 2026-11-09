@@ -24,3 +24,13 @@ describe('담당 바꾸기·한도 넘기기(v0.5.73)', () => {
     expect(p.mode_reason).toContain('담당 바꿈: W1 → Gemini 개발(Codex 한도)');
   });
 });
+
+describe('CI 실패 다시 맡기기(v0.5.75)', () => {
+  it('실패한 검사 이름을 적고 같은 커밋으로는 한 번만', async () => {
+    const { ciFixDone, ciFixWhy } = await import('./reassign');
+    const why = ciFixWhy({ headSha: 'abcdef1234', checks: [{ name: 'verify', conclusion: 'failure' }, { name: 'lint', conclusion: 'success' }] });
+    expect(why).toBe('CI 고치기 abcdef1: 실패한 검사 verify');
+    expect(ciFixDone(`작은 일 · 담당 바꿈: W1 → Claude(${why})`, 'abcdef1234')).toBe(true);
+    expect(ciFixDone('작은 일', 'abcdef1234')).toBe(false);
+  });
+});
