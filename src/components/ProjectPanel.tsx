@@ -300,7 +300,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               )}
               {renderHealth && p.repo && (
                 <details className="project-rules project-health" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHealthOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>점검·앱 지도</summary>
+                  <summary>앱 지도·점검</summary>
                   {healthOpen[p.id] && renderHealth(p)}
                 </details>
               )}

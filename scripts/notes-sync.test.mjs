@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { archifyNote, healthNote, homeNote, safeName, scopeCanvas, scopeLinks } from './notes-sync.mjs';
+import { appMapNote, archifyNote, healthNote, homeNote, safeName, scopeCanvas, scopeLinks } from './notes-sync.mjs';
 
 describe('옵시디언 노트 쌓기(v0.5.62)', () => {
   it('이름에서 문제 되는 글자를 뺀다', () => {
@@ -28,7 +28,20 @@ describe('옵시디언 노트 쌓기(v0.5.62)', () => {
     expect(scopeLinks('- [[App()]] - calls\n- [[밖]]\n- [[Inbox()|받은함]]', 'P/코드 그래프', names)).toBe('- [[P/코드 그래프/App()|App()]] - calls\n- [[밖]]\n- [[P/코드 그래프/Inbox()|받은함]]');
     expect(JSON.parse(scopeCanvas('{"nodes":[{"type":"file","file":"App().md"},{"type":"group"}]}', 'P/코드 그래프')).nodes[0].file).toBe('P/코드 그래프/App().md');
   });
-  it('홈 노트 표', () => {
-    expect(homeNote([{ name: 'P', health: true, graph: false, tasks: 2 }])).toContain('| P | [[P/점검\\|보기]] | - | 2 |');
+  it('홈 노트는 프로젝트별 앱 지도 링크만', () => {
+    const home = homeNote([{ name: 'P', map: true }, { name: 'Q', map: false }]);
+    expect(home).toContain('- [[P/앱 지도|P]]');
+    expect(home).toContain('- Q (아직 지도 없음)');
+  });
+  it('앱 지도 노트: 종류별 표, 표 글자 안의 | 는 바꾼다(v0.5.94)', () => {
+    const note = appMapNote('P', { checkedAt: '2026-11-09T10:00:00Z', appMap: { summary: '운동 기록 앱', parts: [
+      { name: '운동 기록 화면', kind: '화면', what: '세트|횟수 입력', folder: 'src/workout', files: [] },
+      { name: 'DB', kind: '데이터', what: '기록 저장', folder: '', files: ['supabase/x.sql'] },
+    ] } });
+    expect(note).toContain('> [!summary] 운동 기록 앱');
+    expect(note.indexOf('## 화면')).toBeLessThan(note.indexOf('## 데이터'));
+    expect(note).toContain('| **운동 기록 화면** | 세트/횟수 입력 | src/workout/ |');
+    expect(note).toContain('| **DB** | 기록 저장 | supabase/x.sql |');
+    expect(appMapNote('P', { checkedAt: '' })).toContain('아직 쉬운 지도가 없어요');
   });
 });
