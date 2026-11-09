@@ -12,6 +12,7 @@ import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
+import { siteUrl } from '../domain/types';
 import { startBlocker, waitingOn } from '../domain/concurrency';
 import { canApprove, canRequestRevision, prCheckPasses, resultWithoutBranch, type WorkflowView } from '../domain/workflow';
 import { WaitMap } from './WaitMap';
@@ -1302,6 +1303,14 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 {deployment?.ok ? (
                   <p className="ok-text">
                     운영 배포됨: release → {deployment.toSha.slice(0, 7)} ({new Date(deployment.createdAt).toLocaleString('ko-KR')}). Cloudflare 빌드가 끝나면 사이트에 반영됩니다.
+                    {siteUrl(project) && (
+                      <>
+                        {' '}
+                        <a href={siteUrl(project)!} target="_blank" rel="noopener noreferrer">
+                          운영 사이트 열기 ↗
+                        </a>
+                      </>
+                    )}
                   </p>
                 ) : (
                   <>
