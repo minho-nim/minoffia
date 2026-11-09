@@ -334,14 +334,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       const typing = document.activeElement === inputRef.current;
       const raw = typing ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
       const kb = raw > 40 ? raw : 0;
-      // 입력 중 전체 화면(v0.6.0): 보이는 화면의 위치·높이. 대화 상자가 이 칸에 딱 맞춰 떠서 스크롤해도 입력창이 키보드에 붙어 있다
-      root.style.setProperty('--vv-top', `${Math.round(vv.offsetTop)}px`);
-      root.style.setProperty('--vv-h', `${Math.round(vv.height)}px`);
       if (last >= 0 && Math.abs(kb - last) < 6 && kb !== 0 && last !== 0) return;
-      const opened = kb > 0 && last <= 0;
       last = kb;
       root.style.setProperty('--kb', `${kb}px`);
-      if (opened) requestAnimationFrame(() => listRef.current?.lastElementChild?.scrollIntoView({ block: 'end' }));
       // 키보드가 떠 있으면 아이폰 홈 막대 여백(safe-area)이 필요 없다(v0.5.93): 그 여백만큼 입력창 밑에 빈 띠가 생겼다
       root.classList.toggle('kb-open', kb > 0);
     };
@@ -356,12 +351,27 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     };
     let scrollTimer = 0;
     const onScroll = () => {
-      // 입력 중 전체 화면이면 바로 따라가고(화면 자체는 거의 안 움직임), 아니면 스크롤이 멈춘 뒤 한 번만 잰다
-      if (root.classList.contains('kb-open')) return setKb();
       window.clearTimeout(scrollTimer);
       scrollTimer = window.setTimeout(setKb, 160);
     };
     const onFocusChange = () => window.setTimeout(settle, 0);
+    // v0.6.1(소유자 "대화창은 그대로, 입력창만 키보드에"): 키보드가 뜬 채 대화를 손가락으로 끌어 스크롤하면 키보드를 내린다
+    // (메시지 앱처럼). 스크롤 중에는 키보드가 없으니 입력창이 흔들릴 일이 없다. 입력창 안에서 끄는 것은 그대로 둔다.
+    let touchY: number | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      const inForm = formRef.current?.contains(e.target as Node);
+      touchY = !inForm && document.activeElement === inputRef.current ? e.touches[0]?.clientY ?? null : null;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY === null) return;
+      const y = e.touches[0]?.clientY ?? touchY;
+      if (Math.abs(y - touchY) > 24) {
+        touchY = null;
+        inputRef.current?.blur();
+      }
+    };
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
     const onResize = () => {
       settle();
       if (document.activeElement === inputRef.current) revealEnd();
@@ -372,6 +382,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     document.addEventListener('focusin', onFocusChange);
     document.addEventListener('focusout', onFocusChange);
     return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
       document.removeEventListener('focusin', onFocusChange);
       document.removeEventListener('focusout', onFocusChange);
       vv.removeEventListener('resize', onResize);
@@ -380,8 +392,6 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       for (const t of timers) window.clearTimeout(t);
       if (frame) window.cancelAnimationFrame(frame);
       root.style.removeProperty('--kb');
-      root.style.removeProperty('--vv-top');
-      root.style.removeProperty('--vv-h');
       root.classList.remove('kb-open');
     };
   }, []);

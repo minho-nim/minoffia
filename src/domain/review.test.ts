@@ -107,6 +107,8 @@ describe('근거 없는 지적·꼭 완료 기준(v0.5.80)', () => {
     expect(mustCriterion('R1. (꼭) 버튼 16px')).toBe(true);
     expect(mustCriterion('- (필수) 버튼 16px')).toBe(true);
     expect(mustCriterion('(권장) 그림자')).toBe(false);
+    expect(mustCriterion('● 버튼 16px')).toBe(true);
+    expect(mustCriterion('◐ 그림자')).toBe(false);
     expect(mustCriterion('(좋음) 그림자')).toBe(false);
     const score = { parts: { acceptance: 40, spec: 25, constraints: 15, scope: 10, quality: 10 }, criteria: [{ text: 'R1 (꼭) 버튼 16px', status: 'unmet' as const, evidence: '' }], violations: [], fixes: [], summary: '' };
     const v = verdictOf([], score, 0);
