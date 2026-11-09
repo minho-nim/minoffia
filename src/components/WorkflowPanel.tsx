@@ -24,6 +24,7 @@ import type { AgentAssignment, AssigneePreference, Deployment, Gate, Intent, PrC
 import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
 import { addDesignWord, DESIGN_WORDS } from '../domain/designWords';
 import { DesignCheckView } from './DesignCheckView';
+import { SiteCheckView } from './SiteCheckView';
 import { PREF_LABEL, quotaHit, reassignTargets, staleStart } from '../domain/reassign';
 
 const AGENT_NAME: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
@@ -54,6 +55,8 @@ export interface WorkflowActions {
   reassign?: (task: Task, a: AgentAssignment, to: AssigneePreference, why: string) => Promise<boolean>;
   /** 디자인 자동 검사(v0.5.56): 미리보기 주소가 있는 결과만 */
   designCheck?: { load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>; start(taskId: string, revision: number): Promise<void> };
+  /** 화면 확인(v0.6.9): 실제 미리보기·운영 사이트 */
+  siteCheck?: { load(taskId: string): Promise<import('../domain/siteCheck').SiteChecks>; start(taskId: string, kind: 'preview' | 'production'): Promise<void> };
   /** 성공하면 true. 실패 이유는 App이 알림으로 보여준다. */
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   /** Gemini 무료 기획서 초안(서버가 새 버전으로 저장) */
@@ -1103,6 +1106,9 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                   </p>
                 );
               })()}
+              {actions.siteCheck && view.result.previewUrl && (
+                <SiteCheckView key={`p-${view.result.revision}`} kind="preview" canStart api={{ load: () => actions.siteCheck!.load(task.id), start: (k) => actions.siteCheck!.start(task.id, k) }} />
+              )}
               {view.result.diff && (
                 // 바뀐 곳 구조도(v0.5.24): Codex·Claude·Gemini 결과 모두 diff로 그린다(토큰 0)
                 <details className="wf-change-tree">
@@ -1369,6 +1375,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
             actions.deploy ? (
               <div className="wf-manual">
                 {deployment?.ok ? (
+                  <>
                   <p className="ok-text">
                     운영 배포됨: release → {deployment.toSha.slice(0, 7)} ({new Date(deployment.createdAt).toLocaleString('ko-KR')}). Cloudflare 빌드가 끝나면 사이트에 반영됩니다.
                     {siteUrl(project) && (
@@ -1380,6 +1387,10 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                       </>
                     )}
                   </p>
+                  {actions.siteCheck && siteUrl(project) && (
+                    <SiteCheckView key={`d-${deployment.toSha}`} kind="production" canStart api={{ load: () => actions.siteCheck!.load(task.id), start: (k) => actions.siteCheck!.start(task.id, k) }} />
+                  )}
+                  </>
                 ) : (
                   <>
                     <p className="small">

@@ -128,6 +128,11 @@ export interface OfficeStore {
     load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>;
     start(taskId: string, revision: number): Promise<void>;
   };
+  /** 화면 확인(v0.6.9): 실제 미리보기·운영 사이트를 찍어 본다(Supabase 모드에서만) */
+  siteCheck?: {
+    load(taskId: string): Promise<import('../domain/siteCheck').SiteChecks>;
+    start(taskId: string, kind: 'preview' | 'production'): Promise<void>;
+  };
   /** Gemini 개발 결과의 PR 자동 열기(v0.5.85, Supabase 모드에서만) */
   openPr?(taskId: string): Promise<void>;
   /** 옵시디언 노트 보관함(v0.5.62, Supabase 모드에서만): 코드 그래프 다시 만들기, 지운 프로젝트·업무 노트 지우기 */

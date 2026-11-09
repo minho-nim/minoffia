@@ -1,0 +1,49 @@
+# 화면 확인(v0.6.9): 서버 함수 site-check가 시작한다. 실제 사이트(승인 전 미리보기·지금 운영, 배포 뒤 운영)를 PC·휴대폰으로 찍고
+# 콘솔 오류·가로 넘침을 적어 1회용 업로드 주소로 올린다. AI 호출·쓰기 토큰 없음. 업로드 주소는 로그에 가린다.
+name: 화면 확인
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: '확인할 주소 JSON [{"key":"after","url":"https://…"}]'
+        required: true
+      uploads:
+        description: '파일별 1회용 업로드 주소 JSON {"result.json":"…"}'
+        required: true
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 업로드 주소 가리기
+        env:
+          UPLOADS: ${{ inputs.uploads }}
+        run: |
+          echo "$UPLOADS" | node -e "const m=JSON.parse(require('fs').readFileSync(0,'utf8'));for(const v of Object.values(m))console.log('::add-mask::'+v)"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 찍기
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i -s --no-audit --no-fund playwright@1.49.1 >/dev/null
+          npx -y playwright@1.49.1 install --with-deps chromium >/dev/null 2>&1
+          cp "$GITHUB_WORKSPACE/scripts/site-check.mjs" /tmp/pw/ && node /tmp/pw/site-check.mjs "$TARGETS" /tmp/site
+      - name: 올리기
+        if: always()
+        env:
+          UPLOADS: ${{ inputs.uploads }}
+        run: |
+          cd /tmp/site 2>/dev/null || { echo "올릴 것이 없습니다."; exit 0; }
+          echo "$UPLOADS" | node -e "
+            const fs=require('fs');const m=JSON.parse(fs.readFileSync(0,'utf8'));
+            (async()=>{for(const [f,u] of Object.entries(m)){ if(!/^[a-z]+(-[a-z]+)?\.(jpg|json)$/.test(f)||!fs.existsSync(f)) continue;
+              const r=await fetch(u,{method:'PUT',headers:{'Content-Type':f.endsWith('.json')?'application/json':'image/jpeg','x-upsert':'true'},body:fs.readFileSync(f)});
+              console.log(f, r.status);}})();"
