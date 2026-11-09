@@ -22,6 +22,7 @@ const RESEARCH_HARD_CAP = 50;
 const RESEARCH_DEFAULT_CAP = 20;
 /** 검색 연결 무료 한도가 있는 모델(GEMINI_RESEARCH_MODEL로 바꿈) */
 const RESEARCH_MODEL = 'gemini-2.5-flash';
+const RESEARCH_FALLBACKS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash'];
 
 /** 검색 연결 답의 출처(groundingMetadata.groundingChunks[].web) */
 function sourcesOf(data: unknown, into: Map<string, string>) {
@@ -228,7 +229,8 @@ Deno.serve(async (req) => {
   const baseModel = env('GEMINI_MODEL') || DEFAULT_MODEL;
   // 조사(v0.5.5): 기본 모델은 Google 검색 연결 무료 한도가 없어 늘 429였다(일반 질문은 같은 키로 바로 됨, 2026-11-03 기록).
   // 검색은 무료 검색 한도가 있는 모델(GEMINI_RESEARCH_MODEL, 기본 gemini-2.5-flash)로 먼저 묻고, 안 되면 기본 모델로 한 번 더.
-  const models = research ? [...new Set([env('GEMINI_RESEARCH_MODEL') || RESEARCH_MODEL, baseModel])] : [baseModel];
+  // v0.6.3: 검색 무료 한도가 남아 있을 만한 모델을 차례로(실패한 시도마다 research·ok=false 한 줄)
+  const models = research ? [...new Set([env('GEMINI_RESEARCH_MODEL') || RESEARCH_MODEL, ...RESEARCH_FALLBACKS, baseModel])] : [baseModel];
   let model = baseModel;
   const stream = body.stream === true;
   const routeProjects = Array.isArray(body.route?.projects) ? body.route!.projects!.filter((p) => typeof p === 'string').slice(0, 50).map((p) => p.slice(0, 60)) : null;
@@ -315,6 +317,8 @@ Deno.serve(async (req) => {
         return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
       }
       last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
+      // 웹 조사는 모델·키마다 실패 이유를 남긴다(v0.6.3 소유자 "검색 한도가 실제로 걸린 건지"): 마지막 실패만 남아 원인을 몰랐다
+      if (research) await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'research', key_slot: slot, ok: false, http_status: res.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
       // 요청 자체가 잘못된 경우(400·404)는 B로 넘겨도 같으므로 멈춘다. 한도(429)·인증·서버 오류만 B를 쓴다.
       if (res.status === 400 || res.status === 404) break;
     }
