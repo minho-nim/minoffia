@@ -4723,13 +4723,12 @@ a {
 /* 서버실 불빛(v0.5.59): 터미널실 서버 랙 하나에 서비스 하나 */
 .rack {
   position: absolute;
-  z-index: 7;
+  /* 방 이름표(z 5)보다 아래: 방 이름을 가리지 않는다(v0.5.61) */
+  z-index: 4;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* 불빛과 이름표를 랙 한가운데에(방 이름표에 가리지 않게, v0.5.60) */
-  justify-content: center;
-  gap: 2px;
+  justify-content: flex-start;
   padding: 0;
   border: 0;
   border-radius: 2px;
@@ -4743,20 +4742,29 @@ a {
 }
 
 .rack i {
-  width: max(5px, 0.9cqw);
-  height: max(5px, 0.9cqw);
+  display: inline-block;
+  width: max(5px, 0.8cqw);
+  height: max(5px, 0.8cqw);
   border-radius: 50%;
   background: #8a8a8a;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
 
+/* 이름표는 랙(가구) 위가 아니라 랙 바로 아래 바닥에, 랙 가운데 맞춤 */
 .rack span {
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
   padding: 0 2px;
-  text-align: center;
   border-radius: 2px;
   background: rgba(20, 16, 12, 0.8);
   color: #f4ead8;
   font: 700 max(6px, 0.95cqw) / 1.2 var(--font-display, sans-serif);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .lamp-ok i { background: #4cd07d; box-shadow: 0 0 6px #4cd07d; }
