@@ -91,3 +91,24 @@ describe('지켜야 할 것 자동 검사(v0.5.76)', () => {
     expect(ruleCheck({ diff, testLog: 'ok', changeScope: '', rules: ['버튼은 크게'] }).some((x) => x.id === 'rules')).toBe(false);
   });
 });
+
+describe('근거 없는 지적·꼭 완료 기준(v0.5.80)', () => {
+  it('근거 없는 충족은 일부만, 근거 없는 위반은 고칠 점으로', async () => {
+    const { parseScore } = await import('./review');
+    const s = parseScore(JSON.stringify({ parts: { acceptance: 30, spec: 20, constraints: 15, scope: 10, quality: 10 },
+      criteria: [{ text: '(꼭) 버튼 16px', status: 'met', evidence: '' }, { text: '(좋음) 그림자', status: 'met', evidence: 'src/a.tsx:12' }],
+      violations: ['범위 밖 파일 수정', '`CLAUDE.md` 추가'], fixes: [] }))!;
+    expect(s.criteria.map((c) => c.status)).toEqual(['partial', 'met']);
+    expect(s.violations).toEqual(['`CLAUDE.md` 추가']);
+    expect(s.fixes).toContain('(근거 없음) 범위 밖 파일 수정');
+  });
+  it('(꼭) 기준이 미충족이면 점수와 상관없이 다시 개발', async () => {
+    const { mustCriterion, verdictOf } = await import('./review');
+    expect(mustCriterion('R1. (꼭) 버튼 16px')).toBe(true);
+    expect(mustCriterion('(좋음) 그림자')).toBe(false);
+    const score = { parts: { acceptance: 40, spec: 25, constraints: 15, scope: 10, quality: 10 }, criteria: [{ text: 'R1 (꼭) 버튼 16px', status: 'unmet' as const, evidence: '' }], violations: [], fixes: [], summary: '' };
+    const v = verdictOf([], score, 0);
+    expect(v.verdict).toBe('redo');
+    expect(v.reasons[0]).toContain('꼭 지킬 완료 기준 미충족');
+  });
+});
