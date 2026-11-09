@@ -38,10 +38,10 @@ interface Mover {
 const SPEED = 22; // 논리 픽셀/초. 천천히 걷는다.
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
 /** 터미널실 배경 서버 랙(2~4번째) 가운데 x와 크기(논리 좌표) */
-const RACK_X = [235.7, 250.6, 265.8];
-const RACK_W = 13;
-const RACK_TOP = 15;
-const RACK_H = 29;
+const RACK_X = [235.0, 250.5, 265.7];
+const RACK_W = 14;
+const RACK_TOP = 14.6;
+const RACK_H = 29.6;
 const RACK_TAG: Record<string, string> = { github: 'GH', cloudflare: 'CF', supabase: 'SB' };
 
 export function OfficeView({ tasks, assignments = [], selected, onSelect, workflow, onOpenTask, leave = [], lamps = [] }: Props) {
