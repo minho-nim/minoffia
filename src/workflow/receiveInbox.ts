@@ -76,6 +76,14 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
       if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `${fromGemini ? 'Gemini' : 'Claude'}가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
       continue;
     }
+    // v0.5.88: 개발이 끝까지 못 가서 바뀐 것이 하나도 없는 결과는 결과 패키지로 만들지 않고 작업을 '중단'으로 표시한다.
+    // (그러지 않으면 작업이 계속 '진행 중'으로 남아 다시 하기·넘기기를 못 했다) 업무 카드에서 다시 시작하거나 다른 AI로 넘긴다.
+    if (!item.diff.trim()) {
+      const note = (item.remainingIssues || item.summary || '바뀐 것이 없음').slice(0, 200);
+      await store.updateAssignment({ ...a, dispatchStatus: 'failed', actualProviderStatus: note, lastVerifiedAt: new Date().toISOString() }).catch(() => undefined);
+      if (await store.markResultInbox(item.id, 'invalid', '바뀐 것이 없는 결과(개발 실패)')) say('error', `${fromGemini ? 'Gemini' : 'Claude'} 개발이 끝까지 못 갔어요(${task.title}). 업무 카드에서 다시 시작하거나 다른 AI로 넘기세요.`);
+      continue;
+    }
     const summary = [
       maskSecrets(item.summary),
       item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
