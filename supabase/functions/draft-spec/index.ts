@@ -5,6 +5,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { autoTitle, DRAFT_SYSTEM, parseDraft } from './draft.ts';
 import { loadRules, rulesSection, saveRules } from './projectRules.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
+import { codePaths, NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -39,6 +40,28 @@ async function callGemini(key: string, model: string, text: string) {
   return { status: res.status, text: parts.map((p) => p.text ?? '').join('').trim(), message: (data as { error?: { message?: string } }).error?.message ?? '', tokens: tokensOf(data) };
 }
 
+const GH = (token: string, accept: string) => ({ Authorization: `Bearer ${token}`, Accept: accept, 'User-Agent': 'minoffia', 'X-GitHub-Api-Version': '2022-11-28' });
+
+/** 저장소 코드 파일 이름 목록(실패하면 빈 목록) */
+async function repoFiles(repo: string): Promise<string[]> {
+  const token = env('GITHUB_REPO_TOKEN');
+  if (!token) return [];
+  const res = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers: GH(token, 'application/vnd.github+json'), signal: AbortSignal.timeout(15_000) }).catch(() => null);
+  if (!res?.ok) return [];
+  const data = (await res.json().catch(() => ({}))) as { tree?: { path?: string; type?: string }[] };
+  return codePaths((data.tree ?? []).filter((t) => t.type === 'blob' && t.path).map((t) => t.path!));
+}
+
+/** 요청한 파일을 기본 브랜치에서 읽는다(너무 크면 null) */
+async function readRepoFile(repo: string, path: string): Promise<string | null> {
+  const token = env('GITHUB_REPO_TOKEN');
+  if (!token) return null;
+  const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, { headers: GH(token, 'application/vnd.github.raw'), signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  if (!res?.ok) return null;
+  const text = await res.text();
+  return text.length > 200_000 ? null : text;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'POST만 받습니다.' });
@@ -66,7 +89,7 @@ Deno.serve(async (req) => {
   if (!text || text.length > MAX_TEXT) return reply(400, { ok: false, error: `기획 요청은 1~${MAX_TEXT}자여야 합니다.` });
 
   // RLS를 거쳐 내 업무만. 원문은 DB의 것을 쓴다.
-  const { data: task } = await userClient.from('tasks').select('id, project_id, title, description, user_original_text').eq('id', body.taskId ?? '').maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('id, project_id, title, description, user_original_text, projects(repo)').eq('id', body.taskId ?? '').maybeSingle();
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
@@ -78,6 +101,12 @@ Deno.serve(async (req) => {
   // v0.4.57: 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것을 기획 요청 끝에 붙인다.
   const rules = rulesSection(await loadRules(userClient, task.project_id), '## 이 프로젝트에서 지켜야 할 것 (어기지 않는다)');
   const prompt = rules.length ? `${text}\n\n${rules.join('\n')}` : text;
+  // 파일 요청(v0.5.67): 저장소가 있으면 코드 파일 이름 목록을 함께 주고, 초안 대신 필요한 파일(최대 3개)을 요청할 수 있게 한다.
+  // 요청하면 서버가 GitHub에서 읽어 딱 한 번만 다시 묻는다. MinLab 저장소는 읽지 않는다.
+  const repo = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
+  const canRead = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) && repo.toLowerCase() !== 'minho-nim/minlab';
+  const files = canRead ? await repoFiles(repo) : [];
+  const firstAsk = files.length ? `${prompt}\n\n[저장소 코드 파일 목록(이름만)]\n${files.join('\n')}\n\n${NEED_FILES_ASK}` : prompt;
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   let last = { status: 0, message: '' };
   // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
@@ -90,7 +119,13 @@ Deno.serve(async (req) => {
     if (!key) continue;
     let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
     try {
-      r = await callGemini(key, model, prompt);
+      r = await callGemini(key, model, firstAsk);
+      const need = files.length && r.status === 200 && !parseDraft(r.text) ? parseNeedFiles(r.text) : null;
+      if (need) {
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'plan', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: firstAsk.length, answer_chars: r.text.length, ...(r.tokens ?? {}) });
+        const got = await Promise.all(need.filter((p) => files.includes(p)).map(async (path) => ({ path, text: await readRepoFile(repo, path) })));
+        r = await callGemini(key, model, withFiles(prompt, got.length ? got : need.map((path) => ({ path, text: null }))));
+      }
     } catch (e) {
       r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
     }
