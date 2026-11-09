@@ -370,7 +370,8 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                         value={draft}
                         onChange={(e) => setRuleDraft((d) => ({ ...d, [p.id]: e.target.value }))}
                         maxLength={200}
-                        placeholder="직접 더하기(선택)"
+                        placeholder="직접 더하기(예: 금지: console.log · 금지 파일: CLAUDE.md)"
+                        title="'금지: 글자'·'금지 파일: 경로'로 쓰면 AI 없이 결과를 자동 검사해요(어기면 다시 개발). '주의:'는 경고만."
                         aria-label={`${p.name}에서 지켜야 할 것 더하기`}
                       />
                       <button type="submit" className="btn btn-small btn-ghost" disabled={draft.trim().length < 2}>
