@@ -172,7 +172,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
             {popup === 'brief' ? (
               <div className="map-brief">
                 <p className="appmap-title">간략 지도</p>
-                {report?.appMap ? <AppMapView map={report.appMap} /> : <p className="muted small">간략 지도는 다음 점검 때 만들어져요. '다시 점검'을 눌러 주세요.</p>}
+                {report?.appMap ? <AppMapView map={report.appMap} /> : <p className="muted small">{report?.files === 0 ? '코드 파일이 없는 저장소라 지도를 만들 수 없어요.' : "간략 지도는 다음 점검 때 만들어져요. '다시 점검'을 눌러 주세요."}</p>}
               </div>
             ) : mapHtml ? (
               <iframe className="archify-frame" sandbox="allow-scripts" srcDoc={mapHtml} title="자세한 앱 지도(floorplan)" />
