@@ -73,7 +73,9 @@ export const DRAFT_SYSTEM = [
 
 const INTENTS: DraftIntent[] = ['question', 'change_request', 'asset_request', 'ambiguous'];
 
-const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+// Gemini가 글 대신 목록(["…","…"])으로 보내도 받는다(v0.5.68: 완료 기준이 목록으로 와서 빈칸으로 저장되던 문제)
+const str = (v: unknown, max: number) =>
+  (typeof v === 'string' ? v : Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).map((x) => `- ${String(x).trim().replace(/^[-*]\s*/, '')}`).join('\n') : '').trim().slice(0, max);
 
 /** Gemini 응답(JSON, 코드 블록으로 감싸였을 수 있음)을 초안으로. 틀리면 null. */
 export function parseDraft(text: string): SpecDraft | null {
