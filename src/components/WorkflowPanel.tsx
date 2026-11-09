@@ -1267,7 +1267,9 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 </>
               ) : (
                 <p className="small">
-                  이제 Claude에게 "결과 v{view.result!.revision} 올려줘"라고 하세요. PR 주소를 기록해 두면 C 단계에서 씁니다.
+                  {view.result!.source === 'gemini_actions_auto'
+                    ? 'Gemini 결과는 PR을 자동으로 열어요(1분 안팎). PR이 생기면 아래에 주소와 검사(CI) 결과가 보여요.'
+                    : `이제 Claude에게 "결과 v${view.result!.revision} 올려줘"라고 하세요. PR 주소를 기록해 두면 C 단계에서 씁니다.`}
                 </p>
               )}
               {task.prUrl ? (

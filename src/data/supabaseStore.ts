@@ -610,6 +610,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('key-status', {});
       return Array.isArray(data.keys) ? (data.keys as import('./store').KeyStatus[]) : [];
     },
+    async openPr(taskId) {
+      await invoke('open-pr', { taskId });
+    },
     notes: {
       async graph(projectId) {
         await invoke('notes', { action: 'graph', projectId });
