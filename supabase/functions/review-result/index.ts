@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
   };
 
   // 1단계: 규칙 검사(토큰 0). 막히면 AI를 부르지 않는다.
-  const gates = ruleCheck({ diff: String(result.diff ?? ''), testLog: String(result.test_log ?? ''), changeScope: String(spec.change_scope ?? '') });
+  const gates = ruleCheck({ diff: String(result.diff ?? ''), testLog: String(result.test_log ?? ''), changeScope: String(spec.change_scope ?? ''), rules: projectRules });
   let score: Score | null = null;
   let judge = '규칙';
   if (!gates.some((g) => g.blocking && !g.ok)) {

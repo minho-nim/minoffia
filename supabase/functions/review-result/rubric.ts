@@ -20,7 +20,7 @@ export const PART_LABEL: Record<Part, string> = {
 };
 
 export interface Gate {
-  id: 'tests' | 'diff' | 'secrets' | 'risky' | 'scope';
+  id: 'tests' | 'diff' | 'secrets' | 'risky' | 'scope' | 'rules';
   label: string;
   ok: boolean;
   /** 실패하면 점수를 매기지 않고 다시 개발 */
@@ -69,7 +69,19 @@ function scopePaths(changeScope: string): string[] {
 }
 
 /** 1단계 규칙 검사(토큰 0) */
-export function ruleCheck(input: { diff: string; testLog: string; changeScope: string }): Gate[] {
+/** AI 없이 검사하는 '지켜야 할 것'(v0.5.76, hookify 참고). 규칙 글이 이 모양이면 결과 diff로 바로 검사한다.
+ *  "금지: 글자"(추가한 줄에 있으면 다시 개발) · "주의: 글자"(있으면 경고만) · "금지 파일: 경로"·"주의 파일: 경로"(그 파일을 바꾸면) */
+export type RuleCheck = { block: boolean; kind: 'text' | 'file'; value: string; rule: string };
+export function parseRuleChecks(rules: string[]): RuleCheck[] {
+  const out: RuleCheck[] = [];
+  for (const rule of rules) {
+    const m = /^\s*(금지|주의)\s*(파일)?\s*[:：]\s*(.+?)\s*$/.exec(rule);
+    if (m && m[3].length <= 200) out.push({ block: m[1] === '금지', kind: m[2] ? 'file' : 'text', value: m[3].replace(/^[`'"]|[`'"]$/g, ''), rule });
+  }
+  return out.slice(0, 30);
+}
+
+export function ruleCheck(input: { diff: string; testLog: string; changeScope: string; rules?: string[] }): Gate[] {
   const { diff, testLog, changeScope } = input;
   const added = diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
   const files = changedFiles(diff);
@@ -116,6 +128,19 @@ export function ruleCheck(input: { diff: string; testLog: string; changeScope: s
     blocking: false,
     detail: !scope.length ? '기획서에 경로 범위가 없어 AI가 판단해요.' : outside.length ? `범위 밖 파일: ${outside.slice(0, 6).join(', ')}` : '범위 안',
   });
+
+  const checks = parseRuleChecks(input.rules ?? []);
+  if (checks.length) {
+    const hits = checks.filter((c) => (c.kind === 'file' ? files.some((f) => f === c.value || f.endsWith(`/${c.value}`)) : added.some((l) => l.includes(c.value))));
+    const blocked = hits.filter((c) => c.block);
+    gates.push({
+      id: 'rules',
+      label: '지켜야 할 것(자동 검사)',
+      ok: !hits.length,
+      blocking: blocked.length > 0,
+      detail: hits.length ? `어긴 규칙: ${hits.map((c) => c.rule).slice(0, 5).join(' / ')}` : `${checks.length}개 규칙 지킴`,
+    });
+  }
   return gates;
 }
 
