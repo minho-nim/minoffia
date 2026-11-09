@@ -37,7 +37,7 @@ import { projectChanges } from './domain/fileTree';
 import { checkSmallTask, smallPlanText } from './domain/smallTask';
 import { mentionedAssignee } from './domain/mention';
 import { maskSecrets } from './domain/maskSecrets';
-import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
+import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, resultWithoutBranch, sha256Hex } from './domain/workflow';
 import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
@@ -766,6 +766,8 @@ export function App() {
           const v = deriveWorkflow(t, snap.workflow);
           if (!v.bApproved || v.cApproved) continue;
           if (!t.prUrl && !(v.result?.source === 'claude_session_auto' || v.result?.source === 'claude_manual' || v.result?.source === 'gemini_actions_auto')) continue;
+          // 작업 브랜치를 못 올린 Gemini 결과는 PR이 생길 수 없다(v0.5.74: 1분마다 409가 쌓이던 것)
+          if (!t.prUrl && resultWithoutBranch(v.result)) continue;
           const c = latestPrCheck(t, snap.workflow);
           if (c && (c.ciState === 'success' || c.ciState === 'failure' || c.prState === 'closed')) continue;
           if (Date.now() - (autoPrAt.current.get(t.id) ?? 0) < 60_000) continue;
