@@ -719,6 +719,19 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                       : null;
               const eOk = view.eApproved(a.workItemId);
               const eCheck = canApprove(view, 'E', a.workItemId);
+              // 실행 승인(E) 기록은 자동·수동 모두 같다. 승인 뒤 Claude·Gemini는 앱이 바로 자동 시작하고, Codex는 여기서 Linear로 맡긴다.
+              const approveE = () =>
+                run(async () => {
+                  const ok = await actions.decide(task, 'E', view.plan!.planRevision, 'approved', a.workItemId, {
+                    assignee: a.assignee,
+                    mode: 'manual_handoff',
+                    plan_revision: view.plan!.planRevision,
+                    spec_revision: view.spec!.revision,
+                  });
+                  if (ok && a.assignee === 'codex' && auto) await auto.start({ ...a, dispatchStatus: 'ready' }, false);
+                  return ok;
+                });
+              const autoWho = a.assignee === 'claude' ? 'Claude' : a.assignee === 'codex' ? 'Codex' : 'Gemini';
               return (
                 <li key={a.id} className="wf-item">
                   <div className="wf-item-head">
@@ -761,7 +774,15 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                           </button>
                         </span>
                       ) : (
-                        !eOk && <p className="muted small">{auto.note}</p>
+                        !eOk && (
+                          <>
+                            {/* v0.5.69(소유자 "승인 버튼이 수동밖에 없네"): 자동 길이 있으면 이 버튼이 실행 승인이다 */}
+                            <button type="button" className="btn btn-small btn-primary" disabled={busy || !eCheck.ok} title={eCheck.ok ? auto.note : eCheck.reason} onClick={() => void approveE()}>
+                              실행 승인 → {autoWho} 자동 시작
+                            </button>
+                            <p className="muted small">{auto.note}</p>
+                          </>
+                        )
                       )}
                       {a.dispatchStatus === 'failed' && a.actualProviderStatus && a.actualProviderStatus !== 'unknown' && <p className="task-error small">{a.actualProviderStatus.replace(/^linear: /, 'Codex: ')}</p>}
                       {a.assignee === 'codex' && a.dispatchStatus === 'started' && a.actualProviderStatus?.startsWith('linear') && (
@@ -803,25 +824,8 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                       <b>수동 인계(임시)</b> — 실행 승인 후 지시서를 복사해 {a.assignee === 'codex' ? 'Codex Cloud 웹' : '해당 도구'}에서 직접 시작합니다.
                     </p>
                     {!eOk ? (
-                      <button
-                        type="button"
-                        className="btn btn-small btn-ghost"
-                        disabled={busy || !eCheck.ok}
-                        onClick={() =>
-                          void run(async () => {
-                            const ok = await actions.decide(task, 'E', view.plan!.planRevision, 'approved', a.workItemId, {
-                              assignee: a.assignee,
-                              mode: 'manual_handoff',
-                              plan_revision: view.plan!.planRevision,
-                              spec_revision: view.spec!.revision,
-                            });
-                            // Codex는 실행 승인하면 바로 Linear로 맡긴다(v0.5.2, Claude·Gemini 자동 시작과 같게). 안 되면 지시서 복사로.
-                            if (ok && a.assignee === 'codex' && auto) await auto.start({ ...a, dispatchStatus: 'ready' }, false);
-                            return ok;
-                          })
-                        }
-                      >
-                        실행 승인: 수동 인계로 진행
+                      <button type="button" className="btn btn-small btn-ghost" disabled={busy || !eCheck.ok} onClick={() => void approveE()}>
+                        {auto ? '자동 시작이 안 될 때만: 수동 인계로 승인' : '실행 승인: 수동 인계로 진행'}
                       </button>
                     ) : (
                       <>
