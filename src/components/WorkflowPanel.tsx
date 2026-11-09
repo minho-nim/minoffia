@@ -22,7 +22,7 @@ import type { AgentAssignment, AssigneePreference, Deployment, Gate, Intent, PrC
 import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
 import { addDesignWord, DESIGN_WORDS } from '../domain/designWords';
 import { DesignCheckView } from './DesignCheckView';
-import { PREF_LABEL, quotaHit, reassignTargets } from '../domain/reassign';
+import { PREF_LABEL, quotaHit, reassignTargets, staleStart } from '../domain/reassign';
 
 const AGENT_NAME: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
 import { OFFICE_REPOS } from '../domain/smallTask';
@@ -761,6 +761,18 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                           </button>
                         );
                       })}
+                    </div>
+                  )}
+                  {/* v0.5.84 '지시 받음' 확인: 시작했는데 소식이 없으면 경고와 다른 AI로 넘기기 */}
+                  {actions.reassign && staleStart(a) && (
+                    <div className="wf-reassign is-quota">
+                      <p className="small">⚠️ {staleStart(a)}</p>
+                      <span className="small muted">다른 AI로 넘기기:</span>
+                      {reassignTargets(a.assignee, OFFICE_REPOS.includes((project?.repo ?? '').toLowerCase())).map((to) => (
+                        <button key={to} type="button" className="chip" disabled={busy} onClick={() => void run(() => actions.reassign!(task, a, to, `${AGENT_NAME[a.assignee] ?? a.assignee} 소식 없음`))}>
+                          {PREF_LABEL[to]}
+                        </button>
+                      ))}
                     </div>
                   )}
                   {actions.reassign && a.dispatchStatus !== 'completed' && a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting' && (
