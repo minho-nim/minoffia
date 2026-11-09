@@ -345,7 +345,8 @@ jobs:
               'test_log': read('/tmp/test.log', 90000) or '(시험 로그 없음)',
               'remaining_issues': '' if ok else 'Gemini 개발 워크플로가 끝까지 성공하지 못했습니다(시험 실패·키 한도·비밀값 검사 등). 작업 브랜치는 올리지 않았습니다.',
               'branch': os.environ['BRANCH'] if pushed else '',
-              'preview_pushed': False,
+              # 작업 브랜치를 올렸으면 프로젝트 미리보기(Cloudflare 등 브랜치 미리보기)로 주소를 붙인다(v0.5.77)
+              'preview_pushed': pushed,
               'project_rules': [],
               'screenshots': shots(),
           }

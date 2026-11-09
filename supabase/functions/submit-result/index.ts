@@ -63,7 +63,8 @@ Deno.serve(async (req) => {
   // v0.4.57: 세션이 작업 브랜치를 미리보기용으로 push했으면, 프로젝트의 미리보기 주소로 링크를 계산해 붙인다.
   const branch = text(r.branch, LIMITS.branch);
   let preview = '';
-  if (r.preview_pushed === true && branch.startsWith('ai/claude/')) {
+  // v0.5.77: Gemini 개발(GitHub Actions)이 올린 ai/gemini/ 브랜치도 미리보기 주소를 붙인다
+  if (r.preview_pushed === true && (branch.startsWith('ai/claude/') || branch.startsWith('ai/gemini/'))) {
     const { data: t } = await admin.from('tasks').select('projects(preview_host)').eq('id', ticket.task_id).maybeSingle();
     preview = previewUrl((t?.projects as unknown as { preview_host: string | null } | null)?.preview_host, branch);
   }
