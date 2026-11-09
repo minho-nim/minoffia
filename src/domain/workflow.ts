@@ -77,7 +77,10 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
   const result = latest(d.results, (r) => r.revision);
   /** 수정을 요청한 결과는 GitHub 업로드 대상이 아니다. 새 결과를 기다린다. */
   const resultRevised = !!result && d.revisionRequests.some((r) => r.resultRevision === result.revision);
-  const bApproved = result ? approved(d.approvals, 'B', result.revision) : false;
+  // 다시 하기(v0.5.85): 결과를 낸 계획보다 새 계획이 있으면 그 결과는 지난 것이다. 지난 결과의 올리기 승인은 단계에 쓰지 않는다
+  // (그러지 않으면 새로 개발 중인데도 '배포 승인 대기'로 보였다).
+  const superseded = !!result && !!plan && result.planRevision != null && result.planRevision < plan.planRevision;
+  const bApproved = result && !superseded ? approved(d.approvals, 'B', result.revision) : false;
   const cApproved = result ? bApproved && approved(d.approvals, 'C', result.revision) : false;
   const eApproved = (id: string) => (plan ? approved(d.approvals, 'E', plan.planRevision, id) : false);
   const prototypeFirst = plan?.plan.development_mode === 'prototype_first';
@@ -101,7 +104,7 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
       if (task.dispatch.state === 'failed') return 'integration_blocked';
       return sentAfter ? 'dispatching' : 'pm_queued';
     }
-    if (result && !resultRevised) return waitingWork.length ? 'executing' : 'github_approval_pending';
+    if (result && !resultRevised && !superseded) return waitingWork.length ? 'executing' : 'github_approval_pending';
     if (!planCurrent) {
       if (task.dispatch.state === 'failed') return 'integration_blocked';
       if (task.dispatch.state === 'dispatching' || task.dispatch.state === 'dispatched') return 'dispatching';
