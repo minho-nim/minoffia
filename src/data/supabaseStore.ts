@@ -661,6 +661,12 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('repo-tree', { projectId });
       return Array.isArray(data.paths) ? (data.paths as unknown[]).filter((x): x is string => typeof x === 'string') : [];
     },
+    async pagesUrls(projectIds) {
+      const data = await invoke('repo-tree', { action: 'pages', projectIds });
+      const out: Record<string, string> = {};
+      for (const [id, url] of Object.entries((data.pages ?? {}) as Record<string, unknown>)) if (typeof url === 'string' && url.startsWith('https://')) out[id] = url;
+      return out;
+    },
     async draftPlan(taskId) {
       const data = await invoke('draft-plan', { taskId });
       return { plan: String(data.plan ?? ''), specRevision: Number(data.specRevision) };
