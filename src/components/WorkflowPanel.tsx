@@ -13,7 +13,7 @@ import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
 import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { startBlocker, waitingOn } from '../domain/concurrency';
-import { canApprove, canRequestRevision, prCheckPasses, type WorkflowView } from '../domain/workflow';
+import { canApprove, canRequestRevision, prCheckPasses, resultWithoutBranch, type WorkflowView } from '../domain/workflow';
 import { WaitMap } from './WaitMap';
 import { FileTreeView } from './FileTreeView';
 import { diffStats } from '../domain/fileTree';
@@ -749,6 +749,20 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     <span className="pill">{DISPATCH_STATUS_LABEL[a.dispatchStatus]}</span>
                   </div>
                   {item?.goal && <p className="small">{item.goal}</p>}
+                  {/* v0.5.74: 끝났지만 브랜치를 못 올린(개발 실패) 결과면 같은 AI로 다시 하거나 다른 AI로 넘긴다 */}
+                  {actions.reassign && a.dispatchStatus === 'completed' && resultWithoutBranch(view.result) && view.result?.workItemId === a.workItemId && (
+                    <div className="wf-reassign is-quota">
+                      <p className="small">⚠️ 개발이 끝까지 못 가서 작업 브랜치가 올라가지 않았어요. 다시 해야 해요.</p>
+                      {(['same', ...reassignTargets(a.assignee, OFFICE_REPOS.includes((project?.repo ?? '').toLowerCase()))] as const).map((to) => {
+                        const pref: AssigneePreference = to === 'same' ? (a.assignee === 'claude' ? 'claude_support' : a.assignee === 'codex' ? 'codex_primary' : 'gemini_dev') : to;
+                        return (
+                          <button key={to} type="button" className={`chip${to === 'same' ? ' chip-strong' : ''}`} disabled={busy} onClick={() => void run(() => actions.reassign!(task, a, pref, '개발이 끝까지 못 감, 다시 하기'))}>
+                            {to === 'same' ? `다시 하기(${AGENT_NAME[a.assignee] ?? a.assignee})` : `${PREF_LABEL[to]}로 다시 하기`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {actions.reassign && a.dispatchStatus !== 'completed' && a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting' && (
                     <div className={`wf-reassign${quotaHit(a) ? ' is-quota' : ''}`}>
                       {quotaHit(a) && <p className="small">⚠️ {AGENT_NAME[a.assignee] ?? a.assignee} 한도에 걸린 것 같아요. 다른 AI로 넘길 수 있어요.</p>}
