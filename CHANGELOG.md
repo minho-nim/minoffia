@@ -1,5 +1,11 @@
 # 변경 기록
 
+## Context7로 최신 사용법 확인(v0.5.79) — 2026-11-09
+
+- 개발 습관에 '라이브러리·API 사용법이 확실하지 않으면 ctx7(고정 0.8.1)로 최신 문서를 확인, 안 되면 건너뜀'을 넣었다(복사본 4곳). Gemini 개발 워크플로는 CONTEXT7_API_KEY(Actions secret)가 있으면 쓴다.
+- 확인: 키 없이 부르면 'Monthly quota exceeded'(무료 키 필요). 소유자가 context7.com에서 무료 키를 만들어 Actions secret과 Claude 환경 네트워크 비밀값에 넣어야 실제로 동작한다.
+- 배포: dispatch-claude, dispatch-claude-dev, dispatch-gemini-dev, draft-plan.
+
 ## Gemini 결과에도 '확인 못 한 것·위험'(v0.5.78) — 2026-11-09
 
 - ponytail 참고: Claude·Codex 지시서에는 이미 있던 '결과 끝에 안 한 것·확인 못 한 것·위험' 줄을 Gemini 개발 지시문에도 넣었다(요약 마지막 줄).
