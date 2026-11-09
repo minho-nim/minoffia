@@ -2209,8 +2209,12 @@ a.project-site {
 
 /* 화면 지우기: 입력창 안 첨부 버튼 옆(v0.5.9, 늘 보이게) */
 .inbox-tools .inbox-clear {
-  margin-right: auto;
-  margin-left: 10px;
+  order: 1;
+  min-width: 0;
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------- 로그인/부팅 ---------- */
@@ -2939,7 +2943,18 @@ a.project-site {
 .inbox-tools {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* 첨부·마이크는 왼쪽에 붙이고, 기준·보내기는 오른쪽에(v0.6.2 소유자) */
+  justify-content: flex-start;
+  gap: 6px;
+}
+.inbox-tools .criteria-toggle {
+  order: 2;
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.inbox-tools .inbox-send {
+  order: 3;
 }
 
 .inbox-attach,
