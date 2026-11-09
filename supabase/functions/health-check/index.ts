@@ -1,5 +1,5 @@
-// 앱 건강 검진·기본 지도(floorplan 1단계, v0.5.53, 소유자 목록 28번). AI 호출 없음, 토큰 0.
-// 프로젝트 저장소를 GitHub Actions(floorplan.yml)가 floorplan(고정 커밋)으로 훑어 지도 HTML과 검진 JSON을 만들고,
+// 앱 점검·기본 지도(floorplan 1단계, v0.5.53, 소유자 목록 28번). AI 호출 없음, 토큰 0.
+// 프로젝트 저장소를 GitHub Actions(floorplan.yml)가 floorplan(고정 커밋)으로 훑어 지도 HTML과 점검 JSON을 만들고,
 // 이 함수가 만든 1회용 업로드 주소(그 파일만, 2시간)로 올린다. 앱은 소유자 폴더의 두 파일을 연다.
 // 비밀값: GITHUB_ACTIONS_TOKEN(이 저장소 Actions 실행만). 대상 저장소 읽기는 Actions secrets(TARGET_REPO_TOKEN)만 쓴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   const ghToken = env('GITHUB_ACTIONS_TOKEN');
   const officeRepo = env('OFFICE_REPO') || 'minho-nim/minoffia';
   if (!ownerEmail) return reply(500, { ok: false, error: '서버 설정(OFFICE_OWNER_EMAIL)이 빠졌습니다.' });
-  if (!ghToken) return reply(503, { ok: false, error: '검진을 시작할 GitHub 토큰(GITHUB_ACTIONS_TOKEN)이 없습니다.' });
+  if (!ghToken) return reply(503, { ok: false, error: '점검을 시작할 GitHub 토큰(GITHUB_ACTIONS_TOKEN)이 없습니다.' });
 
   const userClient = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
     global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   if (!project) return reply(404, { ok: false, error: '프로젝트를 찾을 수 없습니다.' });
   const repo = String(project.repo ?? '');
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) return reply(409, { ok: false, error: '연결된 GitHub 저장소가 없는 프로젝트예요.' });
-  if (repo.toLowerCase() === 'minho-nim/minlab') return reply(403, { ok: false, error: '이 저장소는 검진하지 않습니다.' });
+  if (repo.toLowerCase() === 'minho-nim/minlab') return reply(403, { ok: false, error: '이 저장소는 점검하지 않습니다.' });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const dir = `${user.id}/projects/${project.id}`;
@@ -67,6 +67,6 @@ Deno.serve(async (req) => {
     body: JSON.stringify({ ref: 'main', inputs: { repo, name: String(project.name ?? '').slice(0, 80), map_url: map.data.signedUrl, health_url: health.data.signedUrl } }),
     signal: AbortSignal.timeout(15_000),
   }).catch(() => null);
-  if (!res || !res.ok) return reply(502, { ok: false, error: `검진을 시작하지 못했습니다(GitHub ${res?.status ?? '응답 없음'}).` });
+  if (!res || !res.ok) return reply(502, { ok: false, error: `점검을 시작하지 못했습니다(GitHub ${res?.status ?? '응답 없음'}).` });
   return reply(200, { ok: true, started: true });
 });
