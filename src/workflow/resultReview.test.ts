@@ -58,3 +58,20 @@ describe('결과 채점 재시도', () => {
     expect(ctx.reviewResult).not.toHaveBeenCalled();
   });
 });
+
+describe('다시 개발은 서버가 먼저(v0.6.12)', () => {
+  it('redo 판정을 보면 2분 기다렸다가, 그때도 수정 요청이 없으면 앱이 대신 보낸다', async () => {
+    let now = 0;
+    const runner = createResultReviewer(() => now);
+    const ctx = context();
+    ctx.snap.workflow = { ...ctx.snap.workflow, reviews: [{ ...passReview, verdict: 'redo', feedback: '- 고칠 점' }] };
+    runner.tick(ctx);
+    await flush();
+    expect(ctx.requestRevision).not.toHaveBeenCalled();
+    now = 119_999; runner.tick(ctx);
+    expect(ctx.requestRevision).not.toHaveBeenCalled();
+    now = 120_000; runner.tick(ctx);
+    await flush();
+    expect(ctx.requestRevision).toHaveBeenCalledTimes(1);
+  });
+});

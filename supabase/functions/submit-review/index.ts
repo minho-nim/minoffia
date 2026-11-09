@@ -3,6 +3,7 @@
 // 판정은 서버가 Gemini 채점과 같은 규칙(rubric.ts = src/domain/review.ts 복사)으로 다시 계산해 result_reviews에 한 번만 넣는다.
 // verify_jwt = false(세션에 Supabase 로그인이 없다). 대신 제출표가 맞아야만 한 줄을 넣을 수 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { requestRedoOnServer } from './redo.ts';
 import { parseScore, ranChecks, redoFeedback, ruleCheck, total, verdictOf } from './rubric.ts';
 
 const MAX_USES = 3;
@@ -79,5 +80,12 @@ Deno.serve(async (req) => {
     judge: 'Claude',
   });
   if (error && error.code !== '23505') return reply(500, { ok: false, error: 'could not save review' });
+  // v0.6.12: '다시 개발'이면 서버가 바로 수정 요청·PM 재계획(앱이 닫혀 있어도)
+  if (!error && verdict === 'redo' && feedback) {
+    const redo = requestRedoOnServer(admin, ticket.owner_id, taskId, ticket.result_revision, feedback).catch(() => 'skipped');
+    const er = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+    if (er) er.waitUntil(redo);
+    else await redo;
+  }
   return reply(200, { ok: true, total: total(score), verdict, message: 'AI Office에 점수를 보냈습니다.' });
 });

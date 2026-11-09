@@ -3,6 +3,7 @@
 // 판정만 기록하고, 다시 개발 보내기는 앱이 기존 수정 요청 길(PM 재계획 → 실행 승인)로 한다. 올리기 승인(B)은 늘 소유자가 한다.
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않는다. 글은 저장하지 않고 점수·이유만 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { requestRedoOnServer } from './redo.ts';
 import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, ranChecks, redoFeedback, REVIEW_SYSTEM, SECOND_OPINION_NOTE, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
 import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
@@ -263,6 +264,13 @@ Deno.serve(async (req) => {
     const { data: again } = await userClient.from('result_reviews').select('*').eq('task_id', taskId).eq('result_revision', revision).maybeSingle();
     if (again) return reply(200, { ok: true, review: again, cached: true });
     return reply(500, { ok: false, error: `평가를 저장하지 못했습니다: ${error.message}` });
+  }
+  // v0.6.12: '다시 개발'이면 서버가 바로 수정 요청·PM 재계획(앱이 닫혀 있어도). 응답은 기다리지 않는다
+  if (verdict === 'redo' && feedback) {
+    const redo = requestRedoOnServer(admin, user.id, taskId, revision, feedback).catch(() => 'skipped');
+    const er = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+    if (er) er.waitUntil(redo);
+    else await redo;
   }
   return reply(200, { ok: true, review: saved });
 });

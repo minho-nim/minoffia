@@ -38,6 +38,7 @@ run supabase/tests/99_claude_review.sql
 run supabase/tests/99_codex_linear.sql
 run supabase/tests/99_gemini_pm_claim.sql
 run supabase/tests/99_atomic_plan_and_linear_tracking.sql
+run supabase/tests/99_save_pm_plan_as.sql
 python3 supabase/tests/check_pm_concurrency.py
 
 # 기존 v0.1 데이터가 0003 적용 후에도 남는지
