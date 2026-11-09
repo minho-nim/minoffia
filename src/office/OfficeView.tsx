@@ -215,12 +215,14 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
                 title={`${l.label}: ${l.detail}`}
                 onClick={() => setLampOpen(lampOpen === l.id ? null : l.id)}
               >
-                <i aria-hidden="true" />
-                <span>{RACK_TAG[l.id]}</span>
+                <span>
+                  <i aria-hidden="true" />
+                  {RACK_TAG[l.id]}
+                </span>
               </button>
             ))}
             {open && (
-              <p className="lamp-detail" style={{ right: pct(W - 290, W), top: pct(RACK_TOP + RACK_H + 3, H) }}>
+              <p className="lamp-detail" style={{ right: pct(W - 290, W), top: pct(RACK_TOP + RACK_H + 9, H) }}>
                 <b>{open.label}</b> {open.detail}
               </p>
             )}
