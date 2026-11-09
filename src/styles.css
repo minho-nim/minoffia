@@ -4975,13 +4975,11 @@ a.project-site {
 }
 
 /* 완료 기준 태그 줄(v0.5.99): 입력창 바로 위, 입력 중에만 */
+/* 입력창 안 맨 위 줄에 둔다(v0.6.0): 위에 띄우면 마지막 말·빠른 답 버튼을 가렸다 */
 .criteria-row {
-  position: absolute;
-  left: 10px;
-  bottom: calc(100% + 6px);
-  z-index: 5;
   display: flex;
   gap: 6px;
+  margin: 0 0 6px;
 }
 .criteria-chip {
   display: inline-flex;
@@ -4996,17 +4994,85 @@ a.project-site {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 3px 10px -6px rgba(0, 0, 0, 0.35);
 }
 .criteria-chip span {
   font-size: 12px;
 }
-.criteria-꼭 span {
+.criteria-must span {
   color: var(--danger);
 }
-.criteria-좋음 span {
+.criteria-nice span {
   color: var(--accent);
 }
-.criteria-선택 span {
+.criteria-opt span {
   color: var(--muted);
+}
+
+/* 기획서 완료 기준 중요도(v0.6.0): 누르면 필수 → 권장 → 선택 */
+.crit-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.crit-list li {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.crit-list .criteria-chip {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 12px;
+  box-shadow: none;
+}
+.crit-list .criteria-chip:disabled {
+  cursor: default;
+}
+
+/* 입력 중 전체 화면(v0.6.0 소유자 "스크롤할 때도 키보드에 붙어야 예쁜데"): 휴대폰에서 키보드가 뜨면 대화 상자가
+   보이는 화면(키보드 위)에 딱 맞춰 뜨고, 대화 목록만 그 안에서 스크롤한다. 페이지가 움직이지 않으니 입력창이 늘 키보드에 붙어 있다. */
+@media (max-width: 1039px) {
+  html.kb-open,
+  html.kb-open body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .kb-open .inbox {
+    --kb: 0px;
+    position: fixed;
+    z-index: 65;
+    left: 0;
+    right: 0;
+    top: var(--vv-top, 0px);
+    height: var(--vv-h, 100dvh);
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .kb-open .inbox > .inbox-log,
+  .kb-open .inbox > .inbox-empty {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kb-open .inbox > .inbox-form {
+    position: relative;
+    bottom: auto;
+    flex: none;
+    transition: none;
+  }
+  /* 전체 화면에서는 목록이 입력창 뒤로 들어가지 않으니 흐림 칸·상자 모서리 그림이 필요 없다 */
+  .kb-open .inbox-fade,
+  .kb-open .inbox-cap,
+  .kb-open .inbox > .inbox-form::before,
+  .kb-open .inbox > .inbox-form::after {
+    display: none;
+  }
 }
