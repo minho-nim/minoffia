@@ -18,3 +18,13 @@ describe('디자인 지시 묶음(v0.5.55)', () => {
     expect(domainSteps('README 오타 고치기').join('\n')).not.toContain('디자인 원칙');
   });
 });
+
+describe('코드 연결 그래프 단계(v0.5.65)', () => {
+  it('저장소 지도 뒤에 Graphify 찾기 안내가 붙고, 결과 폴더는 커밋하지 않게', async () => {
+    const { repoMapStep } = await import('./devHabits');
+    const text = repoMapStep().join('\n');
+    expect(text).toContain('graphifyy==0.9.95');
+    expect(text).toContain('graphify query');
+    expect(text).toContain('.git/info/exclude');
+  });
+});

@@ -125,5 +125,13 @@ export function repoMapStep(): string[] {
     REPO_MAP_SCRIPT,
     'MAPEOF',
     'node /tmp/repo-map.mjs',
+    '',
+    // 코드 연결 그래프(v0.5.65, 소유자 "AI가 코드를 뒤지는 대신 그래프를 먼저"): 여러 파일을 고칠 때만. 모델 호출 없음.
+    '## 코드 연결 그래프(여러 파일을 고칠 때만)',
+    '바꿀 곳이 여러 파일에 걸치면 파일을 하나씩 열기 전에 아래로 관련 함수·파일과 영향받는 곳을 먼저 찾는다(코드 이름은 영어로 검색).',
+    'echo graphify-out/ >> .git/info/exclude; pip install -q graphifyy==0.9.95 && graphify update . > /dev/null',
+    'graphify query "<영어 핵심어 2~4개>" --budget 800',
+    'graphify affected "<바꿀 함수 이름>"',
+    '작업이 끝나면 graphify-out 폴더를 지운다(커밋하지 않는다). 설치나 실행이 안 되면 건너뛰고 위 저장소 지도만 쓴다.',
   ];
 }
