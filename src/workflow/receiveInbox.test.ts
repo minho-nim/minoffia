@@ -54,4 +54,29 @@ describe('결과는 있는데 작업이 시작됨에 남은 경우', () => {
     expect(updateAssignment).toHaveBeenCalledTimes(1);
     expect(updateAssignment).toHaveBeenCalledWith(expect.objectContaining({ id: 'as1', dispatchStatus: 'completed' }));
   });
+
+  it('바뀐 것이 없는 실패 결과는 결과로 만들지 않고 작업을 중단으로 표시한다(v0.5.88)', async () => {
+    const snap = snapshot();
+    const a = {
+      id: 'as1', taskId: 't1', planRevision: 1, workItemId: 'W1', title: '', assignee: 'gemini' as const, executionMode: 'gemini_actions' as const,
+      dispatchStatus: 'started' as const, statusSource: 'none' as const, providerExecutionId: null, providerTaskUrl: null,
+      actualProviderStatus: 'workflow_dispatched', startedAt: null, lastVerifiedAt: null, updatedAt: '',
+    };
+    const plan = { id: 'p1', taskId: 't1', planRevision: 1, approvedSpecRevision: 1, targetBaseRevision: '', source: 'manual' as const, createdAt: '', plan: { task_id: 't1', repository: 'o/r', target_base_revision: '', plan_revision: 1, status: 'planned' as const, questions: [], work_items: [] } };
+    snap.workflow = { ...snap.workflow, plans: [plan], assignments: [a], results: [] };
+    const updateAssignment = vi.fn().mockResolvedValue(undefined);
+    const markResultInbox = vi.fn().mockResolvedValue(true);
+    const step = vi.fn();
+    await receiveWorkflowInbox({
+      snap, reported: new Set(), say: vi.fn(), step, importPlanText: vi.fn(),
+      store: {
+        loadPlanInbox: vi.fn().mockResolvedValue([]),
+        loadResultInbox: vi.fn().mockResolvedValue([{ id: 'i1', taskId: 't1', assignmentId: 'as1', summary: '', changedFiles: '', diff: '', testLog: '', remainingIssues: '끝까지 못 감', branch: '', previewUrl: '', screenshots: [] }]),
+        updateAssignment, markResultInbox,
+      } as unknown as OfficeStore,
+    });
+    expect(step).not.toHaveBeenCalled();
+    expect(updateAssignment).toHaveBeenCalledWith(expect.objectContaining({ id: 'as1', dispatchStatus: 'failed' }));
+    expect(markResultInbox).toHaveBeenCalledWith('i1', 'invalid', expect.any(String));
+  });
 });
