@@ -112,3 +112,26 @@ describe('근거 없는 지적·꼭 완료 기준(v0.5.80)', () => {
     expect(v.reasons[0]).toContain('꼭 지킬 완료 기준 미충족');
   });
 });
+
+import { ranChecks, repeatedIssues, slimLog } from './review';
+describe('채점 보강(v0.5.93)', () => {
+  const ok = { acceptance: 40, spec: 25, constraints: 15, scope: 10, quality: 10 };
+  const s = { parts: ok, criteria: [], violations: [], fixes: [], summary: '' } as unknown as Parameters<typeof verdictOf>[1];
+  it('시험·화면 확인 기록이 없으면 통과로 단정하지 않는다', () => {
+    expect(ranChecks('(시험 로그 없음)')).toBe(false);
+    expect(ranChecks('## npm run test\n3 passed')).toBe(true);
+    expect(verdictOf([], s, 0, { executed: false }).verdict).toBe('owner');
+    expect(verdictOf([], s, 0, { executed: true }).verdict).toBe('pass');
+  });
+  it('지난번과 같은 지적이 또 나오면 자동 다시 개발 대신 사장님께', () => {
+    const bad = { ...s, violations: ['CLAUDE.md를 만들었음'] } as typeof s;
+    expect(verdictOf([], bad, 0).verdict).toBe('redo');
+    expect(verdictOf([], bad, 0, { previousReasons: ['위반: CLAUDE.md를 만들었음'] }).verdict).toBe('owner');
+    expect(repeatedIssues(['점수 60점(통과 80점)'], ['점수 60점(통과 80점)'])).toEqual([]);
+  });
+  it('시험 로그는 색 코드·통과 줄·반복 줄을 빼고 줄인다', () => {
+    const log = '\x1b[32m✓ a\x1b[0m\n✓ b\nFAIL x\nFAIL x\nError: boom';
+    expect(slimLog(log)).toBe('FAIL x\nError: boom');
+    expect(slimLog('x'.repeat(10000) + '\nend', 300).length).toBeLessThan(400);
+  });
+});

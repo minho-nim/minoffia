@@ -318,13 +318,19 @@ jobs:
           log = read('/tmp/gemini.log')
           tail = log.split('### Gemini 키')[-1].splitlines()[1:] if '### Gemini 키' in log else log.splitlines()
           # Gemini 도구 오류·시작 안내 줄은 빼고, 요약이 비면 바뀐 파일로 만든다(v0.5.28: 오류 줄이 요약으로 들어가던 것)
-          skip = ('[STARTUP]', 'YOLO mode', 'Warning:', 'Ripgrep', 'Error executing tool', 'Gemini 키 ', 'Loaded cached', 'Data collection')
+          skip = ('[STARTUP]', 'YOLO mode', 'Warning:', 'Ripgrep', 'Error executing tool', 'Gemini 키 ', 'Loaded cached', 'Data collection', '###', '고를 파일:', '무료 한도:', '키 A:', '키 B:')
           summary = '\n'.join([l for l in tail if l.strip() and not l.startswith(skip)][-15:]).strip()
           files = [f for f in read('/tmp/result.files').splitlines() if f]
           if not summary and files:
               summary = f"Gemini가 요약을 남기지 않아 바뀐 파일로 대신 적었어요. 바뀐 파일 {len(files)}개: " + ', '.join(files[:10]) + (' 외' if len(files) > 10 else '')
           ok = os.environ.get('JOB_STATUS') == 'success'
           pushed = os.environ.get('PUSHED') == '1'
+          # 올린 커밋을 요약에 남긴다(v0.5.93): 올리기 승인 뒤 브랜치가 바뀌었으면 PR을 열지 않는다(open-pr이 대조)
+          if pushed:
+              import subprocess
+              head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+              if len(head) == 40:
+                  summary = f"{summary}\n커밋: {head}" if summary else f"커밋: {head}"
           result = {
               'summary': (summary or 'Gemini가 요약을 남기지 않았습니다.')[:3900],
               'changed_files': [f for f in read('/tmp/result.files').splitlines() if f],

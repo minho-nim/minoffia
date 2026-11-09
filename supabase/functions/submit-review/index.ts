@@ -3,7 +3,7 @@
 // 판정은 서버가 Gemini 채점과 같은 규칙(rubric.ts = src/domain/review.ts 복사)으로 다시 계산해 result_reviews에 한 번만 넣는다.
 // verify_jwt = false(세션에 Supabase 로그인이 없다). 대신 제출표가 맞아야만 한 줄을 넣을 수 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { parseScore, redoFeedback, ruleCheck, total, verdictOf } from './rubric.ts';
+import { parseScore, ranChecks, redoFeedback, ruleCheck, total, verdictOf } from './rubric.ts';
 
 const MAX_USES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,7 +58,10 @@ Deno.serve(async (req) => {
   }
   const gates = ruleCheck({ diff: String(result.diff ?? ''), testLog: String(result.test_log ?? ''), changeScope: String(spec?.change_scope ?? '') });
   const { count: redos } = await admin.from('result_reviews').select('id', { count: 'exact', head: true }).eq('task_id', taskId).eq('verdict', 'redo');
-  const { verdict, reasons } = verdictOf(gates, score, redos ?? 0);
+  // v0.5.93: 지난 '다시 개발' 판정의 지적(같은 문제가 또 나오면 자동으로 돌리지 않음)과 시험·화면 확인 기록 유무
+  const { data: lastRedo } = await admin.from('result_reviews').select('reasons').eq('task_id', taskId).eq('verdict', 'redo').lt('result_revision', ticket.result_revision).order('result_revision', { ascending: false }).limit(1).maybeSingle();
+  const previousReasons = Array.isArray(lastRedo?.reasons) ? (lastRedo.reasons as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+  const { verdict, reasons } = verdictOf(gates, score, redos ?? 0, { executed: ranChecks(String(result.test_log ?? '')), previousReasons });
   const feedback = verdict === 'pass' ? '' : redoFeedback(gates, score, reasons);
   const { error } = await admin.from('result_reviews').insert({
     owner_id: ticket.owner_id,
