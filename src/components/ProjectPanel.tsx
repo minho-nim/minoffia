@@ -6,7 +6,7 @@ import { BASE_RULES } from '../domain/baseRules';
 import { useState } from 'react';
 import type { Project, ProjectRule, Task } from '../domain/types';
 import { RepoCreate } from './RepoCreate';
-import { PREVIEW_HOST_PATTERN, REPO_PATTERN, RULE_SOURCE_LABEL, siteUrl } from '../domain/types';
+import { normalizeDemoUrl, PREVIEW_HOST_PATTERN, REPO_PATTERN, RULE_SOURCE_LABEL, siteUrl } from '../domain/types';
 
 interface Props {
   projects: Project[];
@@ -18,7 +18,7 @@ interface Props {
   /** 이 프로젝트로 대화 탭에서 요청하기 */
   onAsk?: (projectId: string) => void;
   /** id가 있으면 기존 프로젝트 수정, 없으면 새로 등록 */
-  onSave: (p: { id?: string; name: string; repo: string | null; description: string; previewHost?: string | null }) => Promise<unknown>;
+  onSave: (p: { id?: string; name: string; repo: string | null; description: string; previewHost?: string | null; demoUrl?: string | null }) => Promise<unknown>;
   onDelete: (p: Project) => void;
   /** 저장소 만들기(Supabase 모드에서만) */
   onCreateRepo?: (project: Project, name: string) => Promise<string | null>;
@@ -60,6 +60,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
   const [previewHost, setPreviewHost] = useState('');
+  const [demoText, setDemoText] = useState('');
   const [ruleDraft, setRuleDraft] = useState<Record<string, string>>({});
   const [formOpen, setFormOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -69,6 +70,8 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
   const repoValid = repo.trim() === '' || REPO_PATTERN.test(repo.trim());
   const hostValue = previewHost.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const hostValid = hostValue === '' || PREVIEW_HOST_PATTERN.test(hostValue);
+  const demoValue = normalizeDemoUrl(demoText);
+  const demoValid = demoText.trim() === '' || demoValue !== null;
 
   const reset = () => {
     setEditingId(null);
@@ -78,6 +81,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
     setRepo('');
     setDescription('');
     setPreviewHost('');
+    setDemoText('');
   };
 
   const startEdit = (p: Project) => {
@@ -88,6 +92,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
     setRepo(p.repo ?? '');
     setDescription(p.description);
     setPreviewHost(p.previewHost ?? '');
+    setDemoText(p.demoUrl ?? '');
     window.setTimeout(() => document.getElementById('project-name')?.focus(), 50);
   };
 
@@ -109,7 +114,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
           className="task-form"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!name.trim() || !repoValid || !hostValid) return;
+            if (!name.trim() || !repoValid || !hostValid || !demoValid) return;
             await onSave({
               id: editing?.id,
               name: name.trim(),
@@ -117,6 +122,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               description: description.trim(),
               // 운영 DB에 칸이 없던 프로젝트(undefined)는 비워 둔 채면 보내지 않는다
               ...(editing?.previewHost !== undefined || hostValue ? { previewHost: hostValue || null } : {}),
+              ...(editing?.demoUrl !== undefined || demoValue ? { demoUrl: demoValue } : {}),
             });
             reset();
           }}
@@ -144,7 +150,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
             <input id="project-description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={200} />
           </label>
           <label className="field">
-            <span>운영·미리보기 주소(선택)</span>
+            <span>운영 주소 · Cloudflare(선택)</span>
             <input
               id="project-preview"
               value={previewHost}
@@ -155,19 +161,33 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               autoCapitalize="off"
             />
           </label>
+          <label className="field">
+            <span>데모 주소 · GitHub Pages(선택)</span>
+            <input
+              id="project-demo"
+              value={demoText}
+              onChange={(e) => setDemoText(e.target.value)}
+              placeholder="예: minho-nim.github.io/my-app/"
+              aria-invalid={!demoValid}
+              spellCheck={false}
+              autoCapitalize="off"
+            />
+          </label>
           <div className="form-foot">
-            <p className={repoValid && hostValid ? 'route-preview' : 'task-error'}>
+            <p className={repoValid && hostValid && demoValid ? 'route-preview' : 'task-error'}>
               {!repoValid
                 ? 'owner/repo 형식으로 입력하세요. 예: minho-nim/minoffia'
                 : !hostValid
-                  ? '미리보기 주소는 my-app.pages.dev처럼 주소 이름만 적어요.'
-                  : '저장소는 owner/repo 형식. 운영 주소(Cloudflare Pages)를 적으면 카드에 "운영", 개발 결과에 "미리보기 열기"가 붙어요. 데모(github.io)는 GitHub Pages가 켜져 있으면 자동으로 붙어요.'}
+                  ? '운영 주소는 my-app.pages.dev처럼 주소 이름만 적어요.'
+                  : !demoValid
+                    ? '데모 주소는 minho-nim.github.io/my-app/처럼 적어요.'
+                    : '운영 주소를 적으면 카드의 "운영"과 개발 결과의 "미리보기 열기"가, 데모 주소를 적으면 "데모"가 열려요. 데모를 비워 두면 GitHub Pages가 켜진 저장소는 자동으로 찾아요.'}
             </p>
             <span className="form-actions">
               <button type="button" className="btn btn-ghost" onClick={reset}>
                 취소
               </button>
-              <button type="submit" className="btn btn-primary" disabled={!name.trim() || !repoValid || !hostValid}>
+              <button type="submit" className="btn btn-primary" disabled={!name.trim() || !repoValid || !hostValid || !demoValid}>
                 {editing ? '변경 저장' : '프로젝트 등록'}
               </button>
             </span>
@@ -208,7 +228,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
           const mineRules = rules.filter((r) => r.projectId === p.id);
           const draft = ruleDraft[p.id] ?? '';
           const site = siteUrl(p);
-          const demo = demoUrlOf?.(p) ?? null;
+          const demo = p.demoUrl || (demoUrlOf?.(p) ?? null);
           const deploy = lastDeployOf?.(p) ?? null;
           return (
             <li key={p.id} className="project-card">
@@ -233,15 +253,17 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 <button type="button" className="btn btn-small btn-ghost" onClick={() => onOpen(p.id)}>
                   업무 보기
                 </button>
-                {site && (
-                  <a className="btn btn-small btn-ghost project-site" href={site} target="_blank" rel="noopener noreferrer" aria-label={`${p.name} 운영 사이트 새 창으로 열기`}>
-                    운영 ↗
-                  </a>
-                )}
-                {demo && (
-                  <a className="btn btn-small btn-ghost project-site" href={demo} target="_blank" rel="noopener noreferrer" aria-label={`${p.name} 데모(GitHub Pages) 새 창으로 열기`}>
-                    데모 ↗
-                  </a>
+                {/* 운영·데모 두 칸은 늘 보인다(v0.5.92). 주소가 없으면 눌러서 수정 칸으로 */}
+                {([['운영', site], ['데모', demo]] as const).map(([label, url]) =>
+                  url ? (
+                    <a key={label} className="btn btn-small btn-ghost project-site" href={url} target="_blank" rel="noopener noreferrer" aria-label={`${p.name} ${label} 새 창으로 열기`}>
+                      {label} ↗
+                    </a>
+                  ) : (
+                    <button key={label} type="button" className="btn btn-small btn-ghost project-site is-empty" onClick={() => startEdit(p)} title={`${label} 주소를 적으면 열 수 있어요`} aria-label={`${p.name} ${label} 주소 적기`}>
+                      {label}
+                    </button>
+                  ),
                 )}
                 {onAsk && (
                   <button type="button" className="btn btn-small btn-primary" onClick={() => onAsk(p.id)}>
