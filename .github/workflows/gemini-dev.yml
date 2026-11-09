@@ -138,7 +138,8 @@ jobs:
             echo "- 저장소 루트에 CLAUDE.md가 있으면 먼저 읽고 그 규칙을 따른다."
             echo "- 할 일 범위 밖 파일은 바꾸지 않는다. 비밀값·토큰·.env 내용을 출력하거나 파일에 쓰지 않는다."
             echo "- git commit·push·PR·배포는 하지 않는다(다음 단계가 한다). 다른 AI CLI를 설치하지 않는다."
-            echo "- package.json이 있으면 고친 뒤 있는 시험(typecheck·test·build)을 돌려 통과시킨다."
+            echo "- 시험(typecheck·test·build)과 의존성 설치는 다음 단계가 한다. 너는 돌리지 말고 고치기만 한다(무료 한도 아끼기)."
+            echo "- 할 일에 없는 새 파일(CLAUDE.md 같은 규칙·설정 파일 포함)은 만들지 않는다."
             echo "- 할 일이 불분명하면 코드를 바꾸지 말고 이유만 적고 끝낸다."
             echo "- 화면 문구는 한국어로 쓴다. 끝나면 무엇을 바꿨는지 한국어로 3줄 이내로 요약한다."
             if [ -f graphify-out/graph.json ]; then
@@ -159,11 +160,16 @@ jobs:
             [ -n "$key" ] || continue
             echo "### Gemini 키 ${slot}로 시작" | tee -a /tmp/gemini.log
             set +e
-            GEMINI_API_KEY="$key" npx -y @google/gemini-cli@0.64.0 -m "$MODEL" --approval-mode yolo -p "$(cat /tmp/task.md)" > /tmp/gemini-run.log 2>&1
-            code=$?
+            # v0.5.72: 진행이 로그에 바로 보이게(tee), 한 키에 최대 12분. 무료 한도(분당 입력 토큰)에 걸리면 CLI가 기다렸다 다시 하므로
+            # 로그에 한도 글이 있어도 정상 종료하고 고친 것이 있으면 성공으로 본다(전에는 성공한 것을 버리고 다른 키로 다시 했다).
+            timeout 720 env GEMINI_API_KEY="$key" npx -y @google/gemini-cli@0.64.0 -m "$MODEL" --approval-mode yolo -p "$(cat /tmp/task.md)" 2>&1 | tee /tmp/gemini-run.log
+            code=${PIPESTATUS[0]}
             set -e
-            cat /tmp/gemini-run.log | tee -a /tmp/gemini.log
-            if [ "$code" -eq 0 ] && ! grep -qiE 'RESOURCE_EXHAUSTED|quota|status 429|"code": ?429' /tmp/gemini-run.log; then used="$slot"; break; fi
+            cat /tmp/gemini-run.log >> /tmp/gemini.log
+            changed=$(git status --porcelain | wc -l)
+            if [ "$code" -eq 0 ] && [ "$changed" -gt 0 ]; then used="$slot"; break; fi
+            if [ "$code" -eq 0 ] && ! grep -qiE 'RESOURCE_EXHAUSTED|status 429|"code": ?429' /tmp/gemini-run.log; then used="$slot"; break; fi
+            [ "$code" -eq 124 ] && echo "::warning::키 ${slot}가 12분 안에 끝나지 않았어요(무료 한도 기다림)."
             echo "::warning::키 ${slot} 실패(종료 코드 ${code}). 고친 것을 되돌리고 다른 키로 해 봅니다."
             git reset -q --hard && git clean -qfd
           done
