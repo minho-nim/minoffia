@@ -42,3 +42,15 @@ export function reassignPlanText(plan: PmPlan, workItemId: string, to: AssigneeP
     work_items: items,
   });
 }
+
+/** CI(PR 검사) 실패를 같은 AI에게 다시 맡길 이유 글. 같은 커밋으로는 한 번만 만들게 표시를 남긴다(v0.5.75) */
+export function ciFixWhy(check: { headSha: string; checks: { name: string; conclusion: string | null }[] }): string {
+  const failed = check.checks.filter((c) => c.conclusion && !['success', 'skipped', 'neutral'].includes(c.conclusion)).map((c) => c.name).slice(0, 5);
+  return `CI 고치기 ${check.headSha.slice(0, 7)}: 실패한 검사 ${failed.length ? failed.join(', ') : '(이름 없음)'}`;
+}
+
+export const ciFixDone = (modeReason: string | undefined, headSha: string) => (modeReason ?? '').includes(`CI 고치기 ${headSha.slice(0, 7)}`);
+
+export function prefOf(assignee: AgentAssignment['assignee']): AssigneePreference {
+  return assignee === 'claude' ? 'claude_support' : assignee === 'codex' ? 'codex_primary' : 'gemini_dev';
+}
