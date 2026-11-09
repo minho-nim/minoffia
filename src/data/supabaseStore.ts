@@ -25,6 +25,7 @@ const toProject = (r: Row): Project => ({
   description: (r.description as string) ?? '',
   // 마이그레이션 전 DB에는 칸이 없다(undefined면 저장할 때도 보내지 않음)
   previewHost: r.preview_host === undefined ? undefined : ((r.preview_host as string | null) ?? null),
+  demoUrl: r.demo_url === undefined ? undefined : ((r.demo_url as string | null) ?? null),
   designMd: r.design_md === undefined ? undefined : String(r.design_md ?? ''),
   designDraft: r.design_draft === undefined ? undefined : String(r.design_draft ?? ''),
   createdAt: r.created_at as string,
@@ -352,7 +353,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       };
     },
     async saveProject(p) {
-      check(await client.from('projects').upsert({ id: p.id, name: p.name, repo: p.repo, description: p.description, ...(p.previewHost !== undefined ? { preview_host: p.previewHost } : {}) }));
+      check(await client.from('projects').upsert({ id: p.id, name: p.name, repo: p.repo, description: p.description, ...(p.previewHost !== undefined ? { preview_host: p.previewHost } : {}), ...(p.demoUrl !== undefined ? { demo_url: p.demoUrl } : {}) }));
     },
     async deleteProject(id) {
       check(await client.from('projects').delete().eq('id', id));

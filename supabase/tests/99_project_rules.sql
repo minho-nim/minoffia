@@ -17,7 +17,13 @@ do $$ begin
     raise exception '미리보기 주소는 호스트만';
   exception when check_violation then null;
   end;
+  begin
+    update projects set demo_url = 'javascript:alert(1)' where id = 'aaaaaaaa-0000-4000-8000-00000000aa01';
+    raise exception '데모 주소는 https만';
+  exception when check_violation then null;
+  end;
 end $$;
+update projects set demo_url = 'https://minho-nim.github.io/Crossroads/' where id = 'aaaaaaaa-0000-4000-8000-00000000aa01';
 update projects set preview_host = 'minlab-ai-office.pages.dev' where id = 'aaaaaaaa-0000-4000-8000-00000000aa01';
 
 set role authenticated;

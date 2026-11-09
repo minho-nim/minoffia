@@ -14,3 +14,17 @@ describe('운영 사이트 주소(v0.5.89)', () => {
     expect(siteUrl({ previewHost: 'a.dev/../x' })).toBeNull();
   });
 });
+
+import { normalizeDemoUrl } from './types';
+describe('데모 주소(v0.5.92)', () => {
+  it('적은 글을 https 주소로 맞춘다', () => {
+    expect(normalizeDemoUrl('minho-nim.github.io/Crossroads/')).toBe('https://minho-nim.github.io/Crossroads/');
+    expect(normalizeDemoUrl(' HTTP://Minho-Nim.github.io/x ')).toBe('https://minho-nim.github.io/x');
+    expect(normalizeDemoUrl('https://a.dev')).toBe('https://a.dev/');
+  });
+  it('이상한 주소는 받지 않는다', () => {
+    expect(normalizeDemoUrl('javascript:alert(1)')).toBeNull();
+    expect(normalizeDemoUrl('https://a.dev/x?y=1')).toBeNull();
+    expect(normalizeDemoUrl('')).toBeNull();
+  });
+});

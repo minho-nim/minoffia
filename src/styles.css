@@ -2031,6 +2031,13 @@ a.project-site {
   margin: 0;
 }
 
+.project-site.is-empty {
+  opacity: 0.5;
+  font-weight: 500;
+  border-style: dashed;
+  border-color: var(--line);
+}
+
 /* 프로젝트에서 지켜야 할 것(v0.4.57) */
 .project-rules {
   border-top: 1px dashed var(--line);

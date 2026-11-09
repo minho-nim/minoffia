@@ -1441,7 +1441,7 @@ export function App() {
     await geminiPlan(task, away.has('claude') ? 'Claude가 휴가' : 'Claude PM에 보내지 못해서');
   };
 
-  const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string; previewHost?: string | null }): Promise<Project | null> => {
+  const saveProject = async ({ id, ...fields }: { id?: string; name: string; repo: string | null; description: string; previewHost?: string | null; demoUrl?: string | null }): Promise<Project | null> => {
     const existing = id ? projectById.get(id) : undefined;
     // 수정해도 id가 같으므로 연결된 업무는 그대로 따라온다.
     const project: Project = existing
