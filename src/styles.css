@@ -4920,3 +4920,41 @@ a.project-site {
   overflow-wrap: anywhere;
   color: var(--muted);
 }
+
+/* 앱 지도·점검 배치(v0.5.96): 점검 한 줄 + 버튼 → 결과는 접기 → 지도(간략히/자세히) */
+.health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.health-issues summary {
+  font-size: 13px;
+  cursor: pointer;
+}
+.map-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.map-recheck {
+  margin-left: auto;
+}
+/* 간략 지도 팝업: 앱 바탕색, 내용만큼(최대 화면 높이), 안에서 스크롤 */
+.archify-box.map-brief-box {
+  width: min(720px, 100%);
+  height: auto;
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--surface);
+  color: var(--ink);
+}
+.map-brief {
+  padding: 14px 14px 18px;
+}
+.map-brief > .appmap-title {
+  margin: 2px 40px 8px 0;
+  font-size: 16px;
+}

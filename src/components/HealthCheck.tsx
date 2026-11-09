@@ -91,37 +91,46 @@ export function HealthCheck({ api }: { api: HealthApi }) {
     }
   };
 
-  const openMap = async () => {
+  // 자세한 지도(floorplan)는 '자세히'를 처음 누를 때 한 번만 받는다
+  // 지도는 둘 다 팝업으로(v0.5.96 소유자 "둘 다 팝업으로")
+  const [popup, setPopup] = useState<'brief' | 'detail' | null>(null);
+  const showDetail = async () => {
+    setPopup('detail');
+    if (mapHtml) return;
     try {
       const html = await api.map();
       if (html) setMapHtml(html);
-      else setMsg('지도가 아직 없어요. 점검을 먼저 해 주세요.');
+      else setMsg('자세한 지도가 아직 없어요. 점검을 먼저 해 주세요.');
     } catch (e) {
       setMsg((e as Error).message || '지도를 열지 못했어요.');
     }
   };
 
   if (state === 'loading') return <p className="muted small">불러오는 중…</p>;
+  const issues = report?.issues ?? [];
   return (
     <div className="health">
-      {report && (
-        <>
-          <p className="appmap-title">앱 지도</p>
-          {report.appMap ? <AppMapView map={report.appMap} /> : <p className="muted small">쉬운 앱 지도는 다음 점검 때 만들어져요. 아래 '다시 점검'을 눌러 주세요.</p>}
-          <p className="appmap-title">점검 결과</p>
-        </>
-      )}
-      {report ? (
-        <>
-          <p className="small">
-            {when(report.checkedAt)} 점검 · <b className={report.summary.high ? 'health-high' : ''}>중요 {report.summary.high}</b> · 고칠 만함 {report.summary.medium} · 사소 {report.summary.low}
-            {report.files ? <span className="muted"> · 코드 {report.files}개</span> : null}
-          </p>
-          {report.issues.length === 0 ? (
-            <p className="muted small">걱정할 문제가 없어요.</p>
+      {/* 1. 점검: 마지막 점검 한 줄 + 버튼, 문제 목록은 접어 둔다(v0.5.96 소유자 "점검 버튼, 간략 지도, 자세한 지도") */}
+      <div className="health-head">
+        <span className="small">
+          {report ? (
+            <>
+              {when(report.checkedAt)} 점검 · <b className={report.summary.high ? 'health-high' : ''}>중요 {report.summary.high}</b> · 고칠 만함 {report.summary.medium} · 사소 {report.summary.low}
+            </>
+          ) : state === 'checking' ? (
+            '점검하고 지도를 만드는 중이에요.'
           ) : (
+            '아직 점검한 적이 없어요.'
+          )}
+        </span>
+      </div>
+      {!report && state !== 'checking' && <p className="muted small">점검하면 앱이 어떤 화면·기능으로 되어 있는지 지도를 만들고, 비밀 열쇠 노출·DB 규칙 실수·안 쓰는 파일 등도 찾아요(AI 없이, 2~5분).</p>}
+      {report &&
+        (issues.length ? (
+          <details className="health-issues">
+            <summary>점검 결과 보기 ({issues.length}개)</summary>
             <ul className="health-list">
-              {report.issues.map((i, n) => {
+              {issues.map((i, n) => {
                 const k = koIssue(i);
                 return (
                   <li key={`${i.kind}-${n}`}>
@@ -132,29 +141,44 @@ export function HealthCheck({ api }: { api: HealthApi }) {
                 );
               })}
             </ul>
-          )}
-        </>
-      ) : (
-        state !== 'checking' && <p className="muted small">아직 점검한 적이 없어요. '점검하기'를 누르면 앱이 어떤 화면·기능으로 되어 있는지 쉬운 지도를 만들고, 비밀 열쇠 노출·DB 규칙 실수·안 쓰는 파일 등도 찾아요(2~5분).</p>
-      )}
-      <div className="health-actions">
-        <button type="button" className="btn btn-small" disabled={state === 'checking'} onClick={() => void start()}>
+          </details>
+        ) : (
+          <p className="muted small">걱정할 문제가 없어요.</p>
+        ))}
+
+      {/* 2. 앱 지도: 간략 지도(쉬운 카드) / 자세한 지도(floorplan 원본), 둘 다 팝업 */}
+      <div className="map-buttons">
+        {report && (
+          <>
+          <button type="button" className="btn btn-small btn-primary" onClick={() => setPopup('brief')}>
+            간략 지도
+          </button>
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => void showDetail()}>
+            자세한 지도
+          </button>
+          </>
+        )}
+        <button type="button" className="btn btn-small btn-ghost map-recheck" disabled={state === 'checking'} onClick={() => void start()}>
           {state === 'checking' ? '점검 중… (2~5분)' : report ? '다시 점검' : '점검하기'}
         </button>
-        {report && (
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => void openMap()}>
-            자세한 지도(PC용)
-          </button>
-        )}
       </div>
       {msg && <p className="task-error small">{msg}</p>}
-      {mapHtml && (
-        <div className="archify-modal" role="dialog" aria-label="앱 지도" onClick={() => setMapHtml(null)}>
-          <div className="archify-box" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="archify-close" onClick={() => setMapHtml(null)} aria-label="닫기">
+      {popup && (
+        <div className="archify-modal" role="dialog" aria-label={popup === 'brief' ? '간략 지도' : '자세한 지도'} onClick={() => setPopup(null)}>
+          <div className={`archify-box${popup === 'brief' ? ' map-brief-box' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="archify-close" onClick={() => setPopup(null)} aria-label="닫기">
               ×
             </button>
-            <iframe className="archify-frame" sandbox="allow-scripts" srcDoc={mapHtml} title="앱 지도(floorplan)" />
+            {popup === 'brief' ? (
+              <div className="map-brief">
+                <p className="appmap-title">간략 지도</p>
+                {report?.appMap ? <AppMapView map={report.appMap} /> : <p className="muted small">간략 지도는 다음 점검 때 만들어져요. '다시 점검'을 눌러 주세요.</p>}
+              </div>
+            ) : mapHtml ? (
+              <iframe className="archify-frame" sandbox="allow-scripts" srcDoc={mapHtml} title="자세한 앱 지도(floorplan)" />
+            ) : (
+              <p className="muted small map-brief">{msg || '자세한 지도를 불러오는 중…'}</p>
+            )}
           </div>
         </div>
       )}
