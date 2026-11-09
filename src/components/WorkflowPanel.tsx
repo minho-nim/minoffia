@@ -18,10 +18,14 @@ import { WaitMap } from './WaitMap';
 import { FileTreeView } from './FileTreeView';
 import { diffStats } from '../domain/fileTree';
 import { mergeDanger } from '../domain/mergeDanger';
-import type { AgentAssignment, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
+import type { AgentAssignment, AssigneePreference, Deployment, Gate, Intent, PrCheck } from '../domain/workflow-types';
 import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL } from '../domain/workflow-types';
 import { addDesignWord, DESIGN_WORDS } from '../domain/designWords';
 import { DesignCheckView } from './DesignCheckView';
+import { PREF_LABEL, quotaHit, reassignTargets } from '../domain/reassign';
+
+const AGENT_NAME: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
+import { OFFICE_REPOS } from '../domain/smallTask';
 
 export interface SpecFields {
   intent: Intent;
@@ -44,6 +48,8 @@ export interface WorkflowActions {
   copy: (text: string) => Promise<boolean>;
   /** 바뀐 곳 구조도(Archify) 보기(v0.5.43, 서버 모드만) */
   archify?: (taskId: string, revision: number) => Promise<{ html?: string; started?: boolean }>;
+  /** 담당 바꾸기·한도 넘기기(v0.5.73): 그 작업 담당만 바꾼 새 계획 버전을 만든다(실행 승인은 다시) */
+  reassign?: (task: Task, a: AgentAssignment, to: AssigneePreference, why: string) => Promise<boolean>;
   /** 디자인 자동 검사(v0.5.56): 미리보기 주소가 있는 결과만 */
   designCheck?: { load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>; start(taskId: string, revision: number): Promise<void> };
   /** 성공하면 true. 실패 이유는 App이 알림으로 보여준다. */
@@ -743,6 +749,27 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     <span className="pill">{DISPATCH_STATUS_LABEL[a.dispatchStatus]}</span>
                   </div>
                   {item?.goal && <p className="small">{item.goal}</p>}
+                  {actions.reassign && a.dispatchStatus !== 'completed' && a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting' && (
+                    <div className={`wf-reassign${quotaHit(a) ? ' is-quota' : ''}`}>
+                      {quotaHit(a) && <p className="small">⚠️ {AGENT_NAME[a.assignee] ?? a.assignee} 한도에 걸린 것 같아요. 다른 AI로 넘길 수 있어요.</p>}
+                      <span className="small muted">담당 바꾸기:</span>
+                      {reassignTargets(a.assignee, OFFICE_REPOS.includes((project?.repo ?? '').toLowerCase())).map((to) => (
+                        <button
+                          key={to}
+                          type="button"
+                          className={`chip${quotaHit(a) ? ' chip-strong' : ''}`}
+                          disabled={busy}
+                          onClick={() =>
+                            void run(() =>
+                              actions.reassign!(task, a, to, quotaHit(a) ? `${AGENT_NAME[a.assignee] ?? a.assignee} 한도` : '소유자가 바꿈'),
+                            )
+                          }
+                        >
+                          {PREF_LABEL[to]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {item && item.dependencies.length > 0 && (() => {
                     // 누가 누구를 기다리나(v0.5.22): 안 끝난 앞 작업만 "⏳ W2(Codex) 결과 대기", 다 끝났으면 ✓
                     const w = waitingOn(a, allAssignments, view.plan);

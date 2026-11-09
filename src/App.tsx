@@ -38,7 +38,7 @@ import { checkSmallTask, smallPlanText } from './domain/smallTask';
 import { mentionedAssignee } from './domain/mention';
 import { maskSecrets } from './domain/maskSecrets';
 import { canApprove, deriveWorkflow, latestDeployment, latestPrCheck, officeStatus, prCheckPasses, sha256Hex } from './domain/workflow';
-import type { Approval, PmPlan } from './domain/workflow-types';
+import type { AgentAssignment, Approval, PmPlan } from './domain/workflow-types';
 import { EMPTY_WORKFLOW, STAGE_LABEL } from './domain/workflow-types';
 import { dispatchClaude } from './lib/dispatch';
 import { getSupabase } from './lib/supabase';
@@ -48,6 +48,7 @@ import { version } from '../package.json';
 import { HealthCheck } from './components/HealthCheck';
 import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
+import { PREF_LABEL, quotaHit, reassignPlanText } from './domain/reassign';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
 type Filter = 'open' | 'all' | TaskStatus;
@@ -704,6 +705,11 @@ export function App() {
   };
 
   /** PM 계획 글을 검증해 계획·배정으로 저장한다. 손으로 붙여넣기와 PM 세션 자동 전송이 같은 규칙을 쓴다. 문제가 있으면 이유 목록. */
+  // 시작이 한도(사용량·요청 수) 때문에 실패하면 작업을 '한도 대기'로 표시해 업무 카드에서 다른 AI로 넘길 수 있게 한다(v0.5.73).
+  const markQuota = async (a: AgentAssignment, message: string) => {
+    if (!quotaHit({ dispatchStatus: a.dispatchStatus, actualProviderStatus: message })) return;
+    await store.updateAssignment({ ...a, dispatchStatus: 'blocked_quota', actualProviderStatus: message.slice(0, 200) }).catch(() => undefined);
+  };
   const importPlanText = async (task: Task, text: string, source: PmPlan['source'], data: Snapshot, expectedSpecRevision?: number): Promise<string[] | null> => {
     const prepared = preparePlanImport(task, text, source, data, expectedSpecRevision);
     if (prepared.errors) return prepared.errors;
@@ -870,6 +876,22 @@ export function App() {
 
   const workflowActions: WorkflowActions = {
     archify: store.archify ? (taskId, revision) => store.archify!(taskId, revision) : undefined,
+    // 담당 바꾸기·한도 넘기기(v0.5.73): 지금 계획에서 그 작업 담당만 바꾼 새 계획 버전을 만든다. 실행 승인(E)은 다시 받는다.
+    reassign: async (task, a, to, why) => {
+      const data = await store.load();
+      const view = deriveWorkflow(task, data.workflow);
+      if (!view.plan || !view.spec) {
+        say('error', '계획이 없어서 담당을 바꿀 수 없어요.');
+        return false;
+      }
+      const failed = await importPlanText(task, reassignPlanText(view.plan, a.workItemId, to, why), 'manual', data, view.spec.revision);
+      if (failed) {
+        say('error', `담당을 바꾸지 못했어요: ${failed.join(' / ')}`);
+        return false;
+      }
+      say('ok', `${a.workItemId} 담당을 ${PREF_LABEL[to as keyof typeof PREF_LABEL] ?? to}(으)로 바꾼 새 계획을 만들었어요. 실행 승인하면 시작해요.`);
+      return true;
+    },
     designCheck: store.designCheck,
     draftSpec: (task) => draftSpec(task.id),
     makePrototype: (task) => makePrototype(task.id),
@@ -1196,6 +1218,7 @@ export function App() {
               return true;
             } catch (e) {
               say('error', `Claude 보조 개발을 시작하지 못했습니다: ${(e as Error).message}`);
+              await markQuota(a, (e as Error).message);
               return false;
             } finally {
               setSnap(await store.load());
@@ -1211,6 +1234,7 @@ export function App() {
               return true;
             } catch (e) {
               say('error', `Codex(Linear)에 맡기지 못했어요: ${(e as Error).message} — 지시서 복사로 진행할 수 있어요.`);
+              await markQuota(a, (e as Error).message);
               return false;
             } finally {
               setSnap(await store.load());
@@ -1240,6 +1264,7 @@ export function App() {
               return true;
             } catch (e) {
               say('error', `Gemini 개발을 시작하지 못했습니다: ${(e as Error).message}`);
+              await markQuota(a, (e as Error).message);
               return false;
             } finally {
               setSnap(await store.load());
