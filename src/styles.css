@@ -2948,11 +2948,17 @@ a.project-site {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  /* v0.6.3 소유자 "아이콘 크기 줄여": 36 → 32px */
+  width: 32px;
+  height: 32px;
   padding: 0;
   border-radius: 50%;
   cursor: pointer;
+}
+.inbox-icon svg,
+.inbox-send svg {
+  width: 17px;
+  height: 17px;
 }
 
 .inbox-icon {
@@ -5042,8 +5048,8 @@ a.project-site {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 36px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ink) 7%, transparent);
@@ -5065,4 +5071,33 @@ a.project-site {
 }
 .criteria-toggle.is-on {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* 대화에서 기획서 바로 보기(v0.6.3) */
+.inbox-tasklinks {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.spec-pop-text {
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.spec-pop p.small {
+  margin: 6px 0;
+}
+.spec-pop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 14px;
+}
+/* 휴대폰에서 대화 상자 안쪽 여백을 줄여 입력창을 넓게(v0.6.3 소유자 "좌우를 크게 해도 돼") */
+@media (max-width: 640px) {
+  .inbox {
+    --inbox-pad: 10px;
+  }
 }
