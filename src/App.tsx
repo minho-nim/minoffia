@@ -409,6 +409,9 @@ export function App() {
     reviewTick.current();
   }, [snap]);
 
+  // 훅은 아래 '일찍 끝내기' 줄보다 먼저 둔다(v0.5.82: 로그인 뒤 훅 수가 달라져 화면이 하얗게 멈추던 것)
+  const ciFixTried = useRef(new Set<string>());
+  const handoffTried = useRef(new Set<string>());
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
@@ -705,8 +708,6 @@ export function App() {
   };
 
   /** PM 계획 글을 검증해 계획·배정으로 저장한다. 손으로 붙여넣기와 PM 세션 자동 전송이 같은 규칙을 쓴다. 문제가 있으면 이유 목록. */
-  const ciFixTried = useRef(new Set<string>());
-  const handoffTried = useRef(new Set<string>());
   // 시작이 한도(사용량·요청 수) 때문에 실패하면 작업을 '한도 대기'로 표시해 업무 카드에서 다른 AI로 넘길 수 있게 한다(v0.5.73).
   const markQuota = async (a: AgentAssignment, message: string) => {
     if (!quotaHit({ dispatchStatus: a.dispatchStatus, actualProviderStatus: message })) return;
