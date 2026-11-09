@@ -54,3 +54,13 @@ export const ciFixDone = (modeReason: string | undefined, headSha: string) => (m
 export function prefOf(assignee: AgentAssignment['assignee']): AssigneePreference {
   return assignee === 'claude' ? 'claude_support' : assignee === 'codex' ? 'codex_primary' : 'gemini_dev';
 }
+
+/** 한도에 걸린 작업을 넘길 다음 AI(v0.5.81): Gemini 개발 → Claude → Codex 순, 지금 담당·휴가·AI Office의 Gemini는 뺀다 */
+export function nextAgent(current: AgentAssignment['assignee'], away: { claude?: boolean; codex?: boolean; gemini?: boolean }, officeRepo: boolean): AssigneePreference | null {
+  const order: [AssigneePreference, boolean][] = [
+    ['gemini_dev', !away.gemini && !officeRepo && current !== 'gemini'],
+    ['claude_support', !away.claude && current !== 'claude'],
+    ['codex_primary', !away.codex && current !== 'codex'],
+  ];
+  return order.find(([, ok]) => ok)?.[0] ?? null;
+}
