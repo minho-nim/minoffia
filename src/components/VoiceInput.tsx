@@ -63,15 +63,16 @@ export function VoiceInput({ onText, disabled }: { onText: (text: string) => voi
   return (
     <button
       type="button"
-      className={`inbox-attach inbox-voice${on ? ' is-on' : ''}`}
+      className={`inbox-icon inbox-voice${on ? ' is-on' : ''}`}
       aria-label={on ? '듣기 멈추기' : '말로 입력'}
       aria-pressed={on}
       title={error || (on ? '듣는 중… 다시 누르면 멈춰요' : '말로 입력')}
       disabled={disabled}
       onClick={toggle}
     >
-      <svg className="pixel-icon" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
-        <path fill="currentColor" d="M6 1h4v1h1v7h-1v1H6V9H5V2h1zM3 7h1v2h1v1h1v1h4v-1h1V9h1V7h1v2h-1v2h-1v1H9v2h2v1H5v-1h2v-2H5v-1H4V9H3z" />
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
       </svg>
     </button>
   );
