@@ -33,6 +33,11 @@ describe('지금 할 일(v0.6.27)', () => {
   it('결과 승인 뒤 PR이 없으면 PR 다시 열기(v0.6.31)', () => {
     expect(nowInfo(v({ stage: 'deployment_approval_pending' }), { done: false }).secondary?.action).toEqual({ kind: 'openPr' });
   });
+  it('배포 승인했는데 배포 실패면 끝남이 아니라 실패와 다시 시도(v0.6.39)', () => {
+    const n = nowInfo(v({ stage: 'completed', cApproved: true }), { done: false, deploy: { ok: false, error: 'PR을 병합하지 못했습니다(HTTP 403)' } });
+    expect(n.tone).toBe('failed');
+    expect(n.primary?.action).toEqual({ kind: 'deploy' });
+  });
   it('끝난 업무', () => {
     expect(nowInfo(v({ stage: 'completed' }), { done: true }).tone).toBe('done');
   });
