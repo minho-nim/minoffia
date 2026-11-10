@@ -111,7 +111,12 @@ Deno.serve(async (req) => {
     const main = await json('/git/ref/heads/main');
     const release = await json('/git/ref/heads/release');
     if (main.status !== 200) return refuse(502, `main 브랜치를 읽지 못했습니다(HTTP ${main.status}).`);
-    if (release.status === 404) return refuse(409, '이 저장소에는 release 브랜치가 없습니다. release 배포를 쓰는 저장소만 배포합니다.');
+    // v0.6.40(WorthIt 시험): release 브랜치가 없는 저장소는 main 병합이 곧 배포다(호스팅이 main에서 빌드). 병합까지 됐으면 배포 완료로 기록한다.
+    if (release.status === 404) {
+      const mainHead = String((main.data.object as { sha?: string })?.sha ?? mergeSha);
+      await record(true, '', mainHead, '');
+      return reply(200, { ok: true, updated: false, mainOnly: true, to: mainHead });
+    }
     if (release.status !== 200) return refuse(502, `release 브랜치를 읽지 못했습니다(HTTP ${release.status}).`);
     const mainSha = String((main.data.object as { sha?: string })?.sha ?? '');
     const releaseSha = String((release.data.object as { sha?: string })?.sha ?? '');
