@@ -9,13 +9,11 @@ create table if not exists public.task_followups (
   created_at timestamptz not null default now()
 );
 create index if not exists task_followups_task_idx on public.task_followups (task_id, created_at);
-drop trigger if exists task_followups_owner on public.task_followups;
 create trigger task_followups_owner before insert on public.task_followups for each row execute function public.owner_matches_task();
 alter table public.task_followups enable row level security;
-drop policy if exists task_followups_select on public.task_followups;
 create policy task_followups_select on public.task_followups for select to authenticated using (owner_id = (select auth.uid()));
-drop policy if exists task_followups_insert on public.task_followups;
 create policy task_followups_insert on public.task_followups for insert to authenticated with check (owner_id = (select auth.uid()) and used_at is null);
+-- 새 표라 지우기(drop) 문은 넣지 않는다(운영 적용 때 '지우기' 확인 창을 피함).
 -- 수정·삭제 정책은 두지 않는다(로그인 사용자는 바꿀 수 없음). used_at은 서버(dispatch-claude)만 적는다.
 
 do $$
