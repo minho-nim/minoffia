@@ -38,7 +38,7 @@ const STATUS_VERB: Record<TaskStatus, string> = {
   done: '완료 승인',
 };
 
-export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn, simple }: Props) {
+export function TaskCard({ task, project, workflow, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn, simple }: Props) {
   const agent = AGENT_BY_ID[task.assignee];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
@@ -92,7 +92,8 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
             <span className="task-chevron" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
           </span>
           <span className="task-sub">
-            {project?.name ?? '삭제됨'} · {agent.name} · {stageLabel}
+            {/* v0.6.43: 단계는 맨 앞 상태 표시와 '지금 할 일'에 있어 여기서는 뺀다 */}
+            {project?.name ?? '삭제됨'} · {agent.name}
             {task.sample && <span className="sample-tag">예시</span>}
           </span>
         </button>
