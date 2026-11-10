@@ -5400,3 +5400,21 @@ a.project-site {
   gap: 8px;
   margin-left: 6px;
 }
+
+/* 수정 요청 입력칸(v0.6.35 소유자 "너무 작음, 글자 크기 줄여"): 칸은 넓게, 글자는 작게 */
+.rev-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+  width: 100%;
+}
+.rev-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.rev-input::placeholder {
+  font-size: 0.8rem;
+}

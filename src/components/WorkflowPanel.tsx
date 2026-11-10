@@ -1359,11 +1359,12 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     </button>
                   ))}
                 </span>
-                <span className="wf-inline">
+                <span className="wf-inline rev-inline">
                   <textarea
                     id={`rev-${task.id}`}
-                    rows={revisionText.includes('\n') ? 4 : 1}
-                    placeholder="예: 버튼 색은 원래대로, 크기만 키우기 (스크린샷의 '짚어서 수정'으로 위치도 넣을 수 있어요)"
+                    className="rev-input"
+                    rows={revisionText.includes('\n') ? 4 : 2}
+                    placeholder="예: 버튼 색은 그대로, 크기만 키우기(스크린샷 '짚어서 수정'으로 위치도 넣을 수 있어요)"
                     value={revisionText}
                     onChange={(e) => setRevisionText(e.target.value)}
                     maxLength={4000}
