@@ -73,6 +73,8 @@ export interface WorkflowActions {
   startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** Codex를 Linear로 맡기기(v0.5.2): 지시서는 패널이 만들어 넘긴다 */
   startCodexLinear?: (assignment: AgentAssignment, acknowledgeRetry: boolean, text: string) => Promise<boolean>;
+  /** 교차 채점 추가(v0.6.26) */
+  crossReview?: (task: Task, resultRevision: number) => Promise<void>;
   /** Codex 앱에 붙여 넣을 지시서에 결과 자동 제출 절을 붙인다(실패하면 빈 문자열, v0.6.21) */
   codexManualSection?: (assignment: AgentAssignment) => Promise<string>;
   /** Codex 소식 손으로 다시 읽기(웹훅이 안 올 때, v0.5.3) */
@@ -1217,7 +1219,11 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                   </p>
                 );
               })()}
-              <ReviewCard review={reviews.find((r) => r.resultRevision === view.result!.revision) ?? null} />
+              <ReviewCard
+                review={reviews.find((r) => r.resultRevision === view.result!.revision) ?? null}
+                onCross={actions.crossReview && !view.bApproved ? () => run(() => actions.crossReview!(task, view.result!.revision)) : undefined}
+                busy={busy}
+              />
               {view.result.previewUrl && (
                 <p className="small">
                   <a className="preview-link" href={view.result.previewUrl} target="_blank" rel="noreferrer">
@@ -1553,16 +1559,37 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
 const MARK: Record<'met' | 'partial' | 'unmet', string> = { met: '✓', partial: '△', unmet: '✗' };
 
 /** 결과 점수표(v0.4.64): 규칙 검사·AI 점수·판정. 올리기 승인은 늘 사람이 한다. */
-function ReviewCard({ review }: { review: ResultReview | null }) {
-  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → 다른 AI가 채점: Claude 결과는 Gemini, 나머지는 Claude)</p>;
+function ReviewCard({ review, onCross, busy }: { review: ResultReview | null; onCross?: () => void; busy?: boolean }) {
+  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Gemini 무료 채점)</p>;
   const bad = review.gates.filter((g) => !g.ok);
+  // 교차 채점(v0.6.26 소유자 "제미니 기본 + 필요할 때 교차 채점, 평균"): 두 점수와 평균. 20점 넘게 엇갈리면 직접 보라고 알린다
+  const cross = review.crossTotal ?? null;
+  const avg = review.total !== null && cross !== null ? Math.round((review.total + cross) / 2) : null;
+  const split = avg !== null && Math.abs(review.total! - cross!) >= 20;
+  const byClaude = review.assignee === 'claude';
   return (
     <div className={`review-card is-${review.verdict}`}>
       <p className="review-head">
-        <b>AI 평가{review.total === null ? '' : ` ${review.total}점`}</b>
+        <b>AI 평가{avg !== null ? ` 평균 ${avg}점` : review.total === null ? '' : ` ${review.total}점`}</b>
         <span className={`review-verdict is-${review.verdict}`}>{VERDICT_LABEL[review.verdict]}</span>
         <span className="muted small">{review.judge}</span>
       </p>
+      {cross !== null ? (
+        <p className="small">
+          {review.judge.split(' ·')[0]} {review.total ?? '-'}점 · {review.crossJudge ?? '교차'} {cross}점
+          {split && <b className="warn-text"> · 채점이 엇갈려요(20점 넘게 차이). 직접 확인해 주세요.</b>}
+          {review.crossReasons && review.crossReasons.length > 0 && <span className="muted"> — {review.crossJudge} 지적: {review.crossReasons.join(' / ')}</span>}
+        </p>
+      ) : (
+        onCross &&
+        review.total !== null && (
+          <p className="small">
+            <button type="button" className="btn btn-small btn-ghost" disabled={busy || byClaude} onClick={onCross} title={byClaude ? 'Claude 결과는 Codex가 교차 채점해요(Codex Linear 연결 뒤)' : 'Claude가 한 번 더 채점해 평균을 보여 줘요(Claude 한도 1회)'}>
+              교차 채점 추가({byClaude ? 'Codex · 연결 뒤' : 'Claude'})
+            </button>
+          </p>
+        )
+      )}
       {review.score && (
         <ul className="review-parts">
           {(Object.keys(WEIGHTS) as Part[]).map((k) => (

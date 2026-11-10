@@ -5312,3 +5312,8 @@ a.project-site {
 .ov-usage {
   cursor: default;
 }
+
+/* 교차 채점이 엇갈릴 때(v0.6.26) */
+.warn-text {
+  color: var(--warn);
+}

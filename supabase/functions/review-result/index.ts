@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
   const ownerEmail = env('OFFICE_OWNER_EMAIL').toLowerCase();
   if (!ownerEmail) return reply(500, { ok: false, error: '서버 설정(OFFICE_OWNER_EMAIL)이 빠졌습니다.' });
 
-  let body: { taskId?: string; resultRevision?: number; ownerId?: string };
+  let body: { taskId?: string; resultRevision?: number; ownerId?: string; action?: string };
   try {
     body = await req.json();
   } catch {
@@ -98,7 +98,10 @@ Deno.serve(async (req) => {
 
   // RLS를 거쳐 내 업무만 읽는다.
   const { data: existing } = await userClient.from('result_reviews').select('*').eq('task_id', taskId).eq('result_revision', revision).maybeSingle();
-  if (existing) return reply(200, { ok: true, review: existing, cached: true });
+  // v0.6.26: 교차 채점은 기본 채점이 있은 뒤 소유자가 누를 때만(토큰 아끼기)
+  if (body.action === 'cross' && !existing) return reply(409, { ok: false, error: '기본 채점(Gemini)이 끝난 뒤에 교차 채점을 추가할 수 있어요.' });
+  if (existing && body.action !== 'cross') return reply(200, { ok: true, review: existing, cached: true });
+  if (existing && existing.cross_total != null) return reply(200, { ok: true, review: existing, cached: true });
   const { data: result } = await userClient.from('result_packages').select('revision, plan_revision, work_item_id, source, diff, test_log, remaining_issues').eq('task_id', taskId).eq('revision', revision).maybeSingle();
   if (!result) return reply(404, { ok: false, error: '결과 패키지를 찾을 수 없습니다.' });
   const { data: task } = await userClient.from('tasks').select('id, project_id, projects(repo, design_md)').eq('id', taskId).maybeSingle();
@@ -183,16 +186,20 @@ Deno.serve(async (req) => {
 
   // 1단계: 규칙 검사(토큰 0). 막히면 AI를 부르지 않는다.
   const gates = ruleCheck({ diff: String(result.diff ?? ''), testLog: String(result.test_log ?? ''), changeScope: String(spec.change_scope ?? ''), rules: projectRules });
+  // v0.6.26(소유자 "채점은 제미니가 기본, 필요할 때 교차 채점"): 기본은 아래 Gemini. 교차 채점은 소유자가 누를 때만:
+  // Codex·Gemini 결과 → Claude, Claude 결과 → Codex(Linear 연결 뒤, 아직 없음). 점수는 submit-review가 cross_*에 붙인다.
+  if (body.action === 'cross') {
+    const madeByClaude = assignee === 'claude' || ['claude_session_auto', 'claude_manual'].includes(String(result.source ?? ''));
+    if (madeByClaude) return reply(409, { ok: false, error: 'Claude 결과의 교차 채점(Codex)은 Codex Linear 연결이 풀린 뒤에 켜져요.' });
+    const pending = await askClaude();
+    if (pending) return reply(200, { ok: true, pending: true, judge: 'Claude', sessionUrl: pending.sessionUrl });
+    return reply(409, { ok: false, error: 'Claude가 지금 채점할 수 없어요(휴가·하루 상한·연결 확인).' });
+  }
+
   let score: Score | null = null;
   let judge = '규칙';
   if (!gates.some((g) => g.blocking && !g.ok)) {
-    // 2단계(v0.4.94 소유자 "코딩 작업은 클로드가 보고 채점"): Claude 보조 개발 루틴에 채점만 맡긴다(구독 안, 하루 상한 함께 셈).
-    // 점수는 세션이 submit-review로 보낸다. Claude가 휴가·상한·미연결이거나 6시간 안에 점수가 안 오면 아래 Gemini 무료 채점.
-    // 서로 바꿔 채점(v0.4.95 소유자): Claude가 만든 결과는 Claude가 채점하지 않는다(자기 채점 방지) → Gemini.
-    // (나중에 Codex for Linear가 확인되면 Claude 결과는 GPT가 먼저, 안 되면 Gemini)
-    const byClaude = assignee === 'claude' || ['claude_session_auto', 'claude_manual'].includes(String(result.source ?? ''));
-    const pending = byClaude ? null : await askClaude();
-    if (pending) return reply(200, { ok: true, pending: true, judge: 'Claude', sessionUrl: pending.sessionUrl });
+    // 2단계: Gemini 무료 채점(v0.6.26부터 늘 기본. Claude 채점은 위 '교차 채점'으로 소유자가 누를 때만)
     // 2단계(대신): Gemini 무료 채점
     const keys = [env('GEMINI_API_KEY'), env('GEMINI_API_KEY2')];
     const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
