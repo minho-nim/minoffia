@@ -5,6 +5,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { saveRules } from './projectRules.ts';
 import { importOnServer } from './importPlan.ts';
+import { autoRun } from './autoRun.ts';
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 const MAX_PLAN = 65_000;
 const MAX_USES = 3;
@@ -69,5 +72,12 @@ Deno.serve(async (req) => {
   if (error) return reply(500, { ok: false, error: 'could not save plan' });
   // v0.4.57: PM이 적어 보낸 "앞으로도 지켜야 할 것"은 프로젝트에 쌓는다(계획 검증과 별개, 실패해도 계획은 저장됨).
   await saveRules(admin, ticket.owner_id, ticket.task_id, 'plan', (body.plan as Record<string, unknown>).project_rules);
-  return reply(200, { ok: true, message: 'AI Office에 계획을 보냈습니다. 사용자가 E 승인할 때까지 아무것도 실행하지 않습니다.' });
+  // v0.6.28(소유자 "앱을 닫아 둬도 진행"): 서버가 저장했으면 실행 승인(기획 승인에 포함)을 기록하고 담당 AI를 바로 시작한다
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  if (server.saved && serviceKey) {
+    const run = autoRun(admin, ticket.owner_id, ticket.task_id, env('SUPABASE_URL'), serviceKey).then((l) => console.log(JSON.stringify({ fn: 'submit-plan', autoRun: l })), () => undefined);
+    if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(run);
+    else await run;
+  }
+  return reply(200, { ok: true, message: 'AI Office에 계획을 보냈습니다. 기획 승인된 업무라 AI Office가 실행 승인을 기록하고 담당 AI를 시작합니다.' });
 });

@@ -6,6 +6,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { previewUrl, saveRules } from './projectRules.ts';
 import { maskSecrets } from './maskSecrets.ts';
 import { importOnServer, type InboxRow } from './importResult.ts';
+import { autoRun } from './autoRun.ts';
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -129,7 +130,9 @@ Deno.serve(async (req) => {
             signal: AbortSignal.timeout(30_000),
           }).catch(() => undefined)
         : Promise.resolve(undefined);
-      const both = Promise.all([scoring, shots]);
+      // v0.6.28: 이 작업이 끝났으니 기다리던 다음 작업을 서버가 바로 시작한다(앱이 닫혀 있어도)
+      const next = autoRun(admin, ticket.owner_id, ticket.task_id, env('SUPABASE_URL'), serviceKey).catch(() => undefined);
+      const both = Promise.all([scoring, shots, next]);
       if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(both);
       else await both;
     }
