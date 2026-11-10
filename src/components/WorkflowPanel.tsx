@@ -93,6 +93,8 @@ export interface WorkflowActions {
   deploy?: (task: Task, allowExtra?: boolean, quiet?: boolean) => Promise<boolean>;
   /** 결과 검토 → Claude PM 수정 요청 */
   requestRevision: (task: Task, feedback: string) => Promise<boolean>;
+  /** 개발 중 추가 요청(v0.6.13) */
+  addFollowup?: (task: Task, text: string) => Promise<boolean>;
   attachmentUrl: (attachment: Attachment) => Promise<string>;
   /** 실패한 파일의 이유 목록을 돌려준다(빈 배열 = 모두 성공) */
   addAttachments: (task: Task, kind: AttachmentKind, resultRevision: number | null, files: File[]) => Promise<string[]>;
@@ -139,6 +141,8 @@ interface Props {
   /** null이면 PM 전송 가능 */
   dispatchBlocker: string | null;
   actions: WorkflowActions;
+  /** 이 업무의 개발 중 추가 요청(v0.6.13) */
+  followups?: import('../domain/workflow-types').Followup[];
 }
 
 const CI_LABEL: Record<PrCheck['ciState'], string> = { success: '성공', failure: '실패', pending: '진행 중', none: '없음' };
@@ -222,7 +226,54 @@ function CriteriaList({ text, editable, onSave }: { text: string; editable: bool
   );
 }
 
-export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], canReadLinks, dispatchBlocker, actions }: Props) {
+function FollowupBox({ followups, busy, canRedo, onAdd, onRedo }: { followups: import('../domain/workflow-types').Followup[]; busy: boolean; canRedo: boolean; onAdd: (text: string) => Promise<unknown>; onRedo: (n: number) => Promise<unknown> }) {
+  const [text, setText] = useState('');
+  const pending = followups.filter((f) => !f.usedAt);
+  const sent = followups.filter((f) => f.usedAt);
+  return (
+    <div className="wf-followups">
+      <p className="small">
+        <b>개발 중 추가 요청</b>{' '}
+        <span className="muted">{pending.length ? `${pending.length}개 대기 — 다음 다시 개발 때 함께 보내요` : '도는 개발에는 끼어들 수 없어, 적어 두면 다음 라운드에 함께 보내요'}</span>
+      </p>
+      {pending.length > 0 && (
+        <ul className="wf-followup-list">
+          {pending.map((f) => (
+            <li key={f.id}>{f.text}</li>
+          ))}
+        </ul>
+      )}
+      <span className="wf-inline">
+        <textarea rows={1} value={text} maxLength={2000} placeholder="예: 버튼 색도 파란색으로" aria-label="개발 중 추가 요청" onChange={(e) => setText(e.target.value)} />
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={busy || !text.trim()}
+          onClick={() => void onAdd(text.trim()).then(() => setText(''))}
+        >
+          추가
+        </button>
+      </span>
+      {canRedo && pending.length > 0 && (
+        <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={() => void onRedo(pending.length)}>
+          추가 요청 {pending.length}개로 다시 개발
+        </button>
+      )}
+      {sent.length > 0 && (
+        <details className="small">
+          <summary className="muted">보낸 추가 요청 {sent.length}개</summary>
+          <ul className="wf-followup-list">
+            {sent.map((f) => (
+              <li key={f.id} className="muted">{f.text}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], canReadLinks, dispatchBlocker, actions }: Props) {
   const current = stepIndex(view);
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
@@ -1078,6 +1129,18 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
             </>
           )}
         </section>
+      )}
+
+      {/* 개발 중 추가 요청(v0.6.13, 소유자 "개발 중에 연달아 보내도 알아서"): 도는 개발에는 끼어들 수 없어 모아 두었다가
+          다음 PM 재계획(다시 개발)에 함께 보낸다. 결과가 '통과'여도 추가 요청이 있으면 한 번에 다시 개발로 보낼 수 있다. */}
+      {view.aApproved && view.plan && !view.cApproved && actions.addFollowup && (
+        <FollowupBox
+          followups={followups}
+          busy={busy}
+          canRedo={!!view.result && !view.bApproved && revisionCheck.ok}
+          onAdd={(text) => run(() => actions.addFollowup!(task, text))}
+          onRedo={(n) => run(() => actions.requestRevision(task, `사장님 추가 요청 ${n}개를 반영해 다시 개발(내용은 '개발 중 사장님이 더한 요청'에 있음)`))}
+        />
       )}
 
       {/* 5. 결과 패키지 + B */}
