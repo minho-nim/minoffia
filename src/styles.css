@@ -5758,3 +5758,67 @@ a.project-site {
   flex: 1 1 auto;
   text-align: left;
 }
+
+/* 설정의 작은 칸(v0.6.44 소유자 "알림·화면은 한 줄 다 차지하지 않게, 칸에 맞게 이쁘게") */
+.settings-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+.settings-mini {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+}
+.settings-mini h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.settings-mini .push-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+.settings-mini .push-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.settings-mini .push-icon.is-on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.settings-mini .push-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.settings-mini .push-note {
+  display: none;
+}
+.settings-mini .theme-toggle {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+/* 끌기 손잡이를 손가락에 맞게 크게(아이폰) */
+.order-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 1.15rem;
+}
+.order-list.is-editing li {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
