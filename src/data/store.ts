@@ -22,6 +22,8 @@ export interface OfficeStore {
   mode: StoreMode;
   load(): Promise<Snapshot>;
   saveProject(project: Project): Promise<void>;
+  /** 프로젝트 순서 저장(v0.6.42): 아이디 목록 순서대로 */
+  reorderProjects?(ids: string[]): Promise<void>;
   deleteProject(id: string): Promise<void>;
   saveTask(task: Task): Promise<void>;
   deleteTask(id: string): Promise<void>;

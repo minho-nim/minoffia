@@ -29,6 +29,7 @@ const toProject = (r: Row): Project => ({
   demoUrl: r.demo_url === undefined ? undefined : ((r.demo_url as string | null) ?? null),
   designMd: r.design_md === undefined ? undefined : String(r.design_md ?? ''),
   designDraft: r.design_draft === undefined ? undefined : String(r.design_draft ?? ''),
+  position: r.position === undefined ? undefined : Number(r.position ?? 0),
   createdAt: r.created_at as string,
 });
 
@@ -364,10 +365,14 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       };
     },
     async saveProject(p) {
-      check(await client.from('projects').upsert({ id: p.id, name: p.name, repo: p.repo, description: p.description, ...(p.previewHost !== undefined ? { preview_host: p.previewHost } : {}), ...(p.demoUrl !== undefined ? { demo_url: p.demoUrl } : {}) }));
+      check(await client.from('projects').upsert({ id: p.id, name: p.name, repo: p.repo, description: p.description, ...(p.previewHost !== undefined ? { preview_host: p.previewHost } : {}), ...(p.demoUrl !== undefined ? { demo_url: p.demoUrl } : {}), ...(p.position !== undefined ? { position: p.position } : {}) }));
     },
     async deleteProject(id) {
       check(await client.from('projects').delete().eq('id', id));
+    },
+    async reorderProjects(ids) {
+      // 순서 칸(position)만 바꾼다(v0.6.42)
+      for (const [i, id] of ids.entries()) check(await client.from('projects').update({ position: i }).eq('id', id));
     },
     async saveTask(t) {
       // dispatch_* 열은 서버(Edge Function)만 바꾼다. DB 트리거도 클라이언트 변경을 무시한다.
