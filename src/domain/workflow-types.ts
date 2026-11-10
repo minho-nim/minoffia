@@ -139,7 +139,8 @@ export interface ResultPackage {
   planRevision: number | null;
   workItemId: string;
   /** claude_session_auto = Claude 보조 개발 세션이 submit-result로 보낸 결과(v0.4.3), gemini_actions_auto = Gemini 개발 워크플로(v0.4.82) */
-  source: 'codex_cloud_manual' | 'claude_manual' | 'claude_session_auto' | 'gemini_actions_auto' | 'manual';
+  /** codex_linear_auto = Codex(Linear)가 결과 제출표로 직접 보낸 결과(v0.6.19) */
+  source: 'codex_cloud_manual' | 'claude_manual' | 'claude_session_auto' | 'gemini_actions_auto' | 'codex_linear_auto' | 'manual';
   summary: string;
   diff: string;
   testLog: string;

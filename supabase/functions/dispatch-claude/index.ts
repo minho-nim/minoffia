@@ -310,11 +310,11 @@ Deno.serve(async (req) => {
     `- "prototype_first": 신규 앱·UI 전면 개편·새 인터랙션. 첫 작업을 assignee_preference "gemini_optional"인 AI Studio Build 견본 작업으로 두고, Codex 작업은 dependencies로 그 견본 작업 뒤에 잇는다. 사용자가 견본을 승인(P)해야 Codex를 시작한다.`,
     `- "direct": 버그·기존 기능 수정·DB·성능 개선. 견본 없이 Codex로 바로 개발한다.`,
     ``,
-    `## 난이도와 배정(v0.4.71, 쉬움은 Gemini v0.4.82, 토큰 아끼기)`,
+    `## 난이도와 배정(v0.6.19, 소유자 "Codex 주, Claude 보조")`,
     `각 work_item에 "difficulty"(1~10 정수)와 "difficulty_reason"(한 줄)을 넣는다. 1~3 쉬움(문구·설정·작은 화면 수정), 4~6 보통(기능 하나·여러 파일), 7~10 어려움(구조 변경·DB·보안·여러 기능 얽힘).`,
     geminiDevOk
-      ? `배정: 쉬움은 assignee_preference "gemini_dev"(Gemini 개발, 무료, GitHub Actions에서 자동), 보통은 "codex_primary", 어려움만 "claude_support". 위 휴가 중인 AI는 빼고 남은 쪽에 맡긴다. 어려운 일은 가능하면 쉬운 작업 여러 개로 쪼갠다.`
-      : `배정: 쉬움·보통은 assignee_preference "codex_primary", 어려움만 "claude_support". 위 휴가 중인 AI는 빼고 남은 쪽에 맡긴다. 어려운 일은 가능하면 쉬운 작업 여러 개로 쪼갠다. 이 저장소에는 "gemini_dev"를 쓰지 않는다.`,
+      ? `배정: 개발은 난이도와 관계없이 assignee_preference "codex_primary"(Codex가 주 개발). Codex가 휴가면 "claude_support", 둘 다 휴가면 쉬운 일만 "gemini_dev". 사용자가 @이름으로 정한 AI가 있으면 그것을 따른다.`
+      : `배정: 개발은 난이도와 관계없이 assignee_preference "codex_primary"(Codex가 주 개발). Codex가 휴가면 "claude_support". 사용자가 @이름으로 정한 AI가 있으면 그것을 따른다. 이 저장소에는 "gemini_dev"를 쓰지 않는다.`,
     `"gemini_dev"(개발)와 "gemini_optional"(AI Studio 견본)은 다르다. 견본 먼저 계획의 견본 작업만 "gemini_optional"을 쓴다.`,
     ``,
     `## 작업 나누기(v0.4.96)`,
