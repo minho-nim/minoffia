@@ -22,6 +22,7 @@ import { AGENT_BY_ID, AGENTS } from './domain/agents';
 import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
 import { buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
+import { simpleStates, stateCounts, SIMPLE_LABEL } from './domain/simpleState';
 import { myTurns, type TurnStep } from './domain/myTurn';
 import { clarificationsOf, linksOf } from './domain/requestContext';
 import { routeTask } from './domain/router';
@@ -51,7 +52,7 @@ import { serviceLamps } from './domain/serviceLamps';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
-type Filter = 'open' | 'all' | TaskStatus;
+type Filter = 'open' | 'all' | TaskStatus | 'st:working' | 'st:turn' | 'st:stuck';
 
 const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
 const POLL_MS = 15_000;
@@ -292,15 +293,22 @@ export function App() {
     [store, inboxTick],
   );
 
+  // 1분 시계(아래 1분마다 도는 확인이 올린다)
+  const [minuteTick, setMinuteTick] = useState(0);
+  // 업무 상태 다섯 가지(v0.6.15): 진행 중·내 차례·멈춤·실패·끝남. 1분마다(minuteTick) 다시 센다
+  const states = useMemo(() => simpleStates(snap.tasks, snap.workflow), [snap.tasks, snap.workflow, minuteTick]);
   const visibleTasks = useMemo(() => {
     const list = snap.tasks.filter((t) => {
       if (projectFilter !== 'all' && t.projectId !== projectFilter && snap.projects.some((p) => p.id === projectFilter)) return false;
       if (filter === 'all') return true;
       if (filter === 'open') return t.status !== 'done';
+      if (filter === 'st:working') return states.get(t.id) === 'working';
+      if (filter === 'st:turn') return states.get(t.id) === 'turn';
+      if (filter === 'st:stuck') return states.get(t.id) === 'stalled' || states.get(t.id) === 'failed';
       return t.status === filter;
     });
     return list;
-  }, [snap.tasks, snap.projects, filter, projectFilter]);
+  }, [snap.tasks, snap.projects, filter, projectFilter, states]);
 
   // PM 세션이 보낸 계획 옮기기(아래 planInboxRef.current). 업무 기록이 바뀔 때마다 확인한다.
   const importingInbox = useRef(false);
@@ -398,7 +406,6 @@ export function App() {
     document.addEventListener('visibilitychange', warm);
     return () => document.removeEventListener('visibilitychange', warm);
   }, [store]);
-  const [, setMinuteTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
@@ -1770,6 +1777,29 @@ export function App() {
 
           {tab === 'tasks' && (
             <div className="stack">
+              {/* 한눈에 보기(v0.6.15, muse 대시보드 착안): 누르면 그 상태의 업무만 */}
+              {(() => {
+                const c = stateCounts(states, inProject.map((t) => t.id));
+                const kst = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+                const runs = snap.usage.filter((u) => u.day === kst).length;
+                const card = (key: Filter, label: string, n: number, tone: string) => (
+                  <button key={label} type="button" className={`ov-card ov-${tone}`} aria-pressed={filter === key} onClick={() => setFilter(filter === key ? 'open' : key)}>
+                    <span className="ov-num">{n}</span>
+                    <span className="ov-label">{label}</span>
+                  </button>
+                );
+                return (
+                  <div className="overview" role="group" aria-label="한눈에 보기">
+                    {card('st:turn', SIMPLE_LABEL.turn, c.turn, 'turn')}
+                    {card('st:working', SIMPLE_LABEL.working, c.working, 'working')}
+                    {card('st:stuck', '멈춤·실패', c.stuck, 'stuck')}
+                    <span className="ov-card ov-usage">
+                      <span className="ov-num">{runs}</span>
+                      <span className="ov-label">오늘 AI 실행</span>
+                    </span>
+                  </div>
+                );
+              })()}
               <MyTurnList
                 items={pf === 'all' ? turns : turns.filter((it) => snap.tasks.find((t) => t.id === it.taskId)?.projectId === pf)}
                 onOpen={showTask}
@@ -1812,6 +1842,7 @@ export function App() {
                         return next;
                       })
                     }
+                    simple={states.get(t.id)}
                     turn={(() => {
                       const it = turns.find((x) => x.taskId === t.id);
                       return it ? { word: it.word, alert: it.alert, onJump: it.step ? () => showTask(t.id, it.step) : undefined } : undefined;
