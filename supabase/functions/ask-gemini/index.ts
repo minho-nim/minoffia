@@ -21,8 +21,9 @@ const TIMEOUT_MS = 25_000;
 const RESEARCH_HARD_CAP = 50;
 const RESEARCH_DEFAULT_CAP = 20;
 /** 검색 연결 무료 한도가 있는 모델(GEMINI_RESEARCH_MODEL로 바꿈) */
-const RESEARCH_MODEL = 'gemini-2.5-flash';
-const RESEARCH_FALLBACKS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+// v0.6.14: 2.x 모델은 Google에서 없어짐(404, 2026-11-09 기록). 오류 안내가 권한 새 모델을 먼저 시도한다
+const RESEARCH_MODEL = 'gemini-3.8-flash';
+const RESEARCH_FALLBACKS = ['gemini-3.5-flash'];
 
 /** 검색 연결 답의 출처(groundingMetadata.groundingChunks[].web) */
 function sourcesOf(data: unknown, into: Map<string, string>) {
