@@ -23,6 +23,7 @@ import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type Attachment
 import { buildHandoff } from './domain/handoff';
 import { buildCodexHandoff, buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
 import { startBlocker } from './domain/concurrency';
+import { AUTO_E_NOTE, autoApproved, autoExecutionTargets } from './domain/autoExecute';
 import { simpleStates, stateCounts, SIMPLE_LABEL } from './domain/simpleState';
 import { myTurns, type TurnStep } from './domain/myTurn';
 import { clarificationsOf, linksOf } from './domain/requestContext';
@@ -1448,16 +1449,43 @@ export function App() {
   // shortcut: 앱이 닫혀 있으면 앞 작업이 끝나도 다음 작업이 시작되지 않는다, 서버가 결과를 받을 때 이어서 시작하게 고칠 때.
   chainTick.current = () => {
     if (store.mode !== 'supabase' || !client) return;
+    // 승인 3개(v0.6.22): 기획 승인한 업무의 계획이 오면 실행 승인(E)을 자동으로 기록한다(감사 기록에 '기획 승인에 포함'으로 남김).
+    // shortcut: 앱이 열려 있을 때만 기록·시작한다, 서버가 계획을 받을 때 바로 하게 고칠 때.
+    for (const task of snap.tasks) {
+      if (task.status === 'done') continue;
+      const view = deriveWorkflow(task, snap.workflow);
+      for (const a of autoExecutionTargets(view)) {
+        if (chainTried.current.has(`e:${a.id}`)) continue;
+        chainTried.current.add(`e:${a.id}`);
+        void (async () => {
+          try {
+            await store.addApproval({
+              id: newId(), taskId: task.id, gate: 'E', decision: 'approved', approvedRevision: a.planRevision, previousRevision: null,
+              workItemId: a.workItemId, scope: { auto: true, note: AUTO_E_NOTE, assignee: a.assignee, plan_revision: a.planRevision, spec_revision: view.spec?.revision ?? null },
+              actor: session?.user.email ?? '', createdAt: new Date().toISOString(),
+            });
+            await store.updateAssignment({ ...a, dispatchStatus: 'ready' });
+            say('ok', `${task.title} — ${a.workItemId} 실행 승인을 기획 승인에 포함해 기록했어요. 곧 자동으로 시작해요.`);
+          } catch (e) {
+            say('error', `${a.workItemId} 실행 승인 자동 기록 실패: ${(e as Error).message} — 업무 카드에서 직접 승인해 주세요.`);
+          } finally {
+            setSnap(await store.load());
+          }
+        })();
+      }
+    }
     for (const a of snap.workflow.assignments) {
       if (a.dispatchStatus !== 'ready' || chainTried.current.has(a.id)) continue;
       const task = snap.tasks.find((t) => t.id === a.taskId);
       if (!task) continue;
       const view = deriveWorkflow(task, snap.workflow);
       const item = view.plan?.plan.work_items.find((w) => w.id === a.workItemId);
-      if (!view.plan || view.plan.planRevision !== a.planRevision || !item?.dependencies?.length || !view.eApproved(a.workItemId)) continue;
+      if (!view.plan || view.plan.planRevision !== a.planRevision || !item || !view.eApproved(a.workItemId)) continue;
+      // 앞 작업이 있던 작업이거나, 실행 승인이 자동 기록된 작업만(손으로 승인한 것은 승인 때 이미 시작함)
+      if (!item.dependencies?.length && !autoApproved(snap.workflow.approvals, a)) continue;
       if (startBlocker(a, snap.workflow.assignments, view.plan, snap.agentLimits)) continue;
       chainTried.current.add(a.id);
-      say('ok', `앞 작업이 끝나서 ${a.workItemId}을(를) 자동으로 시작해요.`);
+      say('ok', item.dependencies?.length ? `앞 작업이 끝나서 ${a.workItemId}을(를) 자동으로 시작해요.` : `${a.workItemId}을(를) 자동으로 시작해요.`);
       if (a.assignee === 'claude') void workflowActions.startClaudeDev?.(a, false);
       else if (a.assignee === 'gemini' && a.executionMode === 'gemini_actions') void workflowActions.startGeminiDev?.(a, false);
       else if (a.assignee === 'codex' && view.spec) {
