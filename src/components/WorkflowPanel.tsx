@@ -29,6 +29,8 @@ import { PREF_LABEL, quotaHit, reassignTargets, staleStart } from '../domain/rea
 
 const AGENT_NAME: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
 import { OFFICE_REPOS } from '../domain/smallTask';
+import { nowInfo, type NowAction } from '../domain/nowAction';
+import { SIMPLE_LABEL } from '../domain/simpleState';
 
 export interface SpecFields {
   intent: Intent;
@@ -301,6 +303,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
     if (!jump) return;
     // 확인 질문은 기획 칸 또는 PM 칸(PM이 계획을 보류하고 물은 경우) 안에 있다
     const keys = jump.step === 'qa' ? ['plan', 'pm'] : [jump.step];
+    setMoreOpen(true);
     setUnfolded((cur) => new Set([...cur, ...keys]));
     setClosed((cur) => new Set([...cur].filter((k) => !keys.includes(k))));
     const t = window.setTimeout(() => {
@@ -335,6 +338,8 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   const [ciChecked, setCiChecked] = useState(false);
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** 단계별 자세히(v0.6.27): 기본은 접힘. 바로 가기·버튼으로 칸을 열 때 함께 편다 */
+  const [moreOpen, setMoreOpen] = useState(false);
   const [aFeedback, setAFeedback] = useState('');
   const [showAFeedback, setShowAFeedback] = useState(false);
   const [revisionText, setRevisionText] = useState('');
@@ -396,8 +401,52 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
     (!view.pendingRevision || (!!task.dispatch.at && task.dispatch.at > view.pendingRevision.createdAt));
   const revisionCheck = canRequestRevision(view);
 
+  // 지금 할 일(v0.6.27 소유자 "너무 복잡해"): 맨 위에 상태 한 줄과 버튼 하나. 단계별 기록은 '자세히'에 접어 둔다.
+  const now = nowInfo(view, {
+    done: task.status === 'done',
+    review: view.result ? reviews.find((r) => r.resultRevision === view.result!.revision) ?? null : null,
+    ciPassed: actions.checkPr ? prCheckPasses(prCheck ?? null) && !!task.prUrl : false,
+  });
+  const goTo = (step: string) => {
+    const keys = step === 'qa' ? ['plan', 'pm'] : [step];
+    setMoreOpen(true);
+    setUnfolded((cur) => new Set([...cur, ...keys]));
+    setClosed((cur) => new Set([...cur].filter((k) => !keys.includes(k))));
+    window.setTimeout(() => document.getElementById(`wf-${task.id}-${step === 'qa' ? 'plan' : step}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+  };
+  const doNow = (a: NowAction) => {
+    if (a.kind === 'jump') return goTo(a.step);
+    if (a.kind === 'approveA') return void run(() => actions.decide(task, 'A', view.spec!.revision, 'approved'));
+    if (a.kind === 'approveB') return void run(() => actions.decide(task, 'B', view.result!.revision, 'approved', '', { result_sha256: view.result!.sha256 }));
+    return void run(async () => {
+      const ok = await actions.decide(task, 'C', view.result!.revision, 'approved', '', { pr_url: task.prUrl, ci: prCheck ? { state: prCheck.ciState, merged: prCheck.merged, sha: prCheck.headSha } : 'manual' });
+      if (ok && actions.deploy) await actions.deploy(task);
+    });
+  };
+
   return (
     <div className="wf">
+      <div className={`wf-now is-${now.tone}`} role="status">
+        <p>
+          <span className={`wf-now-tag is-${now.tone}`}>{SIMPLE_LABEL[now.tone]}</span> {now.text}
+        </p>
+        {(now.primary || now.secondary) && (
+          <p className="wf-now-actions">
+            {now.primary && (
+              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => doNow(now.primary!.action)}>
+                {now.primary.label}
+              </button>
+            )}
+            {now.secondary && (
+              <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => doNow(now.secondary!.action)}>
+                {now.secondary.label}
+              </button>
+            )}
+          </p>
+        )}
+      </div>
+      <details className="wf-more" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
+        <summary>단계별 자세히</summary>
       <div className="wf-head">
         <ol className="wf-steps" aria-label="진행 단계(누르면 그 칸으로)">
           {STEPS.map((s, i) => (
@@ -1552,6 +1601,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           )}
         </section>
       )}
+      </details>
     </div>
   );
 }
