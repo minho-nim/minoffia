@@ -114,6 +114,28 @@ Deno.serve(async (req) => {
     if (runs.length >= 50) break;
   }
 
+  // 대신 검사(v0.6.38, 소유자 "CI가 뭔데 → A"): 대상 저장소에 CI가 하나도 없으면 미노피아 Actions(proxy-ci.yml)가
+  // 그 PR 커밋으로 typecheck·lint·test·build를 대신 돌린다. 이미 돌린 것이 있으면 그 결과를 쓰고, 없으면 시작만 한다.
+  const actionsToken = env('GITHUB_ACTIONS_TOKEN');
+  if (!runs.length && actionsToken && /^[0-9a-f]{40}$/.test(sha)) {
+    const officeRepo = env('OFFICE_REPO') || 'minho-nim/minoffia';
+    const target = `${pr.owner}/${pr.repo}`;
+    const office = (path: string, init: RequestInit = {}) =>
+      fetch(`https://api.github.com/repos/${officeRepo}${path}`, {
+        ...init,
+        headers: { Authorization: `Bearer ${actionsToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'MinLabAIOffice', 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(10_000),
+      }).catch(() => null);
+    const listed = await office('/actions/workflows/proxy-ci.yml/runs?per_page=30');
+    const proxyRuns = listed?.ok ? (((await listed.json()) as { workflow_runs?: { display_title?: string; status: string; conclusion: string | null }[] }).workflow_runs ?? []) : [];
+    const mine = proxyRuns.find((r) => r.display_title === `대신 검사 ${target}@${sha}`);
+    if (mine) runs.push({ name: '미노피아 대신 검사', status: mine.status, conclusion: mine.conclusion });
+    else {
+      const started = await office('/actions/workflows/proxy-ci.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { repo: target, sha } }) });
+      if (started?.ok) runs.push({ name: '미노피아 대신 검사', status: 'queued', conclusion: null });
+    }
+  }
+
   const { data: row, error } = await admin
     .from('pr_checks')
     .insert({
