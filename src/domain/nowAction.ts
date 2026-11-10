@@ -8,7 +8,7 @@ import type { SimpleState } from './simpleState';
 const WHO: Record<string, string> = { codex: 'Codex', claude: 'Claude', gemini: 'Gemini', grok: 'Grok' };
 
 export type NowAction =
-  | { kind: 'approveA' | 'approveB' | 'approveC' | 'openPr' }
+  | { kind: 'approveA' | 'approveB' | 'approveC' | 'openPr' | 'deploy' }
   | { kind: 'jump'; step: 'qa' | 'plan' | 'pm' | 'E' | 'B' | 'C' };
 
 export interface NowInfo {
@@ -21,10 +21,19 @@ export interface NowInfo {
   secondary?: { label: string; action: NowAction };
 }
 
-export function nowInfo(view: WorkflowView, opts: { done: boolean; review?: ResultReview | null; ciPassed?: boolean; dispatchFailed?: boolean; prUrl?: string | null }): NowInfo {
+export function nowInfo(view: WorkflowView, opts: { done: boolean; review?: ResultReview | null; ciPassed?: boolean; dispatchFailed?: boolean; prUrl?: string | null; deploy?: { ok: boolean; error: string } | null }): NowInfo {
   const failed = view.assignments.find((a) => a.dispatchStatus === 'failed');
   const running = view.assignments.find((a) => a.dispatchStatus === 'started' || a.dispatchStatus === 'starting');
   const who = (a?: AgentAssignment) => (a ? WHO[a.assignee] ?? a.assignee : 'AI');
+  // 배포 승인했는데 배포가 안 됐으면 끝난 게 아니다(v0.6.39, 소유자 "안 됐는데 앱에는 완료로 뜸")
+  if (view.cApproved && opts.deploy && !opts.deploy.ok)
+    return {
+      tone: 'failed',
+      text: `배포가 안 됐어요: ${opts.deploy.error.slice(0, 120)}`,
+      primary: { label: opts.deploy.error.startsWith('확인 필요') ? '확인하고 배포' : '배포 다시 시도', action: { kind: 'deploy' } },
+      secondary: { label: '배포 칸 보기', action: { kind: 'jump', step: 'C' } },
+    };
+  if (view.cApproved && !opts.deploy) return { tone: 'working', text: '배포 중이에요.', secondary: { label: '배포 칸 보기', action: { kind: 'jump', step: 'C' } } };
   if (opts.done || view.stage === 'completed') return { tone: 'done', text: '끝났어요.' };
   switch (view.stage) {
     case 'needs_clarification':
