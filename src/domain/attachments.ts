@@ -271,7 +271,7 @@ export function attachmentBlocker(
   }
   if (op === 'change') return '결과 스크린샷은 추가만 할 수 있습니다(검토 기록).';
   if (!view.result || resultRevision !== view.result.revision) return '최신 결과 패키지에만 스크린샷을 붙일 수 있습니다.';
-  if (view.bApproved) return '올리기 승인 뒤에는 결과를 바꿀 수 없습니다.';
+  if (view.bApproved) return '결과 승인 뒤에는 결과를 바꿀 수 없습니다.';
   if (count >= MAX_RESULT_FILES) return `결과 스크린샷은 ${MAX_RESULT_FILES}장까지입니다.`;
   return null;
 }

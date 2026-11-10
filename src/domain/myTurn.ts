@@ -68,7 +68,7 @@ export function myTurns(tasks: Task[], all: WorkflowData, now: number = Date.now
         break;
       case 'result_review':
       case 'github_approval_pending':
-        add('결과', '결과를 보고 올리기 승인하거나 수정 요청', canApprove(v, 'B').ok ? 'B' : undefined, 'B');
+        add('결과', '결과를 보고 결과 승인하거나 수정 요청', canApprove(v, 'B').ok ? 'B' : undefined, 'B');
         break;
       case 'deployment_approval_pending':
         if (prCheckPasses(latestPrCheck(t, all))) add('배포', 'CI 통과. 배포 승인', undefined, 'C');

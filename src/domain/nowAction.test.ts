@@ -22,13 +22,16 @@ describe('지금 할 일(v0.6.27)', () => {
     expect(n.tone).toBe('failed');
     expect(n.text).toContain('Codex 환경 없음');
   });
-  it('결과가 오면 평균 점수와 올리기 승인', () => {
+  it('결과가 오면 평균 점수와 결과 승인', () => {
     const n = nowInfo(v({ stage: 'github_approval_pending', result: { revision: 2, diff: 'x' } as never }), { done: false, review: { total: 80, crossTotal: 90 } as never });
     expect(n.text).toContain('평가 85점');
     expect(n.tone).toBe('turn');
   });
   it('CI 통과 전에는 배포 버튼을 내지 않는다', () => {
-    expect(nowInfo(v({ stage: 'deployment_approval_pending' }), { done: false, ciPassed: false }).primary).toBeUndefined();
+    expect(nowInfo(v({ stage: 'deployment_approval_pending' }), { done: false, ciPassed: false, prUrl: 'https://github.com/o/r/pull/1' }).primary).toBeUndefined();
+  });
+  it('결과 승인 뒤 PR이 없으면 PR 다시 열기(v0.6.31)', () => {
+    expect(nowInfo(v({ stage: 'deployment_approval_pending' }), { done: false }).secondary?.action).toEqual({ kind: 'openPr' });
   });
   it('끝난 업무', () => {
     expect(nowInfo(v({ stage: 'completed' }), { done: true }).tone).toBe('done');

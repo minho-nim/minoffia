@@ -75,6 +75,8 @@ export interface WorkflowActions {
   startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** Codex를 Linear로 맡기기(v0.5.2): 지시서는 패널이 만들어 넘긴다 */
   startCodexLinear?: (assignment: AgentAssignment, acknowledgeRetry: boolean, text: string) => Promise<boolean>;
+  /** PR 다시 열기(v0.6.31): 결과 승인 뒤 PR이 안 열렸을 때 GitHub Actions로 다시 */
+  openPr?: (task: Task) => Promise<void>;
   /** 교차 채점 추가(v0.6.26) */
   crossReview?: (task: Task, resultRevision: number) => Promise<void>;
   /** Codex 앱에 붙여 넣을 지시서에 결과 자동 제출 절을 붙인다(실패하면 빈 문자열, v0.6.21) */
@@ -388,7 +390,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   const aCheck = canApprove(view, 'A');
   const bCheck = canApprove(view, 'B');
   const cCheck = canApprove(view, 'C');
-  // 결과를 만든 Codex 작업(올리기 승인 뒤 같은 창에 PR 요청을 붙여넣는다)
+  // 결과를 만든 Codex 작업(결과 승인 뒤 같은 창에 PR 요청을 붙여넣는다)
   const codexItem = view.assignments.find((a) => a.assignee === 'codex');
   // Claude 보조 개발 세션(서버가 시작함). Codex 작업이 없으면 이 세션에 PR 요청을 붙여넣는다.
   const claudeItem = view.assignments.find((a) => a.assignee === 'claude' && a.providerTaskUrl);
@@ -406,6 +408,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
     done: task.status === 'done',
     review: view.result ? reviews.find((r) => r.resultRevision === view.result!.revision) ?? null : null,
     ciPassed: actions.checkPr ? prCheckPasses(prCheck ?? null) && !!task.prUrl : false,
+    prUrl: task.prUrl,
   });
   const goTo = (step: string) => {
     const keys = step === 'qa' ? ['plan', 'pm'] : [step];
@@ -416,6 +419,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   };
   const doNow = (a: NowAction) => {
     if (a.kind === 'jump') return goTo(a.step);
+    if (a.kind === 'openPr') return void run(() => actions.openPr ? actions.openPr(task) : Promise.resolve());
     if (a.kind === 'approveA') return void run(() => actions.decide(task, 'A', view.spec!.revision, 'approved'));
     if (a.kind === 'approveB') return void run(() => actions.decide(task, 'B', view.result!.revision, 'approved', '', { result_sha256: view.result!.sha256 }));
     return void run(async () => {
@@ -1204,7 +1208,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
         <section className={fold.cls('B', 4)} id={`wf-${task.id}-B`}>
           {fold.head('B', 4, <>5. 결과 검토 — {GATE_LABEL.B}</>)}
           <p className="muted small">
-            GitHub에 올리기 전에 여기서 diff와 테스트 결과를 봅니다. Codex 웹의 diff(또는 `codex cloud diff` 출력)를 붙여넣으세요. PR·푸시는 올리기 승인 뒤에만 합니다.
+            GitHub에 올리기 전에 여기서 diff와 테스트 결과를 봅니다. Codex 웹의 diff(또는 `codex cloud diff` 출력)를 붙여넣으세요. PR·푸시는 결과 승인 뒤에만 합니다.
           </p>
           {view.result && (
             <div className="wf-result">
@@ -1331,7 +1335,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 >
                   {(() => {
                     const rv = reviews.find((r) => r.resultRevision === view.result!.revision);
-                    return rv && rv.verdict !== 'pass' ? `점수 미달이지만 올리기 승인 (결과 v${view.result.revision})` : `올리기 승인(GitHub) (결과 v${view.result.revision})`;
+                    return rv && rv.verdict !== 'pass' ? `점수 미달이지만 결과 승인 (v${view.result.revision})` : `결과 승인 → PR 열기 (v${view.result.revision})`;
                   })()}
                 </button>
               )}
@@ -1552,7 +1556,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               {actions.checkPr ? (
                 <div className="wf-manual">
                   <p className="small">
-                    <b>PR·CI 확인</b> — 올리기 승인 뒤에는 앱이 1분마다 자동으로 확인합니다. CI가 성공하면 배포 승인을 할 수 있고, 병합은 배포 승인 때 서버가 합니다.
+                    <b>PR·CI 확인</b> — 결과 승인 뒤에는 앱이 1분마다 자동으로 확인합니다. CI가 성공하면 배포 승인을 할 수 있고, 병합은 배포 승인 때 서버가 합니다.
                   </p>
                   {prCheck && (
                     <>
