@@ -262,11 +262,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                     <a key={label} className="btn btn-small btn-ghost project-site" href={url} target="_blank" rel="noopener noreferrer" aria-label={`${p.name} ${label} 새 창으로 열기`}>
                       {label} ↗
                     </a>
-                  ) : (
-                    <button key={label} type="button" className="btn btn-small btn-ghost project-site is-empty" onClick={() => startEdit(p)} title={`${label} 주소를 적으면 열 수 있어요`} aria-label={`${p.name} ${label} 주소 적기`}>
-                      {label}
-                    </button>
-                  ),
+                  ) : null, // v0.6.43: 주소가 없으면 숨김(수정에서 적으면 생김)
                 )}
                 {onAsk && (
                   <button type="button" className="btn btn-small btn-primary" onClick={() => onAsk(p.id)}>
