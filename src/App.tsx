@@ -12,6 +12,7 @@ import { Inbox } from './components/Inbox';
 import { MyTurnList } from './components/MyTurn';
 import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
+import { setupIssues } from './domain/projectSetup';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
 import type { PendingImage } from './components/Attachments';
@@ -2023,6 +2024,7 @@ export function App() {
 
           {tab === 'projects' && (
             <ProjectPanel
+              setupIssuesOf={(p) => setupIssues(p.id, snap.tasks, snap.workflow)}
               projects={snap.projects}
               tasks={snap.tasks}
               turnsByProject={turnsByProject}
