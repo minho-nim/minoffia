@@ -290,25 +290,25 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               {p.repo && !p.sample && <ProjectSetup project={p} issues={setupIssuesOf?.(p) ?? { codex: null, claude: null }} />}
               {renderHistory && (
                 <details className="project-rules project-history-box" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHistoryOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>📜 한 일 기록</summary>
+                  <summary>한 일 기록</summary>
                   {historyOpen[p.id] && renderHistory(p)}
                 </details>
               )}
               {renderStructure && (
                 <details className="project-rules project-structure" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setStructureOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>🗺️ 구조도</summary>
+                  <summary>구조도</summary>
                   {structureOpen[p.id] && renderStructure(p)}
                 </details>
               )}
               {renderHealth && p.repo && (
                 <details className="project-rules project-health" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHealthOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>🩺 앱 지도·점검</summary>
+                  <summary>앱 지도·점검</summary>
                   {healthOpen[p.id] && renderHealth(p)}
                 </details>
               )}
               {renderDesign && p.repo && (
                 <details className="project-rules project-design" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setDesignOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>🎨 디자인{p.designMd ? '' : '(없음)'}</summary>
+                  <summary>디자인{p.designMd ? '' : '(없음)'}</summary>
                   {designOpen[p.id] && renderDesign(p)}
                 </details>
               )}
@@ -318,7 +318,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 return (
                   <details className="project-rules project-debt">
                     <summary>
-                      ⏳ 미뤄 둔 일 <span className="num num-count">{debts.length}</span>
+                      미뤄 둔 일 <span className="num num-count">{debts.length}</span>
                     </summary>
                     <p className="muted small">개발 AI가 알고 일부러 줄인 곳이에요(코드의 shortcut 주석). 때가 되면 업무로 만들어 고치세요.</p>
                     <ul>
@@ -348,7 +348,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               {(
                 <details className="project-rules">
                   <summary>
-                    📏 규칙 <span className="num num-count">{mineRules.length}</span>
+                    규칙 <span className="num num-count">{mineRules.length}</span>
                   </summary>
                   <details className="project-base-rules">
                     <summary className="small">기본 규칙(모든 프로젝트에 늘 적용) {BASE_RULES.length}</summary>
@@ -476,7 +476,7 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
   return (
     <details className="project-rules project-setup">
       <summary>
-        ✅ 준비 {count}/3{issues.codex || issues.claude ? ' ⚠' : ''}
+        준비 {count}/3{issues.codex || issues.claude ? ' ⚠' : ''}
       </summary>
       <ul className="setup-list small">
         <li className="is-ok">✓ 저장소 연결: {project.repo}</li>
