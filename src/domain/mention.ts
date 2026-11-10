@@ -6,7 +6,8 @@ import type { AssigneePreference, WorkItem } from './workflow-types';
 const NAMES: [RegExp, AssigneePreference, string][] = [
   [/@(코덱스|codex)/i, 'codex_primary', 'Codex'],
   [/@(클로드|claude)/i, 'claude_support', 'Claude'],
-  [/@(제미나이|제미니|gemini|스튜디오|studio)/i, 'gemini_dev', 'Gemini 개발'],
+  // v0.6.24: @StudioA·@StudioB는 '누가 답할지'(질문용)라 개발 담당으로 읽지 않는다
+  [/@(제미나이|제미니|gemini)(?![a-z])/i, 'gemini_dev', 'Gemini 개발'],
 ];
 
 export type Mention = { preference: AssigneePreference; label: string };
@@ -36,7 +37,16 @@ export const MENTION_OPTIONS = [
   { tag: 'Claude', ko: '클로드', desc: '개발·꼼꼼한 수정' },
   { tag: 'Codex', ko: '코덱스', desc: 'Linear로 맡기는 개발' },
   { tag: 'Gemini', ko: '제미나이', desc: '쉬운 개발(다른 저장소만)' },
+  // v0.6.24(소유자 "제미나이도 각각 태그"): 질문에 누가 답할지. 그 키가 안 되면 다른 쪽이 대신 답한다
+  { tag: 'StudioA', ko: '스튜디오A', desc: 'Gemini 답(키 A)' },
+  { tag: 'StudioB', ko: '스튜디오B', desc: 'Gemini 답(키 B)' },
 ] as const;
+
+/** 질문 글의 @StudioA·@StudioB → 먼저 쓸 Gemini 키(1=A, 2=B). 없으면 null(기본 A, 안 되면 B) */
+export function answerSlot(text: string | null | undefined): 1 | 2 | null {
+  const m = /@(?:studio|스튜디오)\s?([ab])(?![a-z])/i.exec(text ?? '');
+  return m ? (m[1].toLowerCase() === 'a' ? 1 : 2) : null;
+}
 
 /** 커서 바로 앞이 "@글자"면 그 시작 위치와 글자. 메일 주소(a@b)는 무시 */
 export function mentionQuery(text: string, caret: number): { start: number; query: string } | null {

@@ -12,6 +12,8 @@ export interface AskOptions {
   project?: { name: string; description: string; repo: string | null; openTasks: string[] };
   /** 조사: Google 검색 연결로 답하고 출처를 붙인다(v0.4.61) */
   research?: boolean;
+  /** 먼저 쓸 Gemini 키(1=Studio A, 2=Studio B, @StudioA·@StudioB, v0.6.24). 안 되면 다른 쪽이 대신 */
+  slot?: 1 | 2;
 }
 
 export interface Routed {
