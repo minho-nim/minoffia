@@ -289,28 +289,30 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   {!site && deploy.ok ? ' · 수정에서 주소를 적으면 바로 열 수 있어요' : ''}
                 </p>
               )}
+              {/* 덜 복잡하게(v0.6.41 소유자 "구조도 열어 보기 힘들어, 읽을 게 너무 많아"): 칸들을 한 줄 버튼으로, 누르면 전체 화면으로 열린다 */}
+              <div className="project-sections">
               {p.repo && !p.sample && <ProjectSetup project={p} issues={setupIssuesOf?.(p) ?? { codex: null, claude: null }} />}
               {renderHistory && (
                 <details className="project-rules project-history-box" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHistoryOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>한 일 기록</summary>
+                  <summary>📜 한 일 기록</summary>
                   {historyOpen[p.id] && renderHistory(p)}
                 </details>
               )}
               {renderStructure && (
                 <details className="project-rules project-structure" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setStructureOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>구조도</summary>
+                  <summary>🗺️ 구조도</summary>
                   {structureOpen[p.id] && renderStructure(p)}
                 </details>
               )}
               {renderHealth && p.repo && (
                 <details className="project-rules project-health" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHealthOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>앱 지도·점검</summary>
+                  <summary>🩺 앱 지도·점검</summary>
                   {healthOpen[p.id] && renderHealth(p)}
                 </details>
               )}
               {renderDesign && p.repo && (
                 <details className="project-rules project-design" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setDesignOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>디자인 기준{p.designMd ? '' : ' (없음)'}</summary>
+                  <summary>🎨 디자인{p.designMd ? '' : '(없음)'}</summary>
                   {designOpen[p.id] && renderDesign(p)}
                 </details>
               )}
@@ -320,7 +322,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 return (
                   <details className="project-rules project-debt">
                     <summary>
-                      미뤄 둔 일 <span className="num num-count">{debts.length}</span>
+                      ⏳ 미뤄 둔 일 <span className="num num-count">{debts.length}</span>
                     </summary>
                     <p className="muted small">개발 AI가 알고 일부러 줄인 곳이에요(코드의 shortcut 주석). 때가 되면 업무로 만들어 고치세요.</p>
                     <ul>
@@ -350,8 +352,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               {(
                 <details className="project-rules">
                   <summary>
-                    지켜야 할 것 <span className="num num-count">{mineRules.length}</span>
-                    <span className="muted small"> + 기본 {BASE_RULES.length}</span>
+                    📏 규칙 <span className="num num-count">{mineRules.length}</span>
                   </summary>
                   <details className="project-base-rules">
                     <summary className="small">기본 규칙(모든 프로젝트에 늘 적용) {BASE_RULES.length}</summary>
@@ -431,6 +432,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   )}
                 </details>
               )}
+              </div>
               {repoFor === p.id && onCreateRepo && (
                 <RepoCreate
                   project={p}
@@ -476,9 +478,9 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
   const claudeOk = done.claude && !issues.claude;
   const count = 1 + Number(codexOk) + Number(claudeOk);
   return (
-    <details className="project-rules project-setup" open={!!(issues.codex || issues.claude)}>
+    <details className="project-rules project-setup">
       <summary>
-        준비 체크리스트 {count}/3{issues.codex || issues.claude ? ' · 막힌 곳 있음' : ''}
+        ✅ 준비 {count}/3{issues.codex || issues.claude ? ' ⚠' : ''}
       </summary>
       <ul className="setup-list small">
         <li className="is-ok">✓ 저장소 연결: {project.repo}</li>

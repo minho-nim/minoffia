@@ -5424,3 +5424,116 @@ a.project-site {
   cursor: pointer;
   list-style-position: inside;
 }
+
+/* ===== 덜 복잡하게(v0.6.41 소유자 "읽을 게 너무 많고 보기 힘들어") ===== */
+/* ① 업무 카드: 설명·담당 바꾸기·삭제는 '더보기' 안에 */
+.task-more {
+  margin-top: 8px;
+}
+.task-more > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 4px 0;
+}
+.task-more[open] > summary {
+  margin-bottom: 6px;
+}
+/* ② 프로젝트 카드: 칸들을 한 줄 버튼으로, 누르면 전체 화면 */
+.project-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.project-sections > details {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.project-sections > details > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.project-sections > details > summary::-webkit-details-marker {
+  display: none;
+}
+.project-sections > details > summary::marker {
+  content: '';
+}
+.project-sections > details[open] {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  overflow: auto;
+  padding: max(12px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  background: var(--bg);
+}
+.project-sections > details[open] > summary {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px -8px rgba(0, 0, 0, 0.4);
+}
+.project-sections > details[open] > summary::after {
+  content: '✕ 닫기';
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--muted);
+}
+/* ③ 휴대폰에서 업무·프로젝트·팀 탭은 사무실 그림을 접는다(대화·에이전트 탭에서만 크게) */
+@media (max-width: 1039px) {
+  .layout.tab-tasks > .stage,
+  .layout.tab-projects > .stage,
+  .layout.tab-team > .stage {
+    display: none;
+  }
+}
+/* ④ 업무 필터는 한 줄(옆으로 밀어 보기) */
+.filters-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.filters-scroll::-webkit-scrollbar {
+  display: none;
+}
+.filters-scroll > * {
+  flex: 0 0 auto;
+}
+/* ⑤ 설명 글은 ⓘ를 눌러야(읽을 글 줄이기) */
+.info-note {
+  display: inline-block;
+}
+.info-note > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.info-note > summary::-webkit-details-marker {
+  display: none;
+}
+@media (max-width: 1039px) {
+  .stage-note {
+    display: none;
+  }
+}

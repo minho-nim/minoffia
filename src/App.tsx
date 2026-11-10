@@ -1737,7 +1737,7 @@ export function App() {
       )}
 
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
-      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}`}>
+      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab}`}>
         <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`} aria-label="오피스">
           <OfficeView
             lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
@@ -1931,10 +1931,10 @@ export function App() {
                 }}
               />
               <details className="direct-entry">
-                <summary className="small">직접 입력(이미지·유형·우선순위 지정)</summary>
+                <summary className="small">＋ 직접 입력</summary>
                 <TaskForm projects={snap.projects} usage={snap.usage} leave={snap.leave ?? []} onSubmit={addTask} />
               </details>
-              <div className="filters" role="group" aria-label="업무 필터">
+              <div className="filters filters-scroll" role="group" aria-label="업무 필터">
                 {(
                   [
                     ['open', `열린 업무 ${openCount}`],
