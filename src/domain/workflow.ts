@@ -153,7 +153,7 @@ export function canApprove(view: WorkflowView, gate: Gate, workItemId = ''): Gat
         return { ok: false, reason: `${view.waitingWork.map((a) => `${a.workItemId}(${a.assignee})`).join(', ')} 결과를 기다리는 중입니다. 끝나거나 "중단 기록"을 하면 올릴 수 있어요.` };
       return { ok: true };
     case 'C':
-      if (!view.result || !view.bApproved) return { ok: false, reason: '같은 결과의 올리기 승인이 먼저 필요합니다.' };
+      if (!view.result || !view.bApproved) return { ok: false, reason: '같은 결과의 결과 승인이 먼저 필요합니다.' };
       if (view.cApproved) return { ok: false, reason: '이미 배포 승인했습니다.' };
       return { ok: true };
   }

@@ -70,7 +70,7 @@ export function speechFor(tasks: Task[], all: WorkflowData, leave: AgentId[] = [
       case 'result_review':
       case 'github_approval_pending': {
         const by = mine.find((a) => a.workItemId === v.result?.workItemId) ?? mine[0];
-        tag(by ? agentOf(by.assignee) : t.assignee, 'ask', '결과', '결과 보고, 올리기 승인해 주세요');
+        tag(by ? agentOf(by.assignee) : t.assignee, 'ask', '결과', '결과 보고, 결과 승인해 주세요');
         break;
       }
       case 'github_uploading':
@@ -81,7 +81,7 @@ export function speechFor(tasks: Task[], all: WorkflowData, leave: AgentId[] = [
         tag('ci', 'busy', '배포', '배포하는 중');
         break;
       case 'deployment_approval_pending':
-        // 올리기 승인 뒤 PR·CI가 끝나야 내 차례다. 그 전에는 CI 봇이 일하는 중.
+        // 결과 승인 뒤 PR·CI가 끝나야 내 차례다. 그 전에는 CI 봇이 일하는 중.
         if (prCheckPasses(latestPrCheck(t, all))) tag('ci', 'ask', '배포', '배포 승인해 주세요');
         else tag('ci', 'busy', 'PR', 'PR·CI를 확인하는 중');
         break;

@@ -47,7 +47,7 @@ export function stalls(tasks: Task[], all: WorkflowData, now: number = Date.now(
       const b = all.approvals.filter((a) => a.taskId === t.id && a.gate === 'B' && a.decision === 'approved').sort((x, y) => y.createdAt.localeCompare(x.createdAt))[0];
       const check = latestPrCheck(t, all);
       if (b && !t.prUrl && older(b.createdAt, STALL_AFTER.pr, now)) {
-        out.push({ taskId: t.id, word: '올리기', label: `올리기 승인 뒤 ${STALL_AFTER.pr}분이 지났는데 PR이 없어요. Claude 세션을 확인하거나 PR 주소를 기록하세요.`, since: b.createdAt });
+        out.push({ taskId: t.id, word: '올리기', label: `결과 승인 뒤 ${STALL_AFTER.pr}분이 지났는데 PR이 없어요. 업무 카드의 'PR 다시 열기'를 누르세요.`, since: b.createdAt });
       } else if (check?.ciState === 'failure') {
         out.push({ taskId: t.id, word: '올리기', label: 'PR의 CI(시험)가 실패했어요. PR을 확인하거나 결과 검토에서 수정 요청하세요.', since: check.checkedAt });
       }

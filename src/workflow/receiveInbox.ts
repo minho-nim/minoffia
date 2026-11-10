@@ -73,7 +73,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
           : a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting'
             ? '시작된 작업이 아닙니다(중단·완료됨).'
             : view.bApproved
-              ? '이미 올리기 승인(B)한 결과가 있습니다.'
+              ? '이미 결과 승인(B)한 결과가 있습니다.'
               : null;
     if (why) {
       if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `${who}가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
@@ -90,7 +90,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
     const summary = [
       maskSecrets(item.summary),
       item.changedFiles ? `\n바뀐 파일:\n${item.changedFiles}` : '\n바뀐 파일: 없음',
-      item.branch ? `\n작업 브랜치: ${item.branch} (${item.previewUrl ? '미리보기용으로 올림, PR은 올리기 승인 뒤' : fromGemini ? 'Gemini가 올림, PR은 올리기 승인 뒤' : 'PR은 올리기 승인 뒤'})` : '',
+      item.branch ? `\n작업 브랜치: ${item.branch} (${item.previewUrl ? '미리보기용으로 올림, PR은 결과 승인 뒤' : fromGemini ? 'Gemini가 올림, PR은 결과 승인 뒤' : 'PR은 결과 승인 뒤'})` : '',
     ].join('\n');
     const ok = await step(
       task.id,
@@ -115,7 +115,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
         if (item.screenshots.length) await store.linkResultShots(task.id, revision, item.screenshots).catch(() => undefined);
         await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result', lastVerifiedAt: new Date().toISOString() });
       },
-      `${who}가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 올리기 승인(B)하거나 수정 요청하세요.`,
+      `${who}가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 결과 승인(B)하거나 수정 요청하세요.`,
     );
     // v0.4.20: 저장에 성공했을 때만 "받음"으로 표시한다(실패하면 다음 확인 때 다시 시도).
     if (ok) await store.markResultInbox(item.id, 'imported', '');
@@ -125,7 +125,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
     }
   }
   // 결과는 저장됐는데 작업이 '시작됨'에 남은 경우(v0.5.33 전에는 완료 기록이 DB에서 막혔다): 그 작업의 자동 결과가
-  // 이미 있으면 완료로 고친다. 그래야 올리기 승인(B)이 "결과를 기다리는 중"으로 막히지 않는다.
+  // 이미 있으면 완료로 고친다. 그래야 결과 승인(B)이 "결과를 기다리는 중"으로 막히지 않는다.
   for (const a of snap.workflow.assignments) {
     if (a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting') continue;
     const got = snap.workflow.results.some(

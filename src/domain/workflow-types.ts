@@ -253,7 +253,7 @@ export const STAGE_LABEL: Record<Stage, string> = {
   executing: '개발 중',
   validation: '검증 중',
   result_review: '결과 검토',
-  github_approval_pending: '올리기 승인 대기',
+  github_approval_pending: '결과 승인 대기',
   github_uploading: 'GitHub 업로드',
   pr_review: 'PR 검토',
   deployment_approval_pending: '배포 승인 대기',
@@ -270,7 +270,7 @@ export const GATE_LABEL: Record<Gate, string> = {
   A: '기획 승인',
   E: '실행 승인',
   P: '견본 승인',
-  B: '올리기 승인(GitHub)',
+  B: '결과 승인',
   C: '배포 승인',
 };
 

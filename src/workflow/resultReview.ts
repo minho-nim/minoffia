@@ -22,7 +22,7 @@ export function createResultReviewer(clock: () => number = Date.now) {
   const redo = new Map<string, number>();
   const announce = (ctx: Context, task: Task, revision: number, rv: ResultReview) => {
     const score = rv.total === null ? '' : ` ${rv.total}점`;
-    const message = rv.verdict === 'pass' ? '검토 통과. 확인하고 올리기 승인하세요.'
+    const message = rv.verdict === 'pass' ? '검토 통과. 확인하고 결과 승인하세요.'
       : rv.verdict === 'redo' ? `고칠 점이 있어 다시 개발을 보내요(자동 ${rv.autoRedo + 1}/2).`
       : '사장님 확인이 필요해요. 업무 카드의 점수표를 보세요.';
     ctx.say(rv.verdict === 'owner' ? 'error' : 'ok', `'${task.title}' 결과 v${revision} 평가${score}: ${message}`);
