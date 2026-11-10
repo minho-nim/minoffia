@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('managed_repos').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).gte('created_at', kstMidnight);
+  const { count } = await admin.from('managed_repos').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('source', 'created').gte('created_at', kstMidnight);
   if ((count ?? 0) >= DAILY_REPO_CAP) return reply(429, { ok: false, error: `오늘 저장소 만들기 ${DAILY_REPO_CAP}회를 모두 썼습니다.` });
 
   let res: Response;

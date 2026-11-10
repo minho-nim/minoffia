@@ -857,7 +857,8 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     plan_revision: view.plan!.planRevision,
                     spec_revision: view.spec!.revision,
                   });
-                  if (ok && a.assignee === 'codex' && auto) await auto.start({ ...a, dispatchStatus: 'ready' }, false);
+                  // 앞 작업이 아직이면 지금 맡기지 않는다(앞 작업이 끝나면 앱이 자동으로 맡긴다, v0.6.18)
+                  if (ok && a.assignee === 'codex' && auto && !startBlocker(a, allAssignments, view.plan, agentLimits)) await auto.start({ ...a, dispatchStatus: 'ready' }, false);
                   return ok;
                 });
               const autoWho = a.assignee === 'claude' ? 'Claude' : a.assignee === 'codex' ? 'Codex' : 'Gemini';

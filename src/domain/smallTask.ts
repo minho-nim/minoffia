@@ -47,7 +47,8 @@ export function checkSmallTask(
     if (h.needs_design) why.push('새 디자인 필요');
   }
   if (lines(spec.changeScope) > 3) why.push('바꿀 범위가 김');
-  if (lines(spec.testCriteria) > 4) why.push('확인할 것이 많음');
+  // v0.6.18(소유자 "복잡하네"): 기준 5~6줄(필수·권장·선택 태그로 늘어난 것)도 작업 하나로. 7줄부터 PM이 나눈다
+  if (lines(spec.testCriteria) > 6) why.push('확인할 것이 많음');
   const text = [spec.finalPrompt, spec.changeScope].join('\n');
   for (const [re, label] of RISKY) if (re.test(text)) why.push(label);
   if (!repo || !repo.includes('/')) why.push('저장소 없음');
