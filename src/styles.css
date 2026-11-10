@@ -5473,24 +5473,34 @@ a.project-site {
 }
 .project-sections > details[open] {
   position: fixed;
-  inset: 0;
+  top: 50%;
+  left: 50%;
   z-index: 500;
+  width: min(640px, calc(100vw - 24px));
+  max-height: min(80vh, 760px);
   overflow: auto;
-  padding: max(12px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
-  background: var(--bg);
+  padding: 0 16px 16px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  /* 뒤 화면을 어둡게(누를 수는 없음, ✕ 닫기로 닫는다) */
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.42), 0 18px 40px -12px rgba(0, 0, 0, 0.5);
 }
 .project-sections > details[open] > summary {
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
-  width: 100%;
-  margin-bottom: 12px;
-  padding: 10px 14px;
+  width: calc(100% + 32px);
+  margin: 0 -16px 12px;
+  padding: 12px 16px;
   font-size: 1rem;
   font-weight: 700;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px -8px rgba(0, 0, 0, 0.4);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
 }
 .project-sections > details[open] > summary::after {
   content: '✕ 닫기';
@@ -5586,5 +5596,100 @@ a.project-site {
   .layout.tab-projects > .stage.is-hold .office,
   .layout.tab-team > .stage.is-hold .office {
     transform: none;
+  }
+}
+
+/* ① 위 얇은 머리의 '사무실 ▾'도 숨긴 탭에서 사무실을 띄운다(v0.6.42) */
+@media (max-width: 1039px) {
+  .layout.tab-tasks > .stage.is-peek,
+  .layout.tab-projects > .stage.is-peek,
+  .layout.tab-team > .stage.is-peek,
+  .layout.tab-settings > .stage.is-peek,
+  .layout.tab-settings > .stage.is-hold {
+    display: block;
+    position: fixed;
+    top: calc(var(--mini-h) + env(safe-area-inset-top, 0px) + 6px);
+    left: 8px;
+    right: 8px;
+    z-index: 455;
+    margin: 0;
+    pointer-events: auto;
+  }
+  .layout.tab-tasks > .stage.is-peek .office,
+  .layout.tab-projects > .stage.is-peek .office,
+  .layout.tab-team > .stage.is-peek .office {
+    transform: none;
+  }
+  .layout.tab-settings > .stage {
+    display: none;
+  }
+  /* 누르고 보기 버튼은 작게(내용을 덜 가리게) */
+  .layout.tab-tasks > .office-hold,
+  .layout.tab-projects > .office-hold,
+  .layout.tab-team > .office-hold {
+    padding: 6px 10px;
+    opacity: 0.92;
+  }
+  /* 설정 탭으로 옮긴 것은 휴대폰 머리에서 뺀다(사용량·밝기·연결) */
+  .topbar .usage,
+  .topbar .mode,
+  .topbar .push-toggle,
+  .topbar-mini .theme-toggle,
+  .topbar-mini .bar-btn-usage {
+    display: none;
+  }
+}
+/* 설정 탭(v0.6.42) */
+.settings {
+  display: grid;
+  gap: 12px;
+}
+.settings-box {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.settings-box h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.order-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.order-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.order-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.order-btns {
+  display: inline-flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+/* 설정 탭의 밝기 버튼은 밝은 바탕에 맞춘 색(머리용 색이라 흐리게 보였다) */
+.settings-box .theme-toggle {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface-2);
+  opacity: 1;
+}
+@media (max-width: 1039px) {
+  .topbar .theme-toggle {
+    display: none;
   }
 }
