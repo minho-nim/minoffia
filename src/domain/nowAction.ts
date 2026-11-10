@@ -8,7 +8,7 @@ import type { SimpleState } from './simpleState';
 const WHO: Record<string, string> = { codex: 'Codex', claude: 'Claude', gemini: 'Gemini', grok: 'Grok' };
 
 export type NowAction =
-  | { kind: 'approveA' | 'approveB' | 'approveC' }
+  | { kind: 'approveA' | 'approveB' | 'approveC' | 'openPr' }
   | { kind: 'jump'; step: 'qa' | 'plan' | 'pm' | 'E' | 'B' | 'C' };
 
 export interface NowInfo {
@@ -21,7 +21,7 @@ export interface NowInfo {
   secondary?: { label: string; action: NowAction };
 }
 
-export function nowInfo(view: WorkflowView, opts: { done: boolean; review?: ResultReview | null; ciPassed?: boolean; dispatchFailed?: boolean }): NowInfo {
+export function nowInfo(view: WorkflowView, opts: { done: boolean; review?: ResultReview | null; ciPassed?: boolean; dispatchFailed?: boolean; prUrl?: string | null }): NowInfo {
   const failed = view.assignments.find((a) => a.dispatchStatus === 'failed');
   const running = view.assignments.find((a) => a.dispatchStatus === 'started' || a.dispatchStatus === 'starting');
   const who = (a?: AgentAssignment) => (a ? WHO[a.assignee] ?? a.assignee : 'AI');
@@ -55,12 +55,14 @@ export function nowInfo(view: WorkflowView, opts: { done: boolean; review?: Resu
       const score = r ? (r.total === null ? '' : ` · 평가 ${r.crossTotal != null && r.total !== null ? Math.round((r.total + r.crossTotal) / 2) : r.total}점`) : ' · 평가 중';
       return {
         tone: 'turn',
-        text: `결과(v${view.result?.revision ?? ''})가 왔어요${score}. 보고 올리기 승인하면 PR이 열려요.`,
-        primary: canApprove(view, 'B').ok ? { label: '올리기 승인', action: { kind: 'approveB' } } : undefined,
+        text: `결과(v${view.result?.revision ?? ''})가 왔어요${score}. 보고 결과 승인하면 PR이 열려요.`,
+        primary: canApprove(view, 'B').ok ? { label: '결과 승인', action: { kind: 'approveB' } } : undefined,
         secondary: { label: '결과 보기', action: { kind: 'jump', step: 'B' } },
       };
     }
     case 'deployment_approval_pending':
+      // PR이 아직 없으면 여는 중이거나 실패한 것: 다시 열 수 있게(v0.6.31)
+      if (!opts.prUrl) return { tone: 'working', text: 'PR을 여는 중이에요(1~2분). 안 열리면 다시 눌러 주세요.', secondary: { label: 'PR 다시 열기', action: { kind: 'openPr' } } };
       return opts.ciPassed && canApprove(view, 'C').ok
         ? { tone: 'turn', text: 'PR 검사(CI)를 통과했어요. 배포 승인하면 운영에 나가요.', primary: { label: '배포 승인', action: { kind: 'approveC' } }, secondary: { label: 'PR 보기', action: { kind: 'jump', step: 'C' } } }
         : { tone: 'working', text: 'PR과 검사(CI)를 확인하는 중이에요.', secondary: { label: 'PR 보기', action: { kind: 'jump', step: 'C' } } };

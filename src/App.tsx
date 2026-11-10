@@ -71,8 +71,8 @@ function explainDbError(message: string): string {
     ['plan is stale', '기획서가 바뀌어 이 계획으로는 실행 승인할 수 없습니다. PM 계획을 다시 받으세요.'],
     ['E must', '최신 계획에 있는 작업만 실행 승인할 수 있습니다.'],
     ['E approval required', 'E 실행 승인 전에는 시작을 기록할 수 없습니다.'],
-    ['B must approve the latest', '최신 결과 패키지만 올리기 승인할 수 있습니다.'],
-    ['C requires B', '같은 결과의 올리기 승인이 먼저 필요합니다.'],
+    ['B must approve the latest', '최신 결과만 결과 승인할 수 있습니다.'],
+    ['C requires B', '같은 결과의 결과 승인이 먼저 필요합니다.'],
     ['approve the prototype (P)', '견본 먼저 계획입니다. 견본을 올리고 견본 승인을 한 뒤 Codex를 실행 승인하세요.'],
     ['P requires an uploaded prototype', '승인할 견본(AI Studio 결과)을 먼저 올리세요.'],
     ['P is only for prototype_first', '견본 먼저 계획에서만 견본을 승인합니다.'],
@@ -815,7 +815,7 @@ export function App() {
           prototypeTried.current.add(key);
           await makePrototype(t.id);
         }
-        // 올리기 승인(B) 뒤 PR·CI를 자동으로 확인한다(v0.4.5). 결과가 정해지면(성공·실패·닫힘) 멈춘다. 손으로 다시 확인하는 버튼은 그대로.
+        // 결과 승인(B) 뒤 PR·CI를 자동으로 확인한다(v0.4.5). 결과가 정해지면(성공·실패·닫힘) 멈춘다. 손으로 다시 확인하는 버튼은 그대로.
         let checked = false;
         for (const t of snap.tasks) {
           const v = deriveWorkflow(t, snap.workflow);
@@ -1071,7 +1071,7 @@ export function App() {
             ? '배포 승인을 기록했습니다. 끝난 업무는 열린 업무 목록에서 빠지고 "완료" 필터에 남습니다.'
             : `${gate} 승인을 기록했습니다.`,
       );
-      // 소유자 승인(2026-10-31): 실행 승인(E) → Claude 작업 자동 시작, 올리기 승인(B) → Claude 결과면 Claude가 PR을 연다.
+      // 소유자 승인(2026-10-31): 실행 승인(E) → Claude 작업 자동 시작, 결과 승인(B) → Claude 결과면 Claude가 PR을 연다.
       if (ok && decision === 'approved' && store.mode === 'supabase') {
         if (gate === 'E') {
           const found = snap.workflow.assignments.find((x) => x.taskId === task.id && x.planRevision === revision && x.workItemId === workItemId);
@@ -1095,7 +1095,7 @@ export function App() {
             const branch = codexBranch(task, r.workItemId, tool);
             try {
               await store.openPr?.(task.id);
-              say('ok', `올리기 승인했어요. ${branch} 브랜치로 PR을 자동으로 여는 중이에요(1~2분, 병합 안 함). PR이 생기면 CI를 자동으로 확인합니다.`);
+              say('ok', `결과 승인했어요. ${branch} 브랜치로 PR을 자동으로 여는 중이에요(1~2분, 병합 안 함). PR이 생기면 CI를 자동으로 확인합니다.`);
             } catch (e) {
               say('error', `PR 자동 열기 실패: ${(e as Error).message}`);
             } finally {
@@ -1400,6 +1400,19 @@ export function App() {
               say('error', `Gemini 개발을 시작하지 못했습니다: ${(e as Error).message}`);
               await markQuota(a, (e as Error).message);
               return false;
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
+    openPr:
+      store.mode === 'supabase' && store.openPr
+        ? async (task) => {
+            try {
+              await store.openPr!(task.id);
+              say('ok', 'PR을 다시 여는 중이에요(1~2분, 병합 안 함). 열리면 CI를 자동으로 확인해요.');
+            } catch (e) {
+              say('error', `PR을 열지 못했어요: ${(e as Error).message}`);
             } finally {
               setSnap(await store.load());
             }
