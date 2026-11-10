@@ -42,7 +42,8 @@ describe('작은 일 바로 배정(v0.5.20)', () => {
     expect(no(spec({ sizeHint: { difficulty: 2, single_task: false, needs_design: true } }))).toEqual(['작업 여러 개', '새 디자인 필요']);
     expect(no(spec({ intent: 'asset_request' }))).toContain('개발·수정 요청이 아님');
     expect(no(spec({ changeScope: 'a\nb\nc\nd' }))).toContain('바꿀 범위가 김');
-    expect(no(spec({ testCriteria: '1\n2\n3\n4\n5' }))).toContain('확인할 것이 많음');
+    expect(no(spec({ testCriteria: '1\n2\n3\n4\n5\n6\n7' }))).toContain('확인할 것이 많음');
+    expect(no(spec({ testCriteria: '1\n2\n3\n4\n5\n6' }))).not.toContain('확인할 것이 많음');
     expect(no(spec({ finalPrompt: '로그인 화면 버튼 색 바꾸기' }))).toContain('로그인·권한');
     expect(no(spec({ finalPrompt: 'DB에 칸 하나 추가' }))).toContain('DB');
     expect(no(spec({ finalPrompt: '모든 화면 글꼴 바꾸기' }))).toContain('전체 화면');

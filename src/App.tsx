@@ -21,7 +21,8 @@ import { newId, type InboxState, type OfficeStore } from './data/store';
 import { AGENT_BY_ID, AGENTS } from './domain/agents';
 import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
-import { buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
+import { buildCodexHandoff, buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
+import { startBlocker } from './domain/concurrency';
 import { simpleStates, stateCounts, SIMPLE_LABEL } from './domain/simpleState';
 import { myTurns, type TurnStep } from './domain/myTurn';
 import { clarificationsOf, linksOf } from './domain/requestContext';
@@ -422,6 +423,12 @@ export function App() {
   const reviewTick = useRef<() => void>(() => undefined);
   useEffect(() => {
     reviewTick.current();
+  }, [snap]);
+  // 앞 작업이 끝나면 기다리던 작업 자동 시작(v0.6.18, 소유자 "전체적으로 복잡하네"). 실제 처리는 아래 chainTick.
+  const chainTick = useRef<() => void>(() => undefined);
+  const chainTried = useRef(new Set<string>());
+  useEffect(() => {
+    chainTick.current();
   }, [snap]);
 
   // 훅은 아래 '일찍 끝내기' 줄보다 먼저 둔다(v0.5.82: 로그인 뒤 훅 수가 달라져 화면이 하얗게 멈추던 것)
@@ -1051,7 +1058,11 @@ export function App() {
       // 소유자 승인(2026-10-31): 실행 승인(E) → Claude 작업 자동 시작, 올리기 승인(B) → Claude 결과면 Claude가 PR을 연다.
       if (ok && decision === 'approved' && store.mode === 'supabase') {
         if (gate === 'E') {
-          const a = snap.workflow.assignments.find((x) => x.taskId === task.id && x.planRevision === revision && x.workItemId === workItemId);
+          const found = snap.workflow.assignments.find((x) => x.taskId === task.id && x.planRevision === revision && x.workItemId === workItemId);
+          // 앞 작업이 아직이면 지금 시작하지 않는다(서버가 거절함). 앞 작업이 끝나면 chainTick이 시작한다.
+          const blocked = found ? startBlocker(found, snap.workflow.assignments, deriveWorkflow(task, snap.workflow).plan, snap.agentLimits) : null;
+          if (blocked) say('ok', `실행 승인했어요. ${blocked.replace('시작할 수 있습니다.', '자동으로 시작해요.')}`);
+          const a = blocked ? undefined : found;
           if (a?.assignee === 'claude') await workflowActions.startClaudeDev?.(a, false);
           // Gemini 개발(v0.4.82): 실행 승인 → 서버가 GitHub Actions 워크플로 시작
           if (a?.assignee === 'gemini' && a.executionMode === 'gemini_actions') await workflowActions.startGeminiDev?.(a, false);
@@ -1414,6 +1425,32 @@ export function App() {
         if (ok && store.mode === 'supabase' && projectById.get(task.projectId)?.repo) await planTask(task, false, { skipSmall: true });
         return ok;
       }),
+  };
+
+  // 기다리던 작업 자동 시작(v0.6.18): 실행 승인(E)이 있고, 앞 작업이 있었고, 지금은 막힌 게 없는 '준비' 작업만.
+  // 같은 작업은 앱이 열려 있는 동안 한 번만 시도한다(한도·오류로 실패하면 카드의 시작 버튼으로).
+  // shortcut: 앱이 닫혀 있으면 앞 작업이 끝나도 다음 작업이 시작되지 않는다, 서버가 결과를 받을 때 이어서 시작하게 고칠 때.
+  chainTick.current = () => {
+    if (store.mode !== 'supabase' || !client) return;
+    for (const a of snap.workflow.assignments) {
+      if (a.dispatchStatus !== 'ready' || chainTried.current.has(a.id)) continue;
+      const task = snap.tasks.find((t) => t.id === a.taskId);
+      if (!task) continue;
+      const view = deriveWorkflow(task, snap.workflow);
+      const item = view.plan?.plan.work_items.find((w) => w.id === a.workItemId);
+      if (!view.plan || view.plan.planRevision !== a.planRevision || !item?.dependencies?.length || !view.eApproved(a.workItemId)) continue;
+      if (startBlocker(a, snap.workflow.assignments, view.plan, snap.agentLimits)) continue;
+      chainTried.current.add(a.id);
+      say('ok', `앞 작업이 끝나서 ${a.workItemId}을(를) 자동으로 시작해요.`);
+      if (a.assignee === 'claude') void workflowActions.startClaudeDev?.(a, false);
+      else if (a.assignee === 'gemini' && a.executionMode === 'gemini_actions') void workflowActions.startGeminiDev?.(a, false);
+      else if (a.assignee === 'codex' && view.spec) {
+        const project = projectById.get(task.projectId);
+        const rules = withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === task.projectId).map((r) => r.rule));
+        const text = buildCodexHandoff(task, view.spec, item, project, view.plan.targetBaseRevision, attachmentsOf(snap.workflow.attachments, task.id, 'request'), linksOf(snap.workflow.links, task.id), view.pApproved ? attachmentsOf(snap.workflow.attachments, task.id, 'prototype', view.plan.planRevision) : [], rules);
+        void workflowActions.startCodexLinear?.(a, false, text);
+      }
+    }
   };
 
   // 채점의 중복 방지·대기·오류 재시도는 별도 처리에서 관리한다.
