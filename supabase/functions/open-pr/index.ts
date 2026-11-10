@@ -67,7 +67,8 @@ Deno.serve(async (req) => {
   if (fromDiff) {
     const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
     const path = `${user.id}/tasks/${task.id}/pr/v${result.revision}.diff`;
-    const up = await admin.storage.from('attachments').upload(path, new Blob([String(result.diff)], { type: 'text/plain' }), { upsert: true, contentType: 'text/plain' });
+    const raw = String(result.diff);
+    const up = await admin.storage.from('attachments').upload(path, new Blob([raw.endsWith('\n') ? raw : `${raw}\n`], { type: 'text/plain' }), { upsert: true, contentType: 'text/plain' });
     if (up.error) return reply(500, { ok: false, error: '승인된 변경을 준비하지 못했어요.' });
     const { data: signed } = await admin.storage.from('attachments').createSignedUrl(path, 3600);
     if (!signed?.signedUrl) return reply(500, { ok: false, error: '승인된 변경 주소를 만들지 못했어요.' });
