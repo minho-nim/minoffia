@@ -482,7 +482,7 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
         <li className="is-ok">✓ 저장소 연결: {project.repo}</li>
         <li className={codexOk ? 'is-ok' : issues.codex ? 'is-bad' : ''}>
           <label className="check">
-            <input type="checkbox" checked={done.codex} onChange={() => flip('codex')} /> Codex 환경 만들고 게시(프로젝트마다 한 번)
+            <input type="checkbox" checked={done.codex} onChange={() => flip('codex')} /> Codex <b>레거시</b> 환경에 이 저장소 넣기(프로젝트마다 한 번)
           </label>
           {issues.codex && <b className="warn-text"> — {issues.codex}</b>}
           <span className="setup-actions">
@@ -502,7 +502,9 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
               {copied ? '복사됨' : '허용 도메인 복사'}
             </button>
           </span>
-          <span className="muted"> 저장소 {project.repo} 선택 → 추가 허용 도메인에 붙여 넣기 → 게시</span>
+          <span className="muted">
+            {' '}Codex 설정 → <b>레거시 Codex 클라우드</b> → 환경(이미 있으면 그 환경에 저장소 추가, 없으면 + 환경 만들기) → 저장소 {project.repo} → 추가 허용 도메인 붙여 넣기 → 저장. Linear·GitHub로 맡길 때는 레거시 환경만 써요(새 Codex Cloud 환경은 못 봐요, 2026-11-11 확인).
+          </span>
         </li>
         <li className={claudeOk ? 'is-ok' : issues.claude ? 'is-bad' : ''}>
           <label className="check">
@@ -517,7 +519,7 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
           <span className="muted"> 루틴 "MinLab AI Office 보조 개발" → 저장소에 {project.repo} 추가 → 저장</span>
         </li>
       </ul>
-      <p className="muted small">없어도 업무는 멈추지 않아요: Codex 환경이 없으면 Claude가 이어받아요.</p>
+      <p className="muted small">처음 한 번만: GitHub 설정 → Applications → ChatGPT Codex Connector → 저장소 접근을 All repositories로(새 저장소도 자동). 없어도 업무는 멈추지 않아요: Codex 환경이 없으면 Claude가 이어받아요.</p>
     </details>
   );
 }
