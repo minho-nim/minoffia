@@ -1,5 +1,7 @@
-# Gemini 개발 결과의 PR 자동 열기(v0.5.85, 소유자 "이거 자동 안돼?"): 올리기 승인(B) 뒤 서버 함수 open-pr이 시작한다. 모델 호출 없음.
-# 이미 올라간 작업 브랜치(ai/gemini/…)에서 main으로 PR만 연다(병합은 배포 승인 뒤 서버가). 쓰기 토큰은 Actions secret(TARGET_REPO_TOKEN)에만.
+# 결과의 PR 자동 열기(v0.5.85 Gemini, v0.6.29 Claude·Codex): 올리기 승인(B) 뒤 서버 함수 open-pr이 시작한다. 모델 호출 없음.
+# Gemini: 이미 올라간 작업 브랜치(ai/gemini/…)에서 main으로 PR만 연다. Claude·Codex: 승인된 diff(diff_url, 1시간 주소)를
+# 기본 브랜치 위에 그대로 적용해 작업 브랜치(ai/claude|codex/…)로 올리고 PR을 연다(고치지 않음). 병합은 배포 승인 뒤 서버가.
+# 쓰기 토큰은 Actions secret(TARGET_REPO_TOKEN)에만, diff 주소는 로그에서 가린다.
 name: PR 열기(올리기 승인 뒤)
 on:
   workflow_dispatch:
@@ -16,6 +18,9 @@ on:
       body:
         description: 'PR 본문'
         required: false
+      diff_url:
+        description: '승인된 diff 1회용 주소(Claude·Codex 결과만)'
+        required: false
 permissions:
   contents: read
 # 같은 작업 브랜치의 PR 열기는 한 번에 하나씩(v0.6.16: 단추를 두 번 눌러도 PR이 둘 생기지 않게)
@@ -27,6 +32,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: 주소 가리기
+        env:
+          DIFF_URL: ${{ inputs.diff_url }}
+        run: |
+          [ -z "$DIFF_URL" ] || echo "::add-mask::$DIFF_URL"
+      - name: 승인된 변경을 작업 브랜치로 올리기(Claude·Codex)
+        if: ${{ inputs.diff_url != '' }}
+        env:
+          REPO: ${{ inputs.repo }}
+          HEAD: ${{ inputs.head }}
+          TITLE: ${{ inputs.title }}
+          DIFF_URL: ${{ inputs.diff_url }}
+          GH_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
+          [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; }
+          echo "$HEAD" | grep -Eq '^ai/(claude|codex)/[a-z0-9-]+$' || { echo "::error::작업 브랜치 이름이 이상합니다"; exit 1; }
+          owner=${REPO%%/*}
+          existing=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$HEAD" --jq '.[0].html_url // empty')
+          if [ -n "$existing" ]; then echo "이미 열린 PR이 있어 올리지 않습니다: $existing"; exit 0; fi
+          curl -fsS "$DIFF_URL" -o /tmp/approved.diff || { echo "::error::승인된 변경을 받지 못했습니다"; exit 1; }
+          base=$(gh api "repos/$REPO" --jq .default_branch)
+          git clone -q --depth 1 --branch "$base" "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" /tmp/repo
+          cd /tmp/repo
+          git config user.name "minoffia"
+          git config user.email "minoffia@users.noreply.github.com"
+          git checkout -q -b "$HEAD"
+          git apply --index /tmp/approved.diff || { echo "::error::승인된 변경이 기본 브랜치에 깨끗이 적용되지 않습니다(그 사이 바뀜). 다시 개발이 필요해요."; exit 1; }
+          git commit -q -m "$TITLE"
+          git push -q --force origin "$HEAD"
+          echo "작업 브랜치 올림: $HEAD"
       - name: PR 열기
         env:
           REPO: ${{ inputs.repo }}
@@ -37,7 +73,7 @@ jobs:
         run: |
           echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
           [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; }
-          echo "$HEAD" | grep -Eq '^ai/gemini/[a-z0-9-]+$' || { echo "::error::작업 브랜치 이름이 이상합니다"; exit 1; }
+          echo "$HEAD" | grep -Eq '^ai/(gemini|claude|codex)/[a-z0-9-]+$' || { echo "::error::작업 브랜치 이름이 이상합니다"; exit 1; }
           owner=${REPO%%/*}
           existing=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$HEAD" --jq '.[0].html_url // empty')
           if [ -n "$existing" ]; then echo "이미 열린 PR: $existing"; exit 0; fi

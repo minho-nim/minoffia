@@ -36,16 +36,23 @@ Deno.serve(async (req) => {
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
   const repo = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') return reply(409, { ok: false, error: '이 업무의 저장소로는 PR을 열 수 없어요.' });
-  const { data: result } = await userClient.from('result_packages').select('revision, source, summary').eq('task_id', task.id).order('revision', { ascending: false }).limit(1).maybeSingle();
-  if (!result || result.source !== 'gemini_actions_auto') return reply(409, { ok: false, error: 'Gemini 개발 결과가 아닙니다.' });
-  const branch = /작업 브랜치:\s*(ai\/gemini\/[a-z0-9-]+)/.exec(String(result.summary ?? ''))?.[1];
+  const { data: result } = await userClient.from('result_packages').select('revision, source, summary, diff, work_item_id').eq('task_id', task.id).order('revision', { ascending: false }).limit(1).maybeSingle();
+  // v0.6.29(소유자 "PC 전에 더 해둘 것"): Claude·Codex 결과도 여기서 연다. 세션이 브랜치를 못 올려도(권한 거부) 승인된 diff를
+  // Actions가 기본 브랜치 위에 그대로 적용해 작업 브랜치로 올리고 PR을 연다. Gemini는 예전처럼 이미 올라간 브랜치에서.
+  const fromDiff = !!result && ['claude_session_auto', 'claude_manual', 'codex_linear_auto'].includes(String(result.source));
+  if (!result || (!fromDiff && result.source !== 'gemini_actions_auto')) return reply(409, { ok: false, error: '자동으로 PR을 열 수 있는 결과가 아닙니다(Gemini·Claude·Codex 자동 결과만).' });
+  const tool = String(result.source).startsWith('codex') ? 'codex' : 'claude';
+  const short = String(task.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
+  const item = String(result.work_item_id ?? '').replace(/[^a-z0-9-]/gi, '').toLowerCase();
+  const branch = fromDiff ? `ai/${tool}/${short}${item ? `-${item}` : ''}` : /작업 브랜치:\s*(ai\/gemini\/[a-z0-9-]+)/.exec(String(result.summary ?? ''))?.[1];
   if (!branch) return reply(409, { ok: false, error: '작업 브랜치가 올라가지 않은 결과예요.' });
+  if (fromDiff && !String(result.diff ?? '').trim()) return reply(409, { ok: false, error: '바뀐 내용(diff)이 없는 결과예요.' });
   const { data: b } = await userClient.from('approvals').select('id').eq('task_id', task.id).eq('gate', 'B').eq('decision', 'approved').eq('approved_revision', result.revision).limit(1).maybeSingle();
   if (!b) return reply(409, { ok: false, error: '이 결과는 아직 올리기 승인(B) 전이에요.' });
   // 승인한 커밋과 지금 브랜치 끝이 같은지(v0.5.93, vicem "검토 뒤 바뀐 것은 내보내지 않음"). 커밋 줄이 없는 옛 결과·읽기 실패는 그대로 진행.
   const approvedSha = /커밋:\s*([0-9a-f]{40})/.exec(String(result.summary ?? ''))?.[1];
   const readToken = env('GITHUB_REPO_TOKEN');
-  if (approvedSha && readToken) {
+  if (!fromDiff && approvedSha && readToken) {
     const head = await fetch(`https://api.github.com/repos/${repo}/branches/${branch}`, {
       headers: { Authorization: `Bearer ${readToken}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minoffia' },
       signal: AbortSignal.timeout(10_000),
@@ -54,11 +61,22 @@ Deno.serve(async (req) => {
     if (now && now !== approvedSha) return reply(409, { ok: false, error: `올리기 승인한 뒤 작업 브랜치가 바뀌었어요(승인 ${approvedSha.slice(0, 7)}, 지금 ${now.slice(0, 7)}). 결과를 다시 받아 확인하세요.` });
   }
   const title = `${String(task.title ?? '').slice(0, 80)} (minoffia 결과 v${result.revision})`;
-  const prBody = `minoffia에서 올리기 승인(B)한 Gemini 개발 결과입니다. 병합은 배포 승인(C) 뒤에 합니다.\n\n${String(result.summary ?? '').slice(0, 3000)}`;
+  const prBody = `minoffia에서 올리기 승인(B)한 ${fromDiff ? (tool === 'codex' ? 'Codex' : 'Claude') : 'Gemini'} 개발 결과입니다. 병합은 배포 승인(C) 뒤에 합니다.\n\n${String(result.summary ?? '').slice(0, 3000)}`;
+  // 승인된 diff는 비공개 버킷에 두고 1시간짜리 받기 주소만 Actions에 준다(로그에서는 가린다)
+  let diffUrl = '';
+  if (fromDiff) {
+    const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
+    const path = `${user.id}/tasks/${task.id}/pr/v${result.revision}.diff`;
+    const up = await admin.storage.from('attachments').upload(path, new Blob([String(result.diff)], { type: 'text/plain' }), { upsert: true, contentType: 'text/plain' });
+    if (up.error) return reply(500, { ok: false, error: '승인된 변경을 준비하지 못했어요.' });
+    const { data: signed } = await admin.storage.from('attachments').createSignedUrl(path, 3600);
+    if (!signed?.signedUrl) return reply(500, { ok: false, error: '승인된 변경 주소를 만들지 못했어요.' });
+    diffUrl = signed.signedUrl;
+  }
   const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/open-pr.yml/dispatches`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${ghToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ref: 'main', inputs: { repo, head: branch, title, body: prBody } }),
+    body: JSON.stringify({ ref: 'main', inputs: { repo, head: branch, title, body: prBody, ...(diffUrl ? { diff_url: diffUrl } : {}) } }),
     signal: AbortSignal.timeout(15_000),
   }).catch(() => null);
   if (!res?.ok) return reply(502, { ok: false, error: `PR 열기를 시작하지 못했습니다(GitHub ${res?.status ?? '응답 없음'}).` });
