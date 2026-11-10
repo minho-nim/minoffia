@@ -8,11 +8,31 @@ on:
 permissions:
   contents: read
 
+# Actions 무료 분량 아끼기(v0.6.51 소유자 결정): 같은 브랜치에 새로 올리면 이전 검사는 취소한다.
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      db: ${{ steps.changes.outputs.db }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # DB 시험은 마이그레이션·DB 시험 파일이 바뀐 때만(작업마다 1분 올림이라 나눠 돌면 1분씩 더 든다)
+      - name: DB 관련 변경 확인
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then echo "db=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+          if echo "$files" | grep -qE '^(supabase/migrations/|supabase/tests/|scripts/test-db\.sh$|\.github/workflows/verify\.yml$)'; then db=true; else db=false; fi
+          echo "db=$db" >> "$GITHUB_OUTPUT"
+          echo "DB 시험: $db"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -23,6 +43,8 @@ jobs:
       - run: npm run build
 
   verify-db:
+    needs: verify
+    if: needs.verify.outputs.db == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
