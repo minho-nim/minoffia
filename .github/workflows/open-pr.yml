@@ -53,13 +53,15 @@ jobs:
           existing=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$HEAD" --jq '.[0].html_url // empty')
           if [ -n "$existing" ]; then echo "이미 열린 PR이 있어 올리지 않습니다: $existing"; exit 0; fi
           curl -fsS "$DIFF_URL" -o /tmp/approved.diff || { echo "::error::승인된 변경을 받지 못했습니다"; exit 1; }
+          # 마지막 줄 끝 줄바꿈이 빠진 diff(결과 JSON에서 잘림)는 git apply가 '깨진 patch'로 거절한다(v0.6.36)
+          [ -z "$(tail -c1 /tmp/approved.diff)" ] || echo >> /tmp/approved.diff
           base=$(gh api "repos/$REPO" --jq .default_branch)
           git clone -q --depth 1 --branch "$base" "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" /tmp/repo
           cd /tmp/repo
           git config user.name "minoffia"
           git config user.email "minoffia@users.noreply.github.com"
           git checkout -q -b "$HEAD"
-          git apply --index /tmp/approved.diff || { echo "::error::승인된 변경이 기본 브랜치에 깨끗이 적용되지 않습니다(그 사이 바뀜). 다시 개발이 필요해요."; exit 1; }
+          git apply --index --recount /tmp/approved.diff || git apply --index --recount -3 /tmp/approved.diff || { echo "::error::승인된 변경이 기본 브랜치에 깨끗이 적용되지 않습니다(그 사이 바뀜). 다시 개발이 필요해요."; exit 1; }
           git commit -q -m "$TITLE"
           git push -q --force origin "$HEAD"
           echo "작업 브랜치 올림: $HEAD"
