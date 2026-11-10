@@ -5584,7 +5584,8 @@ a.project-site {
   .layout.tab-team > .stage.is-hold {
     display: block;
     position: fixed;
-    top: max(8px, env(safe-area-inset-top));
+    /* v0.6.49 소유자 "맨 위가 안 보임": 늘 떠 있는 얇은 머리 아래에서 시작 */
+    top: calc(var(--mini-h) + env(safe-area-inset-top, 0px) + 6px);
     left: 8px;
     right: 8px;
     z-index: 455;
