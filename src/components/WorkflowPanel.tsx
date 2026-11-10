@@ -410,6 +410,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
     review: view.result ? reviews.find((r) => r.resultRevision === view.result!.revision) ?? null : null,
     ciPassed: actions.checkPr ? prCheckPasses(prCheck ?? null) && !!task.prUrl : false,
     prUrl: task.prUrl,
+    deploy: deployment ? { ok: deployment.ok, error: deployment.error } : null,
   });
   const goTo = (step: string) => {
     const keys = step === 'qa' ? ['plan', 'pm'] : [step];
@@ -420,6 +421,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   };
   const doNow = (a: NowAction) => {
     if (a.kind === 'jump') return goTo(a.step);
+    if (a.kind === 'deploy') return void run(() => (actions.deploy ? actions.deploy(task, (deployment?.error ?? '').startsWith('확인 필요')) : Promise.resolve()));
     if (a.kind === 'openPr') return void run(() => actions.openPr ? actions.openPr(task) : Promise.resolve());
     if (a.kind === 'approveA') return void run(() => actions.decide(task, 'A', view.spec!.revision, 'approved'));
     if (a.kind === 'approveB') return void run(() => actions.decide(task, 'B', view.result!.revision, 'approved', '', { result_sha256: view.result!.sha256 }));
