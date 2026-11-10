@@ -86,3 +86,19 @@ describe('배정 상태 기록(v0.5.33 버그: 서버가 시작한 작업을 앱
     expect(sent[0]).not.toHaveProperty('last_verified_at');
   });
 });
+
+describe('같은 일 두 번(v0.6.16)', () => {
+  const clientWith = (error: { message: string; code?: string } | null) =>
+    ({ from: () => ({ insert: async () => ({ data: null, error }) }) }) as unknown as SupabaseClient;
+  const approval = { id: 'a', taskId: 't', gate: 'A' as const, decision: 'approved' as const, approvedRevision: 1, previousRevision: null, workItemId: '', scope: {}, actor: '', createdAt: '' };
+  const rev = { id: 'r', taskId: 't', specRevision: 1, resultRevision: 1, feedback: 'x', createdAt: '' };
+  it('이미 있는 승인·수정 요청(23505)은 성공으로 본다', async () => {
+    const store = createSupabaseStore(clientWith({ message: 'duplicate key', code: '23505' }));
+    await expect(store.addApproval(approval)).resolves.toBeUndefined();
+    await expect(store.addRevisionRequest(rev)).resolves.toBeUndefined();
+  });
+  it('다른 오류는 그대로 알린다', async () => {
+    const store = createSupabaseStore(clientWith({ message: 'B must approve the latest result package', code: 'P0001' }));
+    await expect(store.addApproval(approval)).rejects.toThrow('B must approve');
+  });
+});
