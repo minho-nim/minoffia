@@ -355,9 +355,16 @@ export function App() {
   // 페이지가 머리 높이 넘게 내려갈 수 있을 때(짧은 페이지에서 아래 빈 공간이 생기거나 깜빡이지 않게).
   // 끄기 = 맨 위에 닿았을 때만.
   const topEl = useRef<HTMLElement | null>(null);
-  const checkMini = useCallback(() => {
+  // v0.6.25(소유자 "채팅창 위로 올릴 때 흔들림", 화면 녹화): 위로 빠르게 올리는 도중에 사무실이 펴지며(높이가 바뀌어)
+  // 글이 아래로 밀렸다. 접기는 바로, 펴기는 스크롤이 멈춘 뒤(0.25초)에만 한다.
+  const settleTimer = useRef(0);
+  const checkMini = useCallback((settled = false) => {
     const top = topEl.current;
     if (!top) return;
+    if (!settled) {
+      window.clearTimeout(settleTimer.current);
+      settleTimer.current = window.setTimeout(() => checkMini(true), 250);
+    }
     const set = (m: boolean, t: boolean) => {
       stageRef.current = { mini: m, tiny: t };
       setMini(m);
@@ -369,7 +376,7 @@ export function App() {
     setBarOn(bar);
     if (!bar) setUsageOpen(false);
     const now = stageRef.current;
-    if (window.scrollY <= 2) return set(false, false);
+    if (window.scrollY <= 2) return settled || !now.mini ? set(false, false) : undefined;
     if (top.getBoundingClientRect().bottom >= 46) return; // 얇은 머리 높이(--mini-h)와 같게
     const office = document.querySelector<HTMLElement>('.stage .office');
     const h = office ? office.offsetHeight : 0;
@@ -383,7 +390,7 @@ export function App() {
     const enter = top.offsetHeight + h * 0.6;
     const sticky = office?.parentElement && getComputedStyle(office.parentElement).position === 'sticky';
     if (!now.tiny && sticky && window.scrollY > enter && room - h / 2 > enter + 40) set(true, true);
-    else if (now.tiny && window.scrollY < enter - h / 2) set(true, false);
+    else if (settled && now.tiny && window.scrollY < enter - h / 2) set(true, false);
   }, []);
   useEffect(() => {
     if (!peek) return;
@@ -395,8 +402,12 @@ export function App() {
     topEl.current = el;
   }, []);
   useEffect(() => {
-    window.addEventListener('scroll', checkMini, { passive: true });
-    return () => window.removeEventListener('scroll', checkMini);
+    const onScroll = () => checkMini();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.clearTimeout(settleTimer.current);
+    };
   }, [checkMini]);
   // Gemini 질문 서버를 앱을 열 때·다시 볼 때 미리 깨운다(v0.4.38). 입력창을 누르자마자 보내도 깨어나기(약 2초)를 기다리지 않게.
   useEffect(() => {
