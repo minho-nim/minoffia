@@ -38,4 +38,24 @@ describe('예약한 Linear 식별자로 추적 유지', () => {
     expect(p.save).not.toHaveBeenCalled();
     expect(p.mention).toHaveBeenCalledWith(issue.id);
   });
+  it('실패 뒤 다시 맡기면 이미 있는 이슈에 Codex를 다시 부른다', async () => {
+    const p = { ...params(), again: vi.fn().mockResolvedValue(undefined) };
+    p.create.mockRejectedValueOnce(new Error('duplicate id'));
+    p.read.mockResolvedValue(issue);
+    await expect(dispatchTrackedIssue(p)).resolves.toEqual(issue);
+    expect(p.again).toHaveBeenCalledExactlyOnceWith(issue.id);
+    expect(p.save).toHaveBeenCalledOnce();
+  });
+  it('새 이슈를 만들었으면 다시 부르지 않는다', async () => {
+    const p = { ...params(), again: vi.fn() };
+    await dispatchTrackedIssue(p);
+    expect(p.again).not.toHaveBeenCalled();
+  });
+  it('다시 부르기가 실패하면 성공 처리하지 않는다', async () => {
+    const p = { ...params(), again: vi.fn().mockRejectedValue(new Error('update failed')) };
+    p.create.mockRejectedValueOnce(new Error('duplicate id'));
+    p.read.mockResolvedValue(issue);
+    await expect(dispatchTrackedIssue(p)).rejects.toThrow('update failed');
+    expect(p.save).not.toHaveBeenCalled();
+  });
 });
