@@ -360,7 +360,7 @@ export function App() {
     if (!bar) setUsageOpen(false);
     const now = stageRef.current;
     if (window.scrollY <= 2) return set(false, false);
-    if (top.getBoundingClientRect().bottom >= 36) return;
+    if (top.getBoundingClientRect().bottom >= 46) return; // 얇은 머리 높이(--mini-h)와 같게
     const office = document.querySelector<HTMLElement>('.stage .office');
     const h = office ? office.offsetHeight : 0;
     const room = document.documentElement.scrollHeight - window.innerHeight;
