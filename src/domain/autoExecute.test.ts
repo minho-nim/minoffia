@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoApproved, autoExecutionTargets } from './autoExecute';
+import { autoApproved, autoExecutionTargets, serverTurn } from './autoExecute';
 import type { WorkflowView } from './workflow';
 import type { AgentAssignment, Approval } from './workflow-types';
 
@@ -32,5 +32,11 @@ describe('승인 3개: 실행 승인 자동 기록(v0.6.22)', () => {
     const base = { taskId: 't', gate: 'E', decision: 'approved', approvedRevision: 2, workItemId: 'W1' };
     expect(autoApproved([{ ...base, scope: { auto: true } } as unknown as Approval], a('W1'))).toBe(true);
     expect(autoApproved([{ ...base, scope: {} } as unknown as Approval], a('W1'))).toBe(false);
+  });
+  it('서버가 받은 계획·서버가 기록한 승인은 1분 동안 서버 몫(v0.6.28)', () => {
+    const now = Date.parse('2026-11-10T05:00:00Z');
+    expect(serverTurn('2026-11-10T04:59:30Z', true, now)).toBe(true);
+    expect(serverTurn('2026-11-10T04:58:30Z', true, now)).toBe(false);
+    expect(serverTurn('2026-11-10T04:59:30Z', false, now)).toBe(false);
   });
 });

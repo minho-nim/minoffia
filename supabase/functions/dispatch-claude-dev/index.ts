@@ -47,23 +47,31 @@ Deno.serve(async (req) => {
     return reply(503, { ok: false, error: 'Claude 보조 개발 루틴이 아직 연결되지 않았습니다(CLAUDE_SUPPORT_FIRE_URL·CLAUDE_SUPPORT_TOKEN). 수동 인계로 진행하세요.' });
   }
 
-  const userClient = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
-    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
-  });
-  const { data: auth } = await userClient.auth.getUser();
-  const user = auth?.user;
-  if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
-  if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 실행할 수 있습니다.' });
-
-  let body: { assignmentId?: string; acknowledgeRetry?: boolean };
+  let body: { assignmentId?: string; acknowledgeRetry?: boolean; ownerId?: string };
   try {
     body = await req.json();
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
   }
+  // v0.6.28(소유자 "앱을 닫아 둬도 진행"): 서버(submit-plan·submit-result)가 서버 키로 부를 수 있다. 이때는 업무 주인을 직접 확인한다.
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  const internal = Boolean(serviceKey) && req.headers.get('Authorization') === `Bearer ${serviceKey}`;
+  const userClient = internal
+    ? createClient(env('SUPABASE_URL'), serviceKey)
+    : createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
+  let user: { id: string };
+  if (internal) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(body.ownerId ?? ''))) return reply(400, { ok: false, error: 'ownerId가 필요합니다.' });
+    user = { id: String(body.ownerId) };
+  } else {
+    const { data: auth } = await userClient.auth.getUser();
+    if (!auth?.user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
+    if ((auth.user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 실행할 수 있습니다.' });
+    user = auth.user;
+  }
 
-  // RLS를 거쳐 내 기록만 읽는다.
-  const { data: a } = await userClient.from('agent_assignments').select('*').eq('id', body.assignmentId ?? '').maybeSingle();
+  // RLS를 거쳐 내 기록만 읽는다(서버 호출이면 주인 조건을 직접 건다).
+  const { data: a } = await userClient.from('agent_assignments').select('*').eq('id', body.assignmentId ?? '').eq('owner_id', user.id).maybeSingle();
   if (!a) return reply(404, { ok: false, error: '배정된 작업을 찾을 수 없습니다.' });
   if (a.assignee !== 'claude') return reply(400, { ok: false, error: 'Claude에 배정된 작업만 시작합니다.' });
   const { data: task } = await userClient.from('tasks').select('id, project_id, projects(name, repo, preview_host)').eq('id', a.task_id).maybeSingle();
