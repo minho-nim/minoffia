@@ -11,7 +11,7 @@
 
 ## 미해결
 
-- **Codex Linear 위임 실패**: "workspace has no available environments". Linear의 Codex 연결 ChatGPT 계정과 Codex 환경이 있는 계정(Plus)이 같은지 PC에서 확인해야 한다. 그전까지는 Codex가 못 하면 Claude로 자동으로 넘기거나(handoff), 업무 카드 'Codex 앱용 지시서 복사(결과 자동)'를 쓴다.
+- **Codex Linear 위임 실패**: "workspace has no available environments". 2026-11-11 원인 확인: Linear·GitHub 연동은 **레거시 Codex 클라우드** 환경만 쓰는데 그곳에 환경이 없었다(계정은 같음, 새 Codex Cloud 환경은 정상). 소유자가 레거시 환경을 만든 뒤 재시험 필요. 환경 생성 API가 없어 새 저장소는 손으로 추가한다. 그전까지는 Codex가 못 하면 Claude로 자동으로 넘기거나(handoff), 업무 카드 'Codex 앱용 지시서 복사(결과 자동)'를 쓴다.
 - 새 프로젝트마다 Codex 웹 환경 만들기·게시·추가 허용 도메인 `kmmicksimbredbyvdmvx.supabase.co`가 필요하다(WorthIt만 끝남). 자동으로 할 방법은 없다.
 - Claude 루틴(보조 개발)에는 add_repo가 없다: 새 저장소는 claude.ai/code 루틴 설정의 저장소 목록에 소유자가 추가해야 한다(MinLab 제외). 없으면 결과로 "저장소 없음"을 보낸다.
 
