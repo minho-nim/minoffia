@@ -252,6 +252,11 @@ const BUCKET = 'attachments';
 /** 화면용 주소 유효 시간(초) */
 const SIGNED_URL_SECONDS = 3600;
 
+/** 같은 일을 두 번 보내면(단추 두 번·다른 기기·서버가 먼저) DB의 '하나만' 규칙(23505)에 걸린다. 이미 된 것이니 성공으로 본다(v0.6.16) */
+function checkOnce(res: { error: { message: string; code?: string } | null }): void {
+  if (res.error && res.error.code !== '23505') throw new Error(res.error.message);
+}
+
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
   return res.data;
@@ -414,7 +419,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async addApproval(x) {
       // 승인자(actor)는 서버가 로그인 정보로 채운다.
-      check(
+      checkOnce(
         await client.from('approvals').insert({
           id: x.id,
           task_id: x.taskId,
@@ -460,7 +465,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       check(await client.from('task_followups').insert({ task_id: taskId, text: text.trim().slice(0, 2000) }));
     },
     async addRevisionRequest(x) {
-      check(
+      checkOnce(
         await client.from('revision_requests').insert({
           id: x.id,
           task_id: x.taskId,
