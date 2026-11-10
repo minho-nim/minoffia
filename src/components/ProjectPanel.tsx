@@ -6,6 +6,7 @@ import { BASE_RULES } from '../domain/baseRules';
 import { useState } from 'react';
 import type { Project, ProjectRule, Task } from '../domain/types';
 import { RepoCreate } from './RepoCreate';
+import { CODEX_ENV_URL, ROUTINES_URL, SUBMIT_HOST, type SetupIssues } from '../domain/projectSetup';
 import { normalizeDemoUrl, PREVIEW_HOST_PATTERN, REPO_PATTERN, RULE_SOURCE_LABEL, siteUrl } from '../domain/types';
 
 interface Props {
@@ -45,13 +46,15 @@ interface Props {
   lastDeployOf?: (project: Project) => Deployment | null;
   /** GitHub Pages 데모 주소(v0.5.91), Pages가 켜진 저장소만 */
   demoUrlOf?: (project: Project) => string | null;
+  /** 준비 체크리스트의 막힌 흔적(v0.6.32) */
+  setupIssuesOf?: (project: Project) => SetupIssues;
 }
 
 /**
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
@@ -286,6 +289,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   {!site && deploy.ok ? ' · 수정에서 주소를 적으면 바로 열 수 있어요' : ''}
                 </p>
               )}
+              {p.repo && !p.sample && <ProjectSetup project={p} issues={setupIssuesOf?.(p) ?? { codex: null, claude: null }} />}
               {renderHistory && (
                 <details className="project-rules project-history-box" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHistoryOpen((o) => ({ ...o, [p.id]: open })); }}>
                   <summary>한 일 기록</summary>
@@ -443,5 +447,79 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
         })}
       </ul>
     </div>
+  );
+}
+
+/** 준비 체크리스트(v0.6.32 소유자 "새로 만든 건 또 이 작업을 해야 하나"): 자동으로 못 하는 설정만 모아 링크·복사로 바로 하게.
+ *  체크 표시는 이 기기에만 기억한다(화면 편의, 막힌 흔적은 업무 기록으로 따로 알린다). */
+function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssues }) {
+  const key = (k: string) => `setup:${project.id}:${k}`;
+  const read = (k: string) => {
+    try {
+      return localStorage.getItem(key(k)) === '1';
+    } catch {
+      return false;
+    }
+  };
+  const [done, setDone] = useState(() => ({ codex: read('codex'), claude: read('claude') }));
+  const [copied, setCopied] = useState(false);
+  const flip = (k: 'codex' | 'claude') => {
+    const v = !done[k];
+    setDone((d) => ({ ...d, [k]: v }));
+    try {
+      localStorage.setItem(key(k), v ? '1' : '0');
+    } catch {
+      // 저장 못 해도 화면은 그대로
+    }
+  };
+  const codexOk = done.codex && !issues.codex;
+  const claudeOk = done.claude && !issues.claude;
+  const count = 1 + Number(codexOk) + Number(claudeOk);
+  return (
+    <details className="project-rules project-setup" open={!!(issues.codex || issues.claude)}>
+      <summary>
+        준비 체크리스트 {count}/3{issues.codex || issues.claude ? ' · 막힌 곳 있음' : ''}
+      </summary>
+      <ul className="setup-list small">
+        <li className="is-ok">✓ 저장소 연결: {project.repo}</li>
+        <li className={codexOk ? 'is-ok' : issues.codex ? 'is-bad' : ''}>
+          <label className="check">
+            <input type="checkbox" checked={done.codex} onChange={() => flip('codex')} /> Codex 환경 만들고 게시(프로젝트마다 한 번)
+          </label>
+          {issues.codex && <b className="warn-text"> — {issues.codex}</b>}
+          <span className="setup-actions">
+            <a href={CODEX_ENV_URL} target="_blank" rel="noreferrer">
+              Codex 환경 열기 ↗
+            </a>
+            <button
+              type="button"
+              className="btn btn-small btn-ghost"
+              onClick={() => {
+                void navigator.clipboard?.writeText(SUBMIT_HOST).then(() => {
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 2000);
+                }, () => undefined);
+              }}
+            >
+              {copied ? '복사됨' : '허용 도메인 복사'}
+            </button>
+          </span>
+          <span className="muted"> 저장소 {project.repo} 선택 → 추가 허용 도메인에 붙여 넣기 → 게시</span>
+        </li>
+        <li className={claudeOk ? 'is-ok' : issues.claude ? 'is-bad' : ''}>
+          <label className="check">
+            <input type="checkbox" checked={done.claude} onChange={() => flip('claude')} /> Claude 루틴에 이 저장소 추가
+          </label>
+          {issues.claude && <b className="warn-text"> — {issues.claude}</b>}
+          <span className="setup-actions">
+            <a href={ROUTINES_URL} target="_blank" rel="noreferrer">
+              Claude 루틴 열기 ↗
+            </a>
+          </span>
+          <span className="muted"> 루틴 "MinLab AI Office 보조 개발" → 저장소에 {project.repo} 추가 → 저장</span>
+        </li>
+      </ul>
+      <p className="muted small">없어도 업무는 멈추지 않아요: Codex 환경이 없으면 Claude가 이어받아요.</p>
+    </details>
   );
 }
