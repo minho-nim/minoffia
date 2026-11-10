@@ -41,12 +41,12 @@ export interface PlanInput {
   files: string[];
 }
 
-/** 배정 안내: 쉬움 = Gemini 개발, 보통 = Codex, 어려움 = Claude(휴가인 쪽은 빼고, dispatch-claude와 같은 규칙) */
+/** 배정 안내(v0.6.19, 소유자 "Codex 주, Claude 보조"): 개발은 Codex, Codex가 휴가면 Claude, 둘 다면 쉬운 일만 Gemini(dispatch-claude와 같은 규칙) */
 export function assignLine(away: PlanInput['away'], geminiDevOk: boolean): string {
-  const easy = geminiDevOk && !away.gemini ? '"gemini_dev"' : !away.codex ? '"codex_primary"' : '"claude_support"';
-  const normal = !away.codex ? '"codex_primary"' : '"claude_support"';
-  const hard = !away.claude ? '"claude_support"' : '"codex_primary"';
-  return `배정(assignee_preference): 쉬움 ${easy}, 보통 ${normal}, 어려움 ${hard}. 어려운 일은 가능하면 쉬운 작업 여러 개로 쪼갠다.${geminiDevOk ? '' : ' 이 저장소에는 "gemini_dev"를 쓰지 않는다.'}`;
+  const main = !away.codex ? '"codex_primary"' : !away.claude ? '"claude_support"' : null;
+  const easy = main ?? (geminiDevOk && !away.gemini ? '"gemini_dev"' : '"codex_primary"');
+  const other = main ?? '"codex_primary"';
+  return `배정(assignee_preference): 쉬움 ${easy}, 보통 ${other}, 어려움 ${other}. 개발은 Codex가 주로 하고 Claude는 보조다.${geminiDevOk ? '' : ' 이 저장소에는 "gemini_dev"를 쓰지 않는다.'}`;
 }
 
 export function buildPlanText(i: PlanInput): string {

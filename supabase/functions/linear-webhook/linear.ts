@@ -93,5 +93,7 @@ export function readNews(data: Status): CodexNews {
   const all = fromCodex.map((c) => c.body ?? '').join('\n');
   const taskUrl = all.match(/https:\/\/chatgpt\.com\/codex\/tasks\/[A-Za-z0-9_-]+/)?.[0] ?? null;
   const kind: CodexNews['kind'] = !lastC ? 'none' : /couldn'?t start|cannot start|usage limits?|no available environments/i.test(body) ? 'error' : 'working';
-  return { last: body.slice(0, 240), kind, taskUrl, issueState: data.issue?.state?.name ?? '' };
+  // v0.6.19(소유자 "Codex 주, Claude 보조"): 오늘 두 번 막힌 '환경 없음'을 쉬운 말로
+  const hint = /no available environments/i.test(body) ? 'Codex 환경 없음 — Codex 웹 설정 > 환경에서 이 저장소 환경을 만들고 "게시"하세요(프로젝트마다 한 번). ' : '';
+  return { last: (hint + body).slice(0, 240), kind, taskUrl, issueState: data.issue?.state?.name ?? '' };
 }

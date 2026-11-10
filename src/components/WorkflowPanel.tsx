@@ -1158,7 +1158,13 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                 {view.result.workItemId && ` · ${view.result.workItemId}`} · {view.result.summary || '(요약 없음)'}
               </p>
               <p className="small">
-                {view.result.source === 'claude_session_auto' ? '보낸 곳: Claude 세션이 직접 보냄(자동)' : '보낸 곳: 사람이 등록(붙여넣기)'}
+                {view.result.source === 'claude_session_auto'
+                  ? '보낸 곳: Claude 세션이 직접 보냄(자동)'
+                  : view.result.source === 'codex_linear_auto'
+                    ? '보낸 곳: Codex가 직접 보냄(자동, Claude가 채점)'
+                    : view.result.source === 'gemini_actions_auto'
+                      ? '보낸 곳: Gemini 개발이 직접 보냄(자동)'
+                      : '보낸 곳: 사람이 등록(붙여넣기)'}
               </p>
               {(() => {
                 // 되돌리기 쉬운가(v0.5.21, pr 스킬의 merge danger): 규칙만, 승인을 막지 않는 안내
@@ -1374,7 +1380,10 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           {view.bApproved && (
             <div className="wf-manual">
               <p className="ok-text">결과 v{view.result!.revision} 업로드 승인됨.</p>
-              {codexItem ? (
+              {view.result!.source === 'codex_linear_auto' ? (
+                // v0.6.19(소유자 "Codex 주, Claude 보조"): Codex가 보낸 결과는 승인된 diff 그대로 Claude가 PR을 연다
+                <p className="small">Codex 결과는 Claude가 승인된 변경 그대로 PR을 열어요(병합은 안 함). PR이 생기면 아래에 주소와 검사(CI) 결과가 보여요.</p>
+              ) : codexItem ? (
                 <>
                   <p className="small">
                     이제 결과를 만든 <b>같은 Codex 작업 창</b>에 아래 PR 요청을 붙여넣으세요. Codex가 최신 main 위에 브랜치를 만들고 PR을 엽니다(병합은 안 함). 받은 PR 주소를 기록하면 C 단계에서 씁니다.

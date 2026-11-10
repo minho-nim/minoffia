@@ -16,7 +16,8 @@ export type ImportFacts = {
 export function importDecision(f: ImportFacts): 'import' | 'failed' | 'skip' {
   const a = f.assignment;
   if (!a) return 'skip';
-  const auto = a.assignee === 'claude' || (a.assignee === 'gemini' && a.execution_mode === 'gemini_actions');
+  // v0.6.19: Codex(Linear)도 결과 제출표로 직접 보낸다(receiveInbox.ts와 같게)
+  const auto = a.assignee === 'claude' || a.assignee === 'codex' || (a.assignee === 'gemini' && a.execution_mode === 'gemini_actions');
   if (!auto) return 'skip';
   if (f.latestPlanRevision == null || a.plan_revision !== f.latestPlanRevision) return 'skip';
   if (a.dispatch_status !== 'started' && a.dispatch_status !== 'starting') return 'skip';
@@ -85,7 +86,7 @@ export async function importOnServer(admin: Admin, item: InboxRow): Promise<{ re
     revision,
     plan_revision: a.plan_revision,
     work_item_id: a.work_item_id,
-    source: fromGemini ? 'gemini_actions_auto' : 'claude_session_auto',
+    source: fromGemini ? 'gemini_actions_auto' : a.assignee === 'codex' ? 'codex_linear_auto' : 'claude_session_auto',
     summary: resultSummary(item, fromGemini),
     diff: item.diff,
     test_log: item.test_log,

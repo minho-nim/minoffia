@@ -807,7 +807,7 @@ export function App() {
         for (const t of snap.tasks) {
           const v = deriveWorkflow(t, snap.workflow);
           if (!v.bApproved || v.cApproved) continue;
-          if (!t.prUrl && !(v.result?.source === 'claude_session_auto' || v.result?.source === 'claude_manual' || v.result?.source === 'gemini_actions_auto')) continue;
+          if (!t.prUrl && !(v.result?.source === 'claude_session_auto' || v.result?.source === 'claude_manual' || v.result?.source === 'gemini_actions_auto' || v.result?.source === 'codex_linear_auto')) continue;
           // 작업 브랜치를 못 올린 Gemini 결과는 PR이 생길 수 없다(v0.5.74: 1분마다 409가 쌓이던 것)
           if (!t.prUrl && resultWithoutBranch(v.result)) continue;
           const c = latestPrCheck(t, snap.workflow);
@@ -1081,7 +1081,8 @@ export function App() {
               say('error', `PR 자동 열기 실패: ${(e as Error).message} — 직접 열기: https://github.com/${repo}/compare/main...${branch}?expand=1`);
             }
           }
-          if (r && (r.source === 'claude_session_auto' || r.source === 'claude_manual')) {
+          // v0.6.19(소유자 "Codex 주, Claude 보조"): Codex가 보낸 결과도 승인된 diff 그대로 Claude가 PR을 연다
+          if (r && (r.source === 'claude_session_auto' || r.source === 'claude_manual' || r.source === 'codex_linear_auto')) {
             try {
               const sent = await store.dispatchClaudePr(task.id, false);
               say('ok', `Claude가 ${sent.branch} 브랜치로 PR을 여는 중입니다(병합 안 함). PR이 열리면 CI를 자동으로 확인합니다.`);

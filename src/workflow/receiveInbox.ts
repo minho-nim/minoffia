@@ -62,9 +62,12 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
     }
     const view = deriveWorkflow(task, snap.workflow);
     const fromGemini = a.assignee === 'gemini' && a.executionMode === 'gemini_actions';
+    // v0.6.19: Codex(Linear)도 결과 제출표로 직접 보낸다
+    const fromCodex = a.assignee === 'codex';
+    const who = fromGemini ? 'Gemini' : fromCodex ? 'Codex' : 'Claude';
     const why =
-      a.assignee !== 'claude' && !fromGemini
-        ? '자동 개발(Claude·Gemini) 작업이 아닙니다.'
+      a.assignee !== 'claude' && !fromGemini && !fromCodex
+        ? '자동 개발(Claude·Gemini·Codex) 작업이 아닙니다.'
         : !view.plan || a.planRevision !== view.plan.planRevision
           ? '지금 계획의 작업이 아닙니다(계획이 바뀌었음).'
           : a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting'
@@ -73,7 +76,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
               ? '이미 올리기 승인(B)한 결과가 있습니다.'
               : null;
     if (why) {
-      if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `${fromGemini ? 'Gemini' : 'Claude'}가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
+      if (await store.markResultInbox(item.id, 'invalid', why)) say('error', `${who}가 보낸 결과를 쓰지 못했습니다(${task.title}): ${why}`);
       continue;
     }
     // v0.5.88: 개발이 끝까지 못 가서 바뀐 것이 하나도 없는 결과는 결과 패키지로 만들지 않고 작업을 '중단'으로 표시한다.
@@ -81,7 +84,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
     if (!item.diff.trim()) {
       const note = (item.remainingIssues || item.summary || '바뀐 것이 없음').slice(0, 200);
       await store.updateAssignment({ ...a, dispatchStatus: 'failed', actualProviderStatus: note, lastVerifiedAt: new Date().toISOString() }).catch(() => undefined);
-      if (await store.markResultInbox(item.id, 'invalid', '바뀐 것이 없는 결과(개발 실패)')) say('error', `${fromGemini ? 'Gemini' : 'Claude'} 개발이 끝까지 못 갔어요(${task.title}). 업무 카드에서 다시 시작하거나 다른 AI로 넘기세요.`);
+      if (await store.markResultInbox(item.id, 'invalid', '바뀐 것이 없는 결과(개발 실패)')) say('error', `${who} 개발이 끝까지 못 갔어요(${task.title}). 업무 카드에서 다시 시작하거나 다른 AI로 넘기세요.`);
       continue;
     }
     const summary = [
@@ -99,7 +102,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
           revision,
           planRevision: a.planRevision,
           workItemId: a.workItemId,
-          source: fromGemini ? 'gemini_actions_auto' : 'claude_session_auto',
+          source: fromGemini ? 'gemini_actions_auto' : fromCodex ? 'codex_linear_auto' : 'claude_session_auto',
           summary: summary.slice(0, 4000),
           diff: item.diff,
           testLog,
@@ -112,7 +115,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
         if (item.screenshots.length) await store.linkResultShots(task.id, revision, item.screenshots).catch(() => undefined);
         await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result', lastVerifiedAt: new Date().toISOString() });
       },
-      `Claude가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 올리기 승인(B)하거나 수정 요청하세요.`,
+      `${who}가 보낸 결과(${a.workItemId})를 결과 패키지로 저장했습니다. 보고 올리기 승인(B)하거나 수정 요청하세요.`,
     );
     // v0.4.20: 저장에 성공했을 때만 "받음"으로 표시한다(실패하면 다음 확인 때 다시 시도).
     if (ok) await store.markResultInbox(item.id, 'imported', '');
@@ -126,7 +129,7 @@ export async function receiveWorkflowInbox({ store, snap, reported, importPlanTe
   for (const a of snap.workflow.assignments) {
     if (a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting') continue;
     const got = snap.workflow.results.some(
-      (r) => r.taskId === a.taskId && r.planRevision === a.planRevision && r.workItemId === a.workItemId && (r.source === 'gemini_actions_auto' || r.source === 'claude_session_auto'),
+      (r) => r.taskId === a.taskId && r.planRevision === a.planRevision && r.workItemId === a.workItemId && (r.source === 'gemini_actions_auto' || r.source === 'claude_session_auto' || r.source === 'codex_linear_auto'),
     );
     if (got) await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'session_reported_result' }).catch(() => undefined);
   }

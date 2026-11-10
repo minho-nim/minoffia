@@ -29,6 +29,32 @@ async function linear(key: string, query: string, variables: Record<string, unkn
   return body.data;
 }
 
+/** 이 작업 전용 1회용 결과 제출표(dispatch-claude-dev와 같은 방식). 실패하면 null */
+// deno-lint-ignore no-explicit-any
+async function resultTicket(admin: any, ownerId: string, a: { id: string; task_id: string }): Promise<string | null> {
+  const { data: spec } = await admin.from('task_specs').select('revision').eq('task_id', a.task_id).order('revision', { ascending: false }).limit(1).maybeSingle();
+  if (!spec) return null;
+  const ticket = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '');
+  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ticket)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const { error } = await admin.from('plan_submit_tokens').insert({
+    owner_id: ownerId, task_id: a.task_id, spec_revision: spec.revision, token_hash: hash,
+    expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(), kind: 'result', assignment_id: a.id,
+  });
+  return error ? null : ticket;
+}
+
+/** Codex 지시서 끝에 붙는 "결과 보내기" 절 */
+export function submitSection(taskId: string, token: string, url = `${env('SUPABASE_URL')}/functions/v1/submit-result`): string {
+  return [
+    '',
+    '## 결과 보내기(자동 저장, 필수)',
+    `시험까지 끝나면 저장소 밖 /tmp/result-submit.json 에 {"task_id":"${taskId}","token":"${token}","result":{"summary":"<요약>","changed_files":["<경로>"],"diff":"<git diff 전체(기본 브랜치 대비)>","test_log":"<시험 명령과 결과 그대로>","remaining_issues":"<남은 문제, 없으면 빈 문자열>"}} 를 JSON으로 저장하고(문자열은 JSON 이스케이프) 아래를 한 번 실행한다.`,
+    `curl -sS -X POST '${url}' -H 'content-type: application/json' --data-binary @/tmp/result-submit.json`,
+    '- 이 token은 이 작업의 결과 제출 전용(24시간, 3번까지)이다. 다른 곳에 쓰거나 파일·커밋에 남기지 않는다.',
+    '- 응답이 {"ok":true,...}가 아니거나 접속이 막히면 응답(또는 오류)을 한 줄로 보고하고, 위 JSON의 result 부분을 마지막 메시지에 그대로 남긴다(사용자가 직접 옮길 수 있게).',
+  ].join('\n');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'POST만 받습니다.' });
@@ -116,7 +142,11 @@ Deno.serve(async (req) => {
   if (reservedError || !reserved?.provider_execution_id) return reply(503, { ok: false, error: '추적 정보 예약을 확인하지 못해 Linear에 전송하지 않았습니다.' });
   const issueId = String(reserved.provider_execution_id);
   const mention = env('CODEX_LINEAR_TRIGGER') === 'mention';
-  const description = [`저장소: ${project.repo}`, `AI Office 업무 ${a.task_id} · 작업 ${a.work_item_id} · 계획 v${a.plan_revision}`, '', text].join('\n');
+  // 결과 자동 저장(v0.6.19, 소유자 "Codex 주, Claude 보조"): Claude 보조 개발과 같은 1회용 제출표(해시만 저장, 24시간, 3번까지).
+  // Codex가 끝나면 submit-result로 diff를 보내고, 서버가 결과로 옮겨 Claude가 채점한다. 올리기 승인 뒤 PR은 Claude가 연다.
+  // 제출표를 못 만들면 예전처럼 사람이 결과를 붙여 넣는다(지시서는 그대로 보낸다).
+  const submit = await resultTicket(admin, user.id, a);
+  const description = [`저장소: ${project.repo}`, `AI Office 업무 ${a.task_id} · 작업 ${a.work_item_id} · 계획 v${a.plan_revision}`, '', text, submit ? submitSection(a.task_id, submit) : ''].join('\n');
   try {
     const issue = await dispatchTrackedIssue({
       issueId,

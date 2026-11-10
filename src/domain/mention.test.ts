@@ -25,7 +25,7 @@ describe('@이름으로 맡기기(v0.5.46)', () => {
 
   it('작은 일은 지정한 AI로, 휴가면 원래 규칙으로', () => {
     expect(checkSmallTask(spec, 'me/app', {}, 'claude_support')).toMatchObject({ ok: true, preference: 'claude_support' });
-    expect(checkSmallTask(spec, 'me/app', { claude: true }, 'claude_support')).toMatchObject({ ok: true, preference: 'gemini_dev' });
+    expect(checkSmallTask(spec, 'me/app', { claude: true }, 'claude_support')).toMatchObject({ ok: true, preference: 'codex_primary' });
     expect(checkSmallTask(spec, 'minho-nim/minoffia', {}, 'gemini_dev')).toMatchObject({ ok: true, preference: 'codex_primary' });
   });
 
