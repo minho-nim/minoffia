@@ -40,6 +40,8 @@ export interface OfficeStore {
   /** 결과 점수 평가(v0.4.64): 규칙 검사 → Gemini 채점 → 판정. 같은 결과 버전은 한 번만(이미 있으면 그것을 돌려줌) */
   /** 'started' = Claude에 채점을 막 맡김, 'waiting' = Claude 채점을 기다리는 중(v0.4.94) */
   reviewResult(taskId: string, resultRevision: number): Promise<ResultReview | 'started' | 'waiting'>;
+  /** 교차 채점 추가(v0.6.26): 다른 AI(Codex 결과 → Claude)가 한 번 더 채점. 점수는 나중에 결과 평가에 붙는다 */
+  crossReview?(taskId: string, resultRevision: number): Promise<{ sessionUrl: string | null }>;
   /**
    * 이미지 첨부. 파일을 비공개 저장소에 올린 뒤 기록을 남긴다. 같은 업무의 같은 파일(sha256)은 한 번만 저장한다.
    * `storagePath`는 저장소가 정한다.

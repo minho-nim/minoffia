@@ -46,8 +46,15 @@ Deno.serve(async (req) => {
   const { data: bumped } = await admin.from('plan_submit_tokens').update({ uses: ticket.uses + 1 }).eq('id', ticket.id).eq('uses', ticket.uses).select('id');
   if (!bumped?.length) return reply(409, { ok: false, error: 'retry' });
 
-  const { data: existing } = await admin.from('result_reviews').select('id').eq('task_id', taskId).eq('result_revision', ticket.result_revision).maybeSingle();
-  if (existing) return reply(200, { ok: true, message: '이미 채점된 결과입니다.' });
+  const { data: existing } = await admin.from('result_reviews').select('id, cross_total').eq('task_id', taskId).eq('result_revision', ticket.result_revision).maybeSingle();
+  // v0.6.26: 기본 채점(Gemini)이 이미 있으면 이것은 소유자가 누른 '교차 채점'이다. 점수만 붙이고 판정은 그대로 둔다.
+  if (existing) {
+    if (existing.cross_total != null) return reply(200, { ok: true, message: '이미 교차 채점된 결과입니다.' });
+    const reasonsOf = score.criteria.filter((c) => c.status !== 'met').map((c) => `${c.status === 'partial' ? '일부' : '미충족'}: ${c.text}`.slice(0, 160)).slice(0, 8);
+    const { error: crossError } = await admin.from('result_reviews').update({ cross_total: total(score), cross_judge: 'Claude', cross_reasons: reasonsOf }).eq('id', existing.id).is('cross_total', null);
+    if (crossError) return reply(500, { ok: false, error: 'could not save cross review' });
+    return reply(200, { ok: true, total: total(score), message: 'AI Office에 교차 채점 점수를 보냈습니다.' });
+  }
 
   const { data: result } = await admin.from('result_packages').select('plan_revision, work_item_id, diff, test_log').eq('task_id', taskId).eq('revision', ticket.result_revision).maybeSingle();
   const { data: spec } = await admin.from('task_specs').select('change_scope').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();

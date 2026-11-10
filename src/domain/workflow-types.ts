@@ -230,6 +230,10 @@ export interface ResultReview {
   autoRedo: number;
   /** 채점한 쪽(규칙, Gemini · Studio A 등) */
   judge: string;
+  /** 소유자가 누른 교차 채점(v0.6.26): 다른 AI 점수·채점한 쪽·못 지킨 기준. 없으면 null */
+  crossTotal?: number | null;
+  crossJudge?: string | null;
+  crossReasons?: string[];
   createdAt: string;
 }
 

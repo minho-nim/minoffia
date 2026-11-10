@@ -209,6 +209,9 @@ const toReview = (r: Row): ResultReview => ({
   feedback: (r.feedback as string) ?? '',
   autoRedo: (r.auto_redo as number) ?? 0,
   judge: (r.judge as string) ?? '',
+  crossTotal: (r.cross_total as number | null) ?? null,
+  crossJudge: (r.cross_judge as string | null) ?? null,
+  crossReasons: (r.cross_reasons as string[] | null) ?? [],
   createdAt: r.created_at as string,
 });
 
@@ -784,6 +787,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async setLeave(agent, onLeave) {
       if (onLeave) check(await client.from('agent_leave').upsert({ agent }));
       else check(await client.from('agent_leave').delete().eq('agent', agent));
+    },
+    async crossReview(taskId, resultRevision) {
+      const data = await invoke('review-result', { taskId, resultRevision, action: 'cross' });
+      return { sessionUrl: (data.sessionUrl as string | null) ?? null };
     },
     async reviewResult(taskId, resultRevision) {
       const data = await invoke('review-result', { taskId, resultRevision });

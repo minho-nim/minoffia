@@ -1407,6 +1407,19 @@ export function App() {
             }
           }
         : undefined,
+    crossReview:
+      store.mode === 'supabase' && store.crossReview
+        ? async (task, rev) => {
+            try {
+              await store.crossReview!(task.id, rev);
+              say('ok', 'Claude에게 교차 채점을 맡겼어요(몇 분). 점수가 오면 평가 칸에 평균과 함께 보여요.');
+            } catch (e) {
+              say('error', `교차 채점을 시작하지 못했어요: ${(e as Error).message}`);
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
     deploy:
       store.mode === 'supabase'
         ? async (task, allowExtra = false, quiet = false) => {
