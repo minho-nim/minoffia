@@ -1,0 +1,55 @@
+# 대신 검사(v0.6.38, 소유자 "CI가 뭔데 → A로"): 프로젝트 저장소에 CI(자동 검사)가 없으면 서버 함수 pr-status가 시작한다.
+# 그 PR의 커밋을 받아 package.json에 있는 typecheck·lint·test·build만 돌린다. 모델 호출 없음.
+# 대상 코드를 돌리는 단계에는 비밀값을 주지 않는다(받기만 읽기 토큰, 자격 증명은 남기지 않음). 결과는 이 실행의 성공/실패로만 남는다.
+name: 대신 검사
+run-name: 대신 검사 ${{ inputs.repo }}@${{ inputs.sha }}
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '대상 저장소(owner/repo)'
+        required: true
+      sha:
+        description: 'PR 끝 커밋(40자)'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: proxy-ci-${{ inputs.repo }}-${{ inputs.sha }}
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 입력 확인
+        env:
+          REPO: ${{ inputs.repo }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
+          [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; }
+          echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "::error::커밋 이름이 이상합니다"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.sha }}
+          token: ${{ secrets.TARGET_REPO_TOKEN }}
+          persist-credentials: false
+          path: target
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 설치·검사(있는 것만)
+        working-directory: target
+        env:
+          CI: 'true'
+        run: |
+          if [ ! -f package.json ]; then echo "package.json이 없어 검사할 것이 없습니다(통과로 봅니다)."; exit 0; fi
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+          has() { node -e "process.exit(require('./package.json').scripts?.['$1'] ? 0 : 1)"; }
+          ran=0
+          for s in typecheck lint test build; do
+            if has "$s"; then echo "== npm run $s"; npm run "$s"; ran=1; fi
+          done
+          [ "$ran" = 1 ] || echo "package.json에 typecheck·lint·test·build가 없습니다(설치만 확인)."

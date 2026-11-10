@@ -1,5 +1,9 @@
 # 변경 기록
 
+## 대신 검사(v0.6.38) — 2026-11-10
+
+- 프로젝트 저장소에 CI가 없으면(WorthIt 'CI 없음'으로 배포 승인 잠김) pr-status가 미노피아 Actions의 '대신 검사'(proxy-ci.yml)를 시작해 그 PR 커밋으로 package.json의 typecheck·lint·test·build를 돌리고, 그 결과를 CI로 기록한다. 대상 코드를 돌리는 단계에는 비밀값을 주지 않는다.
+
 ## PR 찾기·추가 요청 접기(v0.6.37) — 2026-11-10
 
 - Actions가 연 Claude·Codex PR(ai/claude|codex/…)도 pr-status가 브랜치로 찾아 업무 카드에 붙인다(전엔 Gemini 브랜치만 찾아 PR이 열려도 배포 승인이 안 떴다).
