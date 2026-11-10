@@ -120,7 +120,8 @@ export function ruleCheck(input: { diff: string; testLog: string; changeScope: s
   });
 
   const scope = scopePaths(changeScope);
-  const outside = scope.length ? files.filter((f) => !scope.some((s) => f.startsWith(s) || f.endsWith(s) || f.includes(`/${s}`))) : [];
+  // v0.6.34: 저장소 루트 CLAUDE.md(이 프로젝트에서 지켜야 할 것 절)는 AI Office가 개발 지시서에서 만들라고 시키는 파일이라 범위 밖으로 보지 않는다
+  const outside = scope.length ? files.filter((f) => f !== 'CLAUDE.md' && !scope.some((s) => f.startsWith(s) || f.endsWith(s) || f.includes(`/${s}`))) : [];
   gates.push({
     id: 'scope',
     label: '변경 범위',
@@ -281,7 +282,7 @@ export const REVIEW_SYSTEM = [
   ' "fixes":["다시 개발할 때 고칠 것(짧게, 최대 5개)"],',
   ' "summary":"한두 줄 총평"}',
   '- acceptance: 완료 기준 항목별 충족 비율. spec: 기획서의 기능·화면 요구 반영. constraints: 유지 조건·지켜야 할 것을 어기면 0점이고 violations에 적는다.',
-  '- scope: 관계없는 파일·기능을 건드렸으면 감점. quality: 읽기 쉬움·오류 처리·휴대폰/PC 화면 고려.',
+  '- scope: 관계없는 파일·기능을 건드렸으면 감점. 단 저장소 루트 CLAUDE.md의 "이 프로젝트에서 지켜야 할 것" 절을 만들거나 맞춘 것은 AI Office 지시라 범위 위반·감점·violations가 아니고, 완료 기준의 "다른 파일은 바꾸지 않음"도 이 파일은 예외로 본다. quality: 읽기 쉬움·오류 처리·휴대폰/PC 화면 고려.',
   '- 시험 로그부터 본다. 시험을 끄거나 건너뛰거나 지워서 통과시켰으면 violations에 적는다. 개발 AI의 요약은 믿지 말고 diff·로그와 대조한다.',
   '- 버그 수정인데 재현 시험이 없거나, 같은 일을 하는 기존 함수를 두고 비슷한 것을 새로 만들었으면 quality에서 감점한다.',
   '- 브라우저 환경 변수(VITE_ 등)에 비밀키, Supabase USING (true) 같은 전체 허용 정책, user_metadata로 권한 판단이 보이면 violations에 적는다.',
