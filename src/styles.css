@@ -5554,7 +5554,8 @@ a.project-site {
 @media (max-width: 1039px) {
   .layout.tab-tasks > .office-hold,
   .layout.tab-projects > .office-hold,
-  .layout.tab-team > .office-hold {
+  .layout.tab-team > .office-hold,
+  .layout.tab-settings > .office-hold {
     display: inline-flex;
     position: fixed;
     right: max(12px, env(safe-area-inset-right));
@@ -5626,7 +5627,8 @@ a.project-site {
   /* 누르고 보기 버튼은 작게(내용을 덜 가리게) */
   .layout.tab-tasks > .office-hold,
   .layout.tab-projects > .office-hold,
-  .layout.tab-team > .office-hold {
+  .layout.tab-team > .office-hold,
+  .layout.tab-settings > .office-hold {
     padding: 6px 10px;
     opacity: 0.92;
   }
@@ -5821,4 +5823,15 @@ a.project-site {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* 업무 탭 프로젝트 칩 줄(v0.6.46 소유자 "옆으로 밀 때 위아래로 움직임"): 좌우로만 밀린다. 대화 탭 칩은 그대로. */
+.project-chips.filters-scroll:not(.chat-chips) {
+  overflow-y: hidden;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+}
+.project-chips .chip-edit {
+  border-style: dashed;
+  color: var(--muted);
 }
