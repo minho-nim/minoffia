@@ -15,6 +15,14 @@ export function autoExecutionTargets(view: WorkflowView): AgentAssignment[] {
   );
 }
 
+/** 서버가 먼저 하게 앱이 기다릴 시간(v0.6.28 '앱을 닫아 둬도 진행'): 서버가 받은 계획·서버가 기록한 승인은 1분 뒤에만 앱이 손댄다 */
+export const SERVER_FIRST_MS = 60_000;
+
+/** 서버가 이어서 할 몫인가(서버가 받은 계획이 갓 왔거나, 서버가 갓 기록한 실행 승인) */
+export function serverTurn(at: string, byServer: boolean, now: number = Date.now()): boolean {
+  return byServer && now - Date.parse(at) < SERVER_FIRST_MS;
+}
+
 /** 이 작업의 실행 승인이 자동 기록인가(그러면 앱이 바로 시작한다) */
 export function autoApproved(approvals: Approval[], a: AgentAssignment): boolean {
   return approvals.some(

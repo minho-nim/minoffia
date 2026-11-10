@@ -5,6 +5,7 @@
 // 비밀값: LINEAR_API_KEY(소유자 계정 개인 키)는 secrets에만. 이슈 생성은 소유자 이름으로 된다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { dispatchTrackedIssue, type LinearIssue } from './trackedDispatch.ts';
+import { buildServerHandoff } from './serverHandoff.ts';
 import { CREATE_COMMENT, CREATE_ISSUE, issueInput, LOOKUP_QUERY, readLookup, readNews, STATUS_QUERY } from './linear.ts';
 
 const MAX_TEXT = 60_000;
@@ -55,6 +56,27 @@ export function submitSection(taskId: string, token: string, url = `${env('SUPAB
   ].join('\n');
 }
 
+/** 서버가 부를 때의 지시서(앱 지시서와 같은 뼈대, 첨부 설명 제외) */
+// deno-lint-ignore no-explicit-any
+async function serverText(admin: any, a: { task_id: string; plan_revision: number; work_item_id: string }): Promise<string> {
+  const { data: t } = await admin.from('tasks').select('project_id, projects(repo)').eq('id', a.task_id).maybeSingle();
+  const { data: spec } = await admin.from('task_specs').select('revision, final_prompt, change_scope, preserve_constraints, test_criteria').eq('task_id', a.task_id).order('revision', { ascending: false }).limit(1).maybeSingle();
+  const { data: plan } = await admin.from('pm_plans').select('target_base_revision, plan').eq('task_id', a.task_id).eq('plan_revision', a.plan_revision).maybeSingle();
+  const item = ((plan?.plan as { work_items?: Record<string, unknown>[] } | undefined)?.work_items ?? []).find((w) => w.id === a.work_item_id);
+  if (!t || !spec || !item) return '';
+  const { data: rules } = await admin.from('project_rules').select('rule').eq('project_id', t.project_id).order('created_at').limit(30);
+  const { count } = await admin.from('attachments').select('id', { count: 'exact', head: true }).eq('task_id', a.task_id).eq('kind', 'request');
+  return buildServerHandoff({
+    taskId: a.task_id,
+    repo: String((t.projects as { repo?: string } | null)?.repo ?? ''),
+    spec: { revision: spec.revision, final_prompt: spec.final_prompt ?? '', change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '' },
+    item: { id: String(item.id), title: String(item.title ?? ''), goal: String(item.goal ?? ''), acceptance_tests: item.acceptance_tests as string[] | undefined, preserve_constraints: item.preserve_constraints as string[] | undefined },
+    baseRevision: String(plan?.target_base_revision ?? ''),
+    rules: (rules ?? []).map((r: { rule: string }) => r.rule),
+    attachmentCount: count ?? 0,
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'POST만 받습니다.' });
@@ -63,22 +85,30 @@ Deno.serve(async (req) => {
   const allowedRepo = env('CLAUDE_ALLOWED_REPOSITORY').toLowerCase();
   if (!ownerEmail) return reply(500, { ok: false, error: '서버 설정(OFFICE_OWNER_EMAIL)이 빠졌습니다.' });
 
-  const userClient = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
-    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
-  });
-  const { data: auth } = await userClient.auth.getUser();
-  const user = auth?.user;
-  if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
-  if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
-
-  let body: { action?: string; assignmentId?: string; acknowledgeRetry?: boolean; text?: string };
+  let body: { action?: string; assignmentId?: string; acknowledgeRetry?: boolean; text?: string; ownerId?: string };
   try {
     body = await req.json();
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
   }
-  // RLS를 거쳐 내 기록만 읽는다.
-  const { data: a } = await userClient.from('agent_assignments').select('*').eq('id', body.assignmentId ?? '').maybeSingle();
+  // v0.6.28(소유자 "앱을 닫아 둬도 진행"): 서버(submit-plan·submit-result)가 서버 키로 부르면 지시서를 서버가 만든다.
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  const internal = Boolean(serviceKey) && req.headers.get('Authorization') === `Bearer ${serviceKey}`;
+  const userClient = internal
+    ? createClient(env('SUPABASE_URL'), serviceKey)
+    : createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
+  let user: { id: string };
+  if (internal) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(body.ownerId ?? ''))) return reply(400, { ok: false, error: 'ownerId가 필요합니다.' });
+    user = { id: String(body.ownerId) };
+  } else {
+    const { data: auth } = await userClient.auth.getUser();
+    if (!auth?.user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
+    if ((auth.user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
+    user = auth.user;
+  }
+  // RLS를 거쳐 내 기록만 읽는다(서버 호출이면 주인 조건을 직접 건다).
+  const { data: a } = await userClient.from('agent_assignments').select('*').eq('id', body.assignmentId ?? '').eq('owner_id', user.id).maybeSingle();
   if (!a) return reply(404, { ok: false, error: '배정된 작업을 찾을 수 없습니다.' });
   if (a.assignee !== 'codex') return reply(400, { ok: false, error: 'Codex에 배정된 작업만 맡깁니다.' });
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
@@ -124,7 +154,7 @@ Deno.serve(async (req) => {
   }
 
   // 맡기기
-  const text = (body.text ?? '').trim();
+  const text = internal ? await serverText(admin, a) : (body.text ?? '').trim();
   if (!text || text.length > MAX_TEXT) return reply(400, { ok: false, error: `Codex 지시서는 1~${MAX_TEXT}자여야 합니다.` });
   const { data: task } = await userClient.from('tasks').select('id, title, projects(name, repo)').eq('id', a.task_id).maybeSingle();
   const project = task?.projects as unknown as { name: string; repo: string | null } | null;

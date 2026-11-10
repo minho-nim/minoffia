@@ -23,7 +23,7 @@ import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type Attachment
 import { buildHandoff } from './domain/handoff';
 import { buildCodexHandoff, buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
 import { startBlocker } from './domain/concurrency';
-import { AUTO_E_NOTE, autoApproved, autoExecutionTargets } from './domain/autoExecute';
+import { AUTO_E_NOTE, autoApproved, autoExecutionTargets, serverTurn } from './domain/autoExecute';
 import { simpleStates, stateCounts, SIMPLE_LABEL } from './domain/simpleState';
 import { myTurns, type TurnStep } from './domain/myTurn';
 import { clarificationsOf, linksOf } from './domain/requestContext';
@@ -441,7 +441,8 @@ export function App() {
   const chainTried = useRef(new Set<string>());
   useEffect(() => {
     chainTick.current();
-  }, [snap]);
+    // 1분마다도 다시 본다: 서버가 1분 안에 못 한 것을 앱이 이어받는다(v0.6.28)
+  }, [snap, minuteTick]);
 
   // 훅은 아래 '일찍 끝내기' 줄보다 먼저 둔다(v0.5.82: 로그인 뒤 훅 수가 달라져 화면이 하얗게 멈추던 것)
   // 데모 주소(v0.5.91): 프로젝트 탭을 열 때 저장소 있는 프로젝트만 한 번 묻는다(실패하면 데모 버튼만 안 보임)
@@ -1478,6 +1479,8 @@ export function App() {
     for (const task of snap.tasks) {
       if (task.status === 'done') continue;
       const view = deriveWorkflow(task, snap.workflow);
+      // 서버가 받은 계획은 서버가 먼저 실행 승인·시작한다(v0.6.28). 1분 지나도 그대로면 앱이 한다.
+      if (view.plan && serverTurn(view.plan.createdAt, view.plan.source === 'routine_session_auto')) continue;
       for (const a of autoExecutionTargets(view)) {
         if (chainTried.current.has(`e:${a.id}`)) continue;
         chainTried.current.add(`e:${a.id}`);
@@ -1507,6 +1510,9 @@ export function App() {
       if (!view.plan || view.plan.planRevision !== a.planRevision || !item || !view.eApproved(a.workItemId)) continue;
       // 앞 작업이 있던 작업이거나, 실행 승인이 자동 기록된 작업만(손으로 승인한 것은 승인 때 이미 시작함)
       if (!item.dependencies?.length && !autoApproved(snap.workflow.approvals, a)) continue;
+      // 서버가 기록한 승인은 서버가 시작한다(1분 지나도 준비 그대로면 앱이 시작)
+      const eRow = snap.workflow.approvals.find((x) => x.taskId === a.taskId && x.gate === 'E' && x.approvedRevision === a.planRevision && x.workItemId === a.workItemId);
+      if (eRow && serverTurn(eRow.createdAt, eRow.scope?.by === 'server')) continue;
       if (startBlocker(a, snap.workflow.assignments, view.plan, snap.agentLimits)) continue;
       chainTried.current.add(a.id);
       say('ok', item.dependencies?.length ? `앞 작업이 끝나서 ${a.workItemId}을(를) 자동으로 시작해요.` : `${a.workItemId}을(를) 자동으로 시작해요.`);
