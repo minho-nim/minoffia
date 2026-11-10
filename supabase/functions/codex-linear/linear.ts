@@ -15,6 +15,10 @@ export const CREATE_COMMENT = `mutation MinLabCodexComment($input: CommentCreate
   commentCreate(input: $input) { success }
 }`;
 
+export const UPDATE_ISSUE = `mutation MinLabCodexReassign($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) { success }
+}`;
+
 export const STATUS_QUERY = `query MinLabCodexStatus($id: String!) {
   issue(id: $id) {
     id identifier url

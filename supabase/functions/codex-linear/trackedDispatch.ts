@@ -5,9 +5,12 @@ export async function dispatchTrackedIssue(p: {
   create: (id: string) => Promise<LinearIssue>;
   read: (id: string) => Promise<LinearIssue | null>;
   mention?: (id: string) => Promise<void>;
+  /** 실패 뒤 다시 맡길 때(v0.6.12): 이미 있는 이슈면 Codex를 다시 부른다. 없으면 이미 있는 이슈를 그대로 둔다 */
+  again?: (id: string) => Promise<void>;
   save: (issue: LinearIssue) => Promise<void>;
 }): Promise<LinearIssue> {
   let issue: LinearIssue;
+  let reused = false;
   try {
     issue = await p.create(p.issueId);
   } catch (e) {
@@ -15,8 +18,11 @@ export async function dispatchTrackedIssue(p: {
     const existing = await p.read(p.issueId).catch(() => null);
     if (!existing) throw e;
     issue = existing;
+    reused = true;
   }
   if (issue.id !== p.issueId) throw new Error(`예약한 식별자와 다른 Linear 이슈입니다: ${issue.url}`);
+  // 예전엔 다시 맡겨도 이슈만 찾고 Codex를 부르지 않아 Linear에 아무 일도 없었다
+  if (reused && p.again) await p.again(issue.id);
   await p.mention?.(issue.id);
   try {
     await p.save(issue);
