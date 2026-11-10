@@ -72,7 +72,11 @@ export function DevlogPanel({ snap, loadChat, deleteChat, onCopy }: Props) {
   return (
     <section className="devlog" aria-labelledby="devlog-title">
       <h3 id="devlog-title">개발일지</h3>
-      <p className="muted small">프로젝트 업무 대화와 업무 기록(기획서·승인·계획·결과·PR·배포)을 프로젝트별·날짜별로 모읍니다. 일반 대화·질문은 기록하지 않습니다.</p>
+      {/* v0.6.41: 설명은 ⓘ를 눌러야 보이게(읽을 글 줄이기) */}
+      <details className="info-note">
+        <summary aria-label="설명 보기">ⓘ</summary>
+        <p className="muted small">프로젝트 업무 대화와 업무 기록(기획서·승인·계획·결과·PR·배포)을 프로젝트별·날짜별로 모읍니다. 일반 대화·질문은 기록하지 않습니다.</p>
+      </details>
       <div className="devlog-controls">
         <label className="field">
           <span>시작</span>
