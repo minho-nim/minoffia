@@ -25,6 +25,9 @@ export function startable(items: Item[], assignments: Assignment[], approved: Se
 
 export async function autoRun(admin: Admin, ownerId: string, taskId: string, base: string, serviceKey: string): Promise<string[]> {
   const log: string[] = [];
+  // 소유자가 취소한 업무(v0.6.50)는 서버가 더 시작하지 않는다
+  const { data: task } = await admin.from('tasks').select('stage').eq('id', taskId).maybeSingle();
+  if (!task || task.stage === 'cancelled') return log;
   const { data: plan } = await admin.from('pm_plans').select('plan_revision, approved_spec_revision, plan').eq('task_id', taskId).order('plan_revision', { ascending: false }).limit(1).maybeSingle();
   if (!plan) return log;
   const body = plan.plan as { status?: string; development_mode?: string; work_items?: Item[] };

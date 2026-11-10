@@ -17,6 +17,8 @@ interface Props {
   /** 담당 바꾸기. 접수·차단 상태에서만 쓴다. */
   onAssign: (task: Task, to: AgentId) => void;
   onDelete: (task: Task) => void;
+  /** 업무 취소(v0.6.50 소유자 "취소도 필요"): 남은 작업을 멈추고 기록은 남긴다 */
+  onCancel?: (task: Task) => void;
   onCopy: (task: Task) => Promise<boolean>;
   /** 대화 탭에서 이 업무에 대해 묻기(v0.4.19) */
   onAsk?: (task: Task) => void;
@@ -40,9 +42,10 @@ const STATUS_VERB: Record<TaskStatus, string> = {
   done: '완료 승인',
 };
 
-export function TaskCard({ task, project, workflow, views, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn, simple }: Props) {
+export function TaskCard({ task, project, workflow, views, onStatus, onAssign, onDelete, onCancel, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn, simple }: Props) {
   const agent = AGENT_BY_ID[task.assignee];
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
   const [reassigning, setReassigning] = useState(false);
   // 진행 중인 일의 담당을 바꾸면 오피스에 없는 활동이 생긴다. 접수·차단 상태에서만 바꾼다.
@@ -71,7 +74,7 @@ export function TaskCard({ task, project, workflow, views, onStatus, onAssign, o
       {onToggle ? (
         <button type="button" className="task-toggle" aria-expanded={expanded} onClick={() => onToggle(task)}>
           <span className="task-head">
-            {simple ? <span className={`pill pill-st-${simple}`}>{SIMPLE_LABEL[simple]}</span> : <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>}
+            {task.stage === 'cancelled' ? <span className="pill pill-st-done">취소</span> : simple ? <span className={`pill pill-st-${simple}`}>{SIMPLE_LABEL[simple]}</span> : <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>}
             <span className="task-title">{task.title}</span>
             {turn && (
               <span
@@ -188,6 +191,29 @@ export function TaskCard({ task, project, workflow, views, onStatus, onAssign, o
           ) : (
             <button type="button" className="btn btn-small btn-ghost" onClick={() => setReassigning(true)}>
               담당 바꾸기
+            </button>
+          ))}
+        {onCancel && task.status !== 'done' && task.stage !== 'cancelled' &&
+          (confirmCancel ? (
+            <span className="confirm">
+              업무를 취소할까요? 남은 AI 작업을 멈추고 기록은 남겨요.
+              <button
+                type="button"
+                className="btn btn-small btn-danger"
+                onClick={() => {
+                  setConfirmCancel(false);
+                  onCancel(task);
+                }}
+              >
+                업무 취소
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirmCancel(false)}>
+                아니요
+              </button>
+            </span>
+          ) : (
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirmCancel(true)}>
+              업무 취소
             </button>
           ))}
         {confirmDelete ? (

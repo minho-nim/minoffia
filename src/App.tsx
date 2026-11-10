@@ -489,6 +489,14 @@ export function App() {
     </ul>
   );
 
+  /** 업무 취소(v0.6.50): 끝나지 않은 AI 작업은 '실패(소유자 취소)'로 멈추고 업무는 취소 단계로. 서버도 취소한 업무는 더 시작하지 않는다. */
+  const cancelTask = (task: Task) =>
+    void mutate(async () => {
+      for (const a of snap.workflow.assignments.filter((x) => x.taskId === task.id && x.dispatchStatus !== 'completed' && x.dispatchStatus !== 'failed')) {
+        await store!.updateAssignment({ ...a, dispatchStatus: 'failed', statusSource: 'user_reported', actualProviderStatus: '소유자가 업무를 취소함' });
+      }
+      await store!.saveTask({ ...task, status: 'done', stage: 'cancelled' });
+    }, '업무를 취소했어요. 기록은 남아 있어요.');
   const mutate = async (fn: () => Promise<void>, ok?: string): Promise<boolean> => {
     try {
       await fn();
@@ -2013,6 +2021,7 @@ export function App() {
                       const project = projectById.get(task.projectId);
                       if (ok && project) void store.notes?.remove(project.name, task.title).catch(() => undefined);
                     })}
+                    onCancel={cancelTask}
                     onCopy={copyHandoff}
                   />
                 ))

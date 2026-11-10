@@ -30,7 +30,8 @@ export async function handOffToClaude(admin: Admin, ownerId: string, taskId: str
   if (!plan || plan.plan_revision !== a.plan_revision) return 'skip: 계획이 바뀜';
   const { data: leave } = await admin.from('agent_leave').select('agent').eq('owner_id', ownerId).eq('agent', 'claude');
   if (leave?.length) return 'skip: Claude 휴가';
-  const { data: t } = await admin.from('tasks').select('projects(repo)').eq('id', taskId).maybeSingle();
+  const { data: t } = await admin.from('tasks').select('stage, projects(repo)').eq('id', taskId).maybeSingle();
+  if (!t || t.stage === 'cancelled') return 'skip: 취소한 업무';
   if (String((t?.projects as { repo?: string } | null)?.repo ?? '').toLowerCase() === 'minho-nim/minlab') return 'skip: MinLab';
   const next = plan.plan_revision + 1;
   const body = toClaude(plan.plan, a.work_item_id, why, next);

@@ -90,6 +90,7 @@ export function deriveWorkflow(task: Task, all: WorkflowData): WorkflowView {
   const waitingWork = assignments.filter((a) => a.dispatchStatus === 'ready' || a.dispatchStatus === 'starting' || a.dispatchStatus === 'started');
 
   const stage = ((): Stage => {
+    if (task.stage === 'cancelled') return 'cancelled';
     if (task.status === 'done' && !spec) return 'completed';
     if (!spec) return 'received';
     if (spec.intent === 'question') return spec.answer ? 'completed' : 'planning';
