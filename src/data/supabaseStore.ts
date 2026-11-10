@@ -720,6 +720,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('codex-linear', { action: 'start', assignmentId, acknowledgeRetry, text });
       return { issueUrl: String(data.issueUrl ?? ''), identifier: String(data.identifier ?? '') };
     },
+    async codexManualSection(assignmentId) {
+      const data = await invoke('codex-linear', { action: 'manual', assignmentId });
+      return String(data.section ?? '');
+    },
     async codexLinearStatus(assignmentId) {
       const data = await invoke('codex-linear', { action: 'status', assignmentId });
       return { kind: (data.kind as 'error' | 'working' | 'none') ?? 'none', last: String(data.last ?? ''), taskUrl: (data.taskUrl as string | null) ?? null };
