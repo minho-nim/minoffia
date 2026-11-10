@@ -963,6 +963,19 @@ export function App() {
       return true;
     },
     designCheck: store.designCheck,
+    addFollowup: store.addFollowup
+      ? async (task, text) => {
+          try {
+            await store.addFollowup!(task.id, text);
+            setSnap(await store.load());
+            say('ok', `추가 요청을 적어 뒀어요(${task.title}). 다음 다시 개발 때 함께 보내요.`);
+            return true;
+          } catch (e) {
+            say('error', `추가 요청을 적지 못했어요: ${(e as Error).message}`);
+            return false;
+          }
+        }
+      : undefined,
     siteCheck: store.siteCheck,
     draftSpec: (task) => draftSpec(task.id),
     makePrototype: (task) => makePrototype(task.id),
@@ -1747,6 +1760,7 @@ export function App() {
                 onAutoDraft={store.mode === 'supabase' ? (t) => void draftSpec(t.id) : undefined}
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={showTask}
+                onAddFollowup={store.addFollowup ? (taskId, text) => { const t = snap.tasks.find((x) => x.id === taskId); return t && workflowActions.addFollowup ? workflowActions.addFollowup(t, text) : Promise.resolve(false); } : undefined}
                 onApprove={quickApprove}
                 currentProject={chatProjectId ? (snap.projects.find((p) => p.id === chatProjectId) ?? null) : null}
                 draft={draft}
@@ -1830,6 +1844,7 @@ export function App() {
                         clarifications={snap.workflow.clarifications}
                         projectRules={withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule))}
                         reviews={(snap.workflow.reviews ?? []).filter((r) => r.taskId === t.id)}
+                        followups={(snap.workflow.followups ?? []).filter((f) => f.taskId === t.id)}
                         canReadLinks={store.mode === 'supabase'}
                         dispatchBlocker={dispatchBlocker(t)}
                         actions={workflowActions}

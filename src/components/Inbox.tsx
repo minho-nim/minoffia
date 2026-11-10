@@ -136,6 +136,8 @@ interface Props {
   onClarify?: (task: Task, question: string, answer: string) => Promise<boolean>;
   /** 단계 알림의 "업무 카드 보기" */
   onShowTask?: (taskId: string) => void;
+  /** 개발 중인 업무에 추가 요청으로 보내기(v0.6.13) */
+  onAddFollowup?: (taskId: string, text: string) => Promise<boolean>;
   /** 단계 알림에서 바로 A·올리기 승인(업무 카드의 같은 버튼과 같은 규칙). 성공하면 true */
   onApprove?: (task: Task, gate: 'A' | 'B') => Promise<boolean>;
 }
@@ -249,7 +251,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '올리기 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -1333,6 +1335,25 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                         다른 프로젝트
                       </button>
                     )}
+                    {/* 이 프로젝트에 개발이 도는 업무가 있으면 새 업무 대신 그 업무의 추가 요청으로(v0.6.13) */}
+                    {project && onAddFollowup && otherFor !== m.id &&
+                      snap.tasks
+                        .filter((t) => t.projectId === project.id && t.status !== 'done')
+                        .filter((t) => snap.workflow.assignments.some((a) => a.taskId === t.id && (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting')))
+                        .slice(0, 2)
+                        .map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            className="btn btn-small btn-ghost"
+                            onClick={() => {
+                              settleOffer(m.id, 'done');
+                              void onAddFollowup(t.id, o.text).then((ok) => say('office', ok ? `개발 중인 '${short(t.title)}'에 추가 요청으로 적었어요. 다음 다시 개발 때 함께 보내요.` : '추가 요청을 적지 못했어요. 업무 카드에서 다시 해 주세요.', { projectId: t.projectId, taskId: t.id }));
+                            }}
+                          >
+                            '{short(t.title)}'에 추가
+                          </button>
+                        ))}
                     {list.map((p) => (
                       <button key={p.id} type="button" className="btn btn-small btn-ghost" onClick={() => acceptOffer(m, p)}>
                         {p.name}

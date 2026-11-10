@@ -192,7 +192,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews', 'task_followups',
 ];
 
 const toReview = (r: Row): ResultReview => ({
@@ -294,7 +294,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules, reviews] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules, reviews, followups] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -316,6 +316,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('agent_leave').select('agent'),
         client.from('project_rules').select('*').order('created_at'),
         client.from('result_reviews').select('*').order('created_at'),
+        client.from('task_followups').select('*').order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -336,6 +337,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           prChecks: prChecks.error ? [] : (prChecks.data ?? []).map(toPrCheck),
           deployments: deployments.error ? [] : (deployments.data ?? []).map(toDeployment),
           reviews: reviews.error ? [] : (reviews.data ?? []).map(toReview),
+          followups: followups.error ? [] : (followups.data ?? []).map((r: Row) => ({ id: r.id as string, taskId: r.task_id as string, text: r.text as string, usedAt: (r.used_at as string | null) ?? null, createdAt: r.created_at as string })),
         },
         leave: leave.error ? [] : (leave.data ?? []).map((r: Row) => r.agent as AgentId),
         projectRules: projectRules.error
@@ -453,6 +455,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           })
           .eq('id', a.id),
       );
+    },
+    async addFollowup(taskId, text) {
+      check(await client.from('task_followups').insert({ task_id: taskId, text: text.trim().slice(0, 2000) }));
     },
     async addRevisionRequest(x) {
       check(
