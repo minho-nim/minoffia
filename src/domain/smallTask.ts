@@ -58,7 +58,7 @@ export function checkSmallTask(
   // v0.6.19(소유자 "Codex 주, Claude 보조"): 개발은 Codex, Codex가 휴가면 Claude, 둘 다면 쉬운 일만 Gemini
   const preference: AssigneePreference | null = wantOk && want
     ? want
-    : !away.codex ? 'codex_primary' : !away.claude ? 'claude_support' : geminiOk && h && h.difficulty <= 3 ? 'gemini_dev' : null;
+    : !away.codex ? 'codex_primary' : !away.claude ? 'claude_support' : null; // v0.6.23: Gemini 개발은 @Gemini로 정할 때만
   if (!preference) why.push('맡을 AI가 휴가');
   if (why.length || !h || !preference) return { ok: false, why: [...new Set(why)] };
   return { ok: true, preference, difficulty: h.difficulty };

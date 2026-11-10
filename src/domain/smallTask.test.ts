@@ -24,7 +24,7 @@ describe('작은 일 바로 배정(v0.5.20)', () => {
   it('쉬운 일은 Gemini, 보통(4~5)은 Codex', () => {
     expect(checkSmallTask(spec(), 'me/app')).toEqual({ ok: true, preference: 'codex_primary', difficulty: 2 });
     expect(checkSmallTask(spec(), 'me/app', { codex: true })).toMatchObject({ ok: true, preference: 'claude_support' });
-    expect(checkSmallTask(spec(), 'me/app', { codex: true, claude: true })).toMatchObject({ ok: true, preference: 'gemini_dev' });
+    expect(checkSmallTask(spec(), 'me/app', { codex: true, claude: true })).toMatchObject({ ok: false }); // v0.6.23: Gemini 개발은 기본 배정하지 않음
     expect(checkSmallTask(spec({ sizeHint: { difficulty: 5, single_task: true, needs_design: false } }), 'me/app')).toMatchObject({ ok: true, preference: 'codex_primary' });
   });
 
