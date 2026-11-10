@@ -5418,3 +5418,9 @@ a.project-site {
 .rev-input::placeholder {
   font-size: 0.8rem;
 }
+
+/* 개발 중 추가 요청(v0.6.37): 기본 접힘 */
+.wf-followups > summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
