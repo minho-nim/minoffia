@@ -13,7 +13,8 @@ import { MyTurnList } from './components/MyTurn';
 import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
 import { setupIssues } from './domain/projectSetup';
-import { moveProject, orderProjects } from './domain/projectOrder';
+import { orderProjects } from './domain/projectOrder';
+import { ProjectOrder } from './components/ProjectOrder';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
 import type { PendingImage } from './components/Attachments';
@@ -1714,7 +1715,7 @@ export function App() {
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab}`}>
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
-        {(tab === 'tasks' || tab === 'projects' || tab === 'team') && (
+        {(tab === 'tasks' || tab === 'projects' || tab === 'team' || tab === 'settings') && (
           <button
             type="button"
             className={`office-hold${holdOffice ? ' is-on' : ''}`}
@@ -1779,12 +1780,9 @@ export function App() {
             >
               에이전트
             </button>
-            <button type="button" role="tab" aria-selected={tab === 'team'} onClick={() => setTab('team')}>
-              팀 관리
-            </button>
             {/* 설정 탭(v0.6.42 소유자 "설정 탭 별도"): 프로젝트 순서·밝기·알림·사용량·계정 */}
-            <button type="button" role="tab" aria-selected={tab === 'settings'} onClick={() => setTab('settings')} aria-label="설정">
-              ⚙️
+            <button type="button" role="tab" aria-selected={tab === 'settings' || tab === 'team'} onClick={() => setTab('settings')}>
+              설정
             </button>
           </nav>
 
@@ -1896,29 +1894,6 @@ export function App() {
 
           {tab === 'tasks' && (
             <div className="stack">
-              {/* 한눈에 보기(v0.6.15, muse 대시보드 착안): 누르면 그 상태의 업무만 */}
-              {(() => {
-                const c = stateCounts(states, inProject.map((t) => t.id));
-                const kst = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-                const runs = snap.usage.filter((u) => u.day === kst).length;
-                const card = (key: Filter, label: string, n: number, tone: string) => (
-                  <button key={label} type="button" className={`ov-card ov-${tone}`} aria-pressed={filter === key} onClick={() => setFilter(filter === key ? 'open' : key)}>
-                    <span className="ov-num">{n}</span>
-                    <span className="ov-label">{label}</span>
-                  </button>
-                );
-                return (
-                  <div className="overview" role="group" aria-label="한눈에 보기">
-                    {card('st:turn', SIMPLE_LABEL.turn, c.turn, 'turn')}
-                    {card('st:working', SIMPLE_LABEL.working, c.working, 'working')}
-                    {card('st:stuck', '멈춤·실패', c.stuck, 'stuck')}
-                    <span className="ov-card ov-usage">
-                      <span className="ov-num">{runs}</span>
-                      <span className="ov-label">오늘 AI 실행</span>
-                    </span>
-                  </div>
-                );
-              })()}
               <MyTurnList
                 items={pf === 'all' ? turns : turns.filter((it) => snap.tasks.find((t) => t.id === it.taskId)?.projectId === pf)}
                 onOpen={showTask}
@@ -1931,21 +1906,30 @@ export function App() {
                 <summary className="small">＋ 직접 입력</summary>
                 <TaskForm projects={snap.projects} usage={snap.usage} leave={snap.leave ?? []} onSubmit={addTask} />
               </details>
-              <div className="filters filters-scroll" role="group" aria-label="업무 필터">
-                {(
-                  [
-                    ['open', `열린 업무 ${openCount}`],
-                    ['all', `전체 ${inProject.length}`],
-                    ...(['queued', 'in_progress', 'review', 'blocked', 'done'] as TaskStatus[]).map(
-                      (s) => [s, `${STATUS_LABEL[s]} ${counts(s)}`] as [Filter, string],
-                    ),
-                  ] as [Filter, string][]
-                ).map(([k, label]) => (
-                  <button key={k} type="button" className="chip" aria-pressed={filter === k} onClick={() => setFilter(k)}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+              {/* 상태 고르기는 드롭다운 하나로(v0.6.43 소유자 "필터가 두 줄") */}
+              {(() => {
+                const c = stateCounts(states, inProject.map((t) => t.id));
+                const options: [Filter, string][] = [
+                  ['open', `열린 업무 ${openCount}`],
+                  ['st:turn', `${SIMPLE_LABEL.turn} ${c.turn}`],
+                  ['st:working', `${SIMPLE_LABEL.working} ${c.working}`],
+                  ['st:stuck', `멈춤·실패 ${c.stuck}`],
+                  ['all', `전체 ${inProject.length}`],
+                  ...(['queued', 'in_progress', 'review', 'blocked', 'done'] as TaskStatus[]).map((st) => [st, `${STATUS_LABEL[st]} ${counts(st)}`] as [Filter, string]),
+                ];
+                return (
+                  <label className="filter-select">
+                    <span className="sr-only">업무 상태</span>
+                    <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
+                      {options.map(([k, label]) => (
+                        <option key={k} value={k}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })()}
               {visibleTasks.length === 0 ? (
                 <p className="empty">이 조건의 업무가 없습니다.</p>
               ) : (
@@ -2069,30 +2053,23 @@ export function App() {
             />
           )}
 
-          {tab === 'settings' && (
+          {/* 설정(v0.6.43 소유자: 사용량 → 프로젝트 순서 → 팀 관리 → 알림 → 화면 → 계정, 팀 관리 탭을 여기로) */}
+          {(tab === 'settings' || tab === 'team') && (
             <section className="settings" aria-label="설정">
               <div className="settings-box">
-                <h3>프로젝트 순서</h3>
-                <p className="muted small">업무·대화 탭의 프로젝트 칩과 프로젝트 탭이 이 순서를 따라요.</p>
-                <ol className="order-list">
-                  {ordered.map((p, i) => (
-                    <li key={p.id}>
-                      <span className="order-name">{p.name}</span>
-                      <span className="order-btns">
-                        <button type="button" className="btn btn-small btn-ghost" aria-label={`${p.name} 위로`} disabled={i === 0 || !store.reorderProjects} onClick={() => void mutate(() => store.reorderProjects!(moveProject(ordered, p.id, -1)), '순서를 바꿨어요.')}>
-                          ▲
-                        </button>
-                        <button type="button" className="btn btn-small btn-ghost" aria-label={`${p.name} 아래로`} disabled={i === ordered.length - 1 || !store.reorderProjects} onClick={() => void mutate(() => store.reorderProjects!(moveProject(ordered, p.id, 1)), '순서를 바꿨어요.')}>
-                          ▼
-                        </button>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
+                <h3>오늘 사용량</h3>
+                {usageList}
               </div>
               <div className="settings-box">
-                <h3>화면</h3>
-                <ThemeToggle />
+                <ProjectOrder projects={ordered} onSave={store.reorderProjects ? (ids) => mutate(() => store.reorderProjects!(ids)) : undefined} />
+              </div>
+              <div className="settings-box">
+                <h3>팀 관리(근무·휴가)</h3>
+                <TeamPanel
+                  snap={snap}
+                  loadKeys={store.keyStatus ? () => store.keyStatus!() : undefined}
+                  onSetLeave={(agent, onLeave) => setLeaveNow(agent, onLeave)}
+                />
               </div>
               {store.mode === 'supabase' && (
                 <div className="settings-box">
@@ -2101,8 +2078,8 @@ export function App() {
                 </div>
               )}
               <div className="settings-box">
-                <h3>오늘 사용량</h3>
-                {usageList}
+                <h3>화면</h3>
+                <ThemeToggle />
               </div>
               <div className="settings-box">
                 <h3>계정</h3>
@@ -2118,16 +2095,6 @@ export function App() {
                 )}
               </div>
             </section>
-          )}
-
-          {tab === 'team' && (
-            <TeamPanel
-              snap={snap}
-              loadKeys={store.keyStatus ? () => store.keyStatus!() : undefined}
-              onSetLeave={(agent, onLeave) =>
-                setLeaveNow(agent, onLeave)
-              }
-            />
           )}
 
           {store.mode === 'local' && (
