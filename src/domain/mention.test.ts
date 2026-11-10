@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyMention, mentionAllowed, mentionedAssignee } from './mention';
+import { answerSlot, applyMention, mentionAllowed, mentionedAssignee, mentionOptions } from './mention';
 import { checkSmallTask } from './smallTask';
 import type { TaskSpec, WorkItem } from './workflow-types';
 
@@ -41,10 +41,19 @@ describe('@ 목록(v0.5.47)', () => {
     expect(mentionQuery('다크모드 @', 6)).toEqual({ start: 5, query: '' });
     expect(mentionQuery('@cl', 3)).toEqual({ start: 0, query: 'cl' });
     expect(mentionQuery('a@b', 3)).toBeNull();
-    expect(mentionOptions('').length).toBe(3);
+    expect(mentionOptions('').length).toBe(5);
     expect(mentionOptions('cl').map((o) => o.tag)).toEqual(['Claude']);
     expect(mentionOptions('제').map((o) => o.tag)).toEqual(['Gemini']);
     expect(insertMention('고쳐줘 @cl', 7, 4, 'Claude')).toEqual({ text: '고쳐줘 @Claude ', caret: 12 });
     expect(mentionedAssignee('@Gemini 해줘')).toMatchObject({ preference: 'gemini_dev' });
+  });
+  it('@StudioA·@StudioB는 답할 Gemini 키를 고르고 개발 담당으로 읽지 않는다(v0.6.24)', () => {
+    expect(answerSlot('@StudioB 이거 뭐야?')).toBe(2);
+    expect(answerSlot('@스튜디오A 알려줘')).toBe(1);
+    expect(answerSlot('@studio b 알려줘')).toBe(2);
+    expect(answerSlot('그냥 질문')).toBeNull();
+    expect(mentionedAssignee('@StudioB 버튼 고쳐줘')).toBeNull();
+    expect(mentionedAssignee('@Gemini 버튼 고쳐줘')?.preference).toBe('gemini_dev');
+    expect(mentionOptions('스튜').map((o) => o.tag)).toEqual(['StudioA', 'StudioB']);
   });
 });

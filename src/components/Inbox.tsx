@@ -1,6 +1,6 @@
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
-import { insertMention, mentionOptions, mentionQuery } from '../domain/mention';
+import { answerSlot, insertMention, mentionOptions, mentionQuery } from '../domain/mention';
 import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
@@ -1108,6 +1108,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           ...(currentProject ? { project: projectContext(currentProject, snap.tasks) } : {}),
           ...(route ? { route: { projects: snap.projects.map((p) => p.name) } } : {}),
           ...(research ? { research: true } : {}),
+          ...(answerSlot(text) ? { slot: answerSlot(text)! } : {}),
         };
         // 업무 카드에서 '대화로 묻기'로 시작한 질문이면 그 업무의 지금 상태를 참고로 붙인다(화면에는 안 보임)
         const focus = focusTask.current;

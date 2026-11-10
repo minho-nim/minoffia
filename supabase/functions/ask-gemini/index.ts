@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean };
+  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean; slot?: number };
   try {
     body = await req.json();
   } catch {
@@ -250,9 +250,12 @@ Deno.serve(async (req) => {
   if (away.has('studioA')) keys[0] = '';
   if (away.has('studioB')) keys[1] = '';
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
+  // @StudioB(v0.6.24, 소유자 "제미나이도 각각 태그"): B를 먼저, 안 되면 A가 대신 답한다. 기본은 A 먼저.
+  const order = body.slot === 2 ? [1, 0] : [0, 1];
   for (const tryModel of models) {
     model = tryModel;
-    for (const [i, key] of keys.entries()) {
+    for (const i of order) {
+      const key = keys[i];
       if (!key) continue;
       const slot = i + 1;
       let res: Response;
