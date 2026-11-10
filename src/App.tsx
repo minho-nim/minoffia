@@ -1334,6 +1334,21 @@ export function App() {
             }
           }
         : undefined,
+    codexManualSection:
+      store.mode === 'supabase' && store.codexManualSection
+        ? async (a) => {
+            try {
+              const section = await store.codexManualSection!(a.id);
+              say('ok', `${a.workItemId} 지시서를 복사했어요. Codex 앱에서 이 프로젝트 환경을 골라 붙여 넣으면, 끝난 뒤 결과가 자동으로 들어와요(Codex 환경에 결과 보낼 주소 허용 필요).`);
+              return section;
+            } catch (e) {
+              say('error', `결과 자동 제출 준비 실패: ${(e as Error).message} — 지시서만 복사했어요. 결과는 직접 붙여 넣어 주세요.`);
+              return '';
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
     startCodexLinear:
       store.mode === 'supabase'
         ? async (a, ack, text) => {

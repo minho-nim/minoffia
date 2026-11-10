@@ -66,6 +66,8 @@ export interface OfficeStore {
   startGeminiDev(assignmentId: string, acknowledgeRetry: boolean): Promise<{ runUrl: string | null; key: string }>;
   /** Codex를 Linear로 맡기기(v0.5.2): 앱이 만든 Codex 지시서로 Linear 이슈를 만들고 Codex에게 맡긴다 */
   startCodexLinear(assignmentId: string, acknowledgeRetry: boolean, text: string): Promise<{ issueUrl: string; identifier: string }>;
+  /** Codex 앱에 직접 붙여 넣을 때 지시서 끝에 붙일 결과 제출 절(v0.6.21). 작업을 '시작함'으로 기록한다 */
+  codexManualSection?(assignmentId: string): Promise<string>;
   /** Linear 이슈의 Codex 소식 읽기(읽기만). kind 'error' = 시작 못 함(한도·환경 없음) */
   codexLinearStatus(assignmentId: string): Promise<{ kind: 'error' | 'working' | 'none'; last: string; taskUrl: string | null }>;
   /** 올리기 승인(B)된 Claude 결과로 Claude가 PR을 연다(서버, v0.4.5) */
