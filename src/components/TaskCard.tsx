@@ -105,20 +105,6 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
       )}
       {expanded && (
       <>
-      {/* 간단히(v0.4.22): 프로젝트·담당·단계는 위 요약 줄에 있으니 유형·방식만 한 줄로 */}
-      <p className="task-meta-line">
-        {WORK_TYPE_LABEL[task.type]} · {PRIORITY_LABEL[task.priority]} · {MODE_LABEL[agent.mode]}
-        {onShowAgent && (
-          <>
-            {' · '}
-            <button type="button" className="link-btn" onClick={() => onShowAgent(task)}>
-              사무실에서 {agent.name} 보기
-            </button>
-          </>
-        )}
-      </p>
-      {task.description && <p className="task-desc">{task.description}</p>}
-
       {task.dispatch.error && (
         <p className="task-error" role="alert">
           {task.dispatch.error}
@@ -133,6 +119,24 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
         </p>
       )}
       {task.dispatch.state === 'dispatching' && <p className="task-session">Claude Cloud에 전송 중…</p>}
+
+      {/* 덜 복잡하게(v0.6.41 소유자 "읽을 게 너무 많아"): 펼치면 '지금 할 일'(진행 단계 패널)이 맨 위. 같은 말이던 '진행 단계' 줄은 뺐다 */}
+      <div className="wf-details">{workflow}</div>
+      <details className="task-more">
+        <summary>⋯ 더보기(설명·담당 바꾸기·삭제 등)</summary>
+      {/* 간단히(v0.4.22): 프로젝트·담당·단계는 위 요약 줄에 있으니 유형·방식만 한 줄로 */}
+      <p className="task-meta-line">
+        {WORK_TYPE_LABEL[task.type]} · {PRIORITY_LABEL[task.priority]} · {MODE_LABEL[agent.mode]}
+        {onShowAgent && (
+          <>
+            {' · '}
+            <button type="button" className="link-btn" onClick={() => onShowAgent(task)}>
+              사무실에서 {agent.name} 보기
+            </button>
+          </>
+        )}
+      </p>
+      {task.description && <p className="task-desc">{task.description}</p>}
 
       <div className="task-actions">
         {onAsk && (
@@ -200,11 +204,6 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
       </div>
       {copied === 'fail' && <p className="muted small">클립보드 접근이 막혀 아래 지시서 칸을 선택해 두었습니다. Ctrl+C로 복사하세요.</p>}
 
-      <details className="wf-details" open={task.stage !== undefined && task.stage !== 'received' && task.stage !== 'completed'}>
-        <summary>
-          진행 단계 <span className="pill">{stageLabel}</span>
-        </summary>
-        {workflow}
       </details>
       {onToggle && (
         <button type="button" className="btn btn-small btn-ghost task-fold" onClick={() => onToggle(task)}>
