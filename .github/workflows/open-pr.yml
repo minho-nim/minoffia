@@ -18,6 +18,10 @@ on:
         required: false
 permissions:
   contents: read
+# 같은 작업 브랜치의 PR 열기는 한 번에 하나씩(v0.6.16: 단추를 두 번 눌러도 PR이 둘 생기지 않게)
+concurrency:
+  group: open-pr-${{ inputs.repo }}-${{ inputs.head }}
+  cancel-in-progress: false
 jobs:
   open:
     runs-on: ubuntu-latest
@@ -38,5 +42,8 @@ jobs:
           existing=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$HEAD" --jq '.[0].html_url // empty')
           if [ -n "$existing" ]; then echo "이미 열린 PR: $existing"; exit 0; fi
           base=$(gh api "repos/$REPO" --jq .default_branch)
-          url=$(gh api -X POST "repos/$REPO/pulls" -f title="$TITLE" -f head="$HEAD" -f base="$base" -f body="$BODY" --jq .html_url)
+          url=$(gh api -X POST "repos/$REPO/pulls" -f title="$TITLE" -f head="$HEAD" -f base="$base" -f body="$BODY" --jq .html_url 2>/dev/null || true)
+          # 그 사이 다른 실행이 먼저 열었으면 그 PR을 쓴다
+          [ -n "$url" ] || url=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$HEAD" --jq '.[0].html_url // empty')
+          [ -n "$url" ] || { echo "::error::PR을 열지 못했습니다"; exit 1; }
           echo "PR 열림: $url"
