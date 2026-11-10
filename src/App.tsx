@@ -1084,23 +1084,17 @@ export function App() {
           const r = snap.workflow.results.find((x) => x.taskId === task.id && x.revision === revision);
           // Gemini 개발 결과(v0.4.82): 작업 브랜치가 이미 올라가 있어 GitHub에서 PR만 만들면 된다(병합은 배포 승인 뒤 서버가).
           const repo = projectById.get(task.projectId)?.repo;
-          if (r?.source === 'gemini_actions_auto' && repo) {
-            // v0.5.85(소유자 "이거 자동 안돼?"): Gemini 결과도 PR을 자동으로 연다(GitHub Actions). 안 되면 직접 여는 주소를 알려 준다.
-            const branch = codexBranch(task, r.workItemId, 'gemini');
+          // v0.6.29(소유자 "PC 전에 더 해둘 것"): Gemini·Claude·Codex 자동 결과 모두 GitHub Actions가 PR을 연다(한 길).
+          // Claude·Codex는 승인된 diff를 그대로 기본 브랜치에 적용해 작업 브랜치로 올린다(세션의 push 권한과 상관없이).
+          const auto = r && ['gemini_actions_auto', 'claude_session_auto', 'claude_manual', 'codex_linear_auto'].includes(r.source);
+          if (r && auto && repo) {
+            const tool = r.source === 'gemini_actions_auto' ? 'gemini' : r.source === 'codex_linear_auto' ? 'codex' : 'claude';
+            const branch = codexBranch(task, r.workItemId, tool);
             try {
               await store.openPr?.(task.id);
-              say('ok', `올리기 승인했어요. ${branch} 브랜치로 PR을 자동으로 여는 중이에요(1분 안팎, 병합 안 함). PR이 생기면 CI를 자동으로 확인합니다.`);
+              say('ok', `올리기 승인했어요. ${branch} 브랜치로 PR을 자동으로 여는 중이에요(1~2분, 병합 안 함). PR이 생기면 CI를 자동으로 확인합니다.`);
             } catch (e) {
-              say('error', `PR 자동 열기 실패: ${(e as Error).message} — 직접 열기: https://github.com/${repo}/compare/main...${branch}?expand=1`);
-            }
-          }
-          // v0.6.19(소유자 "Codex 주, Claude 보조"): Codex가 보낸 결과도 승인된 diff 그대로 Claude가 PR을 연다
-          if (r && (r.source === 'claude_session_auto' || r.source === 'claude_manual' || r.source === 'codex_linear_auto')) {
-            try {
-              const sent = await store.dispatchClaudePr(task.id, false);
-              say('ok', `Claude가 ${sent.branch} 브랜치로 PR을 여는 중입니다(병합 안 함). PR이 열리면 CI를 자동으로 확인합니다.`);
-            } catch (e) {
-              say('error', `Claude PR 자동 요청 실패: ${(e as Error).message}`);
+              say('error', `PR 자동 열기 실패: ${(e as Error).message}`);
             } finally {
               setSnap(await store.load());
             }

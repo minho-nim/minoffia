@@ -1439,9 +1439,9 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           {view.bApproved && (
             <div className="wf-manual">
               <p className="ok-text">결과 v{view.result!.revision} 업로드 승인됨.</p>
-              {view.result!.source === 'codex_linear_auto' ? (
-                // v0.6.19(소유자 "Codex 주, Claude 보조"): Codex가 보낸 결과는 승인된 diff 그대로 Claude가 PR을 연다
-                <p className="small">Codex 결과는 Claude가 승인된 변경 그대로 PR을 열어요(병합은 안 함). PR이 생기면 아래에 주소와 검사(CI) 결과가 보여요.</p>
+              {['codex_linear_auto', 'claude_session_auto', 'claude_manual'].includes(view.result!.source) ? (
+                // v0.6.29: Claude·Codex 결과는 GitHub Actions가 승인된 변경 그대로 작업 브랜치로 올리고 PR을 연다
+                <p className="small">승인된 변경 그대로 PR을 자동으로 열어요(1~2분, 병합은 안 함). PR이 생기면 아래에 주소와 검사(CI) 결과가 보여요.</p>
               ) : codexItem ? (
                 <>
                   <p className="small">
