@@ -138,4 +138,9 @@ describe('채점 보강(v0.5.93)', () => {
     expect(slimLog(log)).toBe('FAIL x\nError: boom');
     expect(slimLog('x'.repeat(10000) + '\nend', 300).length).toBeLessThan(400);
   });
+  it('CLAUDE.md(지켜야 할 것 절)는 범위 밖으로 보지 않는다(v0.6.34)', () => {
+    const diff = ['diff --git a/CLAUDE.md b/CLAUDE.md', '+++ b/CLAUDE.md', '+- 규칙', 'diff --git a/README.md b/README.md', '+++ b/README.md', '+한 줄'].join('\n');
+    const g = ruleCheck({ diff, testLog: 'npm test 통과', changeScope: 'README.md' }).find((x) => x.id === 'scope');
+    expect(g?.ok).toBe(true);
+  });
 });
