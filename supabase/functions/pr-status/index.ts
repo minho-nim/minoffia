@@ -49,9 +49,11 @@ Deno.serve(async (req) => {
     // v0.4.82: Gemini 개발 결과는 워크플로가 ai/gemini/<업무 앞 8자>-<작업> 브랜치를 이미 올려 두었다. 소유자가 GitHub에서 연 PR을 그 브랜치로 찾는다.
     if (!sent?.branch) {
       const { data: res } = await userClient.from('result_packages').select('source, work_item_id').eq('task_id', task.id).order('revision', { ascending: false }).limit(1).maybeSingle();
-      if (res?.source === 'gemini_actions_auto') {
-        const item = String(res.work_item_id ?? '').replace(/[^a-z0-9-]/gi, '').toLowerCase();
-        sent = { branch: `ai/gemini/${String(task.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase()}${item ? `-${item}` : ''}` };
+      // v0.6.37: Claude·Codex 결과도 결과 승인 뒤 Actions(open-pr)가 ai/claude|codex/… 브랜치로 PR을 연다. 그 브랜치로 찾는다
+      const tool = res?.source === 'gemini_actions_auto' ? 'gemini' : res?.source === 'codex_linear_auto' ? 'codex' : res?.source === 'claude_session_auto' || res?.source === 'claude_manual' ? 'claude' : '';
+      if (tool) {
+        const item = String(res!.work_item_id ?? '').replace(/[^a-z0-9-]/gi, '').toLowerCase();
+        sent = { branch: `ai/${tool}/${String(task.id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase()}${item ? `-${item}` : ''}` };
       }
     }
     const projectRepo = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
