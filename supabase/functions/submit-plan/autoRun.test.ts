@@ -15,7 +15,8 @@ describe('앱을 닫아 둬도 진행(v0.6.28)', () => {
     expect(startable([{ id: 'W1' }], [a('W1', 'ready')], new Set())).toEqual([]);
     expect(startable([{ id: 'W1' }], [a('W1', 'ready', 'gemini')], new Set(['W1']))).toEqual([]);
   });
-  it('submit-result의 복사본과 같다', () => {
+  it('submit-result·linear-webhook의 복사본과 같다', () => {
     expect(readFileSync('supabase/functions/submit-result/autoRun.ts', 'utf8')).toBe(readFileSync('supabase/functions/submit-plan/autoRun.ts', 'utf8'));
+    expect(readFileSync('supabase/functions/linear-webhook/autoRun.ts', 'utf8')).toBe(readFileSync('supabase/functions/submit-plan/autoRun.ts', 'utf8'));
   });
 });

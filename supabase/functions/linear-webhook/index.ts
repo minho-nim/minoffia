@@ -5,6 +5,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { readNews, STATUS_QUERY } from './linear.ts';
 import { commentIssueId, fresh, signatureOk } from './verify.ts';
+import { handOffToClaude } from './handoff.ts';
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 const reply = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -29,7 +30,7 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: a } = await admin
     .from('agent_assignments')
-    .select('id, owner_id, task_id, dispatch_status, actual_provider_status, started_at')
+    .select('id, owner_id, task_id, plan_revision, work_item_id, dispatch_status, actual_provider_status, started_at')
     .eq('provider_execution_id', issueId)
     .eq('assignee', 'codex')
     .maybeSingle();
@@ -54,11 +55,17 @@ Deno.serve(async (req) => {
     .update({ actual_provider_status: note, last_verified_at: new Date().toISOString(), ...(failed ? { dispatch_status: 'failed' } : {}) })
     .eq('id', a.id).eq('provider_execution_id', issueId).eq('dispatch_status', a.dispatch_status).select('id').maybeSingle();
   if (saveError || !saved) return reply(502, { ok: false });
+  // v0.6.30(소유자 결정 "Codex 주, Claude 대신"): Codex가 시작하지 못하면 그 작업을 Claude로 넘겨 바로 이어서 한다
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  const handed = failed && serviceKey
+    ? await handOffToClaude(admin, a.owner_id, a.task_id, { plan_revision: a.plan_revision, work_item_id: a.work_item_id }, news.last.replace(/^Codex 환경 없음 — [^.]*\.\s*/, '').slice(0, 80) || 'Codex 시작 못 함', env('SUPABASE_URL'), serviceKey).catch((e) => `fail: ${(e as Error).message}`)
+    : '';
+  if (handed) console.log(JSON.stringify({ fn: 'linear-webhook', handoff: handed }));
   await admin.rpc('push_enqueue', {
     p_owner: a.owner_id,
     p_task: a.task_id,
     p_kind: news.kind === 'error' ? 'blocked' : 'result',
-    p_title: news.kind === 'error' ? 'Codex가 시작하지 못했어요' : 'Codex 소식이 왔어요',
+    p_title: news.kind === 'error' ? (handed.startsWith('ok') ? 'Codex가 시작하지 못해 Claude가 이어서 해요' : 'Codex가 시작하지 못했어요') : 'Codex 소식이 왔어요',
   });
   return reply(200, { ok: true });
 });
