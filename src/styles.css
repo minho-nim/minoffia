@@ -5835,3 +5835,20 @@ a.project-site {
   border-style: dashed;
   color: var(--muted);
 }
+
+/* 팝업이 열린 동안(v0.6.48 소유자 "스크롤·뒤 눌림 효과 막기"): 뒤 화면은 안 움직이고 눌림 효과도 없다. 바깥 누르기는 팝업 닫기(popupClose.ts) */
+html.popup-open,
+html.popup-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.popup-open body * {
+  pointer-events: none;
+}
+html.popup-open .project-sections > details[open],
+html.popup-open .project-sections > details[open] * {
+  pointer-events: auto;
+}
+.project-sections > details[open] {
+  overscroll-behavior: contain;
+}
