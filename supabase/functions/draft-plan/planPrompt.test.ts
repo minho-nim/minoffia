@@ -18,8 +18,9 @@ const input = {
 
 describe('Gemini 대신 분배(v0.5.20)', () => {
   it('배정 안내는 휴가인 쪽을 빼고, AI Office 저장소엔 Gemini 개발을 안 쓴다', () => {
-    expect(assignLine({ codex: false, claude: false, gemini: false }, true)).toContain('쉬움 "gemini_dev", 보통 "codex_primary", 어려움 "claude_support"');
-    expect(assignLine({ codex: true, claude: true, gemini: false }, false)).toContain('쉬움 "claude_support", 보통 "claude_support", 어려움 "codex_primary"');
+    expect(assignLine({ codex: false, claude: false, gemini: false }, true)).toContain('쉬움 "codex_primary", 보통 "codex_primary", 어려움 "codex_primary"');
+    expect(assignLine({ codex: true, claude: false, gemini: false }, true)).toContain('쉬움 "claude_support", 보통 "claude_support", 어려움 "claude_support"');
+    expect(assignLine({ codex: true, claude: true, gemini: false }, true)).toContain('쉬움 "gemini_dev", 보통 "codex_primary"');
     expect(assignLine({ codex: false, claude: false, gemini: false }, false)).toContain('"gemini_dev"를 쓰지 않는다');
   });
 

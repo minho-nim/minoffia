@@ -41,4 +41,9 @@ describe('Codex Linear(v0.5.2)', () => {
     expect(w).toMatchObject({ kind: 'working', taskUrl: 'https://chatgpt.com/codex/tasks/task_e_abc123' });
     expect(readNews({ issue: { comments: { nodes: [] } } }).kind).toBe('none');
   });
+  it('환경 없음은 쉬운 안내를 붙인다(v0.6.19)', () => {
+    const n = readNews({ issue: { comments: { nodes: [{ body: "Codex couldn't start a task for this request: Codex cannot start tasks because the workspace has no available environments.", createdAt: '1', user: { name: 'Codex' } }] } } });
+    expect(n.kind).toBe('error');
+    expect(n.last).toMatch(/^Codex 환경 없음 — .*게시/);
+  });
 });

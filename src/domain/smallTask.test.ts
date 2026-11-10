@@ -22,14 +22,16 @@ const spec = (o: Partial<TaskSpec> = {}): TaskSpec => ({
 
 describe('작은 일 바로 배정(v0.5.20)', () => {
   it('쉬운 일은 Gemini, 보통(4~5)은 Codex', () => {
-    expect(checkSmallTask(spec(), 'me/app')).toEqual({ ok: true, preference: 'gemini_dev', difficulty: 2 });
+    expect(checkSmallTask(spec(), 'me/app')).toEqual({ ok: true, preference: 'codex_primary', difficulty: 2 });
+    expect(checkSmallTask(spec(), 'me/app', { codex: true })).toMatchObject({ ok: true, preference: 'claude_support' });
+    expect(checkSmallTask(spec(), 'me/app', { codex: true, claude: true })).toMatchObject({ ok: true, preference: 'gemini_dev' });
     expect(checkSmallTask(spec({ sizeHint: { difficulty: 5, single_task: true, needs_design: false } }), 'me/app')).toMatchObject({ ok: true, preference: 'codex_primary' });
   });
 
   it('AI Office 저장소나 Studio A·B 휴가면 쉬운 일도 Codex', () => {
     expect(checkSmallTask(spec(), 'minho-nim/MinLab-AI-Office')).toMatchObject({ ok: true, preference: 'codex_primary' });
     expect(checkSmallTask(spec(), 'me/app', { gemini: true })).toMatchObject({ ok: true, preference: 'codex_primary' });
-    expect(checkSmallTask(spec({ sizeHint: { difficulty: 4, single_task: true, needs_design: false } }), 'me/app', { codex: true })).toEqual({ ok: false, why: ['맡을 AI가 휴가'] });
+    expect(checkSmallTask(spec({ sizeHint: { difficulty: 4, single_task: true, needs_design: false } }), 'me/app', { codex: true, claude: true })).toEqual({ ok: false, why: ['맡을 AI가 휴가'] });
   });
 
   it('힌트·범위·위험한 말·저장소 중 하나라도 걸리면 PM', () => {
@@ -57,7 +59,7 @@ describe('작은 일 바로 배정(v0.5.20)', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.plan.work_items).toHaveLength(1);
-    expect(r.plan.work_items[0]).toMatchObject({ assignee_preference: 'gemini_dev', difficulty: 2, requires_execution_approval: true, acceptance_tests: ['README에 설치 줄이 있다'] });
+    expect(r.plan.work_items[0]).toMatchObject({ assignee_preference: 'codex_primary', difficulty: 2, requires_execution_approval: true, acceptance_tests: ['README에 설치 줄이 있다'] });
     expect(r.plan.development_mode).toBe('direct');
   });
 });
