@@ -339,6 +339,8 @@ export function App() {
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
+  /** 휴대폰 업무·프로젝트·팀 탭: 사무실 버튼을 누르고 있는 동안만 사무실을 보인다(v0.6.41 소유자) */
+  const [holdOffice, setHoldOffice] = useState(false);
   const stageRef = useRef({ mini: false, tiny: false });
   /** 얇은 머리 보이기(큰 머리가 화면 밖일 때) */
   const [barOn, setBarOn] = useState(false);
@@ -1738,7 +1740,27 @@ export function App() {
 
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab}`}>
-        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`} aria-label="오피스">
+        {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
+        {(tab === 'tasks' || tab === 'projects' || tab === 'team') && (
+          <button
+            type="button"
+            className={`office-hold${holdOffice ? ' is-on' : ''}`}
+            aria-label="누르고 있는 동안 사무실 보기"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              setHoldOffice(true);
+            }}
+            onPointerUp={() => setHoldOffice(false)}
+            onPointerLeave={() => setHoldOffice(false)}
+            onPointerCancel={() => setHoldOffice(false)}
+            onContextMenu={(e) => e.preventDefault()}
+            onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && setHoldOffice(true)}
+            onKeyUp={() => setHoldOffice(false)}
+          >
+            🏢 사무실
+          </button>
+        )}
+        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}${holdOffice ? ' is-hold' : ''}`} aria-label="오피스">
           <OfficeView
             lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
             tasks={snap.tasks}

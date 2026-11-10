@@ -5537,3 +5537,54 @@ a.project-site {
     display: none;
   }
 }
+/* ③ 사무실을 숨긴 탭: 누르고 있는 동안만 보기(v0.6.41 소유자 "버튼을 누르고 있는 동안 보이게") */
+.office-hold {
+  display: none;
+}
+@media (max-width: 1039px) {
+  .layout.tab-tasks > .office-hold,
+  .layout.tab-projects > .office-hold,
+  .layout.tab-team > .office-hold {
+    display: inline-flex;
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+    z-index: 460;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.85rem;
+    box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.45);
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+  .office-hold.is-on {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .layout.tab-tasks > .stage.is-hold,
+  .layout.tab-projects > .stage.is-hold,
+  .layout.tab-team > .stage.is-hold {
+    display: block;
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top));
+    left: 8px;
+    right: 8px;
+    z-index: 455;
+    margin: 0;
+    transform: none;
+    pointer-events: none;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  }
+  .layout.tab-tasks > .stage.is-hold .office,
+  .layout.tab-projects > .stage.is-hold .office,
+  .layout.tab-team > .stage.is-hold .office {
+    transform: none;
+  }
+}
