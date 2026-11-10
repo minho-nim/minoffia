@@ -73,6 +73,8 @@ export interface WorkflowActions {
   startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** Codex를 Linear로 맡기기(v0.5.2): 지시서는 패널이 만들어 넘긴다 */
   startCodexLinear?: (assignment: AgentAssignment, acknowledgeRetry: boolean, text: string) => Promise<boolean>;
+  /** Codex 앱에 붙여 넣을 지시서에 결과 자동 제출 절을 붙인다(실패하면 빈 문자열, v0.6.21) */
+  codexManualSection?: (assignment: AgentAssignment) => Promise<string>;
   /** Codex 소식 손으로 다시 읽기(웹훅이 안 올 때, v0.5.3) */
   refreshCodex?: (assignment: AgentAssignment) => Promise<void>;
   /** 견본 먼저: 견본 승인 + 견본 작업 끝냄 */
@@ -1009,17 +1011,19 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                         <button
                           type="button"
                           className="btn btn-small btn-ghost"
-                          onClick={() =>
-                            item &&
-                            void copy(
-                              a.id,
-                              view.prototypeFirst && a.assignee === 'gemini'
-                                ? buildPrototypeHandoff(task, view.spec!, item, project, view.plan!.plan.mode_reason ?? '', requestImages, taskLinks)
-                                : buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules),
-                            )
-                          }
+                          onClick={async () => {
+                            if (!item) return;
+                            if (view.prototypeFirst && a.assignee === 'gemini') {
+                              void copy(a.id, buildPrototypeHandoff(task, view.spec!, item, project, view.plan!.plan.mode_reason ?? '', requestImages, taskLinks));
+                              return;
+                            }
+                            const text = buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules);
+                            // v0.6.21: Codex는 결과 자동 제출 절을 붙인다(Codex 앱에 붙여 넣으면 결과가 앱으로 바로 옴)
+                            const section = a.assignee === 'codex' && actions.codexManualSection ? await actions.codexManualSection(a) : '';
+                            void copy(a.id, text + section);
+                          }}
                         >
-                          {copied === a.id ? '복사됨' : view.prototypeFirst && a.assignee === 'gemini' ? 'AI Studio 견본 지시서 복사' : '지시서 복사'}
+                          {copied === a.id ? '복사됨' : view.prototypeFirst && a.assignee === 'gemini' ? 'AI Studio 견본 지시서 복사' : a.assignee === 'codex' && actions.codexManualSection ? 'Codex 앱용 지시서 복사(결과 자동)' : '지시서 복사'}
                         </button>
                         {a.dispatchStatus === 'completed' ? (
                           <p className="small ok-text">결과를 받아 끝난 작업입니다.</p>

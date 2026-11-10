@@ -62,7 +62,6 @@ Deno.serve(async (req) => {
   const key = env('LINEAR_API_KEY');
   const allowedRepo = env('CLAUDE_ALLOWED_REPOSITORY').toLowerCase();
   if (!ownerEmail) return reply(500, { ok: false, error: '서버 설정(OFFICE_OWNER_EMAIL)이 빠졌습니다.' });
-  if (!key) return reply(503, { ok: false, error: 'LINEAR_API_KEY가 없어 Codex(Linear)를 쓸 수 없어요. 지시서 복사로 진행하세요.' });
 
   const userClient = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
     global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
@@ -83,6 +82,26 @@ Deno.serve(async (req) => {
   if (!a) return reply(404, { ok: false, error: '배정된 작업을 찾을 수 없습니다.' });
   if (a.assignee !== 'codex') return reply(400, { ok: false, error: 'Codex에 배정된 작업만 맡깁니다.' });
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
+
+  // 지시서 복사(v0.6.21, 소유자 "Codex는 어떻게"): Linear가 막혀도 Codex 앱에 붙여 넣으면 결과가 자동으로 오게.
+  // 실행 승인(E)된 작업에 1회용 결과 제출표를 만들고 '시작함(사용자 기록)'으로 둔다. Linear에는 아무것도 보내지 않는다.
+  if (body.action === 'manual') {
+    const { data: e } = await admin.from('approvals').select('id').eq('task_id', a.task_id).eq('gate', 'E').eq('decision', 'approved')
+      .eq('approved_revision', a.plan_revision).eq('work_item_id', a.work_item_id).limit(1);
+    if (!e?.length) return reply(409, { ok: false, error: '이 작업의 실행 승인(E)이 없습니다.' });
+    if (!['ready', 'failed', 'started'].includes(String(a.dispatch_status))) return reply(409, { ok: false, error: '지금은 지시서를 다시 만들 수 없는 상태입니다.' });
+    const ticket = await resultTicket(admin, user.id, a);
+    if (!ticket) return reply(503, { ok: false, error: '결과 제출표를 만들지 못했어요. 결과는 직접 붙여 넣어 주세요.' });
+    const { error: upError } = await admin.from('agent_assignments').update({
+      dispatch_status: 'started', status_source: 'user_reported', started_at: new Date().toISOString(),
+      provider_execution_id: null, provider_task_url: null,
+      actual_provider_status: 'codex: 지시서 복사함(Codex 앱에서 직접 시작, 결과는 자동 제출)',
+    }).eq('id', a.id);
+    if (upError) return reply(500, { ok: false, error: `상태 저장 실패: ${upError.message}` });
+    return reply(200, { ok: true, section: submitSection(a.task_id, ticket) });
+  }
+
+  if (!key) return reply(503, { ok: false, error: 'LINEAR_API_KEY가 없어 Codex(Linear)를 쓸 수 없어요. 지시서 복사로 진행하세요.' });
 
   // 진행 소식 읽기(읽기만, Linear에 아무것도 쓰지 않음)
   if (body.action === 'status') {
