@@ -18,7 +18,7 @@ export interface SetupIssues {
 export function setupIssues(projectId: string, tasks: Task[], wf: WorkflowData): SetupIssues {
   const ids = new Set(tasks.filter((t) => t.projectId === projectId).map((t) => t.id));
   const mine = wf.assignments.filter((a) => ids.has(a.taskId)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const codexA = mine.find((a) => a.assignee === 'codex' && /no available environments|환경 없음/i.test(a.actualProviderStatus ?? ''));
+  const codexA = mine.find((a) => a.assignee === 'codex' && /no available environments|create an environment|환경 없음/i.test(a.actualProviderStatus ?? ''));
   const codexOk = mine.find((a) => a.assignee === 'codex' && (a.dispatchStatus === 'completed' || /Working|작업 중/i.test(a.actualProviderStatus ?? '')));
   const claudeA = mine.find((a) => a.assignee === 'claude' && /저장소 없음/.test(a.actualProviderStatus ?? ''));
   const claudeOk = mine.find((a) => a.assignee === 'claude' && a.dispatchStatus === 'completed' && !/저장소 없음/.test(a.actualProviderStatus ?? ''));
