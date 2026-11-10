@@ -56,6 +56,7 @@ import { version } from '../package.json';
 import { HealthCheck } from './components/HealthCheck';
 import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
+import { installPopupClose } from './components/popupClose';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'settings';
@@ -174,6 +175,7 @@ export function App() {
   }, []);
 
   // 시작: Supabase 설정이 없으면 로컬 데모 모드
+  useEffect(() => installPopupClose(), []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
