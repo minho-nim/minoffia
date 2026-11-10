@@ -5374,3 +5374,29 @@ a.project-site {
   color: var(--muted);
   font-size: 0.9em;
 }
+
+/* 프로젝트 준비 체크리스트(v0.6.32) */
+.setup-list {
+  margin: 6px 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.setup-list li {
+  overflow-wrap: anywhere;
+}
+.setup-list li.is-ok {
+  color: var(--ok);
+}
+.setup-list li.is-bad {
+  border-left: 3px solid var(--warn);
+  padding-left: 6px;
+}
+.setup-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+}
