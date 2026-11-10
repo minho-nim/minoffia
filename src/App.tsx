@@ -840,14 +840,17 @@ export function App() {
           const v = deriveWorkflow(t, snap.workflow);
           if (!v.plan || !v.spec || t.status === 'done') continue;
           for (const a of v.assignments) {
-            if (a.dispatchStatus !== 'blocked_quota' || handoffTried.current.has(a.id)) continue;
+            // v0.6.30: Codex가 '시작 못 함'(환경 없음 등)이어도 Claude로 넘긴다. 보통은 서버(linear-webhook)가 먼저 넘기므로 1분 기다린다
+            const codexFail = a.assignee === 'codex' && a.dispatchStatus === 'failed' && /^linear: 시작 못 함/.test(a.actualProviderStatus ?? '') && Date.now() - Date.parse(a.updatedAt) > 60_000;
+            if ((a.dispatchStatus !== 'blocked_quota' && !codexFail) || handoffTried.current.has(a.id)) continue;
             handoffTried.current.add(a.id);
             const repo = (snap.projects.find((p) => p.id === t.projectId)?.repo ?? '').toLowerCase();
             const away = new Set(snap.leave ?? []);
             const to = nextAgent(a.assignee, { claude: away.has('claude'), codex: away.has('codex'), gemini: away.has('studioA') && away.has('studioB') }, OFFICE_REPOS.includes(repo));
             if (!to) continue;
-            const failed = await importPlanText(t, reassignPlanText(v.plan, a.workItemId, to, `${a.assignee} 한도`), 'manual', snap, v.spec.revision);
-            if (!failed) say('ok', `[${t.title}] ${a.workItemId}이 한도에 걸려 ${PREF_LABEL[to as keyof typeof PREF_LABEL]}에게 넘기는 계획을 만들었어요. 실행 승인하면 이어서 해요.`);
+            const target = codexFail && !away.has('claude') ? 'claude_support' : to;
+            const failed = await importPlanText(t, reassignPlanText(v.plan, a.workItemId, target, codexFail ? 'Codex 시작 못 함' : `${a.assignee} 한도`), 'manual', snap, v.spec.revision);
+            if (!failed) say('ok', `[${t.title}] ${a.workItemId}을 ${PREF_LABEL[target as keyof typeof PREF_LABEL]}에게 넘겼어요(${codexFail ? 'Codex 시작 못 함' : '한도'}). 바로 이어서 해요.`);
             break;
           }
         }
