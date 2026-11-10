@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: a } = await admin
     .from('agent_assignments')
-    .select('id, owner_id, task_id, dispatch_status, actual_provider_status')
+    .select('id, owner_id, task_id, dispatch_status, actual_provider_status, started_at')
     .eq('provider_execution_id', issueId)
     .eq('assignee', 'codex')
     .maybeSingle();
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   }).catch(() => null);
   const body = (await res?.json().catch(() => ({}))) as { data?: Parameters<typeof readNews>[0] } | undefined;
   if (!body?.data) return reply(502, { ok: false });
-  const news = readNews(body.data);
+  const news = readNews(body.data, a.started_at);
   if (news.kind === 'none') return reply(200, { ok: true, ignored: true });
 
   const note = `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`.slice(0, 300);

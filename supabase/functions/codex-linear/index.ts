@@ -5,7 +5,7 @@
 // 비밀값: LINEAR_API_KEY(소유자 계정 개인 키)는 secrets에만. 이슈 생성은 소유자 이름으로 된다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { dispatchTrackedIssue, type LinearIssue } from './trackedDispatch.ts';
-import { CREATE_COMMENT, CREATE_ISSUE, issueInput, LOOKUP_QUERY, readLookup, readNews, STATUS_QUERY, UPDATE_ISSUE } from './linear.ts';
+import { CREATE_COMMENT, CREATE_ISSUE, issueInput, LOOKUP_QUERY, readLookup, readNews, STATUS_QUERY } from './linear.ts';
 
 const MAX_TEXT = 60_000;
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       if (!data.issue) return reply(409, { ok: false, error: '아직 Linear 이슈 생성을 확인하지 못했습니다. 새 이슈를 만들지 않고 기존 식별자를 유지합니다.' });
       const remoteIssue = data.issue as Partial<LinearIssue>;
       if (remoteIssue.id !== a.provider_execution_id || !remoteIssue.url) throw new Error('예약한 이슈의 주소를 확인하지 못했습니다.');
-      const news = readNews(data as Parameters<typeof readNews>[0]);
+      const news = readNews(data as Parameters<typeof readNews>[0], a.started_at);
       const note = news.kind === 'none' ? 'linear: Codex 소식 아직 없음' : `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`;
       const patch: Record<string, unknown> = { actual_provider_status: note.slice(0, 300), provider_task_url: remoteIssue.url, status_source: 'server_verified', last_verified_at: new Date().toISOString() };
       if (a.dispatch_status === 'starting' || a.dispatch_status === 'started') patch.dispatch_status = news.kind === 'error' ? 'failed' : 'started';
@@ -124,6 +124,11 @@ Deno.serve(async (req) => {
   if (!look.canSetId) return reply(409, { ok: false, error: 'Linear가 이슈 식별자 예약을 지원하지 않아 추적 정보를 보존할 수 없습니다. 전송하지 않았습니다.' });
   if (!look.codexId) return reply(409, { ok: false, error: 'Linear에서 Codex를 찾지 못했어요. Codex for Linear 설치와 팀 추가를 확인하세요.' });
 
+  // 실패 뒤 다시 맡기기(v0.6.20): 같은 이슈에 위임을 다시 걸어도 Codex가 반응하지 않았다(2026-11-10 WorthIt).
+  // 실패가 확인된 작업이면 추적 식별자를 비워 새 이슈로 맡긴다(예전 이슈는 그대로 둔다).
+  if (body.acknowledgeRetry && a.dispatch_status === 'failed') {
+    await admin.from('agent_assignments').update({ provider_execution_id: null, provider_task_url: null }).eq('id', a.id).eq('dispatch_status', 'failed');
+  }
   const { data: claim, error: claimError } = await admin.rpc('claim_codex_linear', { p_assignment: a.id, p_owner: user.id, p_allow_retry: Boolean(body.acknowledgeRetry) });
   if (claimError) return reply(500, { ok: false, error: `예약 실패: ${claimError.message}` });
   const row = Array.isArray(claim) ? claim[0] : claim;
@@ -164,14 +169,6 @@ Deno.serve(async (req) => {
       mention: mention ? async (id) => {
         const data = await linear(key, CREATE_COMMENT, { input: { issueId: id, body: '@codex 이 이슈의 지시서대로 진행해 줘. PR은 만들지 말고 작업만 해 줘.' } }) as { commentCreate?: { success?: boolean } };
         if (!data.commentCreate?.success) throw new Error('Codex 멘션 전송을 확인하지 못했습니다.');
-      } : undefined,
-      // 실패 뒤 다시 맡기기: 이미 있는 이슈의 Codex 위임을 풀었다가 다시 건다(멘션 방식이면 위 멘션이 다시 부른다)
-      again: body.acknowledgeRetry && !mention ? async (id) => {
-        const field = look.canDelegate ? 'delegateId' : 'assigneeId';
-        for (const value of [null, look.codexId]) {
-          const data = await linear(key, UPDATE_ISSUE, { id, input: { [field]: value } }) as { issueUpdate?: { success?: boolean } };
-          if (!data.issueUpdate?.success) throw new Error('Linear 이슈에 Codex를 다시 맡기지 못했어요.');
-        }
       } : undefined,
       save: async (issue) => {
         const { data: saved, error: saveError } = await admin.from('agent_assignments').update({
