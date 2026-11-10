@@ -5232,3 +5232,83 @@ a.project-site {
 .wf-followups > .btn {
   margin-top: 6px;
 }
+
+/* 상태 다섯 가지(v0.6.15) */
+.pill-st-working {
+  background: var(--st-progress);
+  color: var(--st-progress-ink);
+  border-color: transparent;
+}
+.pill-st-turn {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--ink);
+  border-color: transparent;
+  font-weight: 700;
+}
+.pill-st-stalled {
+  background: var(--st-queued);
+  color: var(--st-queued-ink);
+  border-color: transparent;
+}
+.pill-st-failed {
+  background: var(--st-blocked);
+  color: var(--st-blocked-ink);
+  border-color: transparent;
+  font-weight: 700;
+}
+.pill-st-done {
+  background: var(--st-done);
+  color: var(--st-done-ink);
+  border-color: transparent;
+}
+
+/* 한눈에 보기 카드(v0.6.15): 휴대폰 2칸, 넓으면 4칸 */
+.overview {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+}
+@media (max-width: 640px) {
+  .overview {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.ov-card {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ov-card[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.ov-num {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.1;
+}
+.ov-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ov-turn .ov-num {
+  color: var(--accent);
+}
+.ov-working .ov-num {
+  color: var(--info);
+}
+.ov-stuck .ov-num {
+  color: var(--danger);
+}
+.ov-usage {
+  cursor: default;
+}

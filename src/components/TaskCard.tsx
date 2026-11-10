@@ -3,6 +3,7 @@ import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
 import { nextStatuses } from '../domain/status';
 import type { AgentId, Project, Task, TaskStatus } from '../domain/types';
 import { PRIORITY_LABEL, STATUS_LABEL, WORK_TYPE_LABEL } from '../domain/types';
+import { SIMPLE_LABEL } from '../domain/simpleState';
 
 interface Props {
   task: Task;
@@ -25,6 +26,8 @@ interface Props {
   /** 이 업무의 내 차례 표시(기획? · 배포! 등) */
   /** 내 차례 표시. onJump가 있으면 눌러서 그 칸으로 간다(v0.4.86) */
   turn?: { word: string; alert?: boolean; onJump?: () => void };
+  /** 상태 다섯 가지(v0.6.15): 있으면 카드 맨 앞에 이것을 보인다 */
+  simple?: import('../domain/simpleState').SimpleState;
 }
 
 const STATUS_VERB: Record<TaskStatus, string> = {
@@ -35,7 +38,7 @@ const STATUS_VERB: Record<TaskStatus, string> = {
   done: '완료 승인',
 };
 
-export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn }: Props) {
+export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn, simple }: Props) {
   const agent = AGENT_BY_ID[task.assignee];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
@@ -66,7 +69,7 @@ export function TaskCard({ task, project, workflow, stageLabel, onStatus, onAssi
       {onToggle ? (
         <button type="button" className="task-toggle" aria-expanded={expanded} onClick={() => onToggle(task)}>
           <span className="task-head">
-            <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>
+            {simple ? <span className={`pill pill-st-${simple}`}>{SIMPLE_LABEL[simple]}</span> : <span className={`pill pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>}
             <span className="task-title">{task.title}</span>
             {turn && (
               <span
