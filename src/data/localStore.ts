@@ -109,6 +109,9 @@ export function createLocalStore(): OfficeStore {
         projects: exists ? state.projects.map((p) => (p.id === project.id ? project : p)) : [...state.projects, project],
       });
     },
+    async reorderProjects(ids) {
+      commit({ ...state, projects: state.projects.map((p) => ({ ...p, position: Math.max(0, ids.indexOf(p.id)) })) });
+    },
     async deleteProject(id) {
       commit({
         ...state,

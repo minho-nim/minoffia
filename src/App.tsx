@@ -13,6 +13,7 @@ import { MyTurnList } from './components/MyTurn';
 import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
 import { setupIssues } from './domain/projectSetup';
+import { moveProject, orderProjects } from './domain/projectOrder';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
 import type { PendingImage } from './components/Attachments';
@@ -54,7 +55,7 @@ import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 
-type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team';
+type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'settings';
 type Filter = 'open' | 'all' | TaskStatus | 'st:working' | 'st:turn' | 'st:stuck';
 
 const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
@@ -152,22 +153,6 @@ export function App() {
     setProjectFilterState(id);
     try {
       localStorage.setItem('minlab-ai-office:project-filter:v1', id);
-    } catch {
-      // 저장이 막힌 브라우저: 이번 화면에서만
-    }
-  };
-  // 프로젝트 칩 접기(v0.5.5 소유자 "너무 많다"): 대화·업무 탭 같이. 접으면 고른 칩만 남는다. 이 기기에 기억.
-  const [chipsFolded, setChipsFoldedState] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('minlab-ai-office:chips-folded:v1') !== '0';
-    } catch {
-      return true;
-    }
-  });
-  const setChipsFolded = (v: boolean) => {
-    setChipsFoldedState(v);
-    try {
-      localStorage.setItem('minlab-ai-office:chips-folded:v1', v ? '1' : '0');
     } catch {
       // 저장이 막힌 브라우저: 이번 화면에서만
     }
@@ -1601,7 +1586,7 @@ export function App() {
     // 수정해도 id가 같으므로 연결된 업무는 그대로 따라온다.
     const project: Project = existing
       ? { ...existing, ...fields, sample: false }
-      : { id: newId(), ...fields, createdAt: new Date().toISOString() };
+      : { id: newId(), ...fields, position: Math.max(-1, ...snap.projects.map((p) => p.position ?? 0)) + 1, createdAt: new Date().toISOString() };
     return (await mutate(() => store.saveProject(project), `${fields.name} 프로젝트를 ${existing ? '수정' : '등록'}했습니다.`)) ? project : null;
   };
 
@@ -1652,20 +1637,8 @@ export function App() {
     const pid = snap.tasks.find((t) => t.id === it.taskId)?.projectId;
     if (pid) turnsByProject.set(pid, (turnsByProject.get(pid) ?? 0) + 1);
   }
-  // 프로젝트가 4개 이상일 때만 접기 버튼. 접힌 칩의 내 차례 수는 버튼에 모아 보인다.
-  const fold = snap.projects.length > 3;
-  const foldChip = (picked: string | null) => {
-    if (!fold) return null;
-    const hidden = snap.projects.filter((p) => p.id !== picked);
-    const waiting = hidden.reduce((sum, p) => sum + (turnsByProject.get(p.id) ?? 0), 0);
-    return (
-      <button type="button" className="chip chip-fold" aria-expanded={!chipsFolded} onClick={() => setChipsFolded(!chipsFolded)}>
-        {chipsFolded ? `프로젝트 ${hidden.length}개 ▾` : '접기 ▴'}
-        {chipsFolded && waiting > 0 && <span className="num num-turn">{waiting}</span>}
-      </button>
-    );
-  };
-
+  // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
+  const ordered = orderProjects(snap.projects);
   return (
     <div className="app">
       <header className="topbar" ref={topRef}>
@@ -1712,7 +1685,7 @@ export function App() {
           </button>
         )}
         {/* 큰 머리 내용(연결·알림·사용량)을 펼쳐 본다(v0.5.31) */}
-        <button type="button" className={`bar-btn${usageOpen ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={usageOpen} onClick={() => setUsageOpen((v) => !v)}>
+        <button type="button" className={`bar-btn bar-btn-usage${usageOpen ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={usageOpen} onClick={() => setUsageOpen((v) => !v)}>
           사용량 보기
         </button>
         {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
@@ -1809,11 +1782,15 @@ export function App() {
             <button type="button" role="tab" aria-selected={tab === 'team'} onClick={() => setTab('team')}>
               팀 관리
             </button>
+            {/* 설정 탭(v0.6.42 소유자 "설정 탭 별도"): 프로젝트 순서·밝기·알림·사용량·계정 */}
+            <button type="button" role="tab" aria-selected={tab === 'settings'} onClick={() => setTab('settings')} aria-label="설정">
+              ⚙️
+            </button>
           </nav>
 
           {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
           {tab === 'chat' && snap.projects.length > 0 && (
-            <div className="filters project-chips chat-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
+            <div className="filters filters-scroll project-chips chat-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
               {/* 기본 대화창(일반 대화, v0.4.88 소유자): 늘 맨 앞에, 프로젝트를 안 고르면 이 창 */}
               <button
                 type="button"
@@ -1824,7 +1801,7 @@ export function App() {
               >
                 기본
               </button>
-              {snap.projects.filter((p) => !(fold && chipsFolded) || chatProjectId === p.id).map((p) => {
+              {ordered.map((p) => {
                 const n = turnsByProject.get(p.id) ?? 0;
                 const on = chatProjectId === p.id;
                 return (
@@ -1842,14 +1819,13 @@ export function App() {
                   </button>
                 );
               })}
-              {foldChip(chatProjectId)}
             </div>
           )}
 
           {/* 업무 탭 프로젝트 칩(v0.4.18~). 고르면 내 차례·업무가 그 프로젝트 기준 */}
           {tab === 'tasks' && snap.projects.length > 1 && (
-            <div className="filters project-chips" role="group" aria-label="프로젝트" ref={watchChipsHeight}>
-              {[{ id: 'all', name: '모든 프로젝트' }, ...snap.projects.filter((p) => !(fold && chipsFolded) || pf === p.id)].map((p) => {
+            <div className="filters filters-scroll project-chips" role="group" aria-label="프로젝트" ref={watchChipsHeight}>
+              {[{ id: 'all', name: '모든 프로젝트' }, ...ordered].map((p) => {
                 const n = p.id === 'all' ? turns.length : (turnsByProject.get(p.id) ?? 0);
                 return (
                   <button key={p.id} type="button" className="chip chip-project" aria-pressed={pf === p.id} onClick={() => setProjectFilter(p.id)}>
@@ -1858,7 +1834,6 @@ export function App() {
                   </button>
                 );
               })}
-              {foldChip(pf === 'all' ? null : pf)}
             </div>
           )}
 
@@ -2047,7 +2022,7 @@ export function App() {
           {tab === 'projects' && (
             <ProjectPanel
               setupIssuesOf={(p) => setupIssues(p.id, snap.tasks, snap.workflow)}
-              projects={snap.projects}
+              projects={ordered}
               tasks={snap.tasks}
               turnsByProject={turnsByProject}
               onAsk={(id) => {
@@ -2092,6 +2067,57 @@ export function App() {
               serverMode={store.mode === 'supabase'}
               onOpenTask={(t) => showTask(t.id)}
             />
+          )}
+
+          {tab === 'settings' && (
+            <section className="settings" aria-label="설정">
+              <div className="settings-box">
+                <h3>프로젝트 순서</h3>
+                <p className="muted small">업무·대화 탭의 프로젝트 칩과 프로젝트 탭이 이 순서를 따라요.</p>
+                <ol className="order-list">
+                  {ordered.map((p, i) => (
+                    <li key={p.id}>
+                      <span className="order-name">{p.name}</span>
+                      <span className="order-btns">
+                        <button type="button" className="btn btn-small btn-ghost" aria-label={`${p.name} 위로`} disabled={i === 0 || !store.reorderProjects} onClick={() => void mutate(() => store.reorderProjects!(moveProject(ordered, p.id, -1)), '순서를 바꿨어요.')}>
+                          ▲
+                        </button>
+                        <button type="button" className="btn btn-small btn-ghost" aria-label={`${p.name} 아래로`} disabled={i === ordered.length - 1 || !store.reorderProjects} onClick={() => void mutate(() => store.reorderProjects!(moveProject(ordered, p.id, 1)), '순서를 바꿨어요.')}>
+                          ▼
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div className="settings-box">
+                <h3>화면</h3>
+                <ThemeToggle />
+              </div>
+              {store.mode === 'supabase' && (
+                <div className="settings-box">
+                  <h3>휴대폰 알림</h3>
+                  <PushToggle store={store} />
+                </div>
+              )}
+              <div className="settings-box">
+                <h3>오늘 사용량</h3>
+                {usageList}
+              </div>
+              <div className="settings-box">
+                <h3>계정</h3>
+                {store.mode === 'local' ? (
+                  <p className="muted small">로컬 데모 · 이 기기에만 저장</p>
+                ) : (
+                  <p className="small">
+                    {session?.user.email}{' '}
+                    <button type="button" className="link-btn" onClick={() => void client?.auth.signOut()}>
+                      로그아웃
+                    </button>
+                  </p>
+                )}
+              </div>
+            </section>
           )}
 
           {tab === 'team' && (

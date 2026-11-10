@@ -22,6 +22,8 @@ export interface Project {
   designMd?: string;
   designDraft?: string;
   sample?: boolean;
+  /** 순서(v0.6.42, 작을수록 앞). 칸이 없는 DB면 undefined */
+  position?: number;
   createdAt: string;
 }
 
