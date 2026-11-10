@@ -6,6 +6,11 @@ const v = (over: Partial<WorkflowView>) =>
   ({ stage: 'executing', spec: { revision: 1, intent: 'change_request' }, aApproved: true, planCurrent: true, assignments: [], eApproved: () => true, result: null, bApproved: false, cApproved: false, pendingRevision: null, resultRevised: false, waitingWork: [], prototypeFirst: false, pApproved: false, ...over }) as unknown as WorkflowView;
 
 describe('지금 할 일(v0.6.27)', () => {
+  it('취소한 업무는 실패가 남아 있어도 취소로 보이고 버튼이 없다(v0.6.50)', () => {
+    const n = nowInfo(v({ stage: 'cancelled', assignments: [{ assignee: 'codex', dispatchStatus: 'failed', actualProviderStatus: '소유자가 업무를 취소함' }] as never }), { done: true });
+    expect(n.text).toBe('취소한 업무예요.');
+    expect(n.primary).toBeUndefined();
+  });
   it('기획 승인 대기면 기획 승인 버튼 하나', () => {
     const n = nowInfo(v({ stage: 'development_approval_pending', aApproved: false }), { done: false });
     expect(n.tone).toBe('turn');
