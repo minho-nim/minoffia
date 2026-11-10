@@ -239,11 +239,12 @@ function FollowupBox({ followups, busy, canRedo, onAdd, onRedo }: { followups: i
   const pending = followups.filter((f) => !f.usedAt);
   const sent = followups.filter((f) => f.usedAt);
   return (
-    <div className="wf-followups">
-      <p className="small">
+    // v0.6.37(소유자 "이거 닫아줘, 열려 있네 계속"): 기본은 접어 두고, 대기 중인 추가 요청이 있으면 펼친다
+    <details className="wf-followups" open={pending.length > 0}>
+      <summary className="small">
         <b>개발 중 추가 요청</b>{' '}
-        <span className="muted">{pending.length ? `${pending.length}개 대기 — 다음 다시 개발 때 함께 보내요` : '도는 개발에는 끼어들 수 없어, 적어 두면 다음 라운드에 함께 보내요'}</span>
-      </p>
+        <span className="muted">{pending.length ? `${pending.length}개 대기 — 다음 다시 개발 때 함께 보내요` : '눌러서 적기(다음 라운드에 함께 보내요)'}</span>
+      </summary>
       {pending.length > 0 && (
         <ul className="wf-followup-list">
           {pending.map((f) => (
@@ -277,7 +278,7 @@ function FollowupBox({ followups, busy, canRedo, onAdd, onRedo }: { followups: i
           </ul>
         </details>
       )}
-    </div>
+    </details>
   );
 }
 
