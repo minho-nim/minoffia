@@ -15,6 +15,7 @@ import { ProjectPanel } from './components/ProjectPanel';
 import { setupIssues } from './domain/projectSetup';
 import { orderProjects } from './domain/projectOrder';
 import { ProjectOrder } from './components/ProjectOrder';
+import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
@@ -1641,6 +1642,9 @@ export function App() {
   }
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
   const ordered = orderProjects(snap.projects);
+  // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
+  const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
+  const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
   return (
     <div className="app">
       <header className="topbar" ref={topRef}>
@@ -1963,6 +1967,7 @@ export function App() {
                     }}
                     project={projectById.get(t.projectId)}
                     stageLabel={STAGE_LABEL[deriveWorkflow(t, snap.workflow).stage]}
+                    views={projectById.get(t.projectId) ? <ProjectViews project={projectById.get(t.projectId)!} structure={renderStructure} appMap={renderHealth} /> : undefined}
                     workflow={
                       <WorkflowPanel
                         jump={jump?.taskId === t.id ? jump : undefined}
@@ -2034,8 +2039,8 @@ export function App() {
               demoUrlOf={(p) => demoUrls[p.id] ?? null}
               lastDeployOf={(p) => (p.repo ? snap.workflow.deployments.filter((d) => d.repo.toLowerCase() === p.repo!.toLowerCase()).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null : null)}
               renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
-              renderHealth={store.healthCheck ? (p) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id) }} /> : undefined}
-              renderStructure={(p) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />}
+              renderHealth={renderHealth}
+              renderStructure={renderStructure}
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
           )}

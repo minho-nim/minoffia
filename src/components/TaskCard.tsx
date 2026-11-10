@@ -10,6 +10,8 @@ interface Props {
   project: Project | undefined;
   /** 진행 단계 패널(A/E/B/배포 승인 흐름) */
   workflow: ReactNode;
+  /** 이 업무 프로젝트의 구조도·앱 지도 버튼(v0.6.45) */
+  views?: ReactNode;
   stageLabel: string;
   onStatus: (task: Task, to: TaskStatus) => void;
   /** 담당 바꾸기. 접수·차단 상태에서만 쓴다. */
@@ -38,7 +40,7 @@ const STATUS_VERB: Record<TaskStatus, string> = {
   done: '완료 승인',
 };
 
-export function TaskCard({ task, project, workflow, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn, simple }: Props) {
+export function TaskCard({ task, project, workflow, views, onStatus, onAssign, onDelete, onCopy, onAsk, onShowAgent, expanded = true, onToggle, turn, simple }: Props) {
   const agent = AGENT_BY_ID[task.assignee];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
@@ -123,6 +125,7 @@ export function TaskCard({ task, project, workflow, onStatus, onAssign, onDelete
 
       {/* 덜 복잡하게(v0.6.41 소유자 "읽을 게 너무 많아"): 펼치면 '지금 할 일'(진행 단계 패널)이 맨 위. 같은 말이던 '진행 단계' 줄은 뺐다 */}
       <div className="wf-details">{workflow}</div>
+      {views}
       <details className="task-more">
         <summary>⋯ 더보기(설명·담당 바꾸기·삭제 등)</summary>
       {/* 간단히(v0.4.22): 프로젝트·담당·단계는 위 요약 줄에 있으니 유형·방식만 한 줄로 */}
