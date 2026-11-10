@@ -15,6 +15,7 @@ import { ProjectPanel } from './components/ProjectPanel';
 import { setupIssues } from './domain/projectSetup';
 import { orderProjects } from './domain/projectOrder';
 import { ProjectOrder } from './components/ProjectOrder';
+import { KeyStatusList } from './components/KeyStatusList';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
 import type { PendingImage } from './components/Attachments';
@@ -2060,27 +2061,32 @@ export function App() {
                 <h3>오늘 사용량</h3>
                 {usageList}
               </div>
+              {/* v0.6.44 소유자: 팀 관리를 프로젝트 순서 앞으로, 키 상태는 따로, 알림·화면은 작은 칸 둘로 */}
+              <div className="settings-box">
+                <h3>팀 관리(근무·휴가)</h3>
+                <TeamPanel snap={snap} onSetLeave={(agent, onLeave) => setLeaveNow(agent, onLeave)} />
+              </div>
               <div className="settings-box">
                 <ProjectOrder projects={ordered} onSave={store.reorderProjects ? (ids) => mutate(() => store.reorderProjects!(ids)) : undefined} />
               </div>
-              <div className="settings-box">
-                <h3>팀 관리(근무·휴가)</h3>
-                <TeamPanel
-                  snap={snap}
-                  loadKeys={store.keyStatus ? () => store.keyStatus!() : undefined}
-                  onSetLeave={(agent, onLeave) => setLeaveNow(agent, onLeave)}
-                />
+              <div className="settings-pair">
+                {store.mode === 'supabase' && (
+                  <div className="settings-box settings-mini">
+                    <h3>휴대폰 알림</h3>
+                    <PushToggle store={store} />
+                  </div>
+                )}
+                <div className="settings-box settings-mini">
+                  <h3>화면</h3>
+                  <ThemeToggle />
+                </div>
               </div>
-              {store.mode === 'supabase' && (
+              {store.keyStatus && (
                 <div className="settings-box">
-                  <h3>휴대폰 알림</h3>
-                  <PushToggle store={store} />
+                  <h3>AI 키 상태</h3>
+                  <KeyStatusList load={() => store.keyStatus!()} />
                 </div>
               )}
-              <div className="settings-box">
-                <h3>화면</h3>
-                <ThemeToggle />
-              </div>
               <div className="settings-box">
                 <h3>계정</h3>
                 {store.mode === 'local' ? (

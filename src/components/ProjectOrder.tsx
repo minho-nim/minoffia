@@ -1,6 +1,6 @@
 // 프로젝트 순서(v0.6.43 소유자 "수정을 눌렀을 때 화살표가 나오게, 드래그로 움직이기"): 평소엔 목록만, '수정'을 누르면 ▲▼와 끌기 손잡이.
 // 끌기는 손가락·마우스 모두(포인터 이벤트). 놓을 때 한 번만 저장한다.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Project } from '../domain/types';
 import { moveProject } from '../domain/projectOrder';
 
@@ -18,26 +18,28 @@ export function ProjectOrder({ projects, onSave }: { projects: Project[]; onSave
     setDraft(next);
     void onSave?.(next);
   };
-  const onMove = (e: React.PointerEvent) => {
-    if (!dragId || !listRef.current) return;
-    const items = [...listRef.current.querySelectorAll<HTMLLIElement>('li[data-id]')];
-    const over = items.find((li) => {
-      const r = li.getBoundingClientRect();
-      return e.clientY >= r.top && e.clientY <= r.bottom;
-    });
-    const to = over?.dataset.id;
-    if (!to || to === dragId) return;
+  // 아이폰(v0.6.44 소유자 "드래그가 안 됨"): 손가락은 처음 누른 손잡이에 붙어 있어 목록이 움직임을 못 받았다.
+  // 손잡이가 포인터를 잡고(setPointerCapture), 손가락 아래 칸을 elementFromPoint로 찾는다. 끄는 동안은 화면 스크롤을 막는다.
+  const moveTo = (x: number, y: number) => {
+    if (!dragId) return;
+    const li = document.elementFromPoint(x, y)?.closest<HTMLLIElement>('li[data-id]');
+    const to = li?.dataset.id;
+    if (!to || to === dragId || !listRef.current?.contains(li!)) return;
     const cur = [...ids];
-    const from = cur.indexOf(dragId);
-    const target = cur.indexOf(to);
-    cur.splice(from, 1);
-    cur.splice(target, 0, dragId);
+    cur.splice(cur.indexOf(dragId), 1);
+    cur.splice(cur.indexOf(to) + (cur.indexOf(to) >= ids.indexOf(dragId) ? 1 : 0), 0, dragId);
     setDraft(cur);
   };
   const end = () => {
     if (dragId && draft) void onSave?.(draft);
     setDragId(null);
   };
+  useEffect(() => {
+    if (!dragId) return;
+    const stop = (e: TouchEvent) => e.preventDefault();
+    document.addEventListener('touchmove', stop, { passive: false });
+    return () => document.removeEventListener('touchmove', stop);
+  }, [dragId]);
 
   return (
     <div className="project-order">
@@ -48,7 +50,7 @@ export function ProjectOrder({ projects, onSave }: { projects: Project[]; onSave
         </button>
       </div>
       <p className="muted small">업무·대화의 프로젝트 칩과 프로젝트 탭이 이 순서를 따라요.{editing ? ' ☰를 끌거나 ▲▼로 옮기세요.' : ''}</p>
-      <ol ref={listRef} className={`order-list${editing ? ' is-editing' : ''}`} onPointerMove={onMove} onPointerUp={end} onPointerCancel={end} onPointerLeave={end}>
+      <ol ref={listRef} className={`order-list${editing ? ' is-editing' : ''}`}>
         {list.map((p, i) => (
           <li key={p.id} data-id={p.id} className={dragId === p.id ? 'is-drag' : ''}>
             {editing && (
@@ -57,9 +59,12 @@ export function ProjectOrder({ projects, onSave }: { projects: Project[]; onSave
                 aria-label={`${p.name} 끌어서 옮기기`}
                 onPointerDown={(e) => {
                   e.preventDefault();
-                  (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+                  e.currentTarget.setPointerCapture?.(e.pointerId);
                   setDragId(p.id);
                 }}
+                onPointerMove={(e) => moveTo(e.clientX, e.clientY)}
+                onPointerUp={end}
+                onPointerCancel={end}
               >
                 ☰
               </span>
