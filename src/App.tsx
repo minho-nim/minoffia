@@ -134,7 +134,9 @@ export function App() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [store, setStore] = useState<OfficeStore | null>(null);
-  const [snap, setSnap] = useState<Snapshot>(EMPTY);
+  const [rawSnap, setSnap] = useState<Snapshot>(EMPTY);
+  // 프로젝트 순서(v0.6.46 소유자 "설정에서 바꾼 순서가 모두 연동"): 모든 화면이 설정의 순서로 프로젝트를 본다.
+  const snap = useMemo(() => ({ ...rawSnap, projects: orderProjects(rawSnap.projects) }), [rawSnap]);
   // 알림을 누르면 그 업무 카드를 연다(v0.5.83): 주소의 ?task=<id> 또는 서비스 워커 메시지. showTask는 아래에서 채운다.
   const openTaskRef = useRef<(id: string) => void>(() => undefined);
   const pendingTask = useRef<string | null>(typeof location !== 'undefined' ? new URLSearchParams(location.search).get('task') : null);
@@ -1641,7 +1643,7 @@ export function App() {
     if (pid) turnsByProject.set(pid, (turnsByProject.get(pid) ?? 0) + 1);
   }
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
-  const ordered = orderProjects(snap.projects);
+  const ordered = snap.projects;
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
   const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
@@ -1685,7 +1687,8 @@ export function App() {
           return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
         })()}
         {/* 사무실을 접었을 때만: 눌러서 사무실을 잠깐 띄워 본다(v0.5.29) */}
-        {tiny && (
+        {/* v0.6.46 소유자 "사무실 버튼은 대화 탭 말고는 오른쪽 아래만" */}
+        {tiny && tab === 'chat' && (
           <button type="button" className={`bar-btn${peek ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={peek} onClick={() => setPeek((v) => !v)}>
             사무실 {peek ? '▴' : '▾'}
           </button>
@@ -1717,7 +1720,7 @@ export function App() {
         </>
       )}
 
-      {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
+      {peek && tab === 'chat' && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab}`}>
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
         {(tab === 'tasks' || tab === 'projects' || tab === 'team' || tab === 'settings') && (
@@ -1739,7 +1742,7 @@ export function App() {
             🏢 사무실
           </button>
         )}
-        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}${holdOffice ? ' is-hold' : ''}`} aria-label="오피스">
+        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek && tab === 'chat' ? ' is-peek' : ''}${holdOffice ? ' is-hold' : ''}`} aria-label="오피스">
           <OfficeView
             lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
             tasks={snap.tasks}
@@ -1837,6 +1840,17 @@ export function App() {
                   </button>
                 );
               })}
+              {/* 맨 끝 '수정': 설정 탭의 프로젝트 순서로 간다(v0.6.46) */}
+              <button
+                type="button"
+                className="chip chip-project chip-edit"
+                onClick={() => {
+                  setTab('settings');
+                  setTimeout(() => document.getElementById('project-order')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
+                }}
+              >
+                수정
+              </button>
             </div>
           )}
 
@@ -2071,7 +2085,7 @@ export function App() {
                 <h3>팀 관리(근무·휴가)</h3>
                 <TeamPanel snap={snap} onSetLeave={(agent, onLeave) => setLeaveNow(agent, onLeave)} />
               </div>
-              <div className="settings-box">
+              <div className="settings-box" id="project-order">
                 <ProjectOrder projects={ordered} onSave={store.reorderProjects ? (ids) => mutate(() => store.reorderProjects!(ids)) : undefined} />
               </div>
               <div className="settings-pair">
