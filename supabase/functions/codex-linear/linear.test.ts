@@ -46,4 +46,10 @@ describe('Codex Linear(v0.5.2)', () => {
     expect(n.kind).toBe('error');
     expect(n.last).toMatch(/^Codex 환경 없음 — .*게시/);
   });
+  it('이번에 맡긴 뒤의 댓글만 읽는다(v0.6.20)', () => {
+    const data = { issue: { comments: { nodes: [{ body: "Codex couldn't start a task", createdAt: '2026-11-10T03:42:25Z', user: { name: 'Codex' } }] } } };
+    expect(readNews(data).kind).toBe('error');
+    expect(readNews(data, '2026-11-10T03:47:37Z').kind).toBe('none');
+    expect(readNews({ issue: { comments: { nodes: [{ body: 'Working on it', createdAt: '2026-11-10T03:48:00Z', user: { name: 'Codex' } }] } } }, '2026-11-10T03:47:37Z').kind).toBe('working');
+  });
 });

@@ -83,9 +83,12 @@ type Status = {
 };
 
 /** 이슈 댓글에서 Codex 소식만 읽는다(사람 댓글·지시문은 해석하지 않는다) */
-export function readNews(data: Status): CodexNews {
+export function readNews(data: Status, since?: string | null): CodexNews {
   const comments = data.issue?.comments?.nodes ?? [];
+  // v0.6.20: 이번에 맡긴 뒤의 댓글만(예전엔 다시 맡겨도 지난 '시작 못 함' 댓글을 읽어 바로 실패로 바꿨다)
+  const from = since ? Date.parse(since) : NaN;
   const fromCodex = comments
+    .filter((c) => Number.isNaN(from) || Date.parse(String(c.createdAt)) >= from - 5_000)
     .filter((c) => /codex/i.test(`${c.user?.name ?? ''} ${c.user?.displayName ?? ''} ${c.botActor?.name ?? ''}`))
     .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   const lastC = fromCodex[fromCodex.length - 1];
