@@ -25,6 +25,8 @@ export function nowInfo(view: WorkflowView, opts: { done: boolean; review?: Resu
   const failed = view.assignments.find((a) => a.dispatchStatus === 'failed');
   const running = view.assignments.find((a) => a.dispatchStatus === 'started' || a.dispatchStatus === 'starting');
   const who = (a?: AgentAssignment) => (a ? WHO[a.assignee] ?? a.assignee : 'AI');
+  // 소유자가 취소한 업무(v0.6.50)
+  if (view.stage === 'cancelled') return { tone: 'done', text: '취소한 업무예요.' };
   // 배포 승인했는데 배포가 안 됐으면 끝난 게 아니다(v0.6.39, 소유자 "안 됐는데 앱에는 완료로 뜸")
   if (view.cApproved && opts.deploy && !opts.deploy.ok)
     return {
