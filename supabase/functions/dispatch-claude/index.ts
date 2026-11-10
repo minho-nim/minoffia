@@ -258,6 +258,12 @@ Deno.serve(async (req) => {
   const projectRules = await loadRules(userClient, task.project_id);
 
   // 6. 루틴(PM) 실행. 사용자가 보낸 내용은 <routine-fire-payload>로 전달된다. 최대 65,536자.
+  // 개발 중 추가 요청(v0.6.13): 아직 보내지 않은 것을 함께 보내고, 전송에 성공하면 보낸 시각을 적는다. 표가 없으면 빈칸
+  const { data: followRows } = await admin.from('task_followups').select('id, text, created_at').eq('task_id', task.id).is('used_at', null).order('created_at');
+  const followups = (followRows ?? []) as { id: string; text: string }[];
+  const followLines = followups.length
+    ? [`## 개발 중 사장님이 더한 요청 ${followups.length}개 (이번 계획에 꼭 반영)`, ...followups.map((f, i) => `${i + 1}. ${String(f.text).slice(0, 2000)}`), '각 요청이 어느 작업에 들어갔는지 작업 목표에 적는다. 기획서와 부딪히면 status "needs_clarification"으로 묻는다.']
+    : [];
   const otherRepo = repo !== allowedRepo.toLowerCase() ? await otherRepoContext(admin, user.id, task.project_id, String(project.repo)) : [];
   const text = [
     `MinLab AI Office 업무 (작업 ID ${task.id})`,
@@ -292,6 +298,8 @@ Deno.serve(async (req) => {
     revision && previousResult?.remaining_issues ? `이전 결과의 남은 문제: ${previousResult.remaining_issues}` : '',
     ``,
     ...leaveLines,
+    ``,
+    ...followLines,
     ``,
     ...otherRepo,
     ``,
@@ -379,6 +387,7 @@ Deno.serve(async (req) => {
     .from('tasks')
     .update({ dispatch_state: 'dispatched', dispatch_session_url: sessionUrl, dispatch_error: null, status: 'in_progress', stage: 'dispatching' })
     .eq('id', task.id);
+  if (followups.length) await admin.from('task_followups').update({ used_at: new Date().toISOString() }).in('id', followups.map((f) => f.id));
 
   return reply(200, { ok: true, sessionUrl });
 });

@@ -35,6 +35,8 @@ export interface OfficeStore {
   addResult(result: ResultPackage): Promise<void>;
   /** 결과 검토 → Claude PM 수정 요청 */
   addRevisionRequest(request: RevisionRequest): Promise<void>;
+  /** 개발 중 추가 요청(v0.6.13) */
+  addFollowup?(taskId: string, text: string): Promise<void>;
   /** 결과 점수 평가(v0.4.64): 규칙 검사 → Gemini 채점 → 판정. 같은 결과 버전은 한 번만(이미 있으면 그것을 돌려줌) */
   /** 'started' = Claude에 채점을 막 맡김, 'waiting' = Claude 채점을 기다리는 중(v0.4.94) */
   reviewResult(taskId: string, resultRevision: number): Promise<ResultReview | 'started' | 'waiting'>;

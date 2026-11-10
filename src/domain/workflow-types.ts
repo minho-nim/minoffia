@@ -206,6 +206,8 @@ export interface WorkflowData {
   clarifications: Clarification[];
   /** 결과 점수 평가(v0.4.64) */
   reviews?: ResultReview[];
+  /** 개발 중 추가 요청(v0.6.13). 표가 없는 DB면 undefined */
+  followups?: Followup[];
 }
 
 /** 결과 점수 평가 기록(서버 review-result가 결과 버전마다 한 번, v0.4.64) */
@@ -285,3 +287,12 @@ export const DISPATCH_STATUS_LABEL: Record<DispatchStatus, string> = {
   failed: '실패',
   completed: '완료',
 };
+
+/** 개발 중 사장님이 더한 요청(v0.6.13): 다음 PM 재계획에 함께 간다. usedAt = 보낸 시각(서버가 적음) */
+export interface Followup {
+  id: string;
+  taskId: string;
+  text: string;
+  usedAt: string | null;
+  createdAt: string;
+}
