@@ -696,6 +696,16 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('repo-tree', { projectId });
       return Array.isArray(data.paths) ? (data.paths as unknown[]).filter((x): x is string => typeof x === 'string') : [];
     },
+    async skills() {
+      const data = await invoke('repo-tree', { action: 'skills' });
+      const list = Array.isArray(data.skills) ? (data.skills as Record<string, unknown>[]) : [];
+      return list.map((x) => ({
+        name: String(x.name ?? ''),
+        skillMd: String(x.skillMd ?? ''),
+        files: Array.isArray(x.files) ? (x.files as unknown[]).filter((f): f is string => typeof f === 'string') : [],
+        license: String(x.license ?? ''),
+      }));
+    },
     async pagesUrls(projectIds) {
       const data = await invoke('repo-tree', { action: 'pages', projectIds });
       const out: Record<string, string> = {};

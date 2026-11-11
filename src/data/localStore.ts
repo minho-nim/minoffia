@@ -365,6 +365,13 @@ export function createLocalStore(): OfficeStore {
     async linearProbe() {
       return { connected: false, reason: '로컬 데모에서는 Linear를 확인할 수 없습니다.' };
     },
+    // 데모: 저장소를 못 읽으므로 실제로 넣어 둔 두 스킬을 짧게 보여 준다(v0.6.55)
+    async skills() {
+      return [
+        { name: 'find-skills', files: ['LICENSE', 'SKILL.md'], license: 'MIT License Copyright (c) 2026 Vercel, Inc.', skillMd: '---\nname: find-skills\ndescription: Helps users discover and install agent skills when they ask "find a skill for X".\n---\n\n> minoffia 저장소 규칙: 설치는 소유자 승인 뒤에만, -g·-y 금지. 원문: vercel-labs/skills\n\n# Find Skills\n\n`npx skills find [query]`로 찾고, 설치 수·출처를 확인해 추천한다. 설치는 `npx skills add <owner/repo@skill>`.' },
+        { name: 'skill-creator', files: ['LICENSE.txt', 'SKILL.md', 'scripts/run_eval.py', 'scripts/quick_validate.py', 'agents/grader.md'], license: 'Apache License Version 2.0, January 2004', skillMd: '---\nname: skill-creator\ndescription: Create new skills, modify and improve existing skills, and measure skill performance.\n---\n\n# Skill Creator\n\n스킬 초안을 쓰고 → 시험 질문으로 돌려 보고 → 결과를 보며 고치기를 되풀이한다.' },
+      ];
+    },
     async repoTree() {
       throw new Error('로컬 데모에서는 저장소를 읽을 수 없어요');
     },
