@@ -178,6 +178,7 @@ export function resultWithoutBranch(result: Pick<ResultPackage, 'source' | 'summ
 export function officeStatus(stage: Stage, current: TaskStatus): TaskStatus {
   switch (stage) {
     case 'completed':
+    case 'cancelled': // 취소한 업무는 끝난 목록에 머문다(v0.6.52: 단계 다시 맞추기가 '접수'로 되돌리던 것)
       return 'done';
     case 'dispatching':
     case 'executing':
