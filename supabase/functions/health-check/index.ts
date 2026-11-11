@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { projectId?: string };
+  let body: { projectId?: string; force?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -47,6 +47,25 @@ Deno.serve(async (req) => {
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const dir = `${user.id}/projects/${project.id}`;
+  // Actions 분량 아끼기(v0.6.53): 마지막 점검 뒤 저장소가 그대로면 다시 돌리지 않고 저장된 결과를 쓴다(force면 늘 다시).
+  // 확인하지 못하면(토큰 없음·응답 없음·옛 결과에 커밋 없음) 평소대로 돌린다.
+  const readToken = env('GITHUB_REPO_TOKEN');
+  if (!body.force && readToken) {
+    try {
+      const [old, map0] = await Promise.all([admin.storage.from('attachments').download(`${dir}/health.json`), admin.storage.from('attachments').list(dir, { search: 'floorplan.html' })]);
+      const prev = old.data ? String((JSON.parse(await old.data.text()) as { head?: string }).head ?? '') : '';
+      if (prev.length >= 7 && map0.data?.some((f) => f.name === 'floorplan.html')) {
+        const head = await fetch(`https://api.github.com/repos/${repo}/commits/HEAD`, {
+          headers: { Authorization: `Bearer ${readToken}`, Accept: 'application/vnd.github.sha', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia' },
+          signal: AbortSignal.timeout(8_000),
+        });
+        const sha = head.ok ? (await head.text()).trim() : '';
+        if (/^[0-9a-f]{40}$/.test(sha) && (sha === prev || sha.startsWith(prev) || prev.startsWith(sha))) return reply(200, { ok: true, started: false, unchanged: true });
+      }
+    } catch {
+      // 확인 실패는 무시하고 평소대로 점검
+    }
+  }
   // 예전 결과를 지워야 앱이 새 결과가 왔는지 알 수 있다
   await admin.storage.from('attachments').remove([`${dir}/floorplan.html`, `${dir}/health.json`]);
   const [map, health] = await Promise.all([

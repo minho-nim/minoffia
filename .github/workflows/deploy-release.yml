@@ -2,7 +2,8 @@
 # PC 명령 `git fetch origin && git push origin origin/main:refs/heads/release`와 같다. 휴대폰 GitHub 앱·브라우저에서
 # Actions → "운영 배포(release)" → Run workflow로 실행한다. 자동으로는 돌지 않는다.
 # fast-forward만 한다(강제 푸시 없음): release에 main에 없는 커밋이 있으면 실패하고 아무것도 바꾸지 않는다.
-# main의 최신 커밋이 verify(CI)를 통과했을 때만 배포한다.
+# main의 최신 커밋이 verify(CI)를 통과했을 때만 배포한다: main에서 돌린 verify가 성공이거나,
+# 그 커밋을 만든 PR의 마지막 커밋이 verify를 통과했고 코드(tree)가 main과 똑같을 때(v0.6.53).
 name: 운영 배포(release)
 
 on:
@@ -11,6 +12,7 @@ on:
 permissions:
   contents: write
   actions: read
+  pull-requests: read
 
 concurrency:
   group: deploy-release
@@ -32,8 +34,24 @@ jobs:
           conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${sha}&per_page=20" \
             --jq '[.workflow_runs[] | select(.name == "verify")][0].conclusion // "none"')
           echo "main ${sha:0:7} verify: ${conclusion}"
-          if [ "$conclusion" != "success" ]; then
+          if [ "$conclusion" = "success" ]; then exit 0; fi
+          if [ "$conclusion" != "none" ]; then
             echo "::error::main 최신 커밋의 verify가 성공이 아닙니다(${conclusion}). 배포하지 않습니다."
+            exit 1
+          fi
+          # main에서 돌린 검사가 없으면: 이 커밋을 만든 PR이 같은 코드로 검사를 통과했는지 본다
+          head=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" --jq '[.[] | select(.merged_at != null and .merge_commit_sha == "'"$sha"'")][0].head.sha // ""')
+          if [ -z "$head" ]; then
+            echo "::error::main 최신 커밋을 만든 PR을 찾지 못했습니다. Actions에서 verify를 main으로 실행한 뒤 다시 배포하세요."
+            exit 1
+          fi
+          pr_tree=$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${head}" --jq '.tree.sha')
+          main_tree=$(git rev-parse "origin/main^{tree}")
+          pr_ci=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${head}&per_page=20" \
+            --jq '[.workflow_runs[] | select(.name == "verify")][0].conclusion // "none"')
+          echo "PR 마지막 커밋 ${head:0:7} verify: ${pr_ci}, 코드 같음: $([ "$pr_tree" = "$main_tree" ] && echo yes || echo no)"
+          if [ "$pr_ci" != "success" ] || [ "$pr_tree" != "$main_tree" ]; then
+            echo "::error::main의 코드가 PR에서 검사한 코드와 다르거나 PR 검사가 성공이 아닙니다. Actions에서 verify를 main으로 실행한 뒤 다시 배포하세요."
             exit 1
           fi
       - name: release를 main으로 앞당기기(fast-forward만)

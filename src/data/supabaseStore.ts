@@ -682,8 +682,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         if (!data) return null;
         return parseHealth(JSON.parse(await data.text()));
       },
-      async start(projectId) {
-        await invoke('health-check', { projectId });
+      async start(projectId, force) {
+        const data = await invoke('health-check', { projectId, ...(force ? { force: true } : {}) });
+        return { unchanged: data.unchanged === true };
       },
       async map(projectId) {
         const uid = await userId();
