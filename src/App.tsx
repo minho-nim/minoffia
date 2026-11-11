@@ -16,6 +16,8 @@ import { setupIssues } from './domain/projectSetup';
 import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
+import { SkillsPanel } from './components/SkillsPanel';
+import { skillRequestText } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
@@ -61,7 +63,7 @@ import { serviceLamps } from './domain/serviceLamps';
 import { installPopupClose } from './components/popupClose';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 
-type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'settings';
+type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'skills' | 'settings';
 type Filter = 'open' | 'all' | TaskStatus | 'st:working' | 'st:turn' | 'st:stuck';
 
 const EMPTY: Snapshot = { projects: [], tasks: [], usage: [], workflow: EMPTY_WORKFLOW };
@@ -1683,6 +1685,8 @@ export function App() {
   }
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
   const ordered = snap.projects;
+  // 이 저장소(minoffia) 프로젝트: 스킬 만들기·찾기를 여기서 접수(v0.6.55)
+  const officeProject = snap.projects.find((p) => OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) && !p.sample) ?? null;
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
   const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
@@ -1760,9 +1764,9 @@ export function App() {
       )}
 
       {peek && tab === 'chat' && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
-      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab}`}>
+      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab === 'skills' ? 'settings tab-skills' : tab}`}>
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
-        {(tab === 'tasks' || tab === 'projects' || tab === 'team' || tab === 'settings') && (
+        {(tab === 'tasks' || tab === 'projects' || tab === 'team' || tab === 'settings' || tab === 'skills') && (
           <button
             type="button"
             className={`office-hold${holdOffice ? ' is-on' : ''}`}
@@ -1826,6 +1830,10 @@ export function App() {
               }}
             >
               에이전트
+            </button>
+            {/* 스킬 탭(v0.6.55 소유자 "설정 탭 왼쪽으로 skills 탭") */}
+            <button type="button" role="tab" aria-selected={tab === 'skills'} onClick={() => setTab('skills')}>
+              스킬
             </button>
             {/* 설정 탭(v0.6.42 소유자 "설정 탭 별도"): 프로젝트 순서·밝기·알림·사용량·계정 */}
             <button type="button" role="tab" aria-selected={tab === 'settings' || tab === 'team'} onClick={() => setTab('settings')}>
@@ -2138,6 +2146,19 @@ export function App() {
           )}
 
           {/* 설정(v0.6.43 소유자: 사용량 → 프로젝트 순서 → 팀 관리 → 알림 → 화면 → 계정, 팀 관리 탭을 여기로) */}
+          {tab === 'skills' && store.skills && (
+            <SkillsPanel
+              load={() => store.skills!()}
+              canRequest={!!officeProject}
+              onRequest={(kind) => {
+                if (!officeProject) return;
+                // 스킬 업무는 이 저장소(minoffia) 프로젝트 대화창에서 접수한다(결과는 늘 PR·올리기 승인)
+                setChatProject(officeProject.id);
+                setTab('chat');
+                setDraft((d) => ({ text: skillRequestText(kind), n: (d?.n ?? 0) + 1 }));
+              }}
+            />
+          )}
           {(tab === 'settings' || tab === 'team') && (
             <section className="settings" aria-label="설정">
               <div className="settings-box">

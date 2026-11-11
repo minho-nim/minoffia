@@ -22,7 +22,7 @@ export function TaskBoard({ tasks, states, projects, onOpen }: { tasks: Task[]; 
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         const shown = col.key === 'done' ? all.slice(0, DONE_LIMIT) : all;
         return (
-          <section key={col.key} className={`board-col board-${col.key}`} role="listitem" aria-label={`${col.label} ${all.length}개`}>
+          <section key={col.key} className={`board-col board-${col.key}${all.length === 0 ? ' is-empty' : ''}`} role="listitem" aria-label={`${col.label} ${all.length}개`}>
             <h4>
               {col.label} <span className="num num-count">{all.length}</span>
             </h4>
