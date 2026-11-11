@@ -97,6 +97,7 @@ describe('officeStatus', () => {
     expect(officeStatus('github_approval_pending', 'in_progress')).toBe('review');
     expect(officeStatus('integration_blocked', 'queued')).toBe('blocked');
     expect(officeStatus('completed', 'review')).toBe('done');
+    expect(officeStatus('cancelled', 'in_progress')).toBe('done'); // v0.6.52: 취소한 업무가 접수로 되돌아가지 않게
   });
 });
 
