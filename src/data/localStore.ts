@@ -368,8 +368,8 @@ export function createLocalStore(): OfficeStore {
     // 데모: 저장소를 못 읽으므로 실제로 넣어 둔 두 스킬을 짧게 보여 준다(v0.6.55)
     async skills() {
       return [
-        { name: 'find-skills', files: ['LICENSE', 'SKILL.md'], license: 'MIT License Copyright (c) 2026 Vercel, Inc.', skillMd: '---\nname: find-skills\ndescription: Helps users discover and install agent skills when they ask "find a skill for X".\n---\n\n> minoffia 저장소 규칙: 설치는 소유자 승인 뒤에만, -g·-y 금지. 원문: vercel-labs/skills\n\n# Find Skills\n\n`npx skills find [query]`로 찾고, 설치 수·출처를 확인해 추천한다. 설치는 `npx skills add <owner/repo@skill>`.' },
-        { name: 'skill-creator', files: ['LICENSE.txt', 'SKILL.md', 'scripts/run_eval.py', 'scripts/quick_validate.py', 'agents/grader.md'], license: 'Apache License Version 2.0, January 2004', skillMd: '---\nname: skill-creator\ndescription: Create new skills, modify and improve existing skills, and measure skill performance.\n---\n\n# Skill Creator\n\n스킬 초안을 쓰고 → 시험 질문으로 돌려 보고 → 결과를 보며 고치기를 되풀이한다.' },
+        { name: 'find-skills', files: ['LICENSE', 'SKILL.md'], license: 'MIT License Copyright (c) 2026 Vercel, Inc.', skillMd: '---\nname: find-skills\ndescription: 스킬 찾기. "~하는 스킬 있어?"라고 할 때 skills.sh에서 찾아 설치 수·출처·라이선스·위험을 보여 주고, 설치는 소유자 승인 뒤에만 한다.\n---\n\n# 스킬 찾기\n\n> minoffia 저장소 규칙: 설치는 소유자 승인 뒤에만, -g·-y 금지. 원문: vercel-labs/skills\n\n`npx skills find [검색어]`로 찾고, 설치 수·출처를 확인해 추천한다. 설치는 `npx skills add <주인/저장소@스킬>`.' },
+        { name: 'skill-creator', files: ['LICENSE.txt', 'SKILL.md', 'scripts/run_eval.py', 'scripts/quick_validate.py', 'agents/grader.md'], license: 'Apache License Version 2.0, January 2004', skillMd: '---\nname: skill-creator\ndescription: 스킬 만들기. 새 스킬을 만들거나, 있는 스킬을 고치거나, 스킬이 잘 동작하는지 시험해 볼 때 쓴다.\n---\n\n# 스킬 만들기\n\n스킬 초안을 쓰고 → 시험 질문으로 돌려 보고 → 결과를 보며 고치기를 되풀이한다.' },
       ];
     },
     async repoTree() {

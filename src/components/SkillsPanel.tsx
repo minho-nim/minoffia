@@ -47,6 +47,7 @@ export function SkillsPanel({ load, onRequest, canRequest }: { load: () => Promi
           <li key={s.name} className="skill-card">
             <div className="skill-top">
               <b>{s.title}</b>
+              {s.title !== s.name && <span className="muted small">{s.name}</span>}
               <span className="pill">{s.license}</span>
               <span className="muted small">{s.source}</span>
             </div>

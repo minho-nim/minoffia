@@ -1,9 +1,36 @@
 ---
 name: skill-creator
-description: Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.
+description: 스킬 만들기. 새 스킬을 처음부터 만들거나, 있는 스킬을 고치거나, 스킬이 잘 동작하는지 시험해 볼 때 쓴다. "~를 스킬로 만들어줘", "이 스킬 고쳐줘", "스킬이 언제 켜지는지 다듬어줘", "스킬 시험해 봐"라고 할 때.
 ---
 
-# Skill Creator
+# 스킬 만들기
+
+> **minoffia 저장소 메모:** 원문은 anthropics/skills `skills/skill-creator` (Apache-2.0, LICENSE.txt 동봉). 아래 '한국어 요약'은 흐름을 빨리 보려고 붙인 것이고, 자세한 방법은 그 아래 '원문(영어)'을 따른다. 이 저장소에서 만드는 스킬은 이름(name)은 짧은 영어(소문자·하이픈), 설명(description)·제목·본문은 쉬운 한국어로 쓴다. 시험 스크립트는 `claude -p`(로그인한 구독)로 돌고 유료 API 키를 쓰지 않는다.
+
+## 한국어 요약
+
+**전체 흐름**
+
+1. **무엇을 할지 정리**: 이 스킬이 무엇을 하게 할지, 언제 켜져야 하는지(사용자가 어떤 말을 할 때), 결과는 어떤 모양인지, 시험이 필요한지.
+2. **인터뷰·조사**: 예외 상황, 입력·출력 형식, 예시 파일, 성공 기준, 필요한 것을 먼저 묻는다.
+3. **SKILL.md 쓰기**: 앞머리(name·description)와 본문. description은 언제 써야 하는지까지 넣어 조금 적극적으로 쓴다(덜 켜지는 경우가 많다). 본문은 500줄 이하, 길면 references/ 파일로 나눈다.
+4. **시험 질문 2~3개 만들기**: 실제 사용자가 할 법한 말로. 소유자와 함께 확인한다.
+5. **시험 돌리기**: 스킬 있을 때와 없을 때를 같이 돌려 비교한다. 결과를 보는 화면(eval-viewer)으로 소유자가 직접 본다.
+6. **고치기**: 소유자 의견과 점수를 보고 고친다. 예시에만 맞추지 말고 일반적으로, 지시는 짧게, 이유를 설명한다.
+7. **반복**: 소유자가 만족하거나 더 나아지지 않을 때까지.
+8. **설명 다듬기(선택)**: 켜져야 할 말·켜지면 안 될 말 20개로 description이 정확히 켜지게 다듬는다.
+
+**글쓰기 요령**
+
+- 명령조보다 이유를 설명한다("반드시" 대문자 남발 대신 왜 중요한지).
+- 결과 형식이 정해져 있으면 틀을 그대로 보여 준다.
+- 예시를 넣는다(입력 → 출력).
+- 사용자를 놀라게 할 내용(몰래 하는 일, 데이터 빼내기)은 넣지 않는다.
+
+---
+
+## 원문(영어)
+
 
 A skill for creating new skills and iteratively improving them.
 
