@@ -1,10 +1,10 @@
-# MinLab AI Office 개발일지
+# 미노피아(minoffia) 개발일지
 
-> 날짜별로 정리. 양식은 MuscleMap 개발일지와 같음. 버전은 그날 운영에 반영된 앱 버전 범위. 2026-11-08부터 앱 이름은 minoffia.(미노피아), 저장소는 minho-nim/minoffia.
+> 날짜별로 정리. 양식은 MuscleMap 개발일지와 같음. 버전은 그날 운영에 반영된 앱 버전 범위. 옛 이름은 MinLab AI Office(2026-11-08에 미노피아로 바꿈), 저장소는 minho-nim/minoffia.
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-10-29
 v0.1 ~ v0.2.7
 
@@ -37,7 +37,7 @@ AI를 안 써도 되는 일은 규칙으로 처리하고, Gemini 무료로 이�
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-10-30
 v0.2.8 ~ v0.4.2
 
@@ -70,7 +70,7 @@ Gemini 일반 질문·이미지 분석을 운영에서 실측함(2.5 모델은 �
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-10-31
 v0.4.3 ~ v0.4.22
 
@@ -103,7 +103,7 @@ AI별 휴가(쉬게 하기)와 대화창에서 여러 질문·업무를 한 번�
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-01
 v0.4.23 ~ v0.4.60
 
@@ -135,7 +135,7 @@ Grok처럼 무료로 자동 호출할 수 없는 AI를 빼고도 일이 막히�
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-02
 v0.4.61 ~ v0.4.97
 
@@ -168,7 +168,7 @@ v0.4.61 ~ v0.4.97
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-03 ~ 2026-11-05
 v0.4.98 ~ v0.5.33
 
@@ -199,7 +199,7 @@ GitHub CI에 임시 PostgreSQL 17 DB 시험을 붙여 전체 검증이 통과함
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-07 ~ 2026-11-08
 v0.5.34 ~ v0.5.56
 
@@ -232,7 +232,7 @@ v0.5.34 ~ v0.5.56
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-09
 v0.5.57 ~ v0.6.14
 
@@ -265,7 +265,7 @@ v0.5.57 ~ v0.6.14
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-10
 v0.6.15 ~ v0.6.48
 
@@ -298,7 +298,7 @@ Codex "환경 없음" 원인 찾기, 업무 취소, GitHub Actions 무료 분량
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-11
 v0.6.49 ~ v0.6.53
 
@@ -330,7 +330,7 @@ Codex 경로를 운영 로그로 처음부터 끝까지 확인. 새 배포 확�
 
 ---
 
-## MinLab AI Office
+## 미노피아(minoffia)
 2026-11-12
 v0.6.54
 
