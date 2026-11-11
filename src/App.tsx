@@ -14,6 +14,8 @@ import { Login } from './components/Login';
 import { ProjectPanel } from './components/ProjectPanel';
 import { setupIssues } from './domain/projectSetup';
 import { orderProjects } from './domain/projectOrder';
+import { taskTimeline } from './domain/timeline';
+import { TaskBoard } from './components/TaskBoard';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
@@ -331,6 +333,22 @@ export function App() {
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
+  // 업무 보기 방식(v0.6.54): 목록 | 보드. 이 기기에만 기억(화면 편의)
+  const [taskView, setTaskViewState] = useState<'list' | 'board'>(() => {
+    try {
+      return localStorage.getItem('taskView') === 'board' ? 'board' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  const setTaskView = (v: 'list' | 'board') => {
+    setTaskViewState(v);
+    try {
+      localStorage.setItem('taskView', v);
+    } catch {
+      // 저장 못 해도 화면은 그대로
+    }
+  };
   /** 휴대폰 업무·프로젝트·팀 탭: 사무실 버튼을 누르고 있는 동안만 사무실을 보인다(v0.6.41 소유자) */
   const [holdOffice, setHoldOffice] = useState(false);
   const stageRef = useRef({ mini: false, tiny: false });
@@ -980,6 +998,17 @@ export function App() {
   const workflowActions: WorkflowActions = {
     archify: store.archify ? (taskId, revision) => store.archify!(taskId, revision) : undefined,
     // 담당 바꾸기·한도 넘기기(v0.5.73): 지금 계획에서 그 작업 담당만 바꾼 새 계획 버전을 만든다. 실행 승인(E)은 다시 받는다.
+    pickResult: async (task, r) => {
+      // 두 AI 비교에서 고른 결과(v0.6.54): 같은 변경·같은 출처를 새 버전으로 다시 저장해 최신 결과로 만든다(올리기 승인은 최신 결과만 받는다).
+      const revision = nextRevision(snap.workflow.results, task.id, (x: { revision: number }) => x.revision);
+      return step(
+        task.id,
+        async () => {
+          await store.addResult({ ...r, id: newId(), revision, summary: `[비교에서 고름: 결과 v${r.revision}] ${r.summary}`.slice(0, 20000), createdAt: new Date().toISOString() });
+        },
+        `결과 v${r.revision}를 올릴 결과로 정했어요(새 버전 v${revision}). 채점이 끝나면 올리기 승인을 눌러 주세요.`,
+      );
+    },
     reassign: async (task, a, to, why) => {
       const data = await store.load();
       const view = deriveWorkflow(task, data.workflow);
@@ -1947,6 +1976,16 @@ export function App() {
                   ...(['queued', 'in_progress', 'review', 'blocked', 'done'] as TaskStatus[]).map((st) => [st, `${STATUS_LABEL[st]} ${counts(st)}`] as [Filter, string]),
                 ];
                 return (
+                  <div className="task-view-bar">
+                  <span className="view-toggle" role="group" aria-label="보기 방식">
+                    <button type="button" aria-pressed={taskView === 'list'} onClick={() => setTaskView('list')}>
+                      목록
+                    </button>
+                    <button type="button" aria-pressed={taskView === 'board'} onClick={() => setTaskView('board')}>
+                      보드
+                    </button>
+                  </span>
+                  {taskView === 'list' && (
                   <label className="filter-select">
                     <span className="sr-only">업무 상태</span>
                     <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
@@ -1957,9 +1996,21 @@ export function App() {
                       ))}
                     </select>
                   </label>
+                  )}
+                  </div>
                 );
               })()}
-              {visibleTasks.length === 0 ? (
+              {taskView === 'board' ? (
+                <TaskBoard
+                  tasks={inProject}
+                  states={states}
+                  projects={projectById}
+                  onOpen={(task) => {
+                    setTaskView('list');
+                    showTask(task.id);
+                  }}
+                />
+              ) : visibleTasks.length === 0 ? (
                 <p className="empty">이 조건의 업무가 없습니다.</p>
               ) : (
                 visibleTasks.map((t) => (
@@ -2009,6 +2060,8 @@ export function App() {
                         projectRules={withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule))}
                         reviews={(snap.workflow.reviews ?? []).filter((r) => r.taskId === t.id)}
                         followups={(snap.workflow.followups ?? []).filter((f) => f.taskId === t.id)}
+                        timeline={taskTimeline(t.id, snap.workflow)}
+                        results={snap.workflow.results.filter((r) => r.taskId === t.id)}
                         canReadLinks={store.mode === 'supabase'}
                         dispatchBlocker={dispatchBlocker(t)}
                         actions={workflowActions}
@@ -2026,7 +2079,7 @@ export function App() {
                   />
                 ))
               )}
-              {filter === 'open' && counts('done') > 0 && (
+              {taskView === 'list' && filter === 'open' && counts('done') > 0 && (
                 <button type="button" className="btn btn-small btn-ghost done-link" onClick={() => setFilter('done')}>
                   완료된 업무 {counts('done')}건 보기
                 </button>

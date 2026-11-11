@@ -3,6 +3,18 @@
 import type { AgentAssignment, AssigneePreference, PmPlan } from './workflow-types';
 
 export const REASSIGN_MARK = '담당 바꿈';
+/** 두 AI 비교(v0.6.54, Conductor 비교 모드 착안): 같은 작업을 다른 AI에게도 따로 시킬 때의 이유 글 머리 */
+export const COMPARE_WHY = '비교';
+
+/** 비교 버튼을 보일 때: 작업 하나짜리 계획이 끝났고, 그 결과에 작업 브랜치가 있고, 아직 올리기 승인 전 */
+export function canCompare(v: { plan: { plan: { work_items: unknown[] } } | null; bApproved: boolean; waitingWork: unknown[]; result: { workItemId: string } | null }, a: { workItemId: string; dispatchStatus: string; assignee: string }): boolean {
+  return !!v.plan && v.plan.plan.work_items.length === 1 && !v.bApproved && v.waitingWork.length === 0 && a.dispatchStatus === 'completed' && v.result?.workItemId === a.workItemId && (a.assignee === 'codex' || a.assignee === 'claude');
+}
+
+/** 비교할 다른 AI(Codex ↔ Claude) */
+export function compareTarget(assignee: string): 'claude_support' | 'codex_primary' {
+  return assignee === 'claude' ? 'codex_primary' : 'claude_support';
+}
 
 export const PREF_LABEL: Record<'claude_support' | 'gemini_dev' | 'codex_primary', string> = {
   claude_support: 'Claude',
@@ -32,7 +44,10 @@ export function reassignPlanText(plan: PmPlan, workItemId: string, to: AssigneeP
           ...w,
           assignee_preference: to,
           execution_mode: 'manual_handoff' as const,
-          goal: `${w.goal}\n\n[이어받기] 이전 담당이 멈춰서 넘겨받은 작업이다(${why}). 작업 브랜치나 이전 결과가 있으면 먼저 확인하고 이어서 한다.`.slice(0, 8000),
+          goal: (why.startsWith(COMPARE_WHY)
+            ? `${w.goal}\n\n[비교] 다른 AI가 같은 일을 이미 했다. 비교하려는 것이니 이전 결과·작업 브랜치는 보지 말고 처음부터 따로 한다.`
+            : `${w.goal}\n\n[이어받기] 이전 담당이 멈춰서 넘겨받은 작업이다(${why}). 작업 브랜치나 이전 결과가 있으면 먼저 확인하고 이어서 한다.`
+          ).slice(0, 8000),
         },
   );
   return JSON.stringify({

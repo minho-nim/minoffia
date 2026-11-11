@@ -5853,3 +5853,164 @@ html.popup-open .project-sections > details[open] * {
 .project-sections > details[open] {
   overscroll-behavior: contain;
 }
+
+/* 업무 기록 타임라인(v0.6.54): 시간순 한 줄씩, 실패는 빨강·통과는 초록·내 차례는 주황 */
+.wf-timeline > summary {
+  cursor: pointer;
+  padding: 4px 2px;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.wf-timeline ol {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--line);
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.wf-timeline li {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.wf-timeline time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.wf-timeline li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.wf-timeline .tl-ok > span {
+  color: var(--ok);
+}
+.wf-timeline .tl-bad > span {
+  color: var(--danger);
+}
+.wf-timeline .tl-turn > span {
+  color: var(--accent);
+}
+
+/* 업무 보기 방식(목록|보드)·보드(v0.6.54, Vibe Kanban 착안) */
+.task-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.view-toggle button {
+  padding: 6px 12px;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.view-toggle button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
+}
+.task-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.board-col {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+}
+.board-col h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.board-turn h4 {
+  color: var(--accent);
+}
+.board-stuck h4 {
+  color: var(--danger);
+}
+.board-card {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg, var(--surface));
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.board-card.st-failed {
+  border-left: 3px solid var(--danger);
+}
+.board-card.st-turn {
+  border-left: 3px solid var(--accent);
+}
+.board-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.board-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+/* 휴대폰: 칸은 옆으로 밀어 보고(한 칸씩 멈춤), 위아래 흔들림 없이 */
+@media (max-width: 1039px) {
+  .task-board {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+  .task-board::-webkit-scrollbar {
+    display: none;
+  }
+  .board-col {
+    flex: 0 0 78%;
+    scroll-snap-align: start;
+  }
+}
+
+/* 두 AI 비교 결과(v0.6.54) */
+.wf-compare {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+}
+.wf-compare ul {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.wf-compare li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.88rem;
+}
