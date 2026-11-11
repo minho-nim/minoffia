@@ -1655,7 +1655,7 @@ export function App() {
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
   const ordered = snap.projects;
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
-  const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: () => store.healthCheck!.start(p.id), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
+  const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
   return (
     <div className="app">
