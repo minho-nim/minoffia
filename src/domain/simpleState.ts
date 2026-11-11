@@ -20,7 +20,9 @@ export function simpleStates(tasks: Task[], all: WorkflowData, now: number = Dat
     const v = deriveWorkflow(t, all);
     const mine = v.plan ? all.assignments.filter((a) => a.taskId === t.id && a.planRevision === v.plan!.planRevision) : [];
     const failed = myTurn.some((x) => x.alert) || t.dispatch.state === 'failed' || mine.some((a) => a.dispatchStatus === 'failed');
-    if (failed) out.set(t.id, 'failed');
+    // 취소한 업무(v0.6.50)는 작업을 실패로 멈춰 두므로 실패보다 먼저 끝남으로 본다(v0.6.54)
+    if (t.stage === 'cancelled') out.set(t.id, 'done');
+    else if (failed) out.set(t.id, 'failed');
     else if (t.status === 'done') out.set(t.id, 'done');
     else if (myTurn.length) out.set(t.id, 'turn');
     else if (stalled.has(t.id) || mine.some((a) => a.dispatchStatus === 'blocked_quota' || a.dispatchStatus === 'blocked_integration' || staleStart(a, now))) out.set(t.id, 'stalled');
