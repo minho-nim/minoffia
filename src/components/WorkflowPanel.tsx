@@ -1,3 +1,4 @@
+import { timelineTime } from '../domain/timeline';
 import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
 import { ArchifyView } from './ArchifyView';
 import { uncoveredRequirements } from '../domain/requirements';
@@ -25,7 +26,7 @@ import { DEVELOPMENT_MODE_LABEL, DISPATCH_STATUS_LABEL, GATE_LABEL, INTENT_LABEL
 import { addDesignWord, DESIGN_WORDS } from '../domain/designWords';
 import { DesignCheckView } from './DesignCheckView';
 import { SiteCheckView } from './SiteCheckView';
-import { PREF_LABEL, quotaHit, reassignTargets, staleStart } from '../domain/reassign';
+import { canCompare, COMPARE_WHY, compareTarget, PREF_LABEL, quotaHit, reassignTargets, staleStart } from '../domain/reassign';
 
 const AGENT_NAME: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
 import { OFFICE_REPOS } from '../domain/smallTask';
@@ -55,6 +56,8 @@ export interface WorkflowActions {
   archify?: (taskId: string, revision: number) => Promise<{ html?: string; started?: boolean }>;
   /** 담당 바꾸기·한도 넘기기(v0.5.73): 그 작업 담당만 바꾼 새 계획 버전을 만든다(실행 승인은 다시) */
   reassign?: (task: Task, a: AgentAssignment, to: AssigneePreference, why: string) => Promise<boolean>;
+  /** 두 AI 비교에서 고른 결과를 최신 결과로(같은 변경을 새 버전으로 다시 저장, v0.6.54) */
+  pickResult?: (task: Task, r: import('../domain/workflow-types').ResultPackage) => Promise<boolean>;
   /** 디자인 자동 검사(v0.5.56): 미리보기 주소가 있는 결과만 */
   designCheck?: { load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>; start(taskId: string, revision: number): Promise<void> };
   /** 화면 확인(v0.6.9): 실제 미리보기·운영 사이트 */
@@ -151,6 +154,10 @@ interface Props {
   actions: WorkflowActions;
   /** 이 업무의 개발 중 추가 요청(v0.6.13) */
   followups?: import('../domain/workflow-types').Followup[];
+  /** 이 업무 기록 타임라인(v0.6.54) */
+  timeline?: import('../domain/timeline').TimelineEvent[];
+  /** 이 업무의 모든 결과(두 AI 비교, v0.6.54) */
+  results?: import('../domain/workflow-types').ResultPackage[];
 }
 
 const CI_LABEL: Record<PrCheck['ciState'], string> = { success: '성공', failure: '실패', pending: '진행 중', none: '없음' };
@@ -282,7 +289,7 @@ function FollowupBox({ followups, busy, canRedo, onAdd, onRedo }: { followups: i
   );
 }
 
-export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], canReadLinks, dispatchBlocker, actions }: Props) {
+export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], canReadLinks, dispatchBlocker, actions, timeline, results = [] }: Props) {
   const current = stepIndex(view);
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
@@ -452,6 +459,57 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           </p>
         )}
       </div>
+      {timeline && timeline.length > 0 && (
+        // 기록(v0.6.54, 실행 추적): 누가 언제 무엇을 했는지 시간순. 넘겨주기·실패 이유도 여기서 보인다
+        <details className="wf-timeline">
+          <summary>
+            기록 {timeline.length}
+            {timeline.some((e) => e.tone === 'bad') ? ' ⚠' : ''}
+          </summary>
+          <ol>
+            {timeline.map((e, i) => (
+              <li key={i} className={`tl-${e.tone}`}>
+                <time dateTime={e.at}>{timelineTime(e.at)}</time>
+                <span>{e.text}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+      {(() => {
+        // 두 AI 비교 결과(v0.6.54): Codex·Claude 결과가 둘 다 있으면 AI마다 최신 결과와 점수를 나란히. 최신이 아닌 쪽은 '이 결과로 정하기'
+        if (view.bApproved) return null;
+        const aiOf = (src: string) => (src.startsWith('codex') ? 'codex' : src.startsWith('claude') ? 'claude' : '');
+        const latestBy = new Map<string, import('../domain/workflow-types').ResultPackage>();
+        for (const r of [...results].sort((x, y) => x.revision - y.revision)) if (aiOf(r.source)) latestBy.set(aiOf(r.source), r);
+        if (latestBy.size < 2 || !view.result) return null;
+        const top = view.result.revision;
+        return (
+          <div className="wf-compare">
+            <b>두 AI 비교</b>
+            <ul>
+              {[...latestBy.entries()].map(([ai, r]) => {
+                const rv = reviews.find((x) => x.resultRevision === r.revision);
+                const score = rv?.total == null ? '채점 전' : `${rv.total}점${rv.crossTotal != null ? ` · 교차 ${rv.crossTotal}점` : ''}`;
+                return (
+                  <li key={ai}>
+                    <span>
+                      {AGENT_NAME[ai]} · 결과 v{r.revision} · {score}
+                      {r.revision === top ? ' (지금 올릴 결과)' : ''}
+                    </span>
+                    {r.revision !== top && actions.pickResult && (
+                      <button type="button" className="btn btn-small btn-ghost" disabled={busy || view.waitingWork.length > 0} onClick={() => void run(() => actions.pickResult!(task, r))}>
+                        이 결과로 정하기
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="muted small">올리기 승인은 '지금 올릴 결과'로 해요. 다른 쪽이 낫다면 '이 결과로 정하기'를 누르면 같은 변경이 새 버전으로 저장되고 다시 채점돼요.</p>
+          </div>
+        );
+      })()}
       <details className="wf-more" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
         <summary>단계별 자세히</summary>
       <div className="wf-head">
@@ -945,6 +1003,21 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                           </button>
                         );
                       })}
+                    </div>
+                  )}
+                  {/* 두 AI 비교(v0.6.54, Conductor 비교 모드 착안): 끝난 결과를 다른 AI에게도 따로 시켜 본다. 사용량이 2배라 버튼으로만 */}
+                  {actions.reassign && canCompare(view, a) && (
+                    <div className="wf-reassign">
+                      <span className="small muted">비교:</span>
+                      <button
+                        type="button"
+                        className="chip"
+                        disabled={busy}
+                        onClick={() => void run(() => actions.reassign!(task, a, compareTarget(a.assignee), `${COMPARE_WHY}: ${AGENT_NAME[a.assignee] ?? a.assignee} 결과와 비교`))}
+                      >
+                        {PREF_LABEL[compareTarget(a.assignee)]}로도 해 보기
+                      </button>
+                      <span className="small muted"> 같은 일을 따로 해서 점수를 견줘요(사용량 1번 더)</span>
                     </div>
                   )}
                   {/* v0.5.84 '지시 받음' 확인: 시작했는데 소식이 없으면 경고와 다른 AI로 넘기기 */}
