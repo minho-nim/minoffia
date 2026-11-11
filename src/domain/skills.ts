@@ -39,7 +39,8 @@ export function parseSkillMd(md: string): { title: string; description: string; 
   };
   const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? '';
   const firstPara = body.split(/\n\s*\n/).map((p) => p.trim()).find((p) => p && !p.startsWith('#') && !p.startsWith('>')) ?? '';
-  return { title: field('name') || heading, description: field('description') || firstPara.slice(0, 300), body };
+  // 한글 제목(# 스킬 찾기)이 있으면 그걸 이름으로 보인다(v0.6.56 소유자 "스킬은 한글로 통일"). 없으면 앞머리 name
+  return { title: /[가-힣]/.test(heading) ? heading : field('name') || heading, description: field('description') || firstPara.slice(0, 300), body };
 }
 
 const RISK_RULES: [SkillRisk, RegExp][] = [
@@ -58,7 +59,7 @@ export function skillRisks(text: string): SkillRisk[] {
 /** 라이선스 이름·출처(원문 표시가 있으면) */
 export function skillSource(md: string, license: string): { license: string; source: string } {
   const lic = /apache license/i.test(license) ? 'Apache-2.0' : /mit license/i.test(license) ? 'MIT' : /bsd/i.test(license) ? 'BSD' : license ? '기타' : '없음(직접 만듦)';
-  const origin = md.match(/원문:\s*([\w.-]+\/[\w.-]+)/)?.[1] ?? '';
+  const origin = md.match(/원문[은:]\s*([\w.-]+\/[\w.-]+)/)?.[1] ?? '';
   const owner = license.match(/Copyright \(c\) \d{4}\s+([^,.]+)/i)?.[1]?.trim() ?? '';
   return { license: lic, source: origin || owner || (license ? '외부' : '직접 만듦') };
 }
@@ -82,6 +83,6 @@ export function toSkillView(f: SkillFile): SkillView {
 /** 스킬 업무 요청 글(대화창에 미리 채운다). 결과는 늘 PR로 올라가 올리기 승인을 거친다 */
 export function skillRequestText(kind: 'make' | 'find'): string {
   return kind === 'make'
-    ? '@Claude 스킬 만들기: (여기에 무엇을 자동으로 할지 적어 주세요). skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md를 만들고, 다른 파일은 고치지 마.'
-    : '@Claude 스킬 찾기: (여기에 무엇에 쓸 스킬인지 적어 주세요). find-skills로 후보 3개를 찾아 출처·설치 수·라이선스·위험(외부 접속·비밀값·유료 API)을 결과 요약에 적고, 가장 좋은 1개만 내용을 읽은 뒤 .claude/skills/에 라이선스 파일과 함께 넣어. -g·-y 금지, 다른 파일은 고치지 마.';
+    ? '@Claude 스킬 만들기: (여기에 무엇을 자동으로 할지 적어 주세요). skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md를 만들어. 설명(description)·제목·본문은 쉬운 한국어로. 다른 파일은 고치지 마.'
+    : '@Claude 스킬 찾기: (여기에 무엇에 쓸 스킬인지 적어 주세요). find-skills로 후보 3개를 찾아 출처·설치 수·라이선스·위험(외부 접속·비밀값·유료 API)을 결과 요약에 적고, 가장 좋은 1개만 내용을 읽은 뒤 .claude/skills/에 라이선스 파일과 함께 넣어. 설명(description)과 제목은 쉬운 한국어로 바꿔 둬. -g·-y 금지, 다른 파일은 고치지 마.';
 }

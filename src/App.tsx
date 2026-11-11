@@ -1809,17 +1809,6 @@ export function App() {
             <button type="button" role="tab" aria-selected={tab === 'chat'} onClick={() => setTab('chat')}>
               대화
             </button>
-            <button type="button" role="tab" aria-selected={tab === 'tasks'} onClick={() => setTab('tasks')}>
-              업무
-              {turns.length > 0 && (
-                <span className="num num-turn" title={`내 차례 ${turns.length}개`} aria-label={`내 차례 ${turns.length}개`}>
-                  {turns.length}
-                </span>
-              )}
-            </button>
-            <button type="button" role="tab" aria-selected={tab === 'projects'} onClick={() => setTab('projects')}>
-              프로젝트 <span className="num num-count">{snap.projects.length}</span>
-            </button>
             <button
               type="button"
               role="tab"
@@ -1830,6 +1819,17 @@ export function App() {
               }}
             >
               에이전트
+            </button>
+            <button type="button" role="tab" aria-selected={tab === 'tasks'} onClick={() => setTab('tasks')}>
+              업무
+              {turns.length > 0 && (
+                <span className="num num-turn" title={`내 차례 ${turns.length}개`} aria-label={`내 차례 ${turns.length}개`}>
+                  {turns.length}
+                </span>
+              )}
+            </button>
+            <button type="button" role="tab" aria-selected={tab === 'projects'} onClick={() => setTab('projects')}>
+              프로젝트 <span className="num num-count">{snap.projects.length}</span>
             </button>
             {/* 스킬 탭(v0.6.55 소유자 "설정 탭 왼쪽으로 skills 탭") */}
             <button type="button" role="tab" aria-selected={tab === 'skills'} onClick={() => setTab('skills')}>
