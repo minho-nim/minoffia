@@ -5973,22 +5973,18 @@ html.popup-open .project-sections > details[open] * {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-/* 휴대폰: 칸은 옆으로 밀어 보고(한 칸씩 멈춤), 위아래 흔들림 없이 */
+/* 휴대폰(v0.6.55 소유자 "좌우 스크롤이라 불편"): 칸을 위아래로 쌓는다. 빈 칸은 제목 한 줄만 */
 @media (max-width: 1039px) {
   .task-board {
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    padding-bottom: 4px;
+    grid-template-columns: minmax(0, 1fr);
   }
-  .task-board::-webkit-scrollbar {
-    display: none;
+  .board-col.is-empty {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    padding-block: 6px;
   }
-  .board-col {
-    flex: 0 0 78%;
-    scroll-snap-align: start;
+  .board-col.is-empty > p {
+    margin: 0;
   }
 }
 
@@ -6013,4 +6009,71 @@ html.popup-open .project-sections > details[open] * {
   justify-content: space-between;
   gap: 6px;
   font-size: 0.88rem;
+}
+
+/* 스킬 탭(v0.6.55) */
+.skills-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.skills-head h3 {
+  margin: 0;
+}
+.skills-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.skill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.skill-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+}
+.skill-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+.skill-desc {
+  margin: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.skill-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.skill-card .project-sections {
+  margin-top: 0;
+}
+.skill-body pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 8px 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg);
 }

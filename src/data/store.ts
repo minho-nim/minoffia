@@ -129,6 +129,8 @@ export interface OfficeStore {
   repoTree(projectId: string): Promise<string[]>;
   /** GitHub Pages 데모 주소(v0.5.91): Pages가 켜진 저장소만 { 프로젝트 id: 주소 }. Supabase 모드에서만 */
   pagesUrls?(projectIds: string[]): Promise<Record<string, string>>;
+  /** 이 저장소(.claude/skills)의 스킬 목록(v0.6.55, AI 호출 없음) */
+  skills?(): Promise<import('../domain/skills').SkillFile[]>;
   /** 프로젝트 디자인 기준(v0.5.56, Supabase 모드에서만) */
   designStandard?: { draft(projectId: string): Promise<string>; approve(projectId: string, md: string): Promise<void> };
   /** 디자인 자동 검사(v0.5.56, Supabase 모드에서만) */

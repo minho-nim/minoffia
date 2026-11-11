@@ -43,6 +43,38 @@ Deno.serve(async (req) => {
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
   }
+  // 스킬 목록(v0.6.55, 소유자 "minoffia에서 스킬을 간단히 보게"): 이 저장소 main의 .claude/skills/*/SKILL.md를 그대로 읽는다.
+  // AI 호출 없음(GitHub 읽기만). 스킬마다 파일 목록과 라이선스 첫 줄도 함께. 크기는 스킬당 60KB, 최대 40개.
+  if (body.action === 'skills') {
+    const repo = env('OFFICE_REPO') || 'minho-nim/minoffia';
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minlab-ai-office' };
+    try {
+      const res = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers, signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) return reply(502, { ok: false, error: `GitHub 응답 ${res.status}` });
+      const data = (await res.json()) as { tree?: { path: string; type: string }[] };
+      const files = new Map<string, string[]>();
+      for (const t of data.tree ?? []) {
+        const m = t.type === 'blob' ? t.path.match(/^\.claude\/skills\/([\w.-]+)\/(.+)$/) : null;
+        if (m) files.set(m[1], [...(files.get(m[1]) ?? []), m[2]]);
+      }
+      const names = [...files.keys()].filter((n) => files.get(n)!.includes('SKILL.md')).sort().slice(0, 40);
+      const raw = (path: string) =>
+        fetch(`https://api.github.com/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, { headers: { ...headers, Accept: 'application/vnd.github.raw' }, signal: AbortSignal.timeout(10_000) })
+          .then((r) => (r.ok ? r.text() : ''))
+          .catch(() => '');
+      const skills = await Promise.all(
+        names.map(async (name) => {
+          const list = files.get(name)!;
+          const lic = list.find((f) => /^LICEN[SC]E/i.test(f));
+          const [md, licText] = await Promise.all([raw(`.claude/skills/${name}/SKILL.md`), lic ? raw(`.claude/skills/${name}/${lic}`) : Promise.resolve('')]);
+          return { name, skillMd: md.slice(0, 60_000), files: list.slice(0, 80), license: licText.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3).join(' ').slice(0, 200) };
+        }),
+      );
+      return reply(200, { ok: true, repo, skills });
+    } catch (e) {
+      return reply(504, { ok: false, error: `GitHub가 늦게 답했습니다(${(e as Error).name}).` });
+    }
+  }
   // 데모 주소(v0.5.91, 소유자 "운영은 Cloudflare, 데모는 github.io"): GitHub Pages가 켜진 저장소만 데모 주소를 돌려준다.
   if (body.action === 'pages') {
     const ids = (Array.isArray(body.projectIds) ? body.projectIds : []).filter((x) => typeof x === 'string').slice(0, 30);
