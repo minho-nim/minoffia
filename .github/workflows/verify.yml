@@ -1,9 +1,10 @@
 name: verify
 
+# main 병합 뒤에는 다시 돌지 않는다(v0.6.53 소유자 결정, Actions 분량 아끼기): 운영 배포가 "main의 코드가 PR에서 검사를
+# 통과한 코드와 똑같은지(tree 같음)"를 확인한다. 다르면(PR이 옛 main 기준이었으면) 이 검사를 main에서 수동 실행한 뒤 배포한다.
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

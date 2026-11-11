@@ -148,7 +148,8 @@ export interface OfficeStore {
   /** 앱 점검(floorplan 1단계, v0.5.53, Supabase 모드에서만) */
   healthCheck?: {
     load(projectId: string): Promise<import('../domain/healthText').HealthReport | null>;
-    start(projectId: string): Promise<void>;
+    /** unchanged = 코드가 그대로라 다시 돌리지 않음(v0.6.53). force면 늘 다시 */
+    start(projectId: string, force?: boolean): Promise<{ unchanged: boolean }>;
     map(projectId: string): Promise<string | null>;
   };
   /** Claude PM 대신 Gemini가 쓴 분배 계획 글(v0.5.20). 저장은 앱이 검증한 뒤 */

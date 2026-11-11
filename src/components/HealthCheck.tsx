@@ -5,7 +5,7 @@ import { APP_MAP_KINDS, koIssue, type AppMap, type HealthReport } from '../domai
 
 export type HealthApi = {
   load: () => Promise<HealthReport | null>;
-  start: () => Promise<void>;
+  start: (force?: boolean) => Promise<{ unchanged: boolean } | void>;
   map: () => Promise<string | null>;
 };
 
@@ -77,12 +77,20 @@ export function HealthCheck({ api }: { api: HealthApi }) {
     }, 15_000);
   };
 
+  // 코드가 그대로면 서버가 다시 돌리지 않는다(v0.6.53, Actions 아끼기). 그때 한 번 더 누르면 강제로 다시 점검.
+  const [same, setSame] = useState(false);
   const start = async () => {
     setState('checking');
     setMsg('');
     const since = Date.now() - 60_000;
     try {
-      await api.start();
+      const r = await api.start(same);
+      if (r && r.unchanged) {
+        setSame(true);
+        setState('idle');
+        return;
+      }
+      setSame(false);
       setReport(null);
       poll(since);
     } catch (e) {
@@ -163,6 +171,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
         </button>
       </div>
       {msg && <p className="task-error small">{msg}</p>}
+      {same && state === 'idle' && <p className="muted small">코드가 그대로라 지난 점검 결과예요. 그래도 다시 하려면 한 번 더 누르세요.</p>}
       {popup && (
         <div className="archify-modal" role="dialog" aria-label={popup === 'brief' ? '간략 지도' : '자세한 지도'} onClick={() => setPopup(null)}>
           <div className={`archify-box${popup === 'brief' ? ' map-brief-box' : ''}`} onClick={(e) => e.stopPropagation()}>

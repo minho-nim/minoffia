@@ -227,6 +227,17 @@ Deno.serve(async (req) => {
     return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   }
 
+  // 웹 조사 차단기(v0.6.53, 토큰·시간 아끼기): 최근 3시간 안에 모든 모델·키가 한도(429)로 실패했고 그 뒤 성공이 없으면
+  // 다시 부르지 않고 바로 알린다(2주간 조사 52번이 모두 한도 실패였고, 한 번 물을 때마다 모델·키를 바꿔 6번씩 불렀다).
+  if (research) {
+    const since = new Date(Date.now() - 3 * 3600_000).toISOString();
+    const { data: lastFail } = await admin.from('ai_calls').select('created_at').eq('owner_id', user.id).eq('purpose', 'research').eq('ok', false).eq('http_status', 429).is('key_slot', null).gte('created_at', since).order('created_at', { ascending: false }).limit(1);
+    if (lastFail?.length) {
+      const { count: okAfter } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'research').eq('ok', true).gte('created_at', lastFail[0].created_at);
+      if (!okAfter) return reply(429, { ok: false, error: 'Gemini 웹 검색 무료 한도가 끝났어요(조금 전에 확인). 3시간 뒤 다시 되는지 봐요. 그동안은 ChatGPT로 복사해 물어보세요.', status: 429, skipped: true });
+    }
+  }
+
   const baseModel = env('GEMINI_MODEL') || DEFAULT_MODEL;
   // 조사(v0.5.5): 기본 모델은 Google 검색 연결 무료 한도가 없어 늘 429였다(일반 질문은 같은 키로 바로 됨, 2026-11-03 기록).
   // 검색은 무료 검색 한도가 있는 모델(GEMINI_RESEARCH_MODEL, 기본 gemini-2.5-flash)로 먼저 묻고, 안 되면 기본 모델로 한 번 더.
