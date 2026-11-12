@@ -144,9 +144,9 @@ Deno.serve(async (req) => {
       const remoteIssue = data.issue as Partial<LinearIssue>;
       if (remoteIssue.id !== a.provider_execution_id || !remoteIssue.url) throw new Error('예약한 이슈의 주소를 확인하지 못했습니다.');
       const news = readNews(data as Parameters<typeof readNews>[0], a.started_at);
-      const note = news.kind === 'none' ? 'linear: Codex 소식 아직 없음' : `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`;
+      const note = news.kind === 'none' ? 'linear: Codex 소식 아직 없음' : `linear: ${news.kind === 'error' ? '시작 못 함 — ' : news.kind === 'failed' ? '끝내지 못함 — ' : ''}${news.last}`;
       const patch: Record<string, unknown> = { actual_provider_status: note.slice(0, 300), provider_task_url: remoteIssue.url, status_source: 'server_verified', last_verified_at: new Date().toISOString() };
-      if (a.dispatch_status === 'starting' || a.dispatch_status === 'started') patch.dispatch_status = news.kind === 'error' ? 'failed' : 'started';
+      if (a.dispatch_status === 'starting' || a.dispatch_status === 'started') patch.dispatch_status = news.kind === 'error' || news.kind === 'failed' ? 'failed' : 'started';
       const { data: saved, error: saveError } = await admin.from('agent_assignments').update(patch).eq('id', a.id).eq('provider_execution_id', a.provider_execution_id).eq('dispatch_status', a.dispatch_status).select('id').maybeSingle();
       if (saveError || !saved) return reply(503, { ok: false, error: 'Linear 소식은 읽었지만 저장하지 못했습니다. 다시 확인하세요.' });
       return reply(200, { ok: true, ...news });

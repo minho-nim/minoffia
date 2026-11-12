@@ -289,6 +289,9 @@ function FollowupBox({ followups, busy, canRedo, onAdd, onRedo }: { followups: i
   );
 }
 
+/** 같은 AI로 다시(담당 그대로 새 계획 버전) */
+const samePref = (assignee: string): AssigneePreference => (assignee === 'claude' ? 'claude_support' : assignee === 'codex' ? 'codex_primary' : 'gemini_dev');
+
 export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], canReadLinks, dispatchBlocker, actions, timeline, results = [] }: Props) {
   const current = stepIndex(view);
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
@@ -996,7 +999,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     <div className="wf-reassign is-quota">
                       <p className="small">⚠️ 개발이 끝까지 못 가서 작업 브랜치가 올라가지 않았어요. 다시 해야 해요.</p>
                       {(['same', ...reassignTargets(a.assignee, OFFICE_REPOS.includes((project?.repo ?? '').toLowerCase()))] as const).map((to) => {
-                        const pref: AssigneePreference = to === 'same' ? (a.assignee === 'claude' ? 'claude_support' : a.assignee === 'codex' ? 'codex_primary' : 'gemini_dev') : to;
+                        const pref: AssigneePreference = to === 'same' ? samePref(a.assignee) : to;
                         return (
                           <button key={to} type="button" className={`chip${to === 'same' ? ' chip-strong' : ''}`} disabled={busy} onClick={() => void run(() => actions.reassign!(task, a, pref, '개발이 끝까지 못 감, 다시 하기'))}>
                             {to === 'same' ? `다시 하기(${AGENT_NAME[a.assignee] ?? a.assignee})` : `${PREF_LABEL[to]}로 다시 하기`}
@@ -1024,18 +1027,25 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                   {actions.reassign && staleStart(a) && (
                     <div className="wf-reassign is-quota">
                       <p className="small">⚠️ {staleStart(a)}</p>
-                      <span className="small muted">다른 AI로 넘기기:</span>
-                      {reassignTargets(a.assignee, OFFICE_REPOS.includes((project?.repo ?? '').toLowerCase())).map((to) => (
-                        <button key={to} type="button" className="chip" disabled={busy} onClick={() => void run(() => actions.reassign!(task, a, to, `${AGENT_NAME[a.assignee] ?? a.assignee} 소식 없음`))}>
-                          {PREF_LABEL[to]}
+                      <span className="small muted">{busy ? '넘기는 중… 곧 새 담당이 시작해요' : '다시 시도하거나 다른 AI로 넘기기:'}</span>
+                      {(['same', ...reassignTargets(a.assignee, OFFICE_REPOS.includes((project?.repo ?? '').toLowerCase()))] as const).map((to) => (
+                        <button key={to} type="button" className={`chip${to === 'same' ? ' chip-strong' : ''}`} disabled={busy} onClick={() => void run(() => actions.reassign!(task, a, to === 'same' ? samePref(a.assignee) : to, `${AGENT_NAME[a.assignee] ?? a.assignee} 소식 없음`))}>
+                          {to === 'same' ? `다시 시도(${AGENT_NAME[a.assignee] ?? a.assignee})` : PREF_LABEL[to]}
                         </button>
                       ))}
                     </div>
                   )}
                   {actions.reassign && a.dispatchStatus !== 'completed' && a.dispatchStatus !== 'started' && a.dispatchStatus !== 'starting' && (
-                    <div className={`wf-reassign${quotaHit(a) ? ' is-quota' : ''}`}>
+                    <div className={`wf-reassign${quotaHit(a) || a.dispatchStatus === 'failed' ? ' is-quota' : ''}`}>
                       {quotaHit(a) && <p className="small">⚠️ {AGENT_NAME[a.assignee] ?? a.assignee} 한도에 걸린 것 같아요. 다른 AI로 넘길 수 있어요.</p>}
-                      <span className="small muted">담당 바꾸기:</span>
+                      {/* v0.6.80 소유자 "개발 안 됐을 때 다시 시도 버튼": 실패면 같은 AI로 다시 시도가 맨 앞 */}
+                      {a.dispatchStatus === 'failed' && !quotaHit(a) && <p className="small">⚠️ 개발이 안 됐어요{a.actualProviderStatus ? `: ${a.actualProviderStatus.replace(/^linear:\s*/, '').slice(0, 120)}` : ''}</p>}
+                      {a.dispatchStatus === 'failed' && (
+                        <button type="button" className="chip chip-strong" disabled={busy} onClick={() => void run(() => actions.reassign!(task, a, samePref(a.assignee), '실패, 다시 시도'))}>
+                          다시 시도({AGENT_NAME[a.assignee] ?? a.assignee})
+                        </button>
+                      )}
+                      <span className="small muted">{busy ? '넘기는 중… 곧 새 담당이 시작해요' : '담당 바꾸기:'}</span>
                       {reassignTargets(a.assignee, OFFICE_REPOS.includes((project?.repo ?? '').toLowerCase())).map((to) => (
                         <button
                           key={to}

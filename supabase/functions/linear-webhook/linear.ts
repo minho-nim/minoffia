@@ -68,8 +68,8 @@ export function issueInput(p: { teamId: string; codexId: string | null; canDeleg
 export interface CodexNews {
   /** Codex가 남긴 마지막 말(짧게) */
   last: string;
-  /** 'error' = 시작하지 못함(한도·환경 없음 등), 'working' = 소식 있음, 'none' = 아직 없음 */
-  kind: 'error' | 'working' | 'none';
+  /** 'error' = 시작하지 못함(한도·환경 없음 등), 'failed' = 시작은 했는데 끝내지 못함(v0.6.80), 'working' = 소식 있음, 'none' = 아직 없음 */
+  kind: 'error' | 'failed' | 'working' | 'none';
   /** Codex 작업 주소(있으면) */
   taskUrl: string | null;
   issueState: string;
@@ -95,7 +95,13 @@ export function readNews(data: Status, since?: string | null): CodexNews {
   const body = (lastC?.body ?? '').replace(/\s+/g, ' ').trim();
   const all = fromCodex.map((c) => c.body ?? '').join('\n');
   const taskUrl = all.match(/https:\/\/chatgpt\.com\/codex\/tasks\/[A-Za-z0-9_-]+/)?.[0] ?? null;
-  const kind: CodexNews['kind'] = !lastC ? 'none' : /couldn'?t start|cannot start|usage limits?|no available environments/i.test(body) ? 'error' : 'working';
+  const kind: CodexNews['kind'] = !lastC
+    ? 'none'
+    : /couldn'?t start|cannot start|usage limits?|no available environments/i.test(body)
+      ? 'error'
+      : /couldn'?t complete|could not complete|failed to complete|unable to complete/i.test(body)
+        ? 'failed'
+        : 'working';
   // v0.6.19(소유자 "Codex 주, Claude 보조"): 오늘 두 번 막힌 '환경 없음'을 쉬운 말로
   const hint = /no available environments/i.test(body) ? 'Codex 환경 없음 — Codex 웹 설정 > 환경에서 이 저장소 환경을 만들고 "게시"하세요(프로젝트마다 한 번). ' : '';
   return { last: (hint + body).slice(0, 240), kind, taskUrl, issueState: data.issue?.state?.name ?? '' };
