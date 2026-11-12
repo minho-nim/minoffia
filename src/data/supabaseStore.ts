@@ -704,7 +704,20 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         skillMd: String(x.skillMd ?? ''),
         files: Array.isArray(x.files) ? (x.files as unknown[]).filter((f): f is string => typeof f === 'string') : [],
         license: String(x.license ?? ''),
+        dir: typeof x.dir === 'string' ? x.dir : undefined,
+        meta: x.meta === true,
       }));
+    },
+    async skillStatus(skill) {
+      const data = await invoke('repo-tree', { action: 'skillStatus', skill });
+      const out: Record<string, 'same' | 'old' | 'none'> = {};
+      for (const [id, v] of Object.entries((data.status ?? {}) as Record<string, unknown>)) if (v === 'same' || v === 'old' || v === 'none') out[id] = v;
+      return out;
+    },
+    async installSkill(skill, projectIds) {
+      const data = await invoke('repo-tree', { action: 'skillInstall', skill, projectIds });
+      const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+      return { started: list(data.started), failed: list(data.failed) };
     },
     async pagesUrls(projectIds) {
       const data = await invoke('repo-tree', { action: 'pages', projectIds });

@@ -2,11 +2,62 @@
 // 누르면 가운데 팝업으로 내용을 본다(프로젝트 칸과 같은 팝업, 바깥 누르면 닫힘). 읽기는 GitHub만, AI 호출 없음.
 // 만들기·찾기는 작은 입력 창(v0.6.57)에 쓰고 보내면 대화로 바로 보낸다. 결과는 늘 PR(올리기 승인)로 들어온다.
 import { useEffect, useMemo, useState } from 'react';
-import { RISK_LABEL, SKILL_AREAS, SKILL_PRESETS, skillRequest, toSkillView, type SkillFile } from '../domain/skills';
+import { INSTALL_LABEL, RISK_LABEL, SKILL_AREAS, SKILL_PRESETS, skillRequest, toSkillView, type SkillFile, type SkillInstallState } from '../domain/skills';
 
 const EMPTY = { what: '', when: '', rules: '', areas: [] as string[] };
 
-export function SkillsPanel({ load, onSend, canRequest }: { load: () => Promise<SkillFile[]>; onSend: (text: string) => void; canRequest: boolean }) {
+export interface SkillProject {
+  id: string;
+  name: string;
+  repo: string;
+}
+
+export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install }: {
+  load: () => Promise<SkillFile[]>;
+  onSend: (text: string) => void;
+  canRequest: boolean;
+  /** 스킬을 넣을 수 있는 프로젝트(저장소 있는 것, MinLab 제외) */
+  projects?: SkillProject[];
+  status?: (skill: string) => Promise<Record<string, SkillInstallState>>;
+  install?: (skill: string, projectIds: string[]) => Promise<{ started: string[]; failed: string[] }>;
+}) {
+  // 프로젝트에 넣기 창(v0.6.58): 스킬 하나를 골라 프로젝트마다 들어 있는지 보고, 고른 곳에 넣는다
+  const [installFor, setInstallFor] = useState<string | null>(null);
+  const [states, setStates] = useState<Record<string, SkillInstallState> | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [installMsg, setInstallMsg] = useState('');
+  const [installing, setInstalling] = useState(false);
+  const openInstall = (skill: string) => {
+    setInstallFor(skill);
+    setStates(null);
+    setInstallMsg('');
+    status?.(skill).then(
+      (s) => {
+        setStates(s);
+        // 없거나 옛 버전인 곳을 미리 골라 둔다
+        setPicked(new Set(projects.filter((p) => s[p.id] !== 'same').map((p) => p.id)));
+      },
+      (e) => {
+        setStates({});
+        setInstallMsg((e as Error).message || '상태를 읽지 못했어요.');
+      },
+    );
+  };
+  const doInstall = async () => {
+    if (!installFor || !install || picked.size === 0) return;
+    setInstalling(true);
+    setInstallMsg('');
+    try {
+      const r = await install(installFor, [...picked]);
+      setInstallMsg(
+        `${r.started.length}곳에 넣기 시작했어요(GitHub Actions, 1~2분). 끝나면 각 저장소에 PR이 열리고 바로 병합돼요.${r.failed.length ? ` 시작 못 함: ${r.failed.join(', ')}` : ''} 잠시 뒤 다시 열면 상태가 바뀌어 있어요.`,
+      );
+    } catch (e) {
+      setInstallMsg((e as Error).message || '넣지 못했어요.');
+    } finally {
+      setInstalling(false);
+    }
+  };
   const [form, setForm] = useState<'make' | 'find' | null>(null);
   // 바깥을 눌러 창이 닫혀도 쓴 글은 남겨 둔다(다시 열면 그대로)
   const [fields, setFields] = useState(EMPTY);
@@ -50,6 +101,57 @@ export function SkillsPanel({ load, onSend, canRequest }: { load: () => Promise<
       <p className="muted small">
         Claude가 이 저장소에서 일할 때 쓰는 작업 설명서예요. 만들기·찾기에 짧게 적어 보내면 대화로 접수되고, Claude가 만든 스킬은 올리기 승인 뒤 PR로 들어와요.
       </p>
+      {/* 프로젝트에 넣기 창(v0.6.58) */}
+      <div className="project-sections skill-form-pop">
+        <details open={installFor !== null} onToggle={(e) => !(e.currentTarget as HTMLDetailsElement).open && setInstallFor(null)}>
+          <summary>프로젝트에 넣기{installFor ? ` · ${skills.find((x) => x.name === installFor)?.title ?? installFor}` : ''}</summary>
+          {installFor && (
+            <div className="skill-form">
+              <p className="muted small">고른 프로젝트 저장소의 .agents/skills(Codex 등)와 .claude/skills(Claude)에 이 스킬을 넣어요. 그 뒤로는 그 프로젝트에서 일하는 AI가 필요할 때 알아서 꺼내 써요.</p>
+              {states === null ? (
+                <p className="muted small">프로젝트마다 들어 있는지 확인하는 중…</p>
+              ) : (
+                <ul className="skill-projects">
+                  {projects.map((p) => {
+                    const st = states[p.id];
+                    return (
+                      <li key={p.id}>
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={picked.has(p.id)}
+                            onChange={() =>
+                              setPicked((cur) => {
+                                const next = new Set(cur);
+                                if (!next.delete(p.id)) next.add(p.id);
+                                return next;
+                              })
+                            }
+                          />{' '}
+                          {p.name}
+                        </label>
+                        <span className={`pill${st === 'same' ? '' : st === 'old' ? ' pill-warn' : ''}`}>{st ? INSTALL_LABEL[st] : '확인 못 함'}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {installMsg && <p className="small">{installMsg}</p>}
+              <div className="form-foot">
+                <span />
+                <span className="form-actions">
+                  <button type="button" className="btn btn-ghost" onClick={() => setInstallFor(null)}>
+                    닫기
+                  </button>
+                  <button type="button" className="btn btn-primary" disabled={installing || picked.size === 0 || states === null} onClick={() => void doInstall()}>
+                    {picked.size}곳에 넣기
+                  </button>
+                </span>
+              </div>
+            </div>
+          )}
+        </details>
+      </div>
       {/* 입력 창: 프로젝트 칸과 같은 가운데 팝업(✕·바깥 누르면 닫힘). 닫혀 있을 때는 숨김 */}
       <div className="project-sections skill-form-pop">
         <details open={form !== null} onToggle={(e) => !(e.currentTarget as HTMLDetailsElement).open && setForm(null)}>
@@ -138,6 +240,7 @@ export function SkillsPanel({ load, onSend, canRequest }: { load: () => Promise<
             <p className="skill-desc small">{s.description || '설명 없음'}</p>
             <div className="skill-meta small">
               <span>파일 {s.files.length}{s.scripts ? ` · 스크립트 ${s.scripts}` : ''}</span>
+              {s.meta && <span className="pill">도구 · 미노피아 전용</span>}
               {s.risks.map((r) => (
                 <span key={r} className="pill pill-warn" title="내용에 이런 글자가 있어요. 꼭 위험한 건 아니고, 읽어 볼 곳이에요.">
                   {RISK_LABEL[r]}
@@ -145,7 +248,12 @@ export function SkillsPanel({ load, onSend, canRequest }: { load: () => Promise<
               ))}
             </div>
             {/* 내용은 가운데 팝업(project-sections 팝업 그대로: ✕·바깥 누르면 닫힘, 열린 동안 뒤 화면 잠금) */}
-            <div className="project-sections">
+            <div className="project-sections skill-buttons">
+              {!s.meta && install && projects.length > 0 && (
+                <button type="button" className="btn btn-small btn-ghost" onClick={() => openInstall(s.name)}>
+                  프로젝트에 넣기
+                </button>
+              )}
               <details open={open === s.name} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open ? s.name : open === s.name ? null : open)}>
                 <summary>내용 보기</summary>
                 {open === s.name && (
