@@ -461,7 +461,7 @@ export function App() {
     if (!top) return;
     if (!settled) {
       window.clearTimeout(settleTimer.current);
-      settleTimer.current = window.setTimeout(() => checkMini(true), 250);
+      settleTimer.current = window.setTimeout(() => checkMini(true), 90);
     }
     const set = (m: boolean, t: boolean) => {
       stageRef.current = { mini: m, tiny: t };
@@ -474,7 +474,8 @@ export function App() {
     setBarOn(bar);
     if (!bar) setUsageOpen(false);
     const now = stageRef.current;
-    if (window.scrollY <= 2) return settled || !now.mini ? set(false, false) : undefined;
+    // v0.6.81 소유자 "사무실 펴지는 반응이 느려": 맨 위에 닿으면 기다리지 않고 바로 편다(맨 위라 글이 밀려 흔들릴 일이 없다)
+    if (window.scrollY <= 2) return set(false, false);
     if (top.getBoundingClientRect().bottom >= 46) return; // 얇은 머리 높이(--mini-h)와 같게
     const office = document.querySelector<HTMLElement>('.stage .office');
     const h = office ? office.offsetHeight : 0;
