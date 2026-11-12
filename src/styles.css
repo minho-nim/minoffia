@@ -6350,3 +6350,124 @@ html.popup-open .project-sections > details[open] * {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* 스킬 지도 휴대폰(v0.6.67): 방은 두 칸, 타일은 작게, 프로젝트는 표 대신 한 줄 카드 */
+.skill-proj-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 6px;
+}
+@media (max-width: 700px) {
+  .skill-matrix-wrap {
+    display: none;
+  }
+  .skill-proj-cards {
+    display: grid;
+  }
+  .skill-rooms {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .skill-room {
+    padding: 8px;
+    gap: 6px;
+  }
+  .skill-room h4 {
+    font-size: 0.82rem;
+  }
+  .skill-tile {
+    padding: 6px 8px;
+  }
+  .skill-tile b {
+    font-size: 0.8rem;
+  }
+  .tile-meta {
+    font-size: 0.72rem;
+  }
+}
+.skill-proj-cards > li > details {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.skill-proj-cards summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.88rem;
+}
+.skill-proj-cards summary::-webkit-details-marker {
+  display: none;
+}
+.spc-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.spc-count {
+  display: inline-flex;
+  gap: 8px;
+  flex: none;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.spc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 10px 10px;
+}
+.spc-chip {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.spc-count .mark-same,
+.spc-chip.mark-same {
+  color: var(--ok);
+}
+.spc-count .mark-old,
+.spc-chip.mark-old {
+  color: var(--warn);
+}
+.spc-count .mark-extra,
+.spc-chip.mark-extra {
+  color: var(--accent);
+}
+.spc-count .mark-none {
+  color: var(--muted);
+}
+
+/* 스킬 지도 세 보기(v0.6.67): 간략·자세히·구조도 */
+.skill-map-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.skill-brief-btn {
+  all: unset;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  cursor: pointer;
+}
+.skill-brief-btn:disabled {
+  cursor: default;
+}
+.skill-brief-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.skill-tree .file-tree {
+  margin-top: 6px;
+}
