@@ -17,6 +17,7 @@ import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
+import { ProjectSkills } from './components/ProjectSkills';
 import { SKILLS_REPO, skillUsage, toSkillView } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
@@ -335,6 +336,10 @@ export function App() {
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
+  // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다(2분 동안 다시 안 읽음)
+  const skillsData = useRef<{ at: number; p: Promise<{ files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData }> } | null>(null);
+  // 스킬 탭에서 넣기 창을 바로 열 스킬(프로젝트 칸에서 넘어올 때)
+  const [skillToInstall, setSkillToInstall] = useState<{ name: string; n: number } | null>(null);
   // 반복되는 문제 → 스킬 만들기 창(v0.6.59)
   const [skillPrefill, setSkillPrefill] = useState<{ what: string; rules: string; n: number } | null>(null);
   // 업무 보기 방식(v0.6.54): 목록 | 보드. 이 기기에만 기억(화면 편의)
@@ -2149,6 +2154,33 @@ export function App() {
               onOpenTask={(id) => showTask(id)}
               demoUrlOf={(p) => demoUrls[p.id] ?? null}
               lastDeployOf={(p) => (p.repo ? snap.workflow.deployments.filter((d) => d.repo.toLowerCase() === p.repo!.toLowerCase()).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null : null)}
+              renderSkills={
+                store.skills && store.skillMap
+                  ? (p) => (
+                      <ProjectSkills
+                        projectId={p.id}
+                        load={() => {
+                          if (!skillsData.current || Date.now() - skillsData.current.at > 120_000) {
+                            const p2 = Promise.all([store.skills!(), store.skillMap!()]).then(([files, map]) => ({ files, map }));
+                            p2.catch(() => {
+                              skillsData.current = null;
+                            });
+                            skillsData.current = { at: Date.now(), p: p2 };
+                          }
+                          return skillsData.current.p;
+                        }}
+                        onManage={(skill) => {
+                          // 팝업을 닫고(뒤 화면 잠금도 풀고) 스킬 탭으로. 이름이 있으면 그 스킬의 넣기 창을 연다
+                          document.querySelectorAll<HTMLDetailsElement>('.project-sections > details[open]').forEach((d) => (d.open = false));
+                          document.documentElement.classList.remove('popup-open');
+                          skillsData.current = null;
+                          if (skill) setSkillToInstall((cur) => ({ name: skill, n: (cur?.n ?? 0) + 1 }));
+                          setTab('skills');
+                        }}
+                      />
+                    )
+                  : undefined
+              }
               renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
               renderHealth={renderHealth}
               renderStructure={renderStructure}
@@ -2177,6 +2209,7 @@ export function App() {
               usage={skillUsage(snap.workflow.results)}
               mapLoad={store.skillMap ? () => store.skillMap!() : undefined}
               prefill={skillPrefill}
+              installRequest={skillToInstall}
               projects={snap.projects
                 .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')
                 .map((p) => ({ id: p.id, name: p.name, repo: p.repo! }))}

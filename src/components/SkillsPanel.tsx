@@ -13,7 +13,7 @@ export interface SkillProject {
   repo: string;
 }
 
-export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill, mapLoad }: {
+export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill, mapLoad, installRequest }: {
   load: () => Promise<SkillFile[]>;
   onSend: (text: string) => void;
   canRequest: boolean;
@@ -27,6 +27,8 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   prefill?: { what: string; rules: string; n: number } | null;
   /** 그림 지도용 프로젝트별 스킬 상태(v0.6.62) */
   mapLoad?: () => Promise<import('../domain/skills').SkillMapData>;
+  /** 다른 곳(프로젝트 칸)에서 넘어온 넣기 창 열기(v0.6.66). n이 바뀔 때마다 */
+  installRequest?: { name: string; n: number } | null;
 }) {
   // 스킬 지도(v0.6.63 소유자 "프로젝트의 지도 보기처럼"): 앱 지도와 같은 큰 팝업으로 연다. 열 때만 프로젝트 상태를 읽는다
   const [mapOpen, setMapOpen] = useState(false);
@@ -55,6 +57,9 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   };
   // 빼기는 들어 있는 곳(들어 있음·옛 버전) 중 고른 곳만(v0.6.60)
   const removable = [...picked].filter((id) => states?.[id] === 'same' || states?.[id] === 'old');
+  useEffect(() => {
+    if (installRequest && install && projects.length > 0) openInstall(installRequest.name);
+  }, [installRequest?.n]);
   const doInstall = async (mode: 'add' | 'remove' = 'add') => {
     const ids = mode === 'remove' ? removable : [...picked];
     if (!installFor || !install || ids.length === 0) return;

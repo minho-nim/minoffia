@@ -6309,3 +6309,44 @@ html.popup-open .project-sections > details[open] * {
   margin: -30px 44px 10px 0;
   font-size: 16px;
 }
+
+/* 프로젝트 칸 '스킬'(v0.6.66) */
+.project-skills {
+  display: grid;
+  gap: 8px;
+}
+.pskill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.pskill-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+.pskill-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pskill-mark.mark-same {
+  color: var(--ok);
+}
+.pskill-mark.mark-old {
+  color: var(--warn);
+}
+.pskill-mark.mark-extra {
+  color: var(--accent);
+}
+.pskill-sub {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.pskill-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
