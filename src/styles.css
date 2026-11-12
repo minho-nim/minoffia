@@ -5568,7 +5568,9 @@ a.project-site {
     right: max(12px, env(safe-area-inset-right));
     bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
     z-index: 460;
-    align-items: center;
+    /* 위로 펼친다(v0.6.75 소유자 "버튼 위로 펼쳐지게"): 맨 아래 '…'/✕, 그 위로 사무실 · 클라우드 · 역할 */
+    flex-direction: column;
+    align-items: flex-end;
     gap: 6px;
   }
   .office-dock-btn {
