@@ -80,9 +80,41 @@ export function toSkillView(f: SkillFile): SkillView {
   };
 }
 
-/** 스킬 업무 요청 글(대화창에 미리 채운다). 결과는 늘 PR로 올라가 올리기 승인을 거친다 */
-export function skillRequestText(kind: 'make' | 'find'): string {
-  return kind === 'make'
-    ? '@Claude 스킬 만들기: (여기에 무엇을 자동으로 할지 적어 주세요). skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md를 만들어. 설명(description)·제목·본문은 쉬운 한국어로. 다른 파일은 고치지 마.'
-    : '@Claude 스킬 찾기: (여기에 무엇에 쓸 스킬인지 적어 주세요). find-skills로 후보 3개를 찾아 출처·설치 수·라이선스·위험(외부 접속·비밀값·유료 API)을 결과 요약에 적고, 가장 좋은 1개만 내용을 읽은 뒤 .claude/skills/에 라이선스 파일과 함께 넣어. 설명(description)과 제목은 쉬운 한국어로 바꿔 둬. -g·-y 금지, 다른 파일은 고치지 마.';
+/** 스킬 만들기·찾기 입력 창(v0.6.57 소유자 "채팅에 글씨가 한 번에 들어감, 편하게 입력"): 칸에 쓴 것만 짧게 모아 대화로 보낸다.
+ *  지킬 것(만드는 방식·한국어·다른 파일 금지·-g/-y 금지)은 마지막 한 줄로 붙인다(대화에서도 그대로 보인다). */
+export interface SkillForm {
+  kind: 'make' | 'find';
+  what: string;
+  when?: string;
+  rules?: string;
+  areas?: string[];
+}
+
+export const SKILL_PRESETS: { label: string; what: string; when: string; rules: string }[] = [
+  { label: '배포 순서', what: '변경을 운영까지 올리는 순서를 자동으로 진행', when: '"배포해줘", "올려줘"라고 할 때', rules: '브랜치 → 시험·빌드 → PR → 검사 통과 기다리기 → 병합 → 운영 배포 → 운영 버전 확인 → 데모 갱신' },
+  { label: '개발일지 쓰기', what: '변경 기록을 날짜별 개발일지 양식으로 정리', when: '"개발일지 정리해줘"라고 할 때', rules: '양식: 날짜·버전·제목, 작업 목적, 주요 변경, 접는 세부 정보(이유·확인 결과·다음 작업). 쉬운 한국어' },
+  { label: '운영 점검', what: '최근 실패한 AI 작업·Gemini 실패율·Actions 사용량을 한 번에 보고', when: '"운영 점검해줘", "요즘 상태 어때"라고 할 때', rules: '읽기만 한다(고치지 않음). 문제마다 원인 추정과 다음 할 일 한 줄' },
+];
+
+export const SKILL_AREAS = ['디자인', '시험', '배포', '문서', '코드 품질', '자동화'];
+
+const clean = (s: string | undefined, n: number) => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+
+export function skillRequest(f: SkillForm): string {
+  const what = clean(f.what, 200);
+  if (f.kind === 'find') {
+    const areas = (f.areas ?? []).filter((a) => SKILL_AREAS.includes(a));
+    return [
+      `@Claude 스킬 찾기: ${what}`,
+      areas.length ? `분야: ${areas.join(', ')}` : '',
+      '(find-skills로 후보 3개를 출처·설치 수·라이선스·위험과 함께 요약 · 가장 좋은 1개만 읽고 .claude/skills/에 라이선스와 함께 · 제목·설명은 한국어 · -g/-y 금지 · 다른 파일 고치지 않기)',
+    ].filter(Boolean).join('\n');
+  }
+  const rules = (f.rules ?? '').split('\n').map((l) => l.trim()).filter(Boolean).join(' / ').slice(0, 600);
+  return [
+    `@Claude 스킬 만들기: ${what}`,
+    clean(f.when, 200) ? `언제: ${clean(f.when, 200)}` : '',
+    rules ? `지킬 것: ${rules}` : '',
+    '(skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md · 제목·설명·본문은 쉬운 한국어 · 다른 파일 고치지 않기)',
+  ].filter(Boolean).join('\n');
 }

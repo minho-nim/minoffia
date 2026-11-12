@@ -17,7 +17,6 @@ import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
-import { skillRequestText } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
@@ -365,7 +364,7 @@ export function App() {
   /** 업무 카드에서 확인 질문에 답한 것을 대화창에도 올린다(v0.4.90) */
   const [chatEcho, setChatEcho] = useState<{ n: number; taskId: string; projectId: string; text: string } | null>(null);
   /** 다른 탭에서 대화 입력칸으로 넘기는 초안 */
-  const [draft, setDraft] = useState<{ text: string; n: number; taskId?: string } | null>(null);
+  const [draft, setDraft] = useState<{ text: string; n: number; taskId?: string; send?: boolean } | null>(null);
   // 얇은 머리·작은 사무실(v0.4.14~, v0.4.35): 켜기 = 위 머리가 화면 밖으로 나갔고, 사무실이 줄어든 뒤에도
   // 페이지가 머리 높이 넘게 내려갈 수 있을 때(짧은 페이지에서 아래 빈 공간이 생기거나 깜빡이지 않게).
   // 끄기 = 맨 위에 닿았을 때만.
@@ -2150,12 +2149,12 @@ export function App() {
             <SkillsPanel
               load={() => store.skills!()}
               canRequest={!!officeProject}
-              onRequest={(kind) => {
+              onSend={(text) => {
                 if (!officeProject) return;
-                // 스킬 업무는 이 저장소(minoffia) 프로젝트 대화창에서 접수한다(결과는 늘 PR·올리기 승인)
+                // 스킬 업무는 이 저장소(minoffia) 프로젝트 대화창에서 접수한다(결과는 늘 PR·올리기 승인). 입력 창에서 쓴 글을 바로 보낸다(v0.6.57)
                 setChatProject(officeProject.id);
                 setTab('chat');
-                setDraft((d) => ({ text: skillRequestText(kind), n: (d?.n ?? 0) + 1 }));
+                setDraft((d) => ({ text, n: (d?.n ?? 0) + 1, send: true }));
               }}
             />
           )}
