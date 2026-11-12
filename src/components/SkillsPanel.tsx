@@ -28,8 +28,9 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   /** 그림 지도용 프로젝트별 스킬 상태(v0.6.62) */
   mapLoad?: () => Promise<import('../domain/skills').SkillMapData>;
 }) {
-  // 목록 | 지도(v0.6.62). 지도는 열 때만 프로젝트 상태를 읽는다
-  const [view, setView] = useState<'list' | 'map'>('list');
+  // 스킬 지도(v0.6.63 소유자 "프로젝트의 지도 보기처럼"): 앱 지도와 같은 큰 팝업으로 연다. 열 때만 프로젝트 상태를 읽는다
+  const [mapOpen, setMapOpen] = useState(false);
+  const view = 'list' as const;
   // 프로젝트에 넣기 창(v0.6.58): 스킬 하나를 골라 프로젝트마다 들어 있는지 보고, 고른 곳에 넣는다
   const [installFor, setInstallFor] = useState<string | null>(null);
   const [states, setStates] = useState<Record<string, SkillInstallState> | null>(null);
@@ -320,17 +321,33 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
       {files === null && <p className="muted small">스킬을 읽는 중…</p>}
       {files && skills.length === 0 && !error && <p className="empty">아직 스킬이 없어요.</p>}
       {skills.length > 0 && (
-        <span className="view-toggle skill-view" role="group" aria-label="스킬 보기 방식">
-          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>
-            목록
-          </button>
-          <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>
-            지도
-          </button>
-        </span>
+        <button type="button" className="btn btn-small btn-primary skill-map-open" onClick={() => setMapOpen(true)}>
+          스킬 지도 보기
+        </button>
       )}
-      {view === 'map' && skills.length > 0 && (
-        <SkillMap skills={skills} usage={usage} projects={projects} load={mapLoad} onPick={install && projects.length > 0 ? openInstall : undefined} />
+      {mapOpen && (
+        <div className="archify-modal" role="dialog" aria-label="스킬 지도" onClick={() => setMapOpen(false)}>
+          <div className="archify-box skill-map-box" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="archify-close" onClick={() => setMapOpen(false)} aria-label="닫기">
+              ×
+            </button>
+            <p className="appmap-title">스킬 지도</p>
+            <SkillMap
+              skills={skills}
+              usage={usage}
+              projects={projects}
+              load={mapLoad}
+              onPick={
+                install && projects.length > 0
+                  ? (name) => {
+                      setMapOpen(false);
+                      openInstall(name);
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        </div>
       )}
       {view === 'list' && skills.length > 0 && (
         <div className="skill-map">

@@ -6283,3 +6283,29 @@ html.popup-open .project-sections > details[open] * {
   gap: 4px 12px;
   margin-top: 6px;
 }
+
+/* 스킬 지도 팝업(v0.6.63): 앱 지도와 같은 큰 팝업, 내용이 길면 그 안에서 스크롤 */
+.skill-map-open {
+  justify-self: start;
+  align-self: flex-start;
+  width: max-content;
+}
+.archify-box.skill-map-box {
+  width: min(1100px, 100%);
+  height: auto;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 14px 18px;
+}
+.skill-map-box .archify-close {
+  position: sticky;
+  top: 4px;
+  z-index: 1;
+}
+.skill-map-box > .appmap-title {
+  margin: -30px 44px 10px 0;
+  font-size: 16px;
+}
