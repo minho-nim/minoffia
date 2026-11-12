@@ -5559,10 +5559,7 @@ a.project-site {
 }
 @media (max-width: 1039px) {
   /* 오른쪽 아래 버튼 묶음(v0.6.73): 역할 · 클라우드 · 사무실(누르는 동안) */
-  .layout.tab-tasks > .office-dock,
-  .layout.tab-projects > .office-dock,
-  .layout.tab-team > .office-dock,
-  .layout.tab-settings > .office-dock {
+  .layout > .office-dock {
     display: inline-flex;
     position: fixed;
     right: max(12px, env(safe-area-inset-right));
@@ -6959,4 +6956,17 @@ html.popup-open .project-sections > details[open] * {
 .office-dock-more {
   min-width: 36px;
   font-weight: 700;
+}
+
+/* 휴대폰은 사무실 그림 위 '…' 대신 오른쪽 아래 '…'만(v0.6.77) */
+@media (max-width: 1039px) {
+  .office-map-btns {
+    display: none;
+  }
+}
+@media (max-width: 1039px) {
+  /* 대화 탭은 입력창 위에 띄운다(보내기 버튼을 가리지 않게) */
+  .layout.tab-chat > .office-dock {
+    bottom: calc(max(16px, calc(env(safe-area-inset-bottom) + 8px)) + 84px);
+  }
 }
