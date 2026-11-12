@@ -1,6 +1,6 @@
 // 사무실 지도(v0.6.71, 소유자 "역할 지도, 클라우드 관계도도"): 미노피아 전체 지도. 역할 = 누가 업무의 어디를 맡나(승인 3개),
 // 클라우드 = 서비스끼리 무엇이 오가나. 목록과 선은 지금 구조(CLAUDE.md·FLOW) 그대로 코드에 적어 두고, 상태는 앱이 이미 가진 확인된 것만 붙인다.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LineSvg, NetView, type NetStyle } from './RelationMap';
 import type { RelEdge, RelNode } from '../domain/relation';
 
@@ -86,6 +86,8 @@ export function OfficeMap({ tab, state = {} }: { tab: 'role' | 'cloud'; state?: 
     return { rows: rows.map((r) => r.map(node)), edges: CLOUD.links.map(([a, b]): RelEdge => [a, b, 1]), hint: '위에서 아래로: 휴대폰 → 화면·서버·저장소 → 일하는 곳과 외부 서비스. 상자를 누르면 무엇이 오가는지 옆에 나와요.' };
   }, [tab, state.lastDeploy, state.onLeave?.join()]);
   const [width, setWidth] = useState(360);
+  const roRef = useRef<ResizeObserver | null>(null);
+  useEffect(() => () => roRef.current?.disconnect(), []);
   const selDesc = sel ? D.nodes.find((n) => n[0] === sel) : null;
   const selLinks = sel && tab === 'cloud' ? CLOUD.links.filter(([a, b]) => a === sel || b === sel) : [];
   const nameOf = (id: string) => D.nodes.find((n) => n[0] === id)?.[1] ?? id;
@@ -110,7 +112,15 @@ export function OfficeMap({ tab, state = {} }: { tab: 'role' | 'cloud'; state?: 
             <div
               className="rel-graph"
               ref={(el) => {
-                if (el && Math.abs(el.clientWidth - width) > 20) setWidth(el.clientWidth);
+                if (!el) {
+                  roRef.current?.disconnect();
+                  roRef.current = null;
+                  return;
+                }
+                if (roRef.current) return;
+                // 처음 크기와 화면 크기가 바뀔 때마다 다시 잰다
+                roRef.current = new ResizeObserver(() => setWidth(el.clientWidth));
+                roRef.current.observe(el);
               }}
             >
               <LineSvg rows={line.rows} edges={line.edges} sel={sel} width={width} onPress={(n) => setSel((s) => (s === n.id ? null : n.id))} />
