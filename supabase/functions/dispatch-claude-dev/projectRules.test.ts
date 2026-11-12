@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BASE_RULES as APP_BASE_RULES } from '../../../src/domain/baseRules';
 import { BASE_RULES, cleanRules, loadRules, MAX_NEW_RULES, previewUrl, rulesSection } from './projectRules';
 
-const COPIES = ['draft-spec', 'dispatch-claude', 'submit-plan', 'submit-result', 'review-result', 'create-repo', 'dispatch-gemini-dev', 'draft-plan'];
+const COPIES = ['draft-spec', 'dispatch-claude', 'submit-plan', 'submit-result', 'review-result', 'create-repo', 'dispatch-gemini-dev', 'draft-plan', 'codex-linear'];
 
 describe('프로젝트에서 지켜야 할 것(v0.4.57)', () => {
   it('AI가 보낸 후보를 한 줄·2~200자·중복 없이 최대 5개로 다듬는다', () => {

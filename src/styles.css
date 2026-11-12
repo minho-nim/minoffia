@@ -6130,3 +6130,13 @@ html.popup-open .project-sections > details[open] * {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* 도구 스킬 접기(v0.6.59) */
+.skill-tools > summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px 2px;
+}
+.skill-tools[open] > summary {
+  margin-bottom: 8px;
+}

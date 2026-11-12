@@ -128,3 +128,22 @@ export function skillRequest(f: SkillForm): string {
     '(skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md · 제목·설명·본문은 쉬운 한국어 · 다른 파일 고치지 않기)',
   ].filter(Boolean).join('\n');
 }
+
+/** 결과 요약에서 AI가 적은 "쓴 스킬: a, b"(기본 규칙, v0.6.59)·"스킬 확인: x"(시험용)를 읽는다. 이름 규칙에 맞는 것만 */
+export function usedSkills(summary: string): string[] {
+  const out = new Set<string>();
+  for (const m of summary.matchAll(/^(?:쓴 스킬|스킬 확인)\s*[:：]\s*(.+)$/gm)) {
+    for (const n of m[1].split(/[,，、\s]+/)) {
+      const name = n.trim().replace(/[`'".]/g, '').toLowerCase();
+      if (/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) out.add(name);
+    }
+  }
+  return [...out];
+}
+
+/** 스킬별로 쓰인 결과 수(같은 업무의 여러 결과는 한 번만) */
+export function skillUsage(results: { taskId: string; summary: string }[]): Map<string, number> {
+  const seen = new Map<string, Set<string>>();
+  for (const r of results) for (const n of usedSkills(r.summary)) seen.set(n, (seen.get(n) ?? new Set()).add(r.taskId));
+  return new Map([...seen].map(([n, s]) => [n, s.size]));
+}

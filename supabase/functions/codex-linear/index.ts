@@ -3,6 +3,7 @@
 //   기본은 위임(delegateId, Linear 공식 에이전트 방식). CODEX_LINEAR_TRIGGER=mention이면 대신 @codex 멘션 댓글로 시작한다.
 // action 'status': 그 이슈의 Codex 댓글만 읽어 진행 소식·작업 주소·시작 실패(한도·환경 없음)를 배정 기록에 남긴다(완료 판정은 사람이).
 // 비밀값: LINEAR_API_KEY(소유자 계정 개인 키)는 secrets에만. 이슈 생성은 소유자 이름으로 된다.
+import { BASE_RULES } from './projectRules.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { dispatchTrackedIssue, type LinearIssue } from './trackedDispatch.ts';
 import { buildServerHandoff } from './serverHandoff.ts';
@@ -72,7 +73,8 @@ async function serverText(admin: any, a: { task_id: string; plan_revision: numbe
     spec: { revision: spec.revision, final_prompt: spec.final_prompt ?? '', change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '' },
     item: { id: String(item.id), title: String(item.title ?? ''), goal: String(item.goal ?? ''), acceptance_tests: item.acceptance_tests as string[] | undefined, preserve_constraints: item.preserve_constraints as string[] | undefined },
     baseRevision: String(plan?.target_base_revision ?? ''),
-    rules: (rules ?? []).map((r: { rule: string }) => r.rule),
+    // 기본 규칙(모든 프로젝트)도 함께(v0.6.59: 서버가 시작한 Codex에는 프로젝트 규칙만 가고 기본 규칙이 빠져 있었다)
+    rules: [...new Set([...BASE_RULES, ...(rules ?? []).map((r: { rule: string }) => r.rule)])],
     attachmentCount: count ?? 0,
   });
 }
