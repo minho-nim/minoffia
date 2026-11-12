@@ -136,7 +136,9 @@ export interface OfficeStore {
   /** 그림 지도: 프로젝트마다 들어 있는 스킬(v0.6.62) */
   skillMap?(): Promise<import('../domain/skills').SkillMapData>;
   /** 서버에 저장해 둔 스킬 목록·상태(v0.6.70). 없으면 null */
-  skillCache?(): Promise<{ files: import('../domain/skills').SkillFile[]; map: import('../domain/skills').SkillMapData; updatedAt: string } | null>;
+  skillCache?(): Promise<{ files: import('../domain/skills').SkillFile[]; map: import('../domain/skills').SkillMapData; mcp: Record<string, string[]>; updatedAt: string } | null>;
+  /** 프로젝트마다 저장소 .mcp.json의 MCP 이름(v0.6.71, 값은 읽지 않음) */
+  mcpMap?(): Promise<Record<string, string[]>>;
   /** 고른 프로젝트에 스킬 넣기(Actions '스킬 넣기'를 프로젝트마다 시작) */
   installSkill?(skill: string, projectIds: string[], mode?: 'add' | 'remove'): Promise<{ started: string[]; failed: string[] }>;
   /** 프로젝트 디자인 기준(v0.5.56, Supabase 모드에서만) */
