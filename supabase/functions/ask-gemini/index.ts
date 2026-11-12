@@ -22,8 +22,10 @@ const RESEARCH_HARD_CAP = 50;
 const RESEARCH_DEFAULT_CAP = 20;
 /** 검색 연결 무료 한도가 있는 모델(GEMINI_RESEARCH_MODEL로 바꿈) */
 // v0.6.14: 2.x 모델은 Google에서 없어짐(404, 2026-11-09 기록). 오류 안내가 권한 새 모델을 먼저 시도한다
-const RESEARCH_MODEL = 'gemini-3.8-flash';
-const RESEARCH_FALLBACKS = ['gemini-3.5-flash'];
+// v0.6.83 소유자 "제미나이 웹 검색 왜 안돼?": 3.x 모델은 무료 키로 검색 연결이 한 번도 안 됐다(59번 모두 429, 2026-11-12 기록).
+// 예전에 무료 검색 한도가 있던 2.x 모델을 먼저 묻고, 안 되면 3.x로. 비용 0(무료 키), 실패하면 지금처럼 안내만.
+const RESEARCH_MODEL = 'gemini-2.5-flash';
+const RESEARCH_FALLBACKS = ['gemini-2.0-flash', 'gemini-3.8-flash', 'gemini-3.5-flash'];
 
 /** 검색 연결 답의 출처(groundingMetadata.groundingChunks[].web) */
 function sourcesOf(data: unknown, into: Map<string, string>) {
