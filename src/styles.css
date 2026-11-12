@@ -6140,3 +6140,32 @@ html.popup-open .project-sections > details[open] * {
 .skill-tools[open] > summary {
   margin-bottom: 8px;
 }
+
+/* 스킬 지도(v0.6.61): 분류 칩 + 검색, 분류별 묶음 */
+.skill-map {
+  display: grid;
+  gap: 8px;
+}
+.skill-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.skill-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+.skill-group {
+  display: grid;
+  gap: 8px;
+}
+.skill-group-title {
+  margin: 4px 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}

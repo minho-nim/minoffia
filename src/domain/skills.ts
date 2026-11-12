@@ -37,10 +37,30 @@ export interface SkillView {
   meta: boolean;
   /** 새 프로젝트 저장소를 만들 때 자동으로 넣는 기본 스킬 */
   isDefault: boolean;
+  /** 스킬 지도의 분류(v0.6.61) */
+  category: SkillCategory;
+}
+
+/** 스킬 지도 분류(v0.6.61 소유자 "스킬을 분류해서 빨리 찾게"). 앞머리에 적은 분류가 먼저, 없으면 제목·설명 낱말로 고른다(규칙만) */
+export const SKILL_CATEGORIES = ['배포', '화면·디자인', '시험·점검', '문서', '데이터·DB', '보안', '도구', '기타'] as const;
+export type SkillCategory = (typeof SKILL_CATEGORIES)[number];
+const CATEGORY_WORDS: [SkillCategory, RegExp][] = [
+  ['배포', /배포|올리기|릴리스|release|deploy|PR|병합/i],
+  ['보안', /보안|비밀|토큰|권한|security|secret|auth/i],
+  ['데이터·DB', /DB|데이터베이스|마이그레이션|supabase|sql|database/i],
+  ['시험·점검', /시험|테스트|점검|검사|재현|test|check|audit|lint/i],
+  ['화면·디자인', /화면|디자인|UI|UX|레이아웃|스타일|접근성|design|css/i],
+  ['문서', /문서|일지|README|기록|변경 기록|보고|docs|changelog/i],
+];
+export function skillCategory(v: { meta: boolean; category: string; title: string; description: string }): SkillCategory {
+  if (v.meta) return '도구';
+  if ((SKILL_CATEGORIES as readonly string[]).includes(v.category)) return v.category as SkillCategory;
+  const text = `${v.title} ${v.description}`;
+  return CATEGORY_WORDS.find(([, re]) => re.test(text))?.[0] ?? '기타';
 }
 
 /** 앞머리(--- name/description ---)와 본문을 나눈다. 앞머리가 없으면 첫 제목·첫 문단을 쓴다 */
-export function parseSkillMd(md: string): { title: string; description: string; body: string; isDefault: boolean } {
+export function parseSkillMd(md: string): { title: string; description: string; body: string; isDefault: boolean; category: string } {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   const front = m ? m[1] : '';
   const body = (m ? m[2] : md).trim();
@@ -53,7 +73,9 @@ export function parseSkillMd(md: string): { title: string; description: string; 
   // 한글 제목(# 스킬 찾기)이 있으면 그걸 이름으로 보인다(v0.6.56 소유자 "스킬은 한글로 통일"). 없으면 앞머리 name
   // 새 프로젝트에 늘 넣는 기본 스킬(v0.6.60): 표준 앞머리 metadata 아래 minoffia-default: "true"
   const isDefault = /^\s+minoffia-default:\s*["']?true["']?\s*$/m.test(front);
-  return { title: /[가-힣]/.test(heading) ? heading : field('name') || heading, description: field('description') || firstPara.slice(0, 300), body, isDefault };
+  // 분류(v0.6.61 스킬 지도): 표준 앞머리 metadata 아래 minoffia-category: 배포
+  const category = front.match(/^\s+minoffia-category:\s*["']?([^"'\n]+?)["']?\s*$/m)?.[1]?.trim() ?? '';
+  return { title: /[가-힣]/.test(heading) ? heading : field('name') || heading, description: field('description') || firstPara.slice(0, 300), body, isDefault, category };
 }
 
 const RISK_RULES: [SkillRisk, RegExp][] = [
@@ -78,7 +100,7 @@ export function skillSource(md: string, license: string): { license: string; sou
 }
 
 export function toSkillView(f: SkillFile): SkillView {
-  const { title, description, body, isDefault } = parseSkillMd(f.skillMd);
+  const { title, description, body, isDefault, category } = parseSkillMd(f.skillMd);
   const { license, source } = skillSource(f.skillMd, f.license);
   return {
     name: f.name,
@@ -92,6 +114,7 @@ export function toSkillView(f: SkillFile): SkillView {
     scripts: f.files.filter((x) => /\.(py|js|mjs|ts|sh)$/.test(x)).length,
     meta: f.meta === true,
     isDefault: isDefault && f.meta !== true,
+    category: skillCategory({ meta: f.meta === true, category, title: title || f.name, description }),
   };
 }
 
@@ -105,6 +128,8 @@ export interface SkillForm {
   areas?: string[];
   /** 새 프로젝트에 늘 넣기(v0.6.60) */
   isDefault?: boolean;
+  /** 스킬 지도 분류(v0.6.61, 비우면 낱말로 고름) */
+  category?: string;
 }
 
 export const SKILL_PRESETS: { label: string; what: string; when: string; rules: string }[] = [
@@ -125,6 +150,7 @@ export function skillRequest(f: SkillForm): string {
       `@Claude 스킬 찾기: ${what}`,
       areas.length ? `분야: ${areas.join(', ')}` : '',
       '(find-skills로 후보 3개를 출처·설치 수·라이선스·위험과 함께 요약 · 가장 좋은 1개만 읽고 .claude/skills/에 라이선스와 함께 · 제목·설명은 한국어 · -g/-y 금지 · 다른 파일 고치지 않기)',
+      '(짧게: 설명은 "무엇을·언제" 2~3줄로 고쳐 두기 · 앞머리 metadata 아래 minoffia-category에 분류 하나)',
     ].filter(Boolean).join('\n');
   }
   const rules = (f.rules ?? '').split('\n').map((l) => l.trim()).filter(Boolean).join(' / ').slice(0, 600);
@@ -133,7 +159,10 @@ export function skillRequest(f: SkillForm): string {
     clean(f.when, 200) ? `언제: ${clean(f.when, 200)}` : '',
     rules ? `지킬 것: ${rules}` : '',
     f.isDefault ? '새 프로젝트에 늘 넣기: 앞머리에 metadata: 아래 minoffia-default: "true"' : '',
+    f.category && (SKILL_CATEGORIES as readonly string[]).includes(f.category) && f.category !== '도구' ? `분류: ${f.category} (앞머리 metadata: 아래 minoffia-category: ${f.category})` : '',
     '(skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md · 제목·설명·본문은 쉬운 한국어 · 다른 파일 고치지 않기)',
+    // 토큰 아끼기(v0.6.61): 설명은 늘 읽히고 본문은 쓸 때만 읽힌다
+    '(짧게: 설명은 "무엇을·언제" 2~3줄 · 본문 100줄 이내 · 긴 점검표·예시는 references/ 파일로 나누기)',
   ].filter(Boolean).join('\n');
 }
 
