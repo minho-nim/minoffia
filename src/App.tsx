@@ -2148,6 +2148,11 @@ export function App() {
           {tab === 'skills' && store.skills && (
             <SkillsPanel
               load={() => store.skills!()}
+              projects={snap.projects
+                .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')
+                .map((p) => ({ id: p.id, name: p.name, repo: p.repo! }))}
+              status={store.skillStatus ? (name) => store.skillStatus!(name) : undefined}
+              install={store.installSkill ? (name, ids) => store.installSkill!(name, ids) : undefined}
               canRequest={!!officeProject}
               onSend={(text) => {
                 if (!officeProject) return;

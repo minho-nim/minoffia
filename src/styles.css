@@ -6104,3 +6104,29 @@ html.popup-open .project-sections > details[open] * {
   border-radius: 8px;
   background: var(--bg);
 }
+
+/* 프로젝트에 넣기(v0.6.58) */
+.skill-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.skill-projects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.skill-projects li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.skill-projects label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

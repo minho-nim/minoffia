@@ -131,6 +131,10 @@ export interface OfficeStore {
   pagesUrls?(projectIds: string[]): Promise<Record<string, string>>;
   /** 이 저장소(.claude/skills)의 스킬 목록(v0.6.55, AI 호출 없음) */
   skills?(): Promise<import('../domain/skills').SkillFile[]>;
+  /** 프로젝트마다 이 스킬이 들어 있는지(v0.6.58) */
+  skillStatus?(skill: string): Promise<Record<string, import('../domain/skills').SkillInstallState>>;
+  /** 고른 프로젝트에 스킬 넣기(Actions '스킬 넣기'를 프로젝트마다 시작) */
+  installSkill?(skill: string, projectIds: string[]): Promise<{ started: string[]; failed: string[] }>;
   /** 프로젝트 디자인 기준(v0.5.56, Supabase 모드에서만) */
   designStandard?: { draft(projectId: string): Promise<string>; approve(projectId: string, md: string): Promise<void> };
   /** 디자인 자동 검사(v0.5.56, Supabase 모드에서만) */
