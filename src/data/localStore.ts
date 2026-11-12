@@ -373,6 +373,11 @@ export function createLocalStore(): OfficeStore {
         { name: 'report-format', files: ['SKILL.md'], license: '', skillMd: '---\nname: report-format\ndescription: 작업 결과를 보고할 때 쓴다. 결과 요약 맨 끝에 스킬 확인 한 줄을 넣는다.\n---\n\n# 작업 보고 형식\n\n## 지시서용 요약\n\n- 요약 맨 끝 줄에 `스킬 확인: report-format`을 넣는다.' },
       ];
     },
+    // 데모 지도: 예시 프로젝트에 시험용 스킬이 하나 들어 있는 것처럼(v0.6.62)
+    async skillMap() {
+      const first = (await this.load()).projects[0];
+      return first ? { [first.id]: { 'report-format': 'same' as const } } : {};
+    },
     async skillStatus() {
       return {};
     },

@@ -714,6 +714,15 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       for (const [id, v] of Object.entries((data.status ?? {}) as Record<string, unknown>)) if (v === 'same' || v === 'old' || v === 'none') out[id] = v;
       return out;
     },
+    async skillMap() {
+      const data = await invoke('repo-tree', { action: 'skillMap' });
+      const out: Record<string, Record<string, 'same' | 'old' | 'extra'>> = {};
+      for (const [id, m] of Object.entries((data.map ?? {}) as Record<string, Record<string, unknown>>)) {
+        out[id] = {};
+        for (const [n, v] of Object.entries(m ?? {})) if (v === 'same' || v === 'old' || v === 'extra') out[id][n] = v;
+      }
+      return out;
+    },
     async installSkill(skill, projectIds, mode = 'add') {
       const data = await invoke('repo-tree', { action: 'skillInstall', skill, projectIds, mode });
       const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);

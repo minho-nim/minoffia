@@ -184,3 +184,12 @@ export function skillUsage(results: { taskId: string; summary: string }[]): Map<
   for (const r of results) for (const n of usedSkills(r.summary)) seen.set(n, (seen.get(n) ?? new Set()).add(r.taskId));
   return new Map([...seen].map(([n, s]) => [n, s.size]));
 }
+
+/** 그림 지도의 프로젝트별 스킬 상태(v0.6.62): same = 모음과 같음, old = 옛 버전, extra = 모음에 없는(직접 넣은) 스킬 */
+export type SkillMapState = 'same' | 'old' | 'extra';
+export type SkillMapData = Record<string, Record<string, SkillMapState>>;
+
+/** 스킬별로 들어간 프로젝트 수(같음·옛 버전 모두) */
+export function installedCount(map: SkillMapData, name: string): number {
+  return Object.values(map).filter((m) => m[name] === 'same' || m[name] === 'old').length;
+}
