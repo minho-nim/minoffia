@@ -6444,28 +6444,3 @@ html.popup-open .project-sections > details[open] * {
   color: var(--muted);
 }
 
-/* 스킬 지도 세 보기(v0.6.67): 간략·자세히·구조도 */
-.skill-map-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 0 0 10px;
-}
-.skill-brief-btn {
-  all: unset;
-  display: grid;
-  gap: 2px;
-  width: 100%;
-  cursor: pointer;
-}
-.skill-brief-btn:disabled {
-  cursor: default;
-}
-.skill-brief-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-.skill-tree .file-tree {
-  margin-top: 6px;
-}

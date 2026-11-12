@@ -1,7 +1,7 @@
 // 앱 점검·기본 지도(floorplan 1단계, v0.5.53, 소유자 목록 28번): 프로젝트 카드에서 점검을 시작하고 결과를 쉬운 한국어로 본다.
 // 점검은 GitHub Actions가 AI 없이 돌린다(2~5분). 지도는 floorplan이 만든 HTML이라 앱과 분리된 창(sandbox, 같은 출처 권한 없음)에서만 연다.
 import { useEffect, useRef, useState } from 'react';
-import { APP_MAP_KINDS, koIssue, type AppMap, type HealthReport } from '../domain/healthText';
+import { appMapKinds, koIssue, type AppMap, type HealthReport } from '../domain/healthText';
 
 export type HealthApi = {
   load: () => Promise<HealthReport | null>;
@@ -14,7 +14,7 @@ export function AppMapView({ map }: { map: AppMap }) {
   return (
     <div className="appmap">
       {map.summary && <p className="appmap-summary">{map.summary}</p>}
-      {APP_MAP_KINDS.map((kind) => {
+      {appMapKinds(map).map((kind) => {
         const parts = map.parts.filter((p) => p.kind === kind);
         if (!parts.length) return null;
         return (

@@ -339,15 +339,43 @@ export function App() {
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
   const skillsData = useRef<{ at: number; p: Promise<{ files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData }> } | null>(null);
   // 스킬 목록·프로젝트 상태는 한 번 읽어 10분 동안 나눠 쓴다(v0.6.67 소유자 "스킬은 켤 때마다 불러와야 돼?"). '다시 읽기'·넣기 뒤에는 새로 읽는다
+  // 앱을 다시 켜도(아이폰 홈 화면 앱) '읽는 중' 없이 바로 보이게, 마지막으로 읽은 것을 이 기기에 저장해 두고 먼저 보여 준 뒤
+  // 뒤에서 조용히 새로 읽는다(v0.6.70 소유자 "켤 때 스킬을 불러온다고 계속 나와"). 스킬 내용은 비밀이 아니다(저장소 파일).
+  const SKILLS_KEY = 'minoffia.skills.v1';
   const loadSkillsData = (force = false) => {
-    if (force || !skillsData.current || Date.now() - skillsData.current.at > 600_000) {
-      const p2 = Promise.all([store!.skills!(), store!.skillMap!()]).then(([files, map]) => ({ files, map }));
-      p2.catch(() => {
-        skillsData.current = null;
-      });
-      skillsData.current = { at: Date.now(), p: p2 };
+    if (!force && !skillsData.current) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SKILLS_KEY) ?? 'null') as { files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData } | null;
+        if (saved?.files?.length) {
+          // 저장해 둔 것을 바로 쓰고, 지금 새로 읽은 것은 다음에 열 때 보인다
+          skillsData.current = { at: 0, p: Promise.resolve(saved) };
+          void fetchSkills();
+          return skillsData.current.p;
+        }
+      } catch {
+        // 저장 공간을 못 쓰면 그냥 새로 읽는다
+      }
     }
+    if (force || !skillsData.current || Date.now() - skillsData.current.at > 600_000) return fetchSkills();
     return skillsData.current.p;
+  };
+  const fetchSkills = () => {
+    const p2 = Promise.all([store!.skills!(), store!.skillMap!()]).then(([files, map]) => ({ files, map }));
+    p2.then(
+      (d) => {
+        skillsData.current = { at: Date.now(), p: Promise.resolve(d) };
+        try {
+          localStorage.setItem(SKILLS_KEY, JSON.stringify(d));
+        } catch {
+          // 저장 못 해도 화면은 그대로
+        }
+      },
+      () => {
+        if (skillsData.current?.p === p2) skillsData.current = null;
+      },
+    );
+    if (!skillsData.current || skillsData.current.at !== 0) skillsData.current = { at: Date.now(), p: p2 };
+    return p2;
   };
   // 스킬 탭에서 넣기 창을 바로 열 스킬(프로젝트 칸에서 넘어올 때)
   const [skillToInstall, setSkillToInstall] = useState<{ name: string; n: number } | null>(null);
@@ -1716,6 +1744,7 @@ export function App() {
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
   const ordered = snap.projects;
   // 스킬 만들기·찾기를 접수할 프로젝트(v0.6.65): 스킬 원본 저장소(minoffia-skills) 프로젝트, 없으면 이 저장소(minoffia)
+  const skillsProject = snap.projects.find((p) => (p.repo ?? '').toLowerCase() === SKILLS_REPO && !p.sample) ?? null;
   const officeProject =
     snap.projects.find((p) => (p.repo ?? '').toLowerCase() === SKILLS_REPO && !p.sample) ??
     snap.projects.find((p) => OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) && !p.sample) ??
@@ -2211,6 +2240,7 @@ export function App() {
               mapLoad={store.skillMap ? () => loadSkillsData().then((d) => d.map) : undefined}
               prefill={skillPrefill}
               installRequest={skillToInstall}
+              renderMap={skillsProject && renderHealth ? renderHealth(skillsProject) : undefined}
               projects={snap.projects
                 .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')
                 .map((p) => ({ id: p.id, name: p.name, repo: p.repo! }))}
