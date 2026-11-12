@@ -19,6 +19,8 @@ describe('개발 습관·저장소 지도(v0.4.96)', () => {
     expect(out).toContain('supabase/functions/');
     expect(out.length).toBeLessThanOrEqual(2600);
     expect(out).not.toMatch(/\.test\./);
+    // v0.6.69: 저장소에 넣은 스킬(.agents/skills·.claude/skills)의 스크립트는 앱 코드가 아니라 지도에서 뺀다(넣으면 지도가 넘쳐 서버 함수가 빠졌다)
+    expect(out).not.toMatch(/\.(agents|claude)\/skills/);
   });
 });
 
