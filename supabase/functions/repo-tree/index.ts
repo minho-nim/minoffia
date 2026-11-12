@@ -116,13 +116,15 @@ Deno.serve(async (req) => {
   }
   // 프로젝트에 넣기: 고른 프로젝트마다 Actions '스킬 넣기'(skill-sync.yml)를 한 번씩 시작한다. 버튼을 누른 것이 소유자 승인이다
   if (body.action === 'skillInstall') {
-    const name = String(body.skill ?? '');
-    if (!SKILL_NAME.test(name)) return reply(400, { ok: false, error: '스킬 이름이 이상합니다.' });
+    // 여러 스킬을 쉼표로(v0.6.64): 프로젝트마다 Actions 한 번·PR 하나로 넣는다
+    const names = [...new Set(String(body.skill ?? '').split(',').map((x) => x.trim()).filter(Boolean))].slice(0, 10);
+    if (!names.length || !names.every((n) => SKILL_NAME.test(n))) return reply(400, { ok: false, error: '스킬 이름이 이상합니다.' });
+    const name = names.join(',');
     const mode = body.mode === 'remove' ? 'remove' : 'add';
-    if (META_SKILLS.includes(name) && mode === 'add') return reply(409, { ok: false, error: '스킬을 만들고 찾는 도구 스킬은 미노피아에만 둬요.' });
+    if (names.some((n) => META_SKILLS.includes(n)) && mode === 'add') return reply(409, { ok: false, error: '스킬을 만들고 찾는 도구 스킬은 미노피아에만 둬요.' });
     const actionsToken = env('GITHUB_ACTIONS_TOKEN');
     if (!actionsToken) return reply(503, { ok: false, error: 'Actions를 시작할 토큰(GITHUB_ACTIONS_TOKEN)이 없습니다.' });
-    if (mode === 'add' && !(await sourceSkillPath(name))) return reply(404, { ok: false, error: '스킬 모음에서 그 스킬을 찾지 못했어요.' });
+    if (mode === 'add') for (const n of names) if (!(await sourceSkillPath(n))) return reply(404, { ok: false, error: `스킬 모음에서 ${n}을 찾지 못했어요.` });
     const ids = (Array.isArray(body.projectIds) ? body.projectIds : []).filter((x) => typeof x === 'string').slice(0, 12);
     const { data: rows } = await userClient.from('projects').select('id, repo').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
     const officeRepo = env('OFFICE_REPO') || 'minho-nim/minoffia';
