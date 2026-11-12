@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSkillMd, skillRequest, skillRisks, skillSource, skillUsage, toSkillView, usedSkills } from './skills';
+import { parseSkillMd, skillCategory, skillRequest, skillRisks, skillSource, skillUsage, toSkillView, usedSkills } from './skills';
 
 describe('저장소 스킬 보기(v0.6.55)', () => {
   it('앞머리에서 이름·설명, 나머지는 본문', () => {
@@ -38,11 +38,12 @@ describe('저장소 스킬 보기(v0.6.55)', () => {
 describe('스킬 입력 창(v0.6.57)', () => {
   it('만들기: 쓴 칸만 짧게, 지킬 것 한 줄', () => {
     const t = skillRequest({ kind: 'make', what: '배포 순서  자동', when: '', rules: 'PR\n\n병합' });
-    expect(t.split('\n')).toEqual([
+    expect(t.split('\n').slice(0, 3)).toEqual([
       '@Claude 스킬 만들기: 배포 순서 자동',
       '지킬 것: PR / 병합',
       '(skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md · 제목·설명·본문은 쉬운 한국어 · 다른 파일 고치지 않기)',
     ]);
+    expect(t).toContain('본문 100줄 이내');
   });
   it('찾기: 분야는 정해진 것만', () => {
     const t = skillRequest({ kind: 'find', what: '접근성 검사', areas: ['디자인', '이상한 것'] });
@@ -76,5 +77,18 @@ describe('기본 스킬(v0.6.60)', () => {
   });
   it('만들기 요청에 기본 표시 줄', () => {
     expect(skillRequest({ kind: 'make', what: '배포', isDefault: true })).toContain('minoffia-default');
+  });
+});
+
+describe('스킬 지도 분류(v0.6.61)', () => {
+  it('앞머리 분류가 먼저, 없으면 낱말, 도구 스킬은 도구', () => {
+    expect(skillCategory({ meta: false, category: '문서', title: '배포', description: '' })).toBe('문서');
+    expect(skillCategory({ meta: false, category: '', title: '배포 순서', description: '' })).toBe('배포');
+    expect(skillCategory({ meta: false, category: '', title: '작업 보고 형식', description: '결과를 보고할 때' })).toBe('문서');
+    expect(skillCategory({ meta: true, category: '', title: '스킬 찾기', description: '' })).toBe('도구');
+    expect(skillCategory({ meta: false, category: '없는 분류', title: '아무거나', description: '' })).toBe('기타');
+  });
+  it('앞머리 minoffia-category를 읽는다', () => {
+    expect(parseSkillMd('---\nname: a\ndescription: d\nmetadata:\n  minoffia-category: 시험·점검\n---\n# 가').category).toBe('시험·점검');
   });
 });

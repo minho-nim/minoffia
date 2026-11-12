@@ -2,9 +2,9 @@
 // 누르면 가운데 팝업으로 내용을 본다(프로젝트 칸과 같은 팝업, 바깥 누르면 닫힘). 읽기는 GitHub만, AI 호출 없음.
 // 만들기·찾기는 작은 입력 창(v0.6.57)에 쓰고 보내면 대화로 바로 보낸다. 결과는 늘 PR(올리기 승인)로 들어온다.
 import { useEffect, useMemo, useState } from 'react';
-import { INSTALL_LABEL, RISK_LABEL, SKILL_AREAS, SKILL_PRESETS, skillRequest, toSkillView, type SkillFile, type SkillInstallState } from '../domain/skills';
+import { INSTALL_LABEL, RISK_LABEL, SKILL_AREAS, SKILL_CATEGORIES, SKILL_PRESETS, skillRequest, toSkillView, type SkillCategory, type SkillFile, type SkillInstallState } from '../domain/skills';
 
-const EMPTY = { what: '', when: '', rules: '', areas: [] as string[], isDefault: false };
+const EMPTY = { what: '', when: '', rules: '', areas: [] as string[], isDefault: false, category: '' };
 
 export interface SkillProject {
   id: string;
@@ -94,8 +94,18 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   useEffect(refresh, []);
   const skills = useMemo(() => (files ?? []).map(toSkillView), [files]);
 
-  const used = skills.filter((s) => !s.meta);
-  const tools = skills.filter((s) => s.meta);
+  // 스킬 지도(v0.6.61): 분류 칩·검색으로 좁히고, 분류별로 묶어 보인다. 도구 스킬은 '전체'에서는 맨 아래 접어 둔다
+  const [cat, setCat] = useState<'all' | SkillCategory>('all');
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const matches = (s: (typeof skills)[number]) => !q || `${s.title} ${s.name} ${s.description}`.toLowerCase().includes(q);
+  const counts = new Map<SkillCategory, number>();
+  for (const s of skills) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
+  const shown = skills.filter((s) => (cat === 'all' || s.category === cat) && matches(s));
+  const foldTools = cat === 'all' && !q;
+  const used = shown.filter((s) => !(foldTools && s.meta));
+  const tools = foldTools ? shown.filter((s) => s.meta) : [];
+  const groups = SKILL_CATEGORIES.map((c) => [c, used.filter((s) => s.category === c)] as const).filter(([, list]) => list.length > 0);
   const card = (s: (typeof skills)[number]) => (
     <li key={s.name} className="skill-card">
       <div className="skill-top">
@@ -246,6 +256,17 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
                     <span>언제 쓰면 좋을까? (선택)</span>
                     <input id="skill-when" value={fields.when} maxLength={200} onChange={(e) => setFields({ ...fields, when: e.target.value })} placeholder='예: "배포해줘"라고 할 때' />
                   </label>
+                  <label className="field">
+                    <span>분류 (선택, 비우면 낱말로 고름)</span>
+                    <select id="skill-category" value={fields.category} onChange={(e) => setFields({ ...fields, category: e.target.value })}>
+                      <option value="">자동</option>
+                      {SKILL_CATEGORIES.filter((c) => c !== '도구').map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="check small">
                     <input id="skill-default" type="checkbox" checked={fields.isDefault} onChange={(e) => setFields({ ...fields, isDefault: e.target.checked })} /> 새 프로젝트에 늘 넣기(기본 스킬)
                   </label>
@@ -293,7 +314,30 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
       {error && <p className="task-error small">{error}</p>}
       {files === null && <p className="muted small">스킬을 읽는 중…</p>}
       {files && skills.length === 0 && !error && <p className="empty">아직 스킬이 없어요.</p>}
-      <ul className="skill-list">{used.map(card)}</ul>
+      {skills.length > 0 && (
+        <div className="skill-map">
+          <div className="skill-cats" role="group" aria-label="스킬 분류">
+            <button type="button" className="chip" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>
+              전체 {skills.length}
+            </button>
+            {SKILL_CATEGORIES.filter((c) => counts.get(c)).map((c) => (
+              <button key={c} type="button" className="chip" aria-pressed={cat === c} onClick={() => setCat(cat === c ? 'all' : c)}>
+                {c} {counts.get(c)}
+              </button>
+            ))}
+          </div>
+          <input id="skill-search" className="skill-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="스킬 찾기: 이름·설명 낱말" aria-label="스킬 검색" />
+        </div>
+      )}
+      {files && skills.length > 0 && shown.length === 0 && <p className="muted small">맞는 스킬이 없어요.</p>}
+      {groups.map(([c, list]) => (
+        <section key={c} className="skill-group" aria-label={`${c} ${list.length}개`}>
+          <h4 className="skill-group-title">
+            {c} <span className="num num-count">{list.length}</span>
+          </h4>
+          <ul className="skill-list">{list.map(card)}</ul>
+        </section>
+      ))}
       {/* 도구 스킬(스킬 만들기·찾기)은 접어 둔다(v0.6.59): 실제로 쓰는 스킬만 먼저 보이게 */}
       {tools.length > 0 && (
         <details className="skill-tools">
