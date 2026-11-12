@@ -5,19 +5,21 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { AppMapView, type HealthApi } from './HealthCheck';
 import type { HealthReport } from '../domain/healthText';
 
-export type MapTab = 'brief' | 'detail' | 'relation' | 'tree';
-const NAME: Record<MapTab, string> = { brief: '간략', detail: '자세히', relation: '관계', tree: '구조도' };
+export type MapTab = 'brief' | 'detail' | 'relation' | 'tree' | 'role' | 'cloud';
+const NAME: Record<MapTab, string> = { brief: '간략', detail: '자세히', relation: '관계', tree: '구조도', role: '역할', cloud: '클라우드' };
 // 마지막에 본 탭(팝업을 다시 열면 그 탭으로, 앱을 켜 있는 동안만)
 const lastTab: Record<string, MapTab> = {};
 
-export function StructureMaps({ id, health, structure, relation }: {
+export function StructureMaps({ id, health, structure, relation, office }: {
   /** 마지막 탭을 기억할 이름(프로젝트 id 등) */
   id: string;
   health?: Pick<HealthApi, 'load' | 'map'>;
   structure?: () => ReactNode;
   relation?: () => ReactNode;
+  /** 사무실 지도(v0.6.71): 역할·클라우드(미노피아 전체) */
+  office?: (tab: 'role' | 'cloud') => ReactNode;
 }) {
-  const tabs = ([health && 'brief', health && 'detail', relation && 'relation', structure && 'tree'].filter(Boolean) as MapTab[]);
+  const tabs = ([health && 'brief', health && 'detail', relation && 'relation', structure && 'tree', office && 'role', office && 'cloud'].filter(Boolean) as MapTab[]);
   const [tab, setTabState] = useState<MapTab>(() => (lastTab[id] && tabs.includes(lastTab[id]) ? lastTab[id] : tabs[0]));
   const setTab = (t: MapTab) => {
     lastTab[id] = t;
@@ -66,6 +68,7 @@ export function StructureMaps({ id, health, structure, relation }: {
           ))}
         {tab === 'relation' && relation?.()}
         {tab === 'tree' && structure?.()}
+        {(tab === 'role' || tab === 'cloud') && office?.(tab)}
       </div>
     </div>
   );

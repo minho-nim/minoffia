@@ -116,6 +116,28 @@ Deno.serve(async (req) => {
     await userClient.from('skill_cache').upsert({ owner_id: user.id, map, updated_at: new Date().toISOString() }).then(() => null, () => null);
     return reply(200, { ok: true, map });
   }
+  // 프로젝트마다 쓰는 MCP(v0.6.71 관계 지도): 저장소 맨 위 .mcp.json(Claude Code 표준)의 mcpServers 이름만 읽는다.
+  // 명령·주소·env 같은 값은 비밀이 들어 있을 수 있어 버리고 이름만 돌려준다. 없으면 빈 목록.
+  if (body.action === 'mcpMap') {
+    const { data: rows } = await userClient.from('projects').select('id, repo').not('repo', 'is', null);
+    const mcp: Record<string, string[]> = {};
+    await Promise.all(
+      (rows ?? []).map(async (r: { id: string; repo: string | null }) => {
+        const repo = (r.repo ?? '').trim();
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') return;
+        const res = await fetch(`https://api.github.com/repos/${repo}/contents/.mcp.json`, { headers: { ...gh, Accept: 'application/vnd.github.raw' }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+        if (!res || !res.ok) return void (mcp[r.id] = []);
+        try {
+          const servers = ((await res.json()) as { mcpServers?: Record<string, unknown> }).mcpServers ?? {};
+          mcp[r.id] = Object.keys(servers).map((k) => k.toLowerCase()).filter((k) => /^[a-z0-9][a-z0-9_.-]{0,40}$/.test(k)).slice(0, 20);
+        } catch {
+          mcp[r.id] = [];
+        }
+      }),
+    );
+    await userClient.from('skill_cache').upsert({ owner_id: user.id, mcp, updated_at: new Date().toISOString() }).then(() => null, () => null);
+    return reply(200, { ok: true, mcp });
+  }
   // 프로젝트에 넣기: 고른 프로젝트마다 Actions '스킬 넣기'(skill-sync.yml)를 한 번씩 시작한다. 버튼을 누른 것이 소유자 승인이다
   if (body.action === 'skillInstall') {
     // 여러 스킬을 쉼표로(v0.6.64): 프로젝트마다 Actions 한 번·PR 하나로 넣는다

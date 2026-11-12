@@ -278,6 +278,11 @@ function parseSkillFiles(raw: unknown): import('../domain/skills').SkillFile[] {
     meta: x.meta === true,
   }));
 }
+function parseMcpMap(raw: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [id, v] of Object.entries((raw ?? {}) as Record<string, unknown>)) out[id] = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 20) : [];
+  return out;
+}
 function parseSkillMap(raw: unknown): import('../domain/skills').SkillMapData {
   const out: Record<string, Record<string, 'same' | 'old' | 'extra'>> = {};
   for (const [id, m] of Object.entries((raw ?? {}) as Record<string, Record<string, unknown>>)) {
@@ -723,9 +728,13 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     // 서버에 저장해 둔 스킬 목록·프로젝트 상태(v0.6.70): GitHub를 거치지 않고 표 한 행만 읽는다
     async skillCache() {
-      const { data, error } = await client.from('skill_cache').select('files, map, updated_at').maybeSingle();
+      const { data, error } = await client.from('skill_cache').select('files, map, mcp, updated_at').maybeSingle();
       if (error || !data || !Array.isArray(data.files)) return null;
-      return { files: parseSkillFiles(data.files), map: parseSkillMap(data.map), updatedAt: String(data.updated_at ?? '') };
+      return { files: parseSkillFiles(data.files), map: parseSkillMap(data.map), mcp: parseMcpMap(data.mcp), updatedAt: String(data.updated_at ?? '') };
+    },
+    async mcpMap() {
+      const data = await invoke('repo-tree', { action: 'mcpMap' });
+      return parseMcpMap(data.mcp);
     },
     async skillStatus(skill) {
       const data = await invoke('repo-tree', { action: 'skillStatus', skill });
