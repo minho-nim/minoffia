@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSkillMd, skillRisks, skillSource, toSkillView } from './skills';
+import { parseSkillMd, skillRequest, skillRisks, skillSource, toSkillView } from './skills';
 
 describe('저장소 스킬 보기(v0.6.55)', () => {
   it('앞머리에서 이름·설명, 나머지는 본문', () => {
@@ -32,5 +32,21 @@ describe('저장소 스킬 보기(v0.6.55)', () => {
   it('스크립트 수를 센다', () => {
     const v = toSkillView({ name: 'a', skillMd: '---\nname: a\ndescription: d\n---\nx', files: ['SKILL.md', 'scripts/run.py', 'agents/x.md'], license: '' });
     expect(v.scripts).toBe(1);
+  });
+});
+
+describe('스킬 입력 창(v0.6.57)', () => {
+  it('만들기: 쓴 칸만 짧게, 지킬 것 한 줄', () => {
+    const t = skillRequest({ kind: 'make', what: '배포 순서  자동', when: '', rules: 'PR\n\n병합' });
+    expect(t.split('\n')).toEqual([
+      '@Claude 스킬 만들기: 배포 순서 자동',
+      '지킬 것: PR / 병합',
+      '(skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md · 제목·설명·본문은 쉬운 한국어 · 다른 파일 고치지 않기)',
+    ]);
+  });
+  it('찾기: 분야는 정해진 것만', () => {
+    const t = skillRequest({ kind: 'find', what: '접근성 검사', areas: ['디자인', '이상한 것'] });
+    expect(t.split('\n')[1]).toBe('분야: 디자인');
+    expect(t).toContain('-g/-y 금지');
   });
 });
