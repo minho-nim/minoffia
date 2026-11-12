@@ -6,7 +6,8 @@ export type HealthIssue = { kind: string; severity: 'high' | 'medium' | 'low' | 
 export type AppMapPart = { name: string; kind: string; what: string; folder: string; files: string[] };
 /** by: ai = AI 설명, rule = 폴더로만, skill = 스킬 모음 저장소(분류 = 스킬 분류, v0.6.70) */
 export type AppMap = { summary: string; parts: AppMapPart[]; by: 'ai' | 'rule' | 'skill' };
-export type HealthReport = { checkedAt: string; head: string; files: number | null; summary: { high: number; medium: number; low: number }; issues: HealthIssue[]; appMap?: AppMap | null };
+/** tree(v0.6.78): 점검 때 함께 저장한 저장소 파일 목록(구조도를 열 때 GitHub를 다시 읽지 않게) */
+export type HealthReport = { checkedAt: string; head: string; files: number | null; summary: { high: number; medium: number; low: number }; issues: HealthIssue[]; appMap?: AppMap | null; tree?: string[] };
 
 /** 앱 지도 묶는 순서(사장님이 먼저 볼 것부터) */
 export const APP_MAP_KINDS = ['화면', '기능', '서버', '데이터', '설정'] as const;
@@ -62,5 +63,6 @@ export function parseHealth(raw: unknown): HealthReport | null {
       .filter((i): i is HealthIssue => !!i && typeof i === 'object' && typeof (i as HealthIssue).kind === 'string')
       .map((i) => ({ kind: i.kind, severity: String(i.severity), title: String(i.title ?? ''), detail: String(i.detail ?? ''), items: (Array.isArray(i.items) ? i.items : []).map(String).slice(0, 20) })),
     appMap: parseAppMap((r as { appMap?: unknown }).appMap),
+    ...(Array.isArray((r as { tree?: unknown }).tree) ? { tree: ((r as { tree: unknown[] }).tree).filter((x): x is string => typeof x === 'string').slice(0, 3000) } : {}),
   };
 }
