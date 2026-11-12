@@ -42,6 +42,10 @@ export interface SkillView {
   isDefault: boolean;
   /** 스킬 지도의 분류(v0.6.61) */
   category: SkillCategory;
+  /** 관계 지도(v0.6.71): 함께 쓰는 스킬, 갈라져 나온 스킬(원래 스킬 이름), 쓰는 MCP */
+  related: string[];
+  parent: string;
+  mcp: string[];
 }
 
 /** 스킬 지도 분류(v0.6.61 소유자 "스킬을 분류해서 빨리 찾게"). 앞머리에 적은 분류가 먼저, 없으면 제목·설명 낱말로 고른다(규칙만) */
@@ -63,7 +67,7 @@ export function skillCategory(v: { meta: boolean; category: string; title: strin
 }
 
 /** 앞머리(--- name/description ---)와 본문을 나눈다. 앞머리가 없으면 첫 제목·첫 문단을 쓴다 */
-export function parseSkillMd(md: string): { title: string; description: string; body: string; isDefault: boolean; category: string } {
+export function parseSkillMd(md: string): { title: string; description: string; body: string; isDefault: boolean; category: string; related: string[]; parent: string; mcp: string[] } {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   const front = m ? m[1] : '';
   const body = (m ? m[2] : md).trim();
@@ -78,7 +82,10 @@ export function parseSkillMd(md: string): { title: string; description: string; 
   const isDefault = /^\s+minoffia-default:\s*["']?true["']?\s*$/m.test(front);
   // 분류(v0.6.61 스킬 지도): 표준 앞머리 metadata 아래 minoffia-category: 배포
   const category = front.match(/^\s+minoffia-category:\s*["']?([^"'\n]+?)["']?\s*$/m)?.[1]?.trim() ?? '';
-  return { title: /[가-힣]/.test(heading) ? heading : field('name') || heading, description: field('description') || firstPara.slice(0, 300), body, isDefault, category };
+  // 관계 지도(v0.6.71): metadata 아래 minoffia-related(함께 쓰는 스킬), minoffia-parent(갈라져 나온 스킬), minoffia-mcp(쓰는 MCP), 쉼표로
+  const meta = (k: string) => front.match(new RegExp(`^\\s+minoffia-${k}:\\s*["']?([^"'\\n]*?)["']?\\s*$`, 'm'))?.[1] ?? '';
+  const list = (k: string) => meta(k).split(',').map((x) => x.trim().toLowerCase()).filter((x) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(x)).slice(0, 12);
+  return { title: /[가-힣]/.test(heading) ? heading : field('name') || heading, description: field('description') || firstPara.slice(0, 300), body, isDefault, category, related: list('related'), parent: list('parent')[0] ?? '', mcp: list('mcp') };
 }
 
 const RISK_RULES: [SkillRisk, RegExp][] = [
@@ -103,7 +110,7 @@ export function skillSource(md: string, license: string): { license: string; sou
 }
 
 export function toSkillView(f: SkillFile): SkillView {
-  const { title, description, body, isDefault, category } = parseSkillMd(f.skillMd);
+  const { title, description, body, isDefault, category, related, parent, mcp } = parseSkillMd(f.skillMd);
   const { license, source } = skillSource(f.skillMd, f.license);
   return {
     name: f.name,
@@ -118,6 +125,9 @@ export function toSkillView(f: SkillFile): SkillView {
     meta: f.meta === true,
     isDefault: isDefault && f.meta !== true,
     category: skillCategory({ meta: f.meta === true, category, title: title || f.name, description }),
+    related,
+    parent,
+    mcp,
   };
 }
 

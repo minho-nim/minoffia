@@ -20,6 +20,9 @@ insert into skill_cache (map) values ('{"p1":{"a":"same"}}') on conflict (owner_
 select pg_temp.check((select count(*) from skill_cache) = 1, 'one row per owner');
 select pg_temp.check((select files->0->>'name' from skill_cache) = 'a' and (select map->'p1'->>'a' from skill_cache) = 'same', 'files and map kept separately');
 
+update skill_cache set mcp = '{"p1":["context7"]}';
+select pg_temp.check((select mcp->'p1'->>0 from skill_cache) = 'context7', 'mcp names kept');
+
 select pg_temp.as_user('22222222-2222-4222-8222-222222222222');
 select pg_temp.check((select count(*) from skill_cache) = 0, 'other owner sees nothing');
 update skill_cache set files = '[]';

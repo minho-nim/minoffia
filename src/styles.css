@@ -6492,7 +6492,9 @@ html.popup-open .project-sections > details[open] * {
 }
 /* 자세히·관계는 floorplan처럼 테두리 없이 꽉 */
 .maps-detail .maps-body,
-.maps-relation .maps-body {
+.maps-relation .maps-body,
+.maps-role .maps-body,
+.maps-cloud .maps-body {
   margin: 0 -16px;
   padding: 0;
   display: flex;
@@ -6509,4 +6511,245 @@ html.popup-open .project-sections > details[open] * {
 }
 .skill-sections {
   margin-top: 4px;
+}
+
+/* 관계 지도(v0.6.71): floorplan처럼 점 무늬 바탕 + 흰 카드 + 오른쪽 설명 칸(휴대폰은 아래). 앱 색만 쓰고 빛·그라데이션 없음 */
+.rel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rel-top,
+.rel-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.rel-bar {
+  border-bottom: 0;
+  padding: 8px 12px 0;
+}
+.rel-bar .crumb {
+  font-size: 0.86rem;
+}
+.rel-pad {
+  padding: 12px 16px;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg button {
+  font: inherit;
+  font-size: 0.8rem;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 4px 14px;
+  cursor: pointer;
+}
+.seg button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--surface);
+}
+.rel-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+}
+.rel-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface-2);
+  background-image: radial-gradient(color-mix(in srgb, var(--muted) 35%, transparent) 1px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+.rel-graph {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px 16px;
+}
+.rel-svg {
+  display: block;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+}
+.rel-svg text {
+  fill: var(--ink);
+}
+.rel-svg .rel-sub {
+  fill: var(--muted);
+}
+.rel-node {
+  cursor: pointer;
+}
+.rel-node:focus-visible {
+  outline: none;
+}
+.rel-node:focus-visible .rel-card {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.rel-card {
+  fill: var(--surface);
+  stroke: var(--line);
+  filter: drop-shadow(0 1px 2px rgba(60, 40, 20, 0.12));
+}
+.rel-node.k-group .rel-card {
+  stroke: var(--muted);
+  stroke-width: 1.2;
+}
+.rel-node.sel .rel-card {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.rel-node.faded {
+  opacity: 0.35;
+}
+.rel-bar-k {
+  fill: var(--info);
+}
+.k-group .rel-bar-k {
+  fill: var(--muted);
+}
+.k-proj .rel-bar-k {
+  fill: var(--accent);
+}
+.k-mcp .rel-bar-k {
+  fill: var(--warn);
+}
+.rel-edge {
+  fill: none;
+  stroke: var(--muted);
+  stroke-opacity: 0.55;
+}
+.rel-edge.hot {
+  stroke: var(--accent);
+  stroke-opacity: 1;
+}
+.rel-edge.faded {
+  stroke-opacity: 0.12;
+}
+.rel-svg.dense .rel-edge:not(.hot) {
+  stroke-opacity: 0.25;
+}
+.rel-sep {
+  stroke: var(--muted);
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+.rel-side {
+  border-left: 1px solid var(--line);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  overflow: auto;
+  background: var(--surface);
+}
+.rel-info {
+  display: grid;
+  gap: 4px;
+}
+.rel-nb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rel-nb button {
+  font: inherit;
+  font-size: 0.74rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.rel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.rel-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border: 1.5px solid var(--info);
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.rel-legend i.k-group {
+  border-color: var(--muted);
+}
+.rel-legend i.k-proj {
+  border-color: var(--accent);
+}
+.rel-legend i.k-mcp {
+  border-color: var(--warn);
+}
+.rel-net {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+.rel-net canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.rel-zoom {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.rel-zoom button {
+  font: inherit;
+  width: 36px;
+  height: 34px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  .rel-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .rel-side {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    max-height: 32vh;
+  }
+}
+
+.rel-flows {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+}
+.office-sections {
+  margin-bottom: 8px;
 }

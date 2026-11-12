@@ -18,6 +18,8 @@ import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
 import { StructureMaps } from './components/StructureMaps';
+import { RelationLoader } from './components/RelationMap';
+import { OfficeMap } from './components/OfficeMap';
 import { ProjectSkills } from './components/ProjectSkills';
 import { SKILLS_REPO, skillUsage, toSkillView } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
@@ -338,10 +340,11 @@ export function App() {
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
+  const [officeOpen, setOfficeOpen] = useState(false);
   // 스킬 탭의 '구조 보기'·'점검' 칸(v0.6.70): 열었을 때만 그린다
   const [skillMapsOpen, setSkillMapsOpen] = useState(false);
   const [skillCheckOpen, setSkillCheckOpen] = useState(false);
-  const skillsData = useRef<{ at: number; p: Promise<{ files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData }> } | null>(null);
+  const skillsData = useRef<{ at: number; p: Promise<{ files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData; mcp: Record<string, string[]> }> } | null>(null);
   // 스킬 목록·프로젝트 상태는 한 번 읽어 10분 동안 나눠 쓴다(v0.6.67 소유자 "스킬은 켤 때마다 불러와야 돼?"). '다시 읽기'·넣기 뒤에는 새로 읽는다
   // 앱을 다시 켜도 '읽는 중' 없이 바로 보이게(v0.6.70 소유자 "켤 때 스킬을 불러온다고 계속 나와", "서버로 올리면 안 돼?"):
   // 서버에 저장해 둔 것(skill_cache 한 행)을 먼저 쓰고, 저장한 지 10분이 지났으면 뒤에서 GitHub에서 새로 읽는다(서버가 다시 저장).
@@ -354,7 +357,7 @@ export function App() {
         .then((c) => {
           if (!c || !c.files.length) return fetchSkills(true);
           if (!(Date.now() - Date.parse(c.updatedAt) < 600_000)) void fetchSkills(true).catch(() => null);
-          return { files: c.files, map: c.map };
+          return { files: c.files, map: c.map, mcp: c.mcp };
         });
       skillsData.current = { at: Date.now(), p };
       p.catch(() => {
@@ -366,7 +369,7 @@ export function App() {
   };
   /** GitHub에서 새로 읽기(서버 함수가 읽으면서 skill_cache에도 저장). background면 지금 보이는 것은 그대로 두고 끝나면 바꿔 둔다 */
   const fetchSkills = (background = false) => {
-    const p2 = Promise.all([store!.skills!(), store!.skillMap!()]).then(([files, map]) => ({ files, map }));
+    const p2 = Promise.all([store!.skills!(), store!.skillMap!(), store!.mcpMap ? store!.mcpMap().catch(() => ({})) : Promise.resolve({})]).then(([files, map, mcp]) => ({ files, map, mcp: mcp as Record<string, string[]> }));
     p2.then(
       (d) => {
         skillsData.current = { at: Date.now(), p: Promise.resolve(d) };
@@ -1753,6 +1756,11 @@ export function App() {
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
   const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
+  // 사무실 지도(v0.6.71): 확인된 상태만(마지막 운영 배포, 휴가)
+  const officeDeploy = snap.workflow.deployments.filter((d) => d.ok && OFFICE_REPOS.includes(d.repo.toLowerCase())).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const renderOffice = (t: 'role' | 'cloud') => <OfficeMap tab={t} state={{ lastDeploy: officeDeploy?.createdAt, onLeave: snap.leave ?? [] }} />;
+  // 관계 지도에 나오는 프로젝트(저장소 있음, 예시·MinLab 제외, 프로젝트 순서대로)
+  const relProjects = ordered.filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab').map((p) => ({ id: p.id, name: p.name }));
   // '구조 보기'와 '점검'을 나눈다(v0.6.70): 프로젝트 칸과 스킬 탭이 같은 모양
   const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderMaps = (p: Project) => (
@@ -1760,6 +1768,8 @@ export function App() {
       id={p.id}
       health={store.healthCheck && p.repo ? { load: () => store.healthCheck!.load(p.id), map: () => store.healthCheck!.map(p.id) } : undefined}
       structure={() => renderStructure(p)}
+      office={OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) ? renderOffice : undefined}
+      relation={store.skills && store.skillMap ? () => <RelationLoader load={() => loadSkillsData()} projects={relProjects} focus={p.repo && p.repo.toLowerCase() !== SKILLS_REPO ? p.id : undefined} /> : undefined}
     />
   );
   return (
@@ -2230,6 +2240,14 @@ export function App() {
           )}
           {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}
 
+          {tab === 'agent' && (
+            <div className="project-sections office-sections">
+              <details className="project-rules project-maps" onToggle={(e) => setOfficeOpen((e.currentTarget as HTMLDetailsElement).open)}>
+                <summary>사무실 지도</summary>
+                {officeOpen && <StructureMaps id="office" office={renderOffice} />}
+              </details>
+            </div>
+          )}
           {tab === 'agent' && <ReviewLog reviews={snap.workflow.reviews ?? []} tasks={snap.tasks} onOpenTask={(t) => showTask(t.id)} />}
           {tab === 'agent' && (
             <AgentRoster
@@ -2248,7 +2266,6 @@ export function App() {
             <SkillsPanel
               load={(force) => (store.skillMap ? loadSkillsData(force).then((d) => d.files) : store.skills!())}
               usage={skillUsage(snap.workflow.results)}
-              mapLoad={store.skillMap ? () => loadSkillsData().then((d) => d.map) : undefined}
               prefill={skillPrefill}
               installRequest={skillToInstall}
               renderMap={
