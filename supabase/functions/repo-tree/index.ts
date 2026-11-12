@@ -101,10 +101,16 @@ Deno.serve(async (req) => {
       (rows ?? []).map(async (r: { id: string; repo: string | null }) => {
         const repo = (r.repo ?? '').trim();
         if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') return;
-        const list = await fetch(`https://api.github.com/repos/${repo}/contents/.agents/skills`, { headers: gh, signal: AbortSignal.timeout(10_000) }).catch(() => null);
-        const entries = list && list.ok ? ((await list.json()) as { name?: string; type?: string; sha?: string }[]) : [];
+        // .agents/skills(Codex)와 .claude/skills(Claude) 둘 다 읽는다(v0.6.88: 미노피아·스킬 모음처럼 .claude/skills에만 둔 저장소가 floorplan 하나로 보이던 것). 같은 이름은 .agents 것 먼저
+        const dirList = async (dir: string) => {
+          const list = await fetch(`https://api.github.com/repos/${repo}/contents/${dir}`, { headers: gh, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+          const j = list && list.ok ? ((await list.json()) as { name?: string; type?: string; sha?: string }[]) : [];
+          return Array.isArray(j) ? j : [];
+        };
+        const [a, c] = await Promise.all([dirList('.agents/skills'), dirList('.claude/skills')]);
+        const entries = [...a, ...c.filter((e) => !a.some((x) => x.name === e.name))];
         const got: Record<string, 'same' | 'old' | 'extra'> = {};
-        for (const e of Array.isArray(entries) ? entries : []) {
+        for (const e of entries) {
           if (e.type !== 'dir' || !e.name || !SKILL_NAME.test(e.name)) continue;
           // extra = 프로젝트에만 있고 스킬 모음에는 없는 스킬(직접 넣은 것)
           got[e.name] = !dirSha.has(e.name) ? 'extra' : dirSha.get(e.name) === e.sha ? 'same' : 'old';
