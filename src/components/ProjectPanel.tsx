@@ -39,6 +39,8 @@ interface Props {
   renderHealth?: (project: Project) => ReactNode;
   /** 디자인 기준(v0.5.56): 저장소가 있는 프로젝트만, 펼쳤을 때만 그린다 */
   renderDesign?: (project: Project) => ReactNode;
+  /** 이 프로젝트에 들어 있는 스킬(v0.6.66): 저장소 있는 프로젝트만, 펼쳤을 때만 그린다 */
+  renderSkills?: (project: Project) => ReactNode;
   /** 미뤄 둔 일(개발 AI가 남긴 shortcut 주석, v0.4.97) */
   shortcutsOf?: (projectId: string) => Shortcut[];
   onOpenTask?: (taskId: string) => void;
@@ -56,11 +58,12 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, onMakeSkill }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, onMakeSkill }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
   const [designOpen, setDesignOpen] = useState<Record<string, boolean>>({});
+  const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
@@ -312,6 +315,12 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 <details className="project-rules project-design" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setDesignOpen((o) => ({ ...o, [p.id]: open })); }}>
                   <summary>디자인{p.designMd ? '' : '(없음)'}</summary>
                   {designOpen[p.id] && renderDesign(p)}
+                </details>
+              )}
+              {renderSkills && p.repo && !p.sample && (
+                <details className="project-rules project-skills-box" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setSkillsOpen((o) => ({ ...o, [p.id]: open })); }}>
+                  <summary>스킬</summary>
+                  {skillsOpen[p.id] && renderSkills(p)}
                 </details>
               )}
               {(() => {
