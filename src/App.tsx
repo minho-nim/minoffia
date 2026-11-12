@@ -1798,7 +1798,6 @@ export function App() {
     snap.projects.find((p) => OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) && !p.sample) ??
     null;
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
-  const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   // 구조도 파일 목록은 프로젝트마다 10분 동안 한 번만 읽는다(v0.6.72 소유자 "켤 때마다 로딩해야 돼?")
   const loadTree = (id: string) => {
     const c = treeCache.get(id);
@@ -2261,7 +2260,7 @@ export function App() {
                     }}
                     project={projectById.get(t.projectId)}
                     stageLabel={STAGE_LABEL[deriveWorkflow(t, snap.workflow).stage]}
-                    views={projectById.get(t.projectId) ? <ProjectViews project={projectById.get(t.projectId)!} structure={renderStructure} appMap={renderHealth} /> : undefined}
+                    views={projectById.get(t.projectId) ? <ProjectViews project={projectById.get(t.projectId)!} maps={renderMaps} check={renderCheck} /> : undefined}
                     workflow={
                       <WorkflowPanel
                         jump={jump?.taskId === t.id ? jump : undefined}
