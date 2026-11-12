@@ -92,3 +92,24 @@ describe('기획 요청에 요청 전 대화(v0.3.9)', () => {
     expect(same.split('긴 요청 원문').length).toBe(2);
   });
 });
+
+describe('짧은 지시서(v0.6.82): 규칙 칸·개발 스킬이 있는 저장소', () => {
+  it('고정 내용(저장소 지도 스크립트·개발 습관·기본 규칙)은 빼고 스킬·규칙 칸을 가리키는 몇 줄만', async () => {
+    const { buildCodexHandoff } = await import('./handoffV2');
+    const { withBaseRules } = await import('./baseRules');
+    const task = { id: 't', projectId: 'p', title: '저장 버튼 화면 고치기', description: '', userOriginalText: '화면의 저장 버튼을 누르면 오류가 나요' } as never;
+    const spec = { revision: 1, finalPrompt: '저장 버튼 화면을 고친다', changeScope: '', preserveConstraints: '', testCriteria: '눌림', userOriginalText: '화면의 저장 버튼을 누르면 오류가 나요' } as never;
+    const item = { id: 'W1', title: '저장 버튼', goal: '눌리게', acceptance_tests: ['눌림'], preserve_constraints: [], dependencies: [] } as never;
+    const rules = withBaseRules(['이 앱은 다크 모드 기본']);
+    const full = buildCodexHandoff(task, spec, item, { name: 'x', repo: 'o/r' } as never, 'main', [], [], [], rules, false);
+    const slim = buildCodexHandoff(task, spec, item, { name: 'x', repo: 'o/r' } as never, 'main', [], [], [], rules, true);
+    expect(full).toContain('MAPEOF');
+    expect(slim).not.toContain('MAPEOF');
+    expect(slim).not.toContain('유료 API·크레딧');
+    expect(slim).toContain('이 앱은 다크 모드 기본');
+    expect(slim).toContain('스킬 repo-map');
+    expect(slim).toContain('ui-check');
+    expect(slim).toContain('debugging-and-error-recovery');
+    expect(slim.length).toBeLessThan(full.length * 0.45);
+  });
+});

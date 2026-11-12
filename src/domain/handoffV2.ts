@@ -2,7 +2,8 @@ import { describeAnalyses, describeAttachments, type Attachment, type ImageAnaly
 import { describeClarifications, describeLinks, type Clarification, type LinkRef } from './requestContext';
 import type { Project, Task } from './types';
 import type { TaskSpec, WorkItem } from './workflow-types';
-import { bugSteps, domainSteps, DEV_HABITS, repoMapStep } from './devHabits';
+import { devGuide } from './devHabits';
+import { BASE_RULES } from './baseRules';
 
 /** 개발 AI가 CLAUDE.md를 알아서 만들거나 맞추게 하는 한 줄(v0.4.75, 소유자 "다르면 맞춰줘, AI가 알아서"). 서버 dispatch-claude-dev/payload.ts에도 같은 문장 */
 export const CLAUDE_MD_SYNC =
@@ -75,7 +76,10 @@ export function buildCodexHandoff(
   prototypes: Attachment[] = [],
   /** 이 프로젝트에서 지켜야 할 것(앞선 업무에서 AI가 적어 둠, v0.4.57) */
   projectRules: string[] = [],
+  /** 저장소에 미노피아 작업 규칙 칸·개발 스킬이 있으면(v0.6.82) 고정 내용은 빼고 할 일만 */
+  slim = false,
 ): string {
+  if (slim) projectRules = projectRules.filter((r) => !BASE_RULES.includes(r));
   const images = describeAttachments(attachments);
   const linkText = describeLinks(links, false);
   const protoText = describeAttachments(prototypes);
@@ -112,12 +116,7 @@ export function buildCodexHandoff(
     '## 완료 기준',
     ...[...item.acceptance_tests, spec.testCriteria].filter(Boolean).map((x) => `- ${x}`),
     '',
-    ...repoMapStep(),
-    '',
-    '## 개발 습관(토큰·범위 아끼기)',
-    ...DEV_HABITS.map((x) => `- ${x}`),
-    ...bugSteps([spec.userOriginalText, spec.finalPrompt, item.title, item.goal].join('\n'), spec.sizeHint?.bug),
-    ...domainSteps([spec.userOriginalText, spec.finalPrompt, item.title, item.goal].join('\n')),
+    ...devGuide([spec.userOriginalText, spec.finalPrompt, item.title, item.goal].join('\n'), spec.sizeHint?.bug, slim),
     '',
     '## 규칙',
     '- 작업 전에 최신 기본 브랜치(main)를 받아 그 위에서 작업한다. 계획 당시 기준 커밋 이후 이 작업이 고칠 파일이 바뀌어 지시와 맞지 않으면 고치지 말고 멈춰서 보고한다.',

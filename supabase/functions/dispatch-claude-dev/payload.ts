@@ -1,8 +1,8 @@
 // Claude 보조 개발 루틴에 보낼 지시문(외부 의존 없음: Deno 함수와 vitest가 같이 쓴다).
 // v0.4.57(소유자 2026-11-01): 시험 뒤 작업 브랜치를 미리보기용으로 push한다(소유자가 데모를 눈으로 보고 승인). PR·병합·배포는 올리기 승인 뒤.
 // 앞선 업무에서 AI가 적어 둔 "이 프로젝트에서 지켜야 할 것"을 함께 넣고, 새로 알게 된 것은 결과와 함께 적어 보내게 한다.
-import { rulesAsk, rulesSection } from './projectRules.ts';
-import { bugSteps, domainSteps, DEV_HABITS, repoMapStep } from './devHabits.ts';
+import { BASE_RULES, rulesAsk, rulesSection } from './projectRules.ts';
+import { devGuide } from './devHabits.ts';
 
 /** CLAUDE.md를 알아서 만들거나 맞춘다(v0.4.75). 앱 src/domain/handoffV2.ts의 CLAUDE_MD_SYNC와 같은 문장(시험이 확인) */
 export const CLAUDE_MD_SYNC =
@@ -29,6 +29,8 @@ export interface DevPayloadInput {
   submit?: { url: string; token: string };
   /** 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것(v0.4.57) */
   projectRules?: string[];
+  /** 저장소에 미노피아 작업 규칙 칸·개발 스킬이 있으면(v0.6.82) 고정 내용은 빼고 할 일만 */
+  slim?: boolean;
   /** 브랜치 미리보기 주소(프로젝트에 미리보기 주소가 있을 때만) */
   previewUrl?: string;
 }
@@ -44,7 +46,7 @@ export function buildDevPayload(p: DevPayloadInput): string {
   const tests = [...p.item.acceptance_tests, p.testCriteria].filter(Boolean);
   const keep = [p.preserveConstraints, ...p.item.preserve_constraints].filter(Boolean);
   const branch = claudeBranch(p.taskId, p.item.id);
-  const rules = p.projectRules ?? [];
+  const rules = (p.projectRules ?? []).filter((r) => !p.slim || !BASE_RULES.includes(r));
   return [
     `MinLab AI Office 보조 개발 (업무 ID ${p.taskId} / 작업 ${p.item.id})`,
     `저장소: ${p.repo}`,
@@ -73,12 +75,7 @@ export function buildDevPayload(p: DevPayloadInput): string {
     '',
     ...rulesSection(rules),
     '',
-    ...repoMapStep(),
-    '',
-    '## 개발 습관(토큰·범위 아끼기)',
-    ...DEV_HABITS.map((x) => `- ${x}`),
-    ...bugSteps([p.item.title, p.item.goal, p.finalPrompt].join('\n'), p.bug),
-    ...domainSteps([p.item.title, p.item.goal, p.finalPrompt].join('\n')),
+    ...devGuide([p.item.title, p.item.goal, p.finalPrompt].join('\n'), p.bug, p.slim === true),
     '',
     '## 규칙',
     '- 최신 main에서 위 작업 브랜치를 만들어 그 안에서만 작업한다. 지시 범위 밖 파일은 바꾸지 않는다.',

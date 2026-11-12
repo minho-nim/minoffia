@@ -60,13 +60,16 @@ export function submitSection(taskId: string, token: string, url = `${env('SUPAB
 /** 서버가 부를 때의 지시서(앱 지시서와 같은 뼈대, 첨부 설명 제외) */
 // deno-lint-ignore no-explicit-any
 async function serverText(admin: any, a: { task_id: string; plan_revision: number; work_item_id: string }): Promise<string> {
-  const { data: t } = await admin.from('tasks').select('project_id, projects(repo)').eq('id', a.task_id).maybeSingle();
+  const { data: t } = await admin.from('tasks').select('project_id, owner_id, projects(repo)').eq('id', a.task_id).maybeSingle();
   const { data: spec } = await admin.from('task_specs').select('revision, final_prompt, change_scope, preserve_constraints, test_criteria').eq('task_id', a.task_id).order('revision', { ascending: false }).limit(1).maybeSingle();
   const { data: plan } = await admin.from('pm_plans').select('target_base_revision, plan').eq('task_id', a.task_id).eq('plan_revision', a.plan_revision).maybeSingle();
   const item = ((plan?.plan as { work_items?: Record<string, unknown>[] } | undefined)?.work_items ?? []).find((w) => w.id === a.work_item_id);
   if (!t || !spec || !item) return '';
   const { data: rules } = await admin.from('project_rules').select('rule').eq('project_id', t.project_id).order('created_at').limit(30);
   const { count } = await admin.from('attachments').select('id', { count: 'exact', head: true }).eq('task_id', a.task_id).eq('kind', 'request');
+  // v0.6.82: 규칙 칸·개발 스킬(repo-map)이 들어 있는 저장소면 기본 규칙은 저장소 AGENTS.md에 있으므로 빼고 가리키기만
+  const { data: sc } = await admin.from('skill_cache').select('map').eq('owner_id', t.owner_id).maybeSingle();
+  const slim = !!(sc?.map as Record<string, Record<string, string>> | null)?.[String(t.project_id)]?.['repo-map'];
   return buildServerHandoff({
     taskId: a.task_id,
     repo: String((t.projects as { repo?: string } | null)?.repo ?? ''),
@@ -74,8 +77,9 @@ async function serverText(admin: any, a: { task_id: string; plan_revision: numbe
     item: { id: String(item.id), title: String(item.title ?? ''), goal: String(item.goal ?? ''), acceptance_tests: item.acceptance_tests as string[] | undefined, preserve_constraints: item.preserve_constraints as string[] | undefined },
     baseRevision: String(plan?.target_base_revision ?? ''),
     // 기본 규칙(모든 프로젝트)도 함께(v0.6.59: 서버가 시작한 Codex에는 프로젝트 규칙만 가고 기본 규칙이 빠져 있었다)
-    rules: [...new Set([...BASE_RULES, ...(rules ?? []).map((r: { rule: string }) => r.rule)])],
+    rules: slim ? (rules ?? []).map((r: { rule: string }) => r.rule) : [...new Set([...BASE_RULES, ...(rules ?? []).map((r: { rule: string }) => r.rule)])],
     attachmentCount: count ?? 0,
+    slim,
   });
 }
 

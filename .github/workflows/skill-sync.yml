@@ -20,6 +20,10 @@ on:
         description: 'add = 넣기·갱신, remove = 빼기(v0.6.60)'
         required: false
         default: add
+      rules:
+        description: 'true = 미노피아 작업 규칙 칸(rules/minoffia-rules.md)도 AGENTS.md·CLAUDE.md에 넣기·맞추기(v0.6.82)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -39,6 +43,7 @@ jobs:
           SKILL: ${{ inputs.skill }}
           SOURCE: ${{ inputs.source }}
           MODE: ${{ inputs.mode }}
+          RULES: ${{ inputs.rules }}
           GH_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
         run: |
           echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
@@ -74,6 +79,21 @@ jobs:
               fi
             done
           done
+          # 미노피아 작업 규칙 칸(v0.6.82 소유자 "고정 내용은 저장소에, 지시서는 할 일만"): <!-- minoffia-rules v… --> ~ <!-- /minoffia-rules --> 칸만 바꾸고 나머지는 그대로
+          if [ "$RULES" = "true" ] && [ "$MODE" != "remove" ]; then
+            [ -f /tmp/src/rules/minoffia-rules.md ] || { echo "::error::스킬 모음에 rules/minoffia-rules.md가 없습니다"; exit 1; }
+            for f in AGENTS.md CLAUDE.md; do
+              python3 - "$f" /tmp/src/rules/minoffia-rules.md <<'PY'
+          import re, sys, pathlib
+          target, src = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]).read_text(encoding='utf-8').strip()
+          old = target.read_text(encoding='utf-8') if target.exists() else ''
+          block = re.compile(r'<!-- minoffia-rules v[^>]*-->.*?<!-- /minoffia-rules -->', re.S)
+          new = block.sub(lambda m: src, old, count=1) if block.search(old) else ((old.rstrip() + '\n\n') if old.strip() else '') + src
+          target.write_text(new.rstrip() + '\n', encoding='utf-8')
+          PY
+            done
+            git add AGENTS.md CLAUDE.md
+          fi
           git add -A .agents/skills .claude/skills 2>/dev/null || true
           if git diff --cached --quiet; then echo "바꿀 것이 없습니다(이미 같거나 이미 없음)."; exit 0; fi
           src_sha=$(git -C /tmp/src rev-parse --short HEAD)
