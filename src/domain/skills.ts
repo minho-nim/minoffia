@@ -5,7 +5,15 @@ export interface SkillFile {
   files: string[];
   /** 라이선스 파일 첫 줄들(없으면 '') */
   license: string;
+  /** 스킬 모음 안의 폴더(예: .claude/skills/x, common/x) */
+  dir?: string;
+  /** 스킬을 만들고 찾는 도구 스킬(프로젝트에 넣지 않음) */
+  meta?: boolean;
 }
+
+/** 프로젝트에 이 스킬이 들어 있는지: same = 모음과 같음, old = 옛 버전, none = 없음(v0.6.58) */
+export type SkillInstallState = 'same' | 'old' | 'none';
+export const INSTALL_LABEL: Record<SkillInstallState, string> = { same: '들어 있음', old: '옛 버전', none: '없음' };
 
 export type SkillRisk = 'network' | 'secret' | 'paid' | 'delete' | 'install';
 export const RISK_LABEL: Record<SkillRisk, string> = {
@@ -26,6 +34,7 @@ export interface SkillView {
   source: string;
   risks: SkillRisk[];
   scripts: number;
+  meta: boolean;
 }
 
 /** 앞머리(--- name/description ---)와 본문을 나눈다. 앞머리가 없으면 첫 제목·첫 문단을 쓴다 */
@@ -77,6 +86,7 @@ export function toSkillView(f: SkillFile): SkillView {
     source,
     risks: skillRisks(f.skillMd),
     scripts: f.files.filter((x) => /\.(py|js|mjs|ts|sh)$/.test(x)).length,
+    meta: f.meta === true,
   };
 }
 

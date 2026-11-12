@@ -368,9 +368,16 @@ export function createLocalStore(): OfficeStore {
     // 데모: 저장소를 못 읽으므로 실제로 넣어 둔 두 스킬을 짧게 보여 준다(v0.6.55)
     async skills() {
       return [
-        { name: 'find-skills', files: ['LICENSE', 'SKILL.md'], license: 'MIT License Copyright (c) 2026 Vercel, Inc.', skillMd: '---\nname: find-skills\ndescription: 스킬 찾기. "~하는 스킬 있어?"라고 할 때 skills.sh에서 찾아 설치 수·출처·라이선스·위험을 보여 주고, 설치는 소유자 승인 뒤에만 한다.\n---\n\n# 스킬 찾기\n\n> minoffia 저장소 규칙: 설치는 소유자 승인 뒤에만, -g·-y 금지. 원문: vercel-labs/skills\n\n`npx skills find [검색어]`로 찾고, 설치 수·출처를 확인해 추천한다. 설치는 `npx skills add <주인/저장소@스킬>`.' },
-        { name: 'skill-creator', files: ['LICENSE.txt', 'SKILL.md', 'scripts/run_eval.py', 'scripts/quick_validate.py', 'agents/grader.md'], license: 'Apache License Version 2.0, January 2004', skillMd: '---\nname: skill-creator\ndescription: 스킬 만들기. 새 스킬을 만들거나, 있는 스킬을 고치거나, 스킬이 잘 동작하는지 시험해 볼 때 쓴다.\n---\n\n# 스킬 만들기\n\n스킬 초안을 쓰고 → 시험 질문으로 돌려 보고 → 결과를 보며 고치기를 되풀이한다.' },
+        { name: 'find-skills', meta: true, files: ['LICENSE', 'SKILL.md'], license: 'MIT License Copyright (c) 2026 Vercel, Inc.', skillMd: '---\nname: find-skills\ndescription: 스킬 찾기. "~하는 스킬 있어?"라고 할 때 skills.sh에서 찾아 설치 수·출처·라이선스·위험을 보여 주고, 설치는 소유자 승인 뒤에만 한다.\n---\n\n# 스킬 찾기\n\n> minoffia 저장소 규칙: 설치는 소유자 승인 뒤에만, -g·-y 금지. 원문: vercel-labs/skills\n\n`npx skills find [검색어]`로 찾고, 설치 수·출처를 확인해 추천한다. 설치는 `npx skills add <주인/저장소@스킬>`.' },
+        { name: 'skill-creator', meta: true, files: ['LICENSE.txt', 'SKILL.md', 'scripts/run_eval.py', 'scripts/quick_validate.py', 'agents/grader.md'], license: 'Apache License Version 2.0, January 2004', skillMd: '---\nname: skill-creator\ndescription: 스킬 만들기. 새 스킬을 만들거나, 있는 스킬을 고치거나, 스킬이 잘 동작하는지 시험해 볼 때 쓴다.\n---\n\n# 스킬 만들기\n\n스킬 초안을 쓰고 → 시험 질문으로 돌려 보고 → 결과를 보며 고치기를 되풀이한다.' },
+        { name: 'report-format', files: ['SKILL.md'], license: '', skillMd: '---\nname: report-format\ndescription: 작업 결과를 보고할 때 쓴다. 결과 요약 맨 끝에 스킬 확인 한 줄을 넣는다.\n---\n\n# 작업 보고 형식\n\n## 지시서용 요약\n\n- 요약 맨 끝 줄에 `스킬 확인: report-format`을 넣는다.' },
       ];
+    },
+    async skillStatus() {
+      return {};
+    },
+    async installSkill() {
+      throw new Error('로컬 데모에서는 프로젝트 저장소에 스킬을 넣을 수 없어요.');
     },
     async repoTree() {
       throw new Error('로컬 데모에서는 저장소를 읽을 수 없어요');

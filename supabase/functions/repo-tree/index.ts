@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { projectId?: string; action?: string; projectIds?: string[] };
+  let body: { projectId?: string; action?: string; projectIds?: string[]; skill?: string };
   try {
     body = await req.json();
   } catch {
@@ -45,18 +45,88 @@ Deno.serve(async (req) => {
   }
   // 스킬 목록(v0.6.55, 소유자 "minoffia에서 스킬을 간단히 보게"): 이 저장소 main의 .claude/skills/*/SKILL.md를 그대로 읽는다.
   // AI 호출 없음(GitHub 읽기만). 스킬마다 파일 목록과 라이선스 첫 줄도 함께. 크기는 스킬당 60KB, 최대 40개.
+  // 스킬 모음 저장소(v0.6.58): SKILLS_REPO가 있으면 그 저장소, 없으면 이 저장소. 어느 폴더든 <이름>/SKILL.md를 스킬로 본다.
+  const skillsRepo = env('SKILLS_REPO') || env('OFFICE_REPO') || 'minho-nim/minoffia';
+  const gh = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minlab-ai-office' };
+  const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  // 프로젝트에 넣지 않는 도구용 스킬(스킬을 만들고 찾는 데만 쓰는 것)
+  const META_SKILLS = ['find-skills', 'skill-creator'];
+  const skillBlob = async (repo: string, path: string): Promise<string> => {
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, { headers: gh, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+    if (!r || !r.ok) return '';
+    return String(((await r.json()) as { sha?: string }).sha ?? '');
+  };
+  const sourceSkillPath = async (name: string): Promise<string> => {
+    const res = await fetch(`https://api.github.com/repos/${skillsRepo}/git/trees/HEAD?recursive=1`, { headers: gh, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return '';
+    const data = (await res.json()) as { tree?: { path: string; type: string }[] };
+    return (data.tree ?? []).find((t) => t.type === 'blob' && (t.path === `${name}/SKILL.md` || t.path.endsWith(`/${name}/SKILL.md`)))?.path ?? '';
+  };
+  // 프로젝트마다 이 스킬이 들어 있는지(.agents/skills 기준): same = 모음과 같음, old = 다름(옛 버전), none = 없음
+  if (body.action === 'skillStatus') {
+    const name = String(body.skill ?? '');
+    if (!SKILL_NAME.test(name)) return reply(400, { ok: false, error: '스킬 이름이 이상합니다.' });
+    const src = await sourceSkillPath(name);
+    if (!src) return reply(404, { ok: false, error: '스킬 모음에서 그 스킬을 찾지 못했어요.' });
+    const srcSha = await skillBlob(skillsRepo, src);
+    const { data: rows } = await userClient.from('projects').select('id, repo').not('repo', 'is', null);
+    const status: Record<string, 'same' | 'old' | 'none'> = {};
+    await Promise.all(
+      (rows ?? []).map(async (r: { id: string; repo: string | null }) => {
+        const repo = (r.repo ?? '').trim();
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') return;
+        const sha = await skillBlob(repo, `.agents/skills/${name}/SKILL.md`);
+        status[r.id] = !sha ? 'none' : sha === srcSha ? 'same' : 'old';
+      }),
+    );
+    return reply(200, { ok: true, status, meta: META_SKILLS.includes(name) });
+  }
+  // 프로젝트에 넣기: 고른 프로젝트마다 Actions '스킬 넣기'(skill-sync.yml)를 한 번씩 시작한다. 버튼을 누른 것이 소유자 승인이다
+  if (body.action === 'skillInstall') {
+    const name = String(body.skill ?? '');
+    if (!SKILL_NAME.test(name)) return reply(400, { ok: false, error: '스킬 이름이 이상합니다.' });
+    if (META_SKILLS.includes(name)) return reply(409, { ok: false, error: '스킬을 만들고 찾는 도구 스킬은 미노피아에만 둬요.' });
+    const actionsToken = env('GITHUB_ACTIONS_TOKEN');
+    if (!actionsToken) return reply(503, { ok: false, error: 'Actions를 시작할 토큰(GITHUB_ACTIONS_TOKEN)이 없습니다.' });
+    if (!(await sourceSkillPath(name))) return reply(404, { ok: false, error: '스킬 모음에서 그 스킬을 찾지 못했어요.' });
+    const ids = (Array.isArray(body.projectIds) ? body.projectIds : []).filter((x) => typeof x === 'string').slice(0, 12);
+    const { data: rows } = await userClient.from('projects').select('id, repo').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
+    const officeRepo = env('OFFICE_REPO') || 'minho-nim/minoffia';
+    const started: string[] = [];
+    const failed: string[] = [];
+    for (const r of (rows ?? []) as { id: string; repo: string | null }[]) {
+      const repo = (r.repo ?? '').trim();
+      if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') continue;
+      const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/skill-sync.yml/dispatches`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${actionsToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: 'main', inputs: { repo, skill: name, source: skillsRepo } }),
+        signal: AbortSignal.timeout(15_000),
+      }).catch(() => null);
+      (res && res.ok ? started : failed).push(repo);
+    }
+    return reply(200, { ok: true, started, failed });
+  }
   if (body.action === 'skills') {
-    const repo = env('OFFICE_REPO') || 'minho-nim/minoffia';
+    const repo = skillsRepo;
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minlab-ai-office' };
     try {
       const res = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers, signal: AbortSignal.timeout(15_000) });
       if (!res.ok) return reply(502, { ok: false, error: `GitHub 응답 ${res.status}` });
       const data = (await res.json()) as { tree?: { path: string; type: string }[] };
       const files = new Map<string, string[]>();
+      const blobs: string[] = [];
+      const dirOf = new Map<string, string>();
       for (const t of data.tree ?? []) {
-        const m = t.type === 'blob' ? t.path.match(/^\.claude\/skills\/([\w.-]+)\/(.+)$/) : null;
-        if (m) files.set(m[1], [...(files.get(m[1]) ?? []), m[2]]);
+        // 어느 폴더든 <이름>/SKILL.md가 있는 폴더를 스킬로 본다(이 저장소는 .claude/skills, 스킬 모음 저장소는 common/·프로젝트 폴더 등)
+        if (t.type === 'blob' && /(^|\/)node_modules\//.test(t.path)) continue;
+        if (t.type === 'blob') blobs.push(t.path);
       }
+      for (const path of blobs) {
+        const m = path.match(/^(?:(.*)\/)?([\w.-]+)\/SKILL\.md$/);
+        if (m && SKILL_NAME.test(m[2]) && !dirOf.has(m[2])) dirOf.set(m[2], (m[1] ? `${m[1]}/` : '') + m[2]);
+      }
+      for (const [name, dir] of dirOf) files.set(name, blobs.filter((b) => b.startsWith(`${dir}/`)).map((b) => b.slice(dir.length + 1)));
       const names = [...files.keys()].filter((n) => files.get(n)!.includes('SKILL.md')).sort().slice(0, 40);
       const raw = (path: string) =>
         fetch(`https://api.github.com/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, { headers: { ...headers, Accept: 'application/vnd.github.raw' }, signal: AbortSignal.timeout(10_000) })
@@ -66,8 +136,9 @@ Deno.serve(async (req) => {
         names.map(async (name) => {
           const list = files.get(name)!;
           const lic = list.find((f) => /^LICEN[SC]E/i.test(f));
-          const [md, licText] = await Promise.all([raw(`.claude/skills/${name}/SKILL.md`), lic ? raw(`.claude/skills/${name}/${lic}`) : Promise.resolve('')]);
-          return { name, skillMd: md.slice(0, 60_000), files: list.slice(0, 80), license: licText.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3).join(' ').slice(0, 200) };
+          const dir = dirOf.get(name)!;
+          const [md, licText] = await Promise.all([raw(`${dir}/SKILL.md`), lic ? raw(`${dir}/${lic}`) : Promise.resolve('')]);
+          return { name, dir, meta: META_SKILLS.includes(name), skillMd: md.slice(0, 60_000), files: list.slice(0, 80), license: licText.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3).join(' ').slice(0, 200) };
         }),
       );
       return reply(200, { ok: true, repo, skills });
