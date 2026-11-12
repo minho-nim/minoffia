@@ -172,7 +172,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
         </span>
       </div>
       <p className="muted small">
-        Claude가 이 저장소에서 일할 때 쓰는 작업 설명서예요. 만들기·찾기에 짧게 적어 보내면 대화로 접수되고, Claude가 만든 스킬은 올리기 승인 뒤 PR로 들어와요.
+        AI가 개발할 때 꺼내 쓰는 작업 설명서예요(원본: minoffia-skills 저장소). 만들기·찾기에 짧게 적어 보내면 대화로 접수되고, Claude가 만든 스킬은 올리기 승인 뒤 PR로 들어와요.
       </p>
       {/* 프로젝트에 넣기 창(v0.6.58) */}
       <div className="project-sections skill-form-pop">
@@ -316,7 +316,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
           )}
         </details>
       </div>
-      {!canRequest && <p className="muted small">만들기·찾기는 저장소가 minho-nim/minoffia인 프로젝트가 있어야 해요.</p>}
+      {!canRequest && <p className="muted small">만들기·찾기는 저장소가 minho-nim/minoffia-skills(또는 minoffia)인 프로젝트가 있어야 해요.</p>}
       {error && <p className="task-error small">{error}</p>}
       {files === null && <p className="muted small">스킬을 읽는 중…</p>}
       {files && skills.length === 0 && !error && <p className="empty">아직 스킬이 없어요.</p>}
