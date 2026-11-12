@@ -2172,6 +2172,7 @@ export function App() {
             <SkillsPanel
               load={() => store.skills!()}
               usage={skillUsage(snap.workflow.results)}
+              mapLoad={store.skillMap ? () => store.skillMap!() : undefined}
               prefill={skillPrefill}
               projects={snap.projects
                 .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')

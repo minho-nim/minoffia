@@ -81,6 +81,39 @@ Deno.serve(async (req) => {
     );
     return reply(200, { ok: true, status, meta: META_SKILLS.includes(name) });
   }
+  // 스킬 그림 지도(v0.6.62): 프로젝트마다 .agents/skills 폴더 목록을 한 번씩 읽어(저장소당 GitHub 1번) 스킬 폴더의 tree sha를
+  // 스킬 모음의 같은 폴더 sha와 견준다. same = 같음, old = 다름(옛 버전), extra = 모음에 없음. 없는 스킬은 빠진다. AI 호출 없음.
+  if (body.action === 'skillMap') {
+    const res = await fetch(`https://api.github.com/repos/${skillsRepo}/git/trees/HEAD?recursive=1`, { headers: gh, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return reply(502, { ok: false, error: `GitHub 응답 ${res.status}` });
+    const tree = ((await res.json()) as { tree?: { path: string; type: string; sha: string }[] }).tree ?? [];
+    const dirSha = new Map<string, string>();
+    for (const t of tree) {
+      const m = t.type === 'blob' ? t.path.match(/^(?:(.*)\/)?([\w.-]+)\/SKILL\.md$/) : null;
+      if (!m || !SKILL_NAME.test(m[2]) || dirSha.has(m[2])) continue;
+      const dir = (m[1] ? `${m[1]}/` : '') + m[2];
+      const d = tree.find((x) => x.type === 'tree' && x.path === dir);
+      if (d) dirSha.set(m[2], d.sha);
+    }
+    const { data: rows } = await userClient.from('projects').select('id, repo').not('repo', 'is', null);
+    const map: Record<string, Record<string, 'same' | 'old' | 'extra'>> = {};
+    await Promise.all(
+      (rows ?? []).map(async (r: { id: string; repo: string | null }) => {
+        const repo = (r.repo ?? '').trim();
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') return;
+        const list = await fetch(`https://api.github.com/repos/${repo}/contents/.agents/skills`, { headers: gh, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+        const entries = list && list.ok ? ((await list.json()) as { name?: string; type?: string; sha?: string }[]) : [];
+        const got: Record<string, 'same' | 'old' | 'extra'> = {};
+        for (const e of Array.isArray(entries) ? entries : []) {
+          if (e.type !== 'dir' || !e.name || !SKILL_NAME.test(e.name)) continue;
+          // extra = 프로젝트에만 있고 스킬 모음에는 없는 스킬(직접 넣은 것)
+          got[e.name] = !dirSha.has(e.name) ? 'extra' : dirSha.get(e.name) === e.sha ? 'same' : 'old';
+        }
+        map[r.id] = got;
+      }),
+    );
+    return reply(200, { ok: true, map });
+  }
   // 프로젝트에 넣기: 고른 프로젝트마다 Actions '스킬 넣기'(skill-sync.yml)를 한 번씩 시작한다. 버튼을 누른 것이 소유자 승인이다
   if (body.action === 'skillInstall') {
     const name = String(body.skill ?? '');
