@@ -28,6 +28,7 @@ run supabase/tests/99_gemini_draft.sql
 run supabase/tests/99_pm_plan_inbox.sql
 run supabase/tests/99_dev_result_inbox.sql
 run supabase/tests/99_auto_pr_merge.sql
+run supabase/tests/99_skill_cache.sql
 run supabase/tests/99_push.sql
 run supabase/tests/99_b_waits.sql
 run supabase/tests/99_agent_leave.sql

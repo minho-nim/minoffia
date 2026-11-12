@@ -49,7 +49,8 @@ export function AppMapView({ map }: { map: AppMap }) {
 
 const when = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-export function HealthCheck({ api }: { api: HealthApi }) {
+/** maps=false(v0.6.70): 지도 버튼은 빼고 점검만('구조 보기'가 지도를 맡을 때) */
+export function HealthCheck({ api, maps = true }: { api: HealthApi; maps?: boolean }) {
   const [report, setReport] = useState<HealthReport | null>(null);
   const [state, setState] = useState<'loading' | 'idle' | 'checking' | 'error'>('loading');
   const [msg, setMsg] = useState('');
@@ -156,7 +157,7 @@ export function HealthCheck({ api }: { api: HealthApi }) {
 
       {/* 2. 앱 지도: 간략 지도(쉬운 카드) / 자세한 지도(floorplan 원본), 둘 다 팝업 */}
       <div className="map-buttons">
-        {report && (
+        {report && maps && (
           <>
           <button type="button" className="btn btn-small btn-primary" onClick={() => setPopup('brief')}>
             간략 지도

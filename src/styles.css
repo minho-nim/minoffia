@@ -6444,3 +6444,69 @@ html.popup-open .project-sections > details[open] * {
   color: var(--muted);
 }
 
+
+/* '구조 보기'(v0.6.70): 간략·자세히·구조도 탭 팝업. 다른 칸 팝업보다 넓고 높게, floorplan처럼 꽉 채운다 */
+.project-sections > details.project-maps[open] {
+  width: min(1040px, calc(100vw - 16px));
+  height: min(86vh, 860px);
+  max-height: none;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+.maps-pop {
+  display: flex;
+  flex-direction: column;
+  height: calc(min(86vh, 860px) - 62px);
+  min-height: 0;
+}
+.maps-tabs {
+  display: flex;
+  gap: 2px;
+  margin: -12px -16px 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  flex: none;
+}
+.maps-tab {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.maps-tab[aria-selected='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 700;
+}
+.maps-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 0 16px;
+}
+/* 자세히·관계는 floorplan처럼 테두리 없이 꽉 */
+.maps-detail .maps-body,
+.maps-relation .maps-body {
+  margin: 0 -16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.maps-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+}
+.maps-detail .maps-body > p {
+  padding: 12px 16px;
+}
+.skill-sections {
+  margin-top: 4px;
+}
