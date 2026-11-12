@@ -2,7 +2,7 @@
 // 누르면 가운데 팝업으로 내용을 본다(프로젝트 칸과 같은 팝업, 바깥 누르면 닫힘). 읽기는 GitHub만, AI 호출 없음.
 // 만들기·찾기는 작은 입력 창(v0.6.57)에 쓰고 보내면 대화로 바로 보낸다. 결과는 늘 PR(올리기 승인)로 들어온다.
 import { useEffect, useMemo, useState } from 'react';
-import { SkillMap } from './SkillMap';
+import { SkillMap, type SkillMapMode } from './SkillMap';
 import { INSTALL_LABEL, RISK_LABEL, SKILL_AREAS, SKILL_CATEGORIES, SKILL_PRESETS, skillRequest, toSkillView, type SkillCategory, type SkillFile, type SkillInstallState } from '../domain/skills';
 
 const EMPTY = { what: '', when: '', rules: '', areas: [] as string[], isDefault: false, category: '' };
@@ -14,7 +14,8 @@ export interface SkillProject {
 }
 
 export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill, mapLoad, installRequest }: {
-  load: () => Promise<SkillFile[]>;
+  /** force = '다시 읽기'(저장해 둔 것 말고 새로) */
+  load: (force?: boolean) => Promise<SkillFile[]>;
   onSend: (text: string) => void;
   canRequest: boolean;
   /** 스킬을 넣을 수 있는 프로젝트(저장소 있는 것, MinLab 제외) */
@@ -31,7 +32,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   installRequest?: { name: string; n: number } | null;
 }) {
   // 스킬 지도(v0.6.63 소유자 "프로젝트의 지도 보기처럼"): 앱 지도와 같은 큰 팝업으로 연다. 열 때만 프로젝트 상태를 읽는다
-  const [mapOpen, setMapOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState<SkillMapMode | null>(null);
   const view = 'list' as const;
   // 프로젝트에 넣기 창(v0.6.58): 스킬 하나를 골라 프로젝트마다 들어 있는지 보고, 고른 곳에 넣는다
   const [installFor, setInstallFor] = useState<string | null>(null);
@@ -94,15 +95,15 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   const [files, setFiles] = useState<SkillFile[] | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<string | null>(null);
-  const refresh = () => {
+  const refresh = (force = false) => {
     setError('');
     setFiles(null);
-    load().then(setFiles, (e) => {
+    load(force).then(setFiles, (e) => {
       setError((e as Error).message || '스킬을 읽지 못했어요.');
       setFiles([]);
     });
   };
-  useEffect(refresh, []);
+  useEffect(() => refresh(), []);
   const skills = useMemo(() => (files ?? []).map(toSkillView), [files]);
 
   // 스킬 지도(v0.6.61): 분류 칩·검색으로 좁히고, 분류별로 묶어 보인다. 도구 스킬은 '전체'에서는 맨 아래 접어 둔다
@@ -171,7 +172,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
           <button type="button" className="btn btn-small btn-ghost" disabled={!canRequest} onClick={() => setForm('find')}>
             찾기
           </button>
-          <button type="button" className="btn btn-small btn-ghost" onClick={refresh} aria-label="스킬 목록 다시 읽기">
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => refresh(true)} aria-label="스킬 목록 다시 읽기">
             새로 읽기
           </button>
         </span>
@@ -326,18 +327,34 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
       {files === null && <p className="muted small">스킬을 읽는 중…</p>}
       {files && skills.length === 0 && !error && <p className="empty">아직 스킬이 없어요.</p>}
       {skills.length > 0 && (
-        <button type="button" className="btn btn-small btn-primary skill-map-open" onClick={() => setMapOpen(true)}>
-          스킬 지도 보기
-        </button>
+        <div className="map-buttons skill-map-open">
+          <button type="button" className="btn btn-small btn-primary" onClick={() => setMapOpen('brief')}>
+            간략 지도
+          </button>
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => setMapOpen('detail')}>
+            자세한 지도
+          </button>
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => setMapOpen('tree')}>
+            구조도
+          </button>
+        </div>
       )}
       {mapOpen && (
-        <div className="archify-modal" role="dialog" aria-label="스킬 지도" onClick={() => setMapOpen(false)}>
+        <div className="archify-modal" role="dialog" aria-label="스킬 지도" onClick={() => setMapOpen(null)}>
           <div className="archify-box skill-map-box" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="archify-close" onClick={() => setMapOpen(false)} aria-label="닫기">
+            <button type="button" className="archify-close" onClick={() => setMapOpen(null)} aria-label="닫기">
               ×
             </button>
-            <p className="appmap-title">스킬 지도</p>
+            <p className="appmap-title">{mapOpen === 'brief' ? '간략 지도' : mapOpen === 'tree' ? '구조도' : '자세한 지도'}</p>
+            <div className="skill-map-tabs" role="tablist" aria-label="지도 보기">
+              {(['brief', 'detail', 'tree'] as const).map((m) => (
+                <button key={m} type="button" role="tab" className="chip" aria-pressed={mapOpen === m} onClick={() => setMapOpen(m)}>
+                  {m === 'brief' ? '간략' : m === 'detail' ? '자세히' : '구조도'}
+                </button>
+              ))}
+            </div>
             <SkillMap
+              mode={mapOpen}
               skills={skills}
               usage={usage}
               projects={projects}
@@ -345,7 +362,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
               onPick={
                 install && projects.length > 0
                   ? (name) => {
-                      setMapOpen(false);
+                      setMapOpen(null);
                       openInstall(name);
                     }
                   : undefined
