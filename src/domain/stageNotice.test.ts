@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noticeFor, stageNotices } from './stageNotice';
+import { noticeFor, stageNotices, staleNotices } from './stageNotice';
 import type { Task } from './types';
 import type { Approval, WorkflowData } from './workflow-types';
 import { EMPTY_WORKFLOW } from './workflow-types';
@@ -57,5 +57,18 @@ describe('단계 알림(v0.3.9)', () => {
     expect(r.notices[0].text).toContain('입력창에 답을 쓰면 Gemini');
     // 같은 상태로 다시 보면 알리지 않는다
     expect(stageNotices([task], data({ specs: [ask] }), r.seen).notices).toHaveLength(0);
+  });
+});
+
+describe('오래 걸리는 개발 알림(v0.6.80)', () => {
+  const plan = { id: 'pl', taskId: 't1', planRevision: 1, approvedSpecRevision: 1, source: 'manual', plan: { work_items: [{ id: 'W1', dependencies: [] }] }, createdAt: '' } as never;
+  const assign = (startedAt: string) => ({ id: 'as1', taskId: 't1', planRevision: 1, workItemId: 'W1', assignee: 'codex', dispatchStatus: 'started', startedAt, updatedAt: startedAt }) as never;
+  const now = Date.parse('2026-11-12T12:00:00Z');
+  it('Codex가 시작한 지 120분 넘게 소식이 없으면 한 번 알린다(같은 시작은 같은 id)', () => {
+    const old = staleNotices([task], data({ specs: [spec(1)], approvals: [approvalA], plans: [plan], assignments: [assign('2026-11-12T09:30:00Z')] }), now);
+    expect(old).toHaveLength(1);
+    expect(old[0].text).toContain('Codex W1');
+    expect(old[0].id).toBe('stale-as1-2026-11-12T09:30:00Z');
+    expect(staleNotices([task], data({ specs: [spec(1)], approvals: [approvalA], plans: [plan], assignments: [assign('2026-11-12T11:30:00Z')] }), now)).toHaveLength(0);
   });
 });
