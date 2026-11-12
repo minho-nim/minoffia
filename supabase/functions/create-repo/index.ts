@@ -69,7 +69,8 @@ Deno.serve(async (req) => {
     if (!ok) return reply(403, { ok: false, error: `AI Office가 만든 저장소에만 넣습니다(${repo}). 이 저장소는 직접 관리하세요.` });
     try {
       // v0.4.75: 기본 규칙 + 프로젝트 규칙. 파일이 없으면 만들고, 있으면 '지켜야 할 것' 절만 맞춘다(다른 부분은 그대로).
-      const rules = await loadRules(userClient, p.id);
+      // v0.6.83: 기본 규칙은 '미노피아 작업 규칙' 칸(스킬 넣기가 AGENTS.md·CLAUDE.md에 넣음)에 있으므로 여기는 프로젝트 규칙만(두 번 읽지 않게)
+      const rules = (await loadRules(userClient, p.id)).filter((r) => !BASE_RULES.includes(r));
       const head = await gh(`/repos/${repo}/contents/CLAUDE.md`);
       if (head.status !== 200 && head.status !== 404) {
         await head.body?.cancel();
@@ -149,7 +150,7 @@ Deno.serve(async (req) => {
   // AI 작업 규칙 파일(CLAUDE.md)을 함께 넣는다(v0.4.55). 실패해도 저장소는 그대로 쓰고 알림만 남긴다.
   let rulesWarning = '';
   try {
-    const content = btoa(String.fromCharCode(...new TextEncoder().encode(projectClaudeMd(String(project.name), [...BASE_RULES]))));
+    const content = btoa(String.fromCharCode(...new TextEncoder().encode(projectClaudeMd(String(project.name), []))));
     const put = await fetch(`https://api.github.com/repos/${data.full_name}/contents/CLAUDE.md`, {
       method: 'PUT',
       headers: {

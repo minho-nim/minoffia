@@ -83,12 +83,19 @@ jobs:
           if [ "$RULES" = "true" ] && [ "$MODE" != "remove" ]; then
             [ -f /tmp/src/rules/minoffia-rules.md ] || { echo "::error::스킬 모음에 rules/minoffia-rules.md가 없습니다"; exit 1; }
             for f in AGENTS.md CLAUDE.md; do
-              python3 - "$f" /tmp/src/rules/minoffia-rules.md <<'PY'
+              python3 - "$f" /tmp/src/rules/minoffia-rules.md /tmp/src/rules/legacy-base-rules.txt <<'PY'
           import re, sys, pathlib
           target, src = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]).read_text(encoding='utf-8').strip()
           old = target.read_text(encoding='utf-8') if target.exists() else ''
           block = re.compile(r'<!-- minoffia-rules v[^>]*-->.*?<!-- /minoffia-rules -->', re.S)
           new = block.sub(lambda m: src, old, count=1) if block.search(old) else ((old.rstrip() + '\n\n') if old.strip() else '') + src
+          # v0.6.83: 예전 '이 프로젝트에서 지켜야 할 것' 절에 있던 기본 규칙은 규칙 칸으로 옮겼으므로 빼서 두 번 읽지 않게(프로젝트 규칙은 그대로)
+          legacy = pathlib.Path(sys.argv[3])
+          if legacy.exists():
+              drop = {'- ' + l.strip() for l in legacy.read_text(encoding='utf-8').splitlines() if l.strip()}
+              m = block.search(new)
+              clean = lambda t: '\n'.join(l for l in t.split('\n') if l.strip() not in drop)
+              new = clean(new[:m.start()]) + new[m.start():m.end()] + clean(new[m.end():]) if m else clean(new)
           target.write_text(new.rstrip() + '\n', encoding='utf-8')
           PY
             done
