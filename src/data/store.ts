@@ -133,6 +133,8 @@ export interface OfficeStore {
   skills?(): Promise<import('../domain/skills').SkillFile[]>;
   /** 프로젝트마다 이 스킬이 들어 있는지(v0.6.58) */
   skillStatus?(skill: string): Promise<Record<string, import('../domain/skills').SkillInstallState>>;
+  /** 그림 지도: 프로젝트마다 들어 있는 스킬(v0.6.62) */
+  skillMap?(): Promise<import('../domain/skills').SkillMapData>;
   /** 고른 프로젝트에 스킬 넣기(Actions '스킬 넣기'를 프로젝트마다 시작) */
   installSkill?(skill: string, projectIds: string[], mode?: 'add' | 'remove'): Promise<{ started: string[]; failed: string[] }>;
   /** 프로젝트 디자인 기준(v0.5.56, Supabase 모드에서만) */

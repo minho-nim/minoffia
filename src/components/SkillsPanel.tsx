@@ -2,6 +2,7 @@
 // 누르면 가운데 팝업으로 내용을 본다(프로젝트 칸과 같은 팝업, 바깥 누르면 닫힘). 읽기는 GitHub만, AI 호출 없음.
 // 만들기·찾기는 작은 입력 창(v0.6.57)에 쓰고 보내면 대화로 바로 보낸다. 결과는 늘 PR(올리기 승인)로 들어온다.
 import { useEffect, useMemo, useState } from 'react';
+import { SkillMap } from './SkillMap';
 import { INSTALL_LABEL, RISK_LABEL, SKILL_AREAS, SKILL_CATEGORIES, SKILL_PRESETS, skillRequest, toSkillView, type SkillCategory, type SkillFile, type SkillInstallState } from '../domain/skills';
 
 const EMPTY = { what: '', when: '', rules: '', areas: [] as string[], isDefault: false, category: '' };
@@ -12,7 +13,7 @@ export interface SkillProject {
   repo: string;
 }
 
-export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill }: {
+export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill, mapLoad }: {
   load: () => Promise<SkillFile[]>;
   onSend: (text: string) => void;
   canRequest: boolean;
@@ -24,7 +25,11 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   usage?: Map<string, number>;
   /** 다른 곳(반복되는 문제)에서 넘어온 스킬 만들기 내용. n이 바뀔 때마다 만들기 창을 연다(v0.6.59) */
   prefill?: { what: string; rules: string; n: number } | null;
+  /** 그림 지도용 프로젝트별 스킬 상태(v0.6.62) */
+  mapLoad?: () => Promise<import('../domain/skills').SkillMapData>;
 }) {
+  // 목록 | 지도(v0.6.62). 지도는 열 때만 프로젝트 상태를 읽는다
+  const [view, setView] = useState<'list' | 'map'>('list');
   // 프로젝트에 넣기 창(v0.6.58): 스킬 하나를 골라 프로젝트마다 들어 있는지 보고, 고른 곳에 넣는다
   const [installFor, setInstallFor] = useState<string | null>(null);
   const [states, setStates] = useState<Record<string, SkillInstallState> | null>(null);
@@ -315,6 +320,19 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
       {files === null && <p className="muted small">스킬을 읽는 중…</p>}
       {files && skills.length === 0 && !error && <p className="empty">아직 스킬이 없어요.</p>}
       {skills.length > 0 && (
+        <span className="view-toggle skill-view" role="group" aria-label="스킬 보기 방식">
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>
+            목록
+          </button>
+          <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>
+            지도
+          </button>
+        </span>
+      )}
+      {view === 'map' && skills.length > 0 && (
+        <SkillMap skills={skills} usage={usage} projects={projects} load={mapLoad} onPick={install && projects.length > 0 ? openInstall : undefined} />
+      )}
+      {view === 'list' && skills.length > 0 && (
         <div className="skill-map">
           <div className="skill-cats" role="group" aria-label="스킬 분류">
             <button type="button" className="chip" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>
@@ -329,8 +347,8 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
           <input id="skill-search" className="skill-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="스킬 찾기: 이름·설명 낱말" aria-label="스킬 검색" />
         </div>
       )}
-      {files && skills.length > 0 && shown.length === 0 && <p className="muted small">맞는 스킬이 없어요.</p>}
-      {groups.map(([c, list]) => (
+      {view === 'list' && files && skills.length > 0 && shown.length === 0 && <p className="muted small">맞는 스킬이 없어요.</p>}
+      {view === 'list' && groups.map(([c, list]) => (
         <section key={c} className="skill-group" aria-label={`${c} ${list.length}개`}>
           <h4 className="skill-group-title">
             {c} <span className="num num-count">{list.length}</span>
@@ -339,7 +357,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
         </section>
       ))}
       {/* 도구 스킬(스킬 만들기·찾기)은 접어 둔다(v0.6.59): 실제로 쓰는 스킬만 먼저 보이게 */}
-      {tools.length > 0 && (
+      {view === 'list' && tools.length > 0 && (
         <details className="skill-tools">
           <summary className="small">도구 스킬 {tools.length}개 (스킬을 만들고 찾는 데 쓰는 것)</summary>
           <ul className="skill-list">{tools.map(card)}</ul>
