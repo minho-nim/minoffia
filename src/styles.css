@@ -5741,9 +5741,7 @@ a.project-site {
   -webkit-user-select: none;
   color: var(--muted);
 }
-.order-list.is-editing {
-  touch-action: none;
-}
+/* 목록 전체에 touch-action: none을 두면 휴대폰에서 '수정' 중 화면이 안 밀렸다(v0.6.68 소유자 "순서 설정할 때 스크롤이 안 됨"). 끌기는 ☰ 손잡이만 막는다 */
 /* 휴대폰 머리(v0.6.43 소유자 "겹침·머리가 너무 길어짐"): 큰 머리 대신 얇은 한 줄 머리만 늘 둔다 */
 @media (max-width: 1039px) {
   .topbar {
