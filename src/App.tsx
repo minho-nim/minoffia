@@ -1885,10 +1885,11 @@ export function App() {
           {renderOffice(officePop)}
         </FormPopup>
       )}
-      {peek && tab === 'chat' && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
+      {peek && (tab === 'chat' || tab === 'agent') && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab === 'skills' ? 'settings tab-skills' : tab}`}>
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
-        {(tab === 'tasks' || tab === 'projects' || tab === 'team' || tab === 'settings' || tab === 'skills') && (
+        {/* 오른쪽 아래 '…'(v0.6.77 소유자 "위치는 오른쪽 아래, 위로 열림, 대화·에이전트 탭에서는 사무실이 2단으로 열리게"): 모든 탭 */}
+        {(
           <span className="office-dock">
           {/* v0.6.74 소유자 "… 하나만, 열면 사무실·역할·클라우드": 평소엔 … 하나, 누르면 펼친다. 역할·클라우드는 열린 채로 팝업 */}
           {dockOpen && (
@@ -1899,23 +1900,39 @@ export function App() {
           <button type="button" className="office-dock-btn" onClick={() => { setOfficePop('cloud'); setDockOpen(false); }}>
             클라우드
           </button>
-          <button
-            type="button"
-            className={`office-hold${holdOffice ? ' is-on' : ''}`}
-            aria-label="누르고 있는 동안 사무실 보기"
-            onPointerDown={(e) => {
-              e.preventDefault();
-              setHoldOffice(true);
-            }}
-            onPointerUp={() => setHoldOffice(false)}
-            onPointerLeave={() => setHoldOffice(false)}
-            onPointerCancel={() => setHoldOffice(false)}
-            onContextMenu={(e) => e.preventDefault()}
-            onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && setHoldOffice(true)}
-            onKeyUp={() => setHoldOffice(false)}
-          >
-            사무실
-          </button>
+          {tab === 'chat' || tab === 'agent' ? (
+            <button
+              type="button"
+              className={`office-hold${peek ? ' is-on' : ''}`}
+              aria-pressed={peek}
+              onClick={() => {
+                setDockOpen(false);
+                // 사무실이 다 보이면(맨 위) 그대로, 줄었거나 접혔으면 크게 띄운다(다시 누르면 닫힘)
+                if (!stageRef.current.mini) window.scrollTo({ top: 0, behavior: 'smooth' });
+                else setPeek((v) => !v);
+              }}
+            >
+              사무실
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`office-hold${holdOffice ? ' is-on' : ''}`}
+              aria-label="누르고 있는 동안 사무실 보기"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setHoldOffice(true);
+              }}
+              onPointerUp={() => setHoldOffice(false)}
+              onPointerLeave={() => setHoldOffice(false)}
+              onPointerCancel={() => setHoldOffice(false)}
+              onContextMenu={(e) => e.preventDefault()}
+              onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && setHoldOffice(true)}
+              onKeyUp={() => setHoldOffice(false)}
+            >
+              사무실
+            </button>
+          )}
             </>
           )}
           <button type="button" className="office-dock-btn office-dock-more" aria-expanded={dockOpen} aria-label={dockOpen ? '닫기' : '사무실·역할·클라우드 보기'} onClick={() => setDockOpen((v) => !v)}>
@@ -1923,7 +1940,7 @@ export function App() {
           </button>
           </span>
         )}
-        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek && tab === 'chat' ? ' is-peek' : ''}${holdOffice ? ' is-hold' : ''}`} aria-label="오피스">
+        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek && (tab === 'chat' || tab === 'agent') ? ' is-peek' : ''}${holdOffice ? ' is-hold' : ''}`} aria-label="오피스">
           <OfficeView
             lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
             tasks={snap.tasks}
