@@ -38,6 +38,8 @@ describe('Codex Linear(v0.5.2)', () => {
     expect(n.kind).toBe('error');
     expect(n.last).toContain('usage limits');
     const w = readNews({ issue: { comments: { nodes: [{ body: 'Working on it https://chatgpt.com/codex/tasks/task_e_abc123', createdAt: '3', user: { name: 'Codex' } }] } } });
+    // v0.6.80: 시작은 했는데 끝내지 못함 = 실패(다시 시도 버튼), 시작 못 함(error)과 따로
+    expect(readNews({ issue: { comments: { nodes: [{ body: "Codex couldn't complete this task.", createdAt: '4', user: { name: 'Codex' } }] } } }).kind).toBe('failed');
     expect(w).toMatchObject({ kind: 'working', taskUrl: 'https://chatgpt.com/codex/tasks/task_e_abc123' });
     expect(readNews({ issue: { comments: { nodes: [] } } }).kind).toBe('none');
   });

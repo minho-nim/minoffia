@@ -10,7 +10,7 @@ import type { Project, Snapshot, Task } from '../domain/types';
 import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
-import { stageNotices, type NoticeAction } from '../domain/stageNotice';
+import { stageNotices, type NoticeAction, staleNotices } from '../domain/stageNotice';
 import { canApprove, deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
@@ -594,6 +594,13 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     if (!now || (pending.kind === 'repo' && now.repo)) setPending(null);
   }, [snap.projects, pending]);
 
+  // 1분마다 다시 보기(오래 걸리는 개발 알림용, 화면이 보일 때만)
+  const [minute, setMinute] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => document.visibilityState === 'visible' && setMinute((n) => n + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   // 단계 알림: 확인 질문·막힘이 생기면 미니엉이 알리고, 아래에 버튼을 둔다(규칙만, 토큰 0, v0.4.12부터 승인 차례는 내 차례가 보여 줌).
   // 다른 기기가 이미 넣은 알림(같은 id)은 다시 넣지 않는다. 처음 쓰는 기기는 지금 상태를 기억만 한다.
   useEffect(() => {
@@ -606,7 +613,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       // 저장이 막힌 브라우저: 이번 화면에서만 알린다.
     }
     const have = new Set(logRef.current.map((m) => m.id));
-    const add = (before ? notices : []).filter((n) => !have.has(n.id));
+    // 오래 걸리는 개발(v0.6.80)도 같은 방식으로 한 번씩(1분마다 다시 본다)
+    const add = [...(before ? notices : []), ...staleNotices(snap.tasks, snap.workflow)].filter((n) => !have.has(n.id));
     if (!add.length) return;
     add.forEach((n) => archive({ role: 'office', text: n.text, projectId: n.projectId, taskId: n.taskId }));
     // 기본 대화창과 그 프로젝트 대화창 둘 다에 보이고, 어느 프로젝트 일인지 앞에 적는다(v0.4.89 소유자)
@@ -622,7 +630,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       projects: [n.projectId],
     }));
     setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
-  }, [snap.tasks, snap.workflow, syncReady]);
+  }, [snap.tasks, snap.workflow, syncReady, minute]);
 
   // 업무 카드에서 답한 확인 질문 답을 대화창(기본·그 프로젝트)에도 남긴다(v0.4.90).
   useEffect(() => {

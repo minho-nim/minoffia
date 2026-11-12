@@ -7,6 +7,7 @@
 import type { Task } from './types';
 import { canApprove, deriveWorkflow } from './workflow';
 import { STAGE_LABEL, type Stage, type WorkflowData } from './workflow-types';
+import { staleStart } from './reassign';
 
 /** 알림 아래에 둘 버튼. open = 업무 카드 보기, A·B = 그 자리에서 승인 */
 export type NoticeAction = 'open' | 'A' | 'B';
@@ -116,4 +117,31 @@ export function stageNotices(tasks: Task[], all: WorkflowData, seen: Record<stri
     if (NOTICE_STAGES.has(n.stage)) notices.push(n);
   }
   return { notices, seen: next };
+}
+
+const AGENT: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
+/**
+ * 개발이 오래 걸릴 때 대화창 알림(v0.6.80 소유자 "너무 오래 걸리면 대화창이나 알림으로 알려줘"): 지금 계획의 작업 중
+ * 시작했는데 소식이 없는 것(staleStart, 업무 카드 경고와 같은 기준)을 한 번씩. id는 작업+시작 시각이라 다시 시작하면 다시 알린다.
+ */
+export function staleNotices(tasks: Task[], all: WorkflowData, now = Date.now()): StageNotice[] {
+  const out: StageNotice[] = [];
+  for (const t of tasks) {
+    if (t.status === 'done') continue;
+    const v = deriveWorkflow(t, all);
+    if (!v.plan) continue;
+    for (const a of all.assignments.filter((x) => x.taskId === t.id && x.planRevision === v.plan!.planRevision)) {
+      const why = staleStart(a, now);
+      if (!why) continue;
+      out.push({
+        id: `stale-${a.id}-${a.startedAt ?? a.updatedAt}`,
+        taskId: t.id,
+        projectId: t.projectId,
+        stage: v.stage,
+        text: `'${clip(t.title, 40)}' — ${AGENT[a.assignee] ?? a.assignee} ${a.workItemId}: ${why}\n업무 카드에서 다시 시도하거나 다른 AI로 넘길 수 있어요.`,
+        actions: ['open'],
+      });
+    }
+  }
+  return out;
 }

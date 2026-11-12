@@ -1106,7 +1106,9 @@ export function App() {
         say('error', `담당을 바꾸지 못했어요: ${failed.join(' / ')}`);
         return false;
       }
-      say('ok', `${a.workItemId} 담당을 ${PREF_LABEL[to as keyof typeof PREF_LABEL] ?? to}(으)로 바꾼 새 계획을 만들었어요. 실행 승인하면 시작해요.`);
+      // v0.6.80 소유자 "넘기는 중에 버튼을 두 번 눌러야 했다": 새 계획을 바로 읽어 자동 시작(실행 승인 자동 기록 → 시작)이 이번 화면에서 이어지게 한다
+      setSnap(await store.load());
+      say('ok', `${a.workItemId}을(를) ${PREF_LABEL[to as keyof typeof PREF_LABEL] ?? to}에게 넘겼어요. 곧 자동으로 시작해요(다시 누르지 않아도 돼요).`);
       return true;
     },
     designCheck: store.designCheck,

@@ -47,9 +47,9 @@ Deno.serve(async (req) => {
   const news = readNews(body.data, a.started_at);
   if (news.kind === 'none') return reply(200, { ok: true, ignored: true });
 
-  const note = `linear: ${news.kind === 'error' ? '시작 못 함 — ' : ''}${news.last}`.slice(0, 300);
+  const note = `linear: ${news.kind === 'error' ? '시작 못 함 — ' : news.kind === 'failed' ? '끝내지 못함 — ' : ''}${news.last}`.slice(0, 300);
   if (note === a.actual_provider_status) return reply(200, { ok: true, same: true });
-  const failed = news.kind === 'error' && (a.dispatch_status === 'starting' || a.dispatch_status === 'started');
+  const failed = (news.kind === 'error' || news.kind === 'failed') && (a.dispatch_status === 'starting' || a.dispatch_status === 'started');
   const { data: saved, error: saveError } = await admin
     .from('agent_assignments')
     .update({ actual_provider_status: note, last_verified_at: new Date().toISOString(), ...(failed ? { dispatch_status: 'failed' } : {}) })
@@ -57,15 +57,16 @@ Deno.serve(async (req) => {
   if (saveError || !saved) return reply(502, { ok: false });
   // v0.6.30(소유자 결정 "Codex 주, Claude 대신"): Codex가 시작하지 못하면 그 작업을 Claude로 넘겨 바로 이어서 한다
   const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
-  const handed = failed && serviceKey
+  // 끝내지 못함(failed)은 자동으로 넘기지 않는다: 소유자가 카드의 '다시 시도'로 같은 AI 또는 다른 AI를 고른다(v0.6.80)
+  const handed = failed && news.kind === 'error' && serviceKey
     ? await handOffToClaude(admin, a.owner_id, a.task_id, { plan_revision: a.plan_revision, work_item_id: a.work_item_id }, news.last.replace(/^Codex 환경 없음 — [^.]*\.\s*/, '').slice(0, 80) || 'Codex 시작 못 함', env('SUPABASE_URL'), serviceKey).catch((e) => `fail: ${(e as Error).message}`)
     : '';
   if (handed) console.log(JSON.stringify({ fn: 'linear-webhook', handoff: handed }));
   await admin.rpc('push_enqueue', {
     p_owner: a.owner_id,
     p_task: a.task_id,
-    p_kind: news.kind === 'error' ? 'blocked' : 'result',
-    p_title: news.kind === 'error' ? (handed.startsWith('ok') ? 'Codex가 시작하지 못해 Claude가 이어서 해요' : 'Codex가 시작하지 못했어요') : 'Codex 소식이 왔어요',
+    p_kind: news.kind === 'error' || news.kind === 'failed' ? 'blocked' : 'result',
+    p_title: news.kind === 'error' ? (handed.startsWith('ok') ? 'Codex가 시작하지 못해 Claude가 이어서 해요' : 'Codex가 시작하지 못했어요') : news.kind === 'failed' ? 'Codex가 끝내지 못했어요 — 업무 카드에서 다시 시도' : 'Codex 소식이 왔어요',
   });
   return reply(200, { ok: true });
 });
