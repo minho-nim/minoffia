@@ -6952,3 +6952,9 @@ html.popup-open .project-sections > details[open] * {
   padding: 0;
   overflow: hidden;
 }
+
+/* … 버튼(v0.6.74) */
+.office-dock-more {
+  min-width: 36px;
+  font-weight: 700;
+}
