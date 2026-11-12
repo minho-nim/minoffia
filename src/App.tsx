@@ -17,9 +17,10 @@ import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
-import { StructureMaps } from './components/StructureMaps';
+import { forgetMaps, StructureMaps } from './components/StructureMaps';
 import { RelationLoader } from './components/RelationMap';
 import { OfficeMap } from './components/OfficeMap';
+import { FormPopup } from './components/FormPopup';
 import { ProjectSkills } from './components/ProjectSkills';
 import { SKILLS_REPO, skillUsage, toSkillView } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
@@ -137,6 +138,9 @@ function heightWatcher(name: string) {
 }
 const watchTabsHeight = heightWatcher('--tabs-h');
 const watchChipsHeight = heightWatcher('--chips-h');
+
+/** 구조도 파일 목록 기억(앱을 켜 있는 동안) */
+const treeCache = new Map<string, { at: number; p: Promise<string[]> }>();
 
 export function App() {
   const [booting, setBooting] = useState(true);
@@ -341,6 +345,25 @@ export function App() {
   const [peek, setPeek] = useState(false);
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
   const [officeOpen, setOfficeOpen] = useState(false);
+  const [directOpen, setDirectOpen] = useState(false);
+  // 대화 탭 프로젝트 칩 접기(v0.6.72). 이 기기에만 기억
+  const [chatChipsOpen, setChatChipsOpenState] = useState(() => {
+    try {
+      return localStorage.getItem('chatChipsOpen') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setChatChipsOpen = (f: (v: boolean) => boolean) =>
+    setChatChipsOpenState((v) => {
+      const n = f(v);
+      try {
+        localStorage.setItem('chatChipsOpen', n ? '1' : '0');
+      } catch {
+        // 저장 못 해도 화면은 그대로
+      }
+      return n;
+    });
   // 스킬 탭의 '구조 보기'·'점검' 칸(v0.6.70): 열었을 때만 그린다
   const [skillMapsOpen, setSkillMapsOpen] = useState(false);
   const [skillCheckOpen, setSkillCheckOpen] = useState(false);
@@ -385,12 +408,12 @@ export function App() {
   const [skillToInstall, setSkillToInstall] = useState<{ name: string; n: number } | null>(null);
   // 반복되는 문제 → 스킬 만들기 창(v0.6.59)
   const [skillPrefill, setSkillPrefill] = useState<{ what: string; rules: string; n: number } | null>(null);
-  // 업무 보기 방식(v0.6.54): 목록 | 보드. 이 기기에만 기억(화면 편의)
+  // 업무 보기 방식(v0.6.54): 보드 | 목록. 이 기기에만 기억(화면 편의). 기본은 보드(v0.6.72 소유자 "보드가 먼저 보이게")
   const [taskView, setTaskViewState] = useState<'list' | 'board'>(() => {
     try {
-      return localStorage.getItem('taskView') === 'board' ? 'board' : 'list';
+      return localStorage.getItem('taskView') === 'list' ? 'list' : 'board';
     } catch {
-      return 'list';
+      return 'board';
     }
   });
   const setTaskView = (v: 'list' | 'board') => {
@@ -1755,14 +1778,23 @@ export function App() {
     null;
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
   const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
-  const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
+  // 구조도 파일 목록은 프로젝트마다 10분 동안 한 번만 읽는다(v0.6.72 소유자 "켤 때마다 로딩해야 돼?")
+  const loadTree = (id: string) => {
+    const c = treeCache.get(id);
+    if (c && Date.now() - c.at < 600_000) return c.p;
+    const p = store.repoTree(id);
+    treeCache.set(id, { at: Date.now(), p });
+    p.catch(() => treeCache.delete(id));
+    return p;
+  };
+  const renderStructure = (p: Project) => <RepoStructure load={() => loadTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
   // 사무실 지도(v0.6.71): 확인된 상태만(마지막 운영 배포, 휴가)
   const officeDeploy = snap.workflow.deployments.filter((d) => d.ok && OFFICE_REPOS.includes(d.repo.toLowerCase())).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const renderOffice = (t: 'role' | 'cloud') => <OfficeMap tab={t} state={{ lastDeploy: officeDeploy?.createdAt, onLeave: snap.leave ?? [] }} />;
   // 관계 지도에 나오는 프로젝트(저장소 있음, 예시·MinLab 제외, 프로젝트 순서대로)
   const relProjects = ordered.filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab').map((p) => ({ id: p.id, name: p.name }));
   // '구조 보기'와 '점검'을 나눈다(v0.6.70): 프로젝트 칸과 스킬 탭이 같은 모양
-  const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
+  const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => (forgetMaps(p.id), store.healthCheck!.start(p.id, force)), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderMaps = (p: Project) => (
     <StructureMaps
       id={p.id}
@@ -1925,8 +1957,13 @@ export function App() {
 
           {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
           {tab === 'chat' && snap.projects.length > 0 && (
-            <div className="filters filters-scroll project-chips chat-chips" role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
+            <div className={`filters filters-scroll project-chips chat-chips${chatChipsOpen ? '' : ' is-folded'}`} role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
+              {/* 접기·펴기(v0.6.72 소유자 "대화의 프로젝트 나열은 꽉 찬 오른쪽 삼각형으로 접기 펴기"): 접으면 고른 것 하나만 */}
+              <button type="button" className="chip-fold" aria-expanded={chatChipsOpen} aria-label={chatChipsOpen ? '프로젝트 목록 접기' : '프로젝트 목록 펴기'} onClick={() => setChatChipsOpen((v) => !v)}>
+                {chatChipsOpen ? '▼' : '▶'}
+              </button>
               {/* 기본 대화창(일반 대화, v0.4.88 소유자): 늘 맨 앞에, 프로젝트를 안 고르면 이 창 */}
+              {(chatChipsOpen || chatProjectId === null) && (
               <button
                 type="button"
                 className="chip chip-project chip-general"
@@ -1936,9 +1973,11 @@ export function App() {
               >
                 기본
               </button>
+              )}
               {ordered.map((p) => {
                 const n = turnsByProject.get(p.id) ?? 0;
                 const on = chatProjectId === p.id;
+                if (!chatChipsOpen && !on) return null;
                 return (
                   <button
                     key={p.id}
@@ -2050,10 +2089,24 @@ export function App() {
                   return t ? quickApprove(t, gate) : false;
                 }}
               />
-              <details className="direct-entry">
-                <summary className="small">＋ 직접 입력</summary>
-                <TaskForm projects={snap.projects} usage={snap.usage} leave={snap.leave ?? []} onSubmit={addTask} />
-              </details>
+              {/* 직접 입력은 팝업으로(v0.6.72) */}
+              <button type="button" className="fold-btn direct-entry" onClick={() => setDirectOpen(true)}>
+                ＋ 직접 입력
+              </button>
+              {directOpen && (
+                <FormPopup title="업무 직접 입력" onClose={() => setDirectOpen(false)}>
+                  <TaskForm
+                    projects={snap.projects}
+                    usage={snap.usage}
+                    leave={snap.leave ?? []}
+                    onSubmit={async (...args: Parameters<typeof addTask>) => {
+                      const r = await addTask(...args);
+                      setDirectOpen(false);
+                      return r;
+                    }}
+                  />
+                </FormPopup>
+              )}
               {/* 상태 고르기는 드롭다운 하나로(v0.6.43 소유자 "필터가 두 줄") */}
               {(() => {
                 const c = stateCounts(states, inProject.map((t) => t.id));
@@ -2068,11 +2121,11 @@ export function App() {
                 return (
                   <div className="task-view-bar">
                   <span className="view-toggle" role="group" aria-label="보기 방식">
-                    <button type="button" aria-pressed={taskView === 'list'} onClick={() => setTaskView('list')}>
-                      목록
-                    </button>
                     <button type="button" aria-pressed={taskView === 'board'} onClick={() => setTaskView('board')}>
                       보드
+                    </button>
+                    <button type="button" aria-pressed={taskView === 'list'} onClick={() => setTaskView('list')}>
+                      목록
                     </button>
                   </span>
                   {taskView === 'list' && (

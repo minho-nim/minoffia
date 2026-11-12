@@ -5514,6 +5514,12 @@ a.project-site {
   .layout.tab-projects > .stage,
   .layout.tab-team > .stage {
     display: none;
+  }  /* 사무실을 숨긴 탭은 고정 자리 높이도 0(v0.6.72 소유자 "반만 접힌 사무실에서 다른 탭 갈 때 빈칸"):
+     작은 사무실 상태(is-mini)로 넘어오면 탭·칩이 없는 사무실 높이만큼 내려가 빈칸이 생겼다 */
+  .layout.tab-tasks,
+  .layout.tab-projects,
+  .layout.tab-team {
+    --stage-h: 0px;
   }
 }
 /* ④ 업무 필터는 한 줄(옆으로 밀어 보기) */
@@ -6752,4 +6758,145 @@ html.popup-open .project-sections > details[open] * {
 }
 .office-sections {
   margin-bottom: 8px;
+}
+
+/* 보드 칸 접고 펴기(v0.6.72) */
+.board-fold {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  cursor: pointer;
+}
+.board-fold:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.fold-tri {
+  font-size: 0.7em;
+  color: var(--muted);
+}
+.board-col.is-closed {
+  padding-block: 6px;
+}
+
+/* 접기 버튼(v0.6.72): 꽉 찬 삼각형 ▶/▼ + 글 */
+.fold-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.fold-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.project-more {
+  margin-top: 4px;
+}
+
+/* 대화 탭 프로젝트 칩 접기 버튼(v0.6.72): 꽉 찬 삼각형 */
+.chip-fold {
+  flex: 0 0 auto;
+  width: 30px;
+  min-height: 30px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.chip-fold:focus-visible {
+  outline: 2px solid var(--accent);
+  border-radius: 6px;
+}
+
+/* 결과 평가 지우기(v0.6.72): ✕ 또는 왼쪽으로 밀기 */
+.swipe-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  touch-action: pan-y;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.swipe-row > .review-log-row {
+  flex: 1;
+  min-width: 0;
+}
+.swipe-x {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.swipe-x:hover,
+.swipe-x:focus-visible {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.review-clear {
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+/* 입력 팝업(v0.6.72) */
+.form-pop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+  background: rgba(0, 0, 0, 0.45);
+  overscroll-behavior: contain;
+}
+.form-pop-box {
+  width: min(640px, 100%);
+  max-height: min(86vh, 860px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.form-pop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.form-pop-close {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.form-pop-body {
+  overflow: auto;
+  padding: 12px 16px 16px;
+  overscroll-behavior: contain;
+}
+.form-pop-body > .task-form {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+}
+.form-pop-body .form-title {
+  display: none;
 }

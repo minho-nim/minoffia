@@ -1,3 +1,4 @@
+import { FormPopup } from './FormPopup';
 import type { ReactNode } from 'react';
 import { repeatIssues } from '../domain/repeatIssues';
 import type { Deployment, ResultReview } from '../domain/workflow-types';
@@ -62,6 +63,8 @@ interface Props {
  */
 export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderMaps, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, onMakeSkill }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
+  // 카드 아래 칸(배포·구조 보기·점검·스킬…)은 접어 둔다(v0.6.72 소유자 "버튼 줄까지만 보이고 아래는 접히게")
+  const [moreOpen, setMoreOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
   const [designOpen, setDesignOpen] = useState<Record<string, boolean>>({});
@@ -120,6 +123,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
       </div>
 
       {formOpen && (
+        <FormPopup title={editing ? `${editing.name} 수정` : '새 프로젝트'} onClose={reset}>
         <form
           className="task-form"
           onSubmit={async (e) => {
@@ -226,6 +230,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               </button>
             ))}
         </form>
+        </FormPopup>
       )}
 
       {projects.length === 0 && <p className="empty">아직 프로젝트가 없어요. "+ 새 프로젝트"로 만들거나 대화 탭에서 요청하면 만들 수 있어요.</p>}
@@ -285,7 +290,10 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   수정
                 </button>
               </span>
-              {deploy && (
+              <button type="button" className="fold-btn project-more" aria-expanded={!!moreOpen[p.id]} onClick={() => setMoreOpen((o) => ({ ...o, [p.id]: !o[p.id] }))}>
+                <span className="fold-tri" aria-hidden="true">{moreOpen[p.id] ? '▼' : '▶'}</span> {moreOpen[p.id] ? '접기' : '구조 보기 · 점검 · 스킬 · 규칙'}
+              </button>
+              {moreOpen[p.id] && deploy && (
                 <p className="muted small project-deploy">
                   {deploy.ok ? '마지막 운영 배포' : '마지막 배포 실패'} · {new Date(deploy.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   {deploy.ok ? ` · ${deploy.toSha.slice(0, 7)}` : ''}
@@ -293,6 +301,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 </p>
               )}
               {/* 덜 복잡하게(v0.6.41 소유자 "구조도 열어 보기 힘들어, 읽을 게 너무 많아"): 칸들을 한 줄 버튼으로, 누르면 전체 화면으로 열린다 */}
+              {moreOpen[p.id] && (
               <div className="project-sections">
               {p.repo && !p.sample && <ProjectSetup project={p} issues={setupIssuesOf?.(p) ?? { codex: null, claude: null }} />}
               {renderHistory && (
@@ -451,6 +460,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 </details>
               )}
               </div>
+              )}
               {repoFor === p.id && onCreateRepo && (
                 <RepoCreate
                   project={p}
