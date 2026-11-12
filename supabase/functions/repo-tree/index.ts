@@ -160,7 +160,8 @@ Deno.serve(async (req) => {
       const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/skill-sync.yml/dispatches`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${actionsToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ref: 'main', inputs: { repo, skill: name, source: skillsRepo, mode } }),
+        // 넣을 때는 미노피아 작업 규칙 칸도 같이 맞춘다(v0.6.82, 같은 PR 하나, 이미 같으면 바뀌는 것 없음)
+        body: JSON.stringify({ ref: 'main', inputs: { repo, skill: name, source: skillsRepo, mode, rules: mode === 'add' ? 'true' : 'false' } }),
         signal: AbortSignal.timeout(15_000),
       }).catch(() => null);
       (res && res.ok ? started : failed).push(repo);

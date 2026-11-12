@@ -8,6 +8,8 @@ export interface ServerHandoffInput {
   baseRevision?: string;
   rules: string[];
   attachmentCount: number;
+  /** 저장소에 미노피아 작업 규칙 칸·개발 스킬이 있으면(v0.6.82) 규칙은 저장소 것을 따르라고 한 줄만 */
+  slim?: boolean;
 }
 
 export function buildServerHandoff(i: ServerHandoffInput): string {
@@ -33,6 +35,8 @@ export function buildServerHandoff(i: ServerHandoffInput): string {
     '',
     '## 완료 기준',
     ...list([...(i.item.acceptance_tests ?? []), i.spec.test_criteria]),
+    '',
+    ...(i.slim ? ['', '## 작업 방법', '- 저장소 AGENTS.md의 "미노피아 작업 규칙"을 따른다. 시작 전에 스킬 repo-map으로 이미 있는 것을 먼저 보고, 화면 일은 ui-check, 버그는 debugging-and-error-recovery를 쓴다.'] : []),
     '',
     '## 규칙',
     '- 최신 기본 브랜치(main) 위에서 작업한다. 지시와 맞지 않게 파일이 바뀌어 있으면 고치지 말고 멈춰서 보고한다.',

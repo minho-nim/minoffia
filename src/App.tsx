@@ -19,6 +19,7 @@ import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
 import { forgetMaps, StructureMaps } from './components/StructureMaps';
 import { freshReport, savedReport } from './data/mapCache';
+import { isSlimProject, setSlimProjects } from './data/slimRepos';
 import { RelationLoader } from './components/RelationMap';
 import { OfficeMap } from './components/OfficeMap';
 import { FormPopup } from './components/FormPopup';
@@ -390,6 +391,7 @@ export function App() {
         .then((c) => {
           if (!c || !c.files.length) return fetchSkills(true);
           if (!(Date.now() - Date.parse(c.updatedAt) < 600_000)) void fetchSkills(true).catch(() => null);
+          setSlimProjects(c.map);
           return { files: c.files, map: c.map, mcp: c.mcp };
         });
       skillsData.current = { at: Date.now(), p };
@@ -406,6 +408,7 @@ export function App() {
     p2.then(
       (d) => {
         skillsData.current = { at: Date.now(), p: Promise.resolve(d) };
+        setSlimProjects(d.map);
       },
       () => {
         if (skillsData.current?.p === p2) skillsData.current = null;
@@ -414,6 +417,10 @@ export function App() {
     if (!background) skillsData.current = { at: Date.now(), p: p2 };
     return p2;
   };
+  // 켤 때 한 번 스킬 상태를 읽어 둔다(v0.6.82): 지시서를 짧게 보낼 수 있는 프로젝트(규칙 칸·개발 스킬 있음)를 알아 두려고. 서버에 저장된 한 행이라 가볍다
+  useEffect(() => {
+    if (store?.skillCache && store.skills && store.skillMap) void loadSkillsData().catch(() => null);
+  }, [store]);
   // 스킬 탭에서 넣기 창을 바로 열 스킬(프로젝트 칸에서 넘어올 때)
   const [skillToInstall, setSkillToInstall] = useState<{ name: string; n: number } | null>(null);
   // 반복되는 문제 → 스킬 만들기 창(v0.6.59)
@@ -1651,7 +1658,7 @@ export function App() {
       else if (a.assignee === 'codex' && view.spec) {
         const project = projectById.get(task.projectId);
         const rules = withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === task.projectId).map((r) => r.rule));
-        const text = buildCodexHandoff(task, view.spec, item, project, view.plan.targetBaseRevision, attachmentsOf(snap.workflow.attachments, task.id, 'request'), linksOf(snap.workflow.links, task.id), view.pApproved ? attachmentsOf(snap.workflow.attachments, task.id, 'prototype', view.plan.planRevision) : [], rules);
+        const text = buildCodexHandoff(task, view.spec, item, project, view.plan.targetBaseRevision, attachmentsOf(snap.workflow.attachments, task.id, 'request'), linksOf(snap.workflow.links, task.id), view.pApproved ? attachmentsOf(snap.workflow.attachments, task.id, 'prototype', view.plan.planRevision) : [], rules, isSlimProject(task.projectId));
         void workflowActions.startCodexLinear?.(a, false, text);
       }
     }
