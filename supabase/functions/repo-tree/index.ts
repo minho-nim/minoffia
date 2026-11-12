@@ -45,8 +45,8 @@ Deno.serve(async (req) => {
   }
   // 스킬 목록(v0.6.55, 소유자 "minoffia에서 스킬을 간단히 보게"): 이 저장소 main의 .claude/skills/*/SKILL.md를 그대로 읽는다.
   // AI 호출 없음(GitHub 읽기만). 스킬마다 파일 목록과 라이선스 첫 줄도 함께. 크기는 스킬당 60KB, 최대 40개.
-  // 스킬 모음 저장소(v0.6.58): SKILLS_REPO가 있으면 그 저장소, 없으면 이 저장소. 어느 폴더든 <이름>/SKILL.md를 스킬로 본다.
-  const skillsRepo = env('SKILLS_REPO') || env('OFFICE_REPO') || 'minho-nim/minoffia';
+  // 스킬 모음 저장소(v0.6.65): 기본은 minho-nim/minoffia-skills(스킬 원본), SKILLS_REPO로 바꿀 수 있다. 어느 폴더든 <이름>/SKILL.md를 스킬로 본다.
+  const skillsRepo = env('SKILLS_REPO') || 'minho-nim/minoffia-skills';
   const gh = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minlab-ai-office' };
   const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
   // 프로젝트에 넣지 않는 도구용 스킬(스킬을 만들고 찾는 데만 쓰는 것)

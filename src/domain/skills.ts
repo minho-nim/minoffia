@@ -1,4 +1,7 @@
 // 저장소 스킬 보기(v0.6.55, 소유자 "minoffia에서 스킬을 간단히 보게, 내용과 설명"): SKILL.md를 나눠 읽고 위험 표시를 규칙으로 단다(AI 호출 없음).
+/** 스킬 원본 저장소(v0.6.65). 서버 repo-tree의 기본값과 같다 */
+export const SKILLS_REPO = 'minho-nim/minoffia-skills';
+
 export interface SkillFile {
   name: string;
   skillMd: string;

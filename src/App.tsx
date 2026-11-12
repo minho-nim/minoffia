@@ -17,7 +17,7 @@ import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
-import { skillUsage, toSkillView } from './domain/skills';
+import { SKILLS_REPO, skillUsage, toSkillView } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
@@ -1699,8 +1699,11 @@ export function App() {
   }
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
   const ordered = snap.projects;
-  // 이 저장소(minoffia) 프로젝트: 스킬 만들기·찾기를 여기서 접수(v0.6.55)
-  const officeProject = snap.projects.find((p) => OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) && !p.sample) ?? null;
+  // 스킬 만들기·찾기를 접수할 프로젝트(v0.6.65): 스킬 원본 저장소(minoffia-skills) 프로젝트, 없으면 이 저장소(minoffia)
+  const officeProject =
+    snap.projects.find((p) => (p.repo ?? '').toLowerCase() === SKILLS_REPO && !p.sample) ??
+    snap.projects.find((p) => OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) && !p.sample) ??
+    null;
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
   const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
