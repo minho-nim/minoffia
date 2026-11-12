@@ -11,6 +11,7 @@ import { AttachmentGallery, ImagePicker, type PendingImage } from './Attachments
 import { RequestContext } from './RequestContext';
 import { clarificationsOf, linksOf, type Clarification, type LinkRef } from '../domain/requestContext';
 import { ADAPTER_STATE_LABEL, adapterFor } from '../domain/adapters';
+import { isSlimProject } from '../data/slimRepos';
 import { buildCodexHandoff, buildCodexPrRequest, buildPrototypeHandoff } from '../domain/handoffV2';
 import type { Project, Task } from '../domain/types';
 import { siteUrl } from '../domain/types';
@@ -961,7 +962,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                     : a.assignee === 'codex' && actions.startCodexLinear && item
                       ? {
                           start: (x: AgentAssignment, ack: boolean) =>
-                            actions.startCodexLinear!(x, ack, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules)),
+                            actions.startCodexLinear!(x, ack, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules, isSlimProject(task.projectId))),
                           label: 'Codex에 맡기기(Linear, 자동)',
                           ack: 'Linear 이슈에서 Codex가 실제로 시작하지 않았음을 확인했습니다',
                           note: '실행 승인하면 Linear 이슈를 만들어 Codex에게 맡깁니다(ChatGPT 구독 한도 안). 한도에 걸리면 여기에 알려요.',
@@ -1158,7 +1159,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                               void copy(a.id, buildPrototypeHandoff(task, view.spec!, item, project, view.plan!.plan.mode_reason ?? '', requestImages, taskLinks));
                               return;
                             }
-                            const text = buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules);
+                            const text = buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules, isSlimProject(task.projectId));
                             // v0.6.21: Codex는 결과 자동 제출 절을 붙인다(Codex 앱에 붙여 넣으면 결과가 앱으로 바로 옴)
                             const section = a.assignee === 'codex' && actions.codexManualSection ? await actions.codexManualSection(a) : '';
                             void copy(a.id, text + section);

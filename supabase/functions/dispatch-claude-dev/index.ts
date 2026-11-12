@@ -4,6 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildDevPayload, claudeBranch } from './payload.ts';
 import { loadRules, previewUrl } from './projectRules.ts';
+import { SLIM_MARKER_SKILL } from './devHabits.ts';
 import { appMapSection } from './appMap.ts';
 
 const HARD_DAILY_CAP = 20;
@@ -180,6 +181,8 @@ Deno.serve(async (req) => {
     submit: ticketError ? undefined : { url: `${env('SUPABASE_URL')}/functions/v1/submit-result`, token: ticket },
     // v0.4.57: 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것, 브랜치 미리보기 주소
     projectRules: await loadRules(userClient, task.project_id),
+    // v0.6.82: 규칙 칸·개발 스킬이 들어 있는 저장소면 지시서를 짧게(스킬 상태는 skill_cache, 없으면 예전처럼 전부)
+    slim: await userClient.from('skill_cache').select('map').maybeSingle().then(({ data }) => !!(data?.map as Record<string, Record<string, string>> | null)?.[String(task.project_id)]?.[SLIM_MARKER_SKILL], () => false),
     previewUrl: previewUrl(project.preview_host, claudeBranch(a.task_id, String(item.id))),
   });
   const text = appMap ? `${textBase}\n\n${appMap}` : textBase;

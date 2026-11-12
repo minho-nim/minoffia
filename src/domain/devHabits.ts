@@ -139,3 +139,23 @@ export function repoMapStep(): string[] {
     '작업이 끝나면 graphify-out 폴더를 지운다(커밋하지 않는다). 설치나 실행이 안 되면 건너뛰고 위 저장소 지도만 쓴다.',
   ];
 }
+
+/** 저장소에 '미노피아 작업 규칙' 칸과 개발 스킬이 들어 있는지 알아보는 스킬 이름(v0.6.82, 규칙 칸과 같이 넣는다) */
+export const SLIM_MARKER_SKILL = 'repo-map';
+
+/**
+ * 개발 방법 절(v0.6.82 소유자 "고정 내용은 저장소에, 지시서는 할 일만"): slim(규칙 칸·스킬이 들어 있는 저장소)이면 그것을 가리키는
+ * 몇 줄만, 아니면 예전처럼 저장소 지도·개발 습관·버그·분야 확인을 모두 붙인다(규칙이 빠진 채로 개발되지 않게).
+ */
+export function devGuide(text: string, bugHint: boolean | undefined, slim: boolean): string[] {
+  if (!slim) return [...repoMapStep(), '', '## 개발 습관(토큰·범위 아끼기)', ...DEV_HABITS.map((x) => `- ${x}`), ...bugSteps(text, bugHint), ...domainSteps(text)];
+  const has = (id: string) => DOMAIN_STEPS.some((d) => d.id === id && d.match.test(text));
+  return [
+    '## 작업 방법',
+    '- 저장소 AGENTS.md·CLAUDE.md의 "미노피아 작업 규칙"을 따른다.',
+    '- 시작 전에 스킬 repo-map으로 이미 있는 것을 먼저 본다. 여러 파일을 고치면 code-graph도 쓴다.',
+    ...(isBugWork(text, bugHint) ? ['- 버그라서: 스킬 debugging-and-error-recovery 순서대로(먼저 실패하는 확인 명령을 만든다).'] : []),
+    ...(has('ui') || has('design') ? ['- 화면 일이라서: 스킬 ui-check로 1400·400px을 확인한다.'] : []),
+    ...(has('db') || has('security') ? ['- DB·보안 일이라서: 스킬 db-security-check를 따른다.'] : []),
+  ];
+}
