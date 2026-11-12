@@ -3,7 +3,7 @@
 // 그 이슈의 Codex 댓글을 Linear API(LINEAR_API_KEY)로 다시 읽어(웹훅 본문의 글은 믿지 않음) 업무 카드 소식을 바꾸고 휴대폰 알림을 보낸다.
 // verify_jwt = false(Linear는 Supabase 로그인이 없다). 대신 서명이 맞아야 한다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { readNews, STATUS_QUERY } from './linear.ts';
+import { readNews, STATUS_QUERY, envMismatch, envWarning } from './linear.ts';
 import { commentIssueId, fresh, signatureOk } from './verify.ts';
 import { handOffToClaude } from './handoff.ts';
 
@@ -47,7 +47,12 @@ Deno.serve(async (req) => {
   const news = readNews(body.data, a.started_at);
   if (news.kind === 'none') return reply(200, { ok: true, ignored: true });
 
-  const note = `linear: ${news.kind === 'error' ? '시작 못 함 — ' : news.kind === 'failed' ? '끝내지 못함 — ' : ''}${news.last}`.slice(0, 300);
+  // 다른 저장소 환경에서 시작했는지(v0.6.86): 경고를 상태 앞에 붙이고 처음 한 번 알린다(막지는 않는다)
+  const { data: tk } = await admin.from('tasks').select('projects(repo)').eq('id', a.task_id).maybeSingle();
+  const repo = String((tk?.projects as { repo?: string } | null)?.repo ?? '');
+  const wrongEnv = envMismatch(news.environment, repo);
+  const note = `linear: ${wrongEnv ? envWarning(news.environment!, repo) : ''}${news.kind === 'error' ? '시작 못 함 — ' : news.kind === 'failed' ? '끝내지 못함 — ' : ''}${news.last}`.slice(0, 300);
+  const firstWrongEnv = wrongEnv && !String(a.actual_provider_status ?? '').includes('환경 확인');
   if (note === a.actual_provider_status) return reply(200, { ok: true, same: true });
   const failed = (news.kind === 'error' || news.kind === 'failed') && (a.dispatch_status === 'starting' || a.dispatch_status === 'started');
   const { data: saved, error: saveError } = await admin
@@ -65,8 +70,8 @@ Deno.serve(async (req) => {
   await admin.rpc('push_enqueue', {
     p_owner: a.owner_id,
     p_task: a.task_id,
-    p_kind: news.kind === 'error' || news.kind === 'failed' ? 'blocked' : 'result',
-    p_title: news.kind === 'error' ? (handed.startsWith('ok') ? 'Codex가 시작하지 못해 Claude가 이어서 해요' : 'Codex가 시작하지 못했어요') : news.kind === 'failed' ? 'Codex가 끝내지 못했어요 — 업무 카드에서 다시 시도' : 'Codex 소식이 왔어요',
+    p_kind: news.kind === 'error' || news.kind === 'failed' || firstWrongEnv ? 'blocked' : 'result',
+    p_title: news.kind === 'error' ? (handed.startsWith('ok') ? 'Codex가 시작하지 못해 Claude가 이어서 해요' : 'Codex가 시작하지 못했어요') : news.kind === 'failed' ? 'Codex가 끝내지 못했어요 — 업무 카드에서 다시 시도' : firstWrongEnv ? `Codex가 다른 저장소 환경(${news.environment})에서 시작했어요` : 'Codex 소식이 왔어요',
   });
   return reply(200, { ok: true });
 });
