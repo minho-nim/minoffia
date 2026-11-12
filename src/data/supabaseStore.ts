@@ -266,6 +266,27 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
   return res.data;
 }
 
+/** 서버가 돌려준(또는 저장해 둔) 스킬 목록을 앱 모양으로 */
+function parseSkillFiles(raw: unknown): import('../domain/skills').SkillFile[] {
+  const list = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+  return list.map((x) => ({
+    name: String(x.name ?? ''),
+    skillMd: String(x.skillMd ?? ''),
+    files: Array.isArray(x.files) ? (x.files as unknown[]).filter((f): f is string => typeof f === 'string') : [],
+    license: String(x.license ?? ''),
+    dir: typeof x.dir === 'string' ? x.dir : undefined,
+    meta: x.meta === true,
+  }));
+}
+function parseSkillMap(raw: unknown): import('../domain/skills').SkillMapData {
+  const out: Record<string, Record<string, 'same' | 'old' | 'extra'>> = {};
+  for (const [id, m] of Object.entries((raw ?? {}) as Record<string, Record<string, unknown>>)) {
+    out[id] = {};
+    for (const [n, v] of Object.entries(m ?? {})) if (v === 'same' || v === 'old' || v === 'extra') out[id][n] = v;
+  }
+  return out;
+}
+
 export function createSupabaseStore(client: SupabaseClient): OfficeStore {
   let lastGeminiWarm = 0;
   const userId = async () => {
@@ -698,15 +719,13 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async skills() {
       const data = await invoke('repo-tree', { action: 'skills' });
-      const list = Array.isArray(data.skills) ? (data.skills as Record<string, unknown>[]) : [];
-      return list.map((x) => ({
-        name: String(x.name ?? ''),
-        skillMd: String(x.skillMd ?? ''),
-        files: Array.isArray(x.files) ? (x.files as unknown[]).filter((f): f is string => typeof f === 'string') : [],
-        license: String(x.license ?? ''),
-        dir: typeof x.dir === 'string' ? x.dir : undefined,
-        meta: x.meta === true,
-      }));
+      return parseSkillFiles(data.skills);
+    },
+    // 서버에 저장해 둔 스킬 목록·프로젝트 상태(v0.6.70): GitHub를 거치지 않고 표 한 행만 읽는다
+    async skillCache() {
+      const { data, error } = await client.from('skill_cache').select('files, map, updated_at').maybeSingle();
+      if (error || !data || !Array.isArray(data.files)) return null;
+      return { files: parseSkillFiles(data.files), map: parseSkillMap(data.map), updatedAt: String(data.updated_at ?? '') };
     },
     async skillStatus(skill) {
       const data = await invoke('repo-tree', { action: 'skillStatus', skill });
@@ -716,12 +735,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async skillMap() {
       const data = await invoke('repo-tree', { action: 'skillMap' });
-      const out: Record<string, Record<string, 'same' | 'old' | 'extra'>> = {};
-      for (const [id, m] of Object.entries((data.map ?? {}) as Record<string, Record<string, unknown>>)) {
-        out[id] = {};
-        for (const [n, v] of Object.entries(m ?? {})) if (v === 'same' || v === 'old' || v === 'extra') out[id][n] = v;
-      }
-      return out;
+      return parseSkillMap(data.map);
     },
     async installSkill(skill, projectIds, mode = 'add') {
       const data = await invoke('repo-tree', { action: 'skillInstall', skill, projectIds, mode });

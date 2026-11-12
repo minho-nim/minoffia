@@ -46,6 +46,7 @@ jobs:
           REPO: ${{ inputs.repo }}
           NAME: ${{ inputs.name }}
           TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+          SKILLS_REPO: ${{ vars.SKILLS_REPO }}
           # 쉬운 앱 지도(v0.5.94): 파일 이름만 Gemini 무료에 한 번 보낸다. 키는 출력하지 않는다.
           KEY_A: ${{ secrets.GEMINI_API_KEY }}
           KEY_B: ${{ secrets.GEMINI_API_KEY2 }}
@@ -56,9 +57,14 @@ jobs:
           else git clone -q --depth 1 "https://x-access-token:${TOKEN}@github.com/${REPO}.git" /tmp/target; fi
           git -C /tmp/target remote set-url origin "https://github.com/${REPO}.git"
           node /tmp/fp/skills/floorplan/scripts/scan.mjs /tmp/target > /dev/null
-          node scripts/floorplan-arch.mjs /tmp/target "${NAME:-$REPO}"
-          # 쉬운 앱 지도를 먼저 만들어 자세한 지도(build)에도 같은 이름·설명이 들어가게 한다(v0.5.97)
-          node scripts/app-map.mjs /tmp/target "${NAME:-$REPO}" /tmp/app-map.json || echo "앱 지도를 만들지 못했어요(점검은 계속)."
+          # 스킬 모음 저장소(v0.6.70 소유자 "스킬 지도를 앱 지도와 똑같이"): 폴더 대신 스킬 분류 → 스킬로, 설명은 스킬 파일 그대로(AI 없음)
+          if [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" = "$(echo "${SKILLS_REPO:-minho-nim/minoffia-skills}" | tr 'A-Z' 'a-z')" ]; then
+            node scripts/skill-arch.mjs /tmp/target "${NAME:-$REPO}" /tmp/app-map.json
+          else
+            node scripts/floorplan-arch.mjs /tmp/target "${NAME:-$REPO}"
+            # 쉬운 앱 지도를 먼저 만들어 자세한 지도(build)에도 같은 이름·설명이 들어가게 한다(v0.5.97)
+            node scripts/app-map.mjs /tmp/target "${NAME:-$REPO}" /tmp/app-map.json || echo "앱 지도를 만들지 못했어요(점검은 계속)."
+          fi
           node /tmp/fp/skills/floorplan/scripts/build.mjs /tmp/target | grep -E 'ASSIGNMENT|HEALTH|wrote' || true
           # 코드 파일이 없는 저장소(v0.5.98: TestRepo에서 멈춤)는 지도 대신 안내 한 장만 만든다
           if [ ! -f /tmp/target/floorplan/index.html ]; then mkdir -p /tmp/target/floorplan; printf '<!doctype html><meta charset="utf-8"><p style="font:16px sans-serif;padding:24px">코드 파일이 없어 자세한 지도를 만들 수 없어요.</p>' > /tmp/target/floorplan/index.html; fi

@@ -1,22 +1,31 @@
 // 앱 점검(floorplan 1단계, v0.5.53): 검사기가 영어로 낸 결과를 종류별로 쉬운 한국어로 바꾼다(규칙, 모델 호출 없음).
+import { SKILL_CATEGORIES } from './skills';
+
 export type HealthIssue = { kind: string; severity: 'high' | 'medium' | 'low' | string; title: string; detail: string; items: string[] };
 /** 쉬운 앱 지도(v0.5.94): 점검 때 AI(또는 규칙)가 화면·기능별로 쉬운 말로 정리 */
 export type AppMapPart = { name: string; kind: string; what: string; folder: string; files: string[] };
-export type AppMap = { summary: string; parts: AppMapPart[]; by: 'ai' | 'rule' };
+/** by: ai = AI 설명, rule = 폴더로만, skill = 스킬 모음 저장소(분류 = 스킬 분류, v0.6.70) */
+export type AppMap = { summary: string; parts: AppMapPart[]; by: 'ai' | 'rule' | 'skill' };
 export type HealthReport = { checkedAt: string; head: string; files: number | null; summary: { high: number; medium: number; low: number }; issues: HealthIssue[]; appMap?: AppMap | null };
 
 /** 앱 지도 묶는 순서(사장님이 먼저 볼 것부터) */
 export const APP_MAP_KINDS = ['화면', '기능', '서버', '데이터', '설정'] as const;
 
+/** 이 지도의 칸 순서: 스킬 모음 저장소면 스킬 분류(스킬 탭과 같은 분류) */
+export const appMapKinds = (m: Pick<AppMap, 'by'>): readonly string[] => (m.by === 'skill' ? SKILL_CATEGORIES : APP_MAP_KINDS);
+
 export function parseAppMap(raw: unknown): AppMap | null {
   const m = raw as Partial<AppMap> | null;
   if (!m || typeof m !== 'object' || !Array.isArray(m.parts)) return null;
+  const by: AppMap['by'] = m.by === 'ai' || m.by === 'skill' ? m.by : 'rule';
+  const kinds = appMapKinds({ by });
+  const other = by === 'skill' ? '기타' : '기능';
   const s = (v: unknown, n: number) => String(v ?? '').slice(0, n);
   const parts = m.parts
     .filter((p): p is AppMapPart => !!p && typeof p === 'object' && typeof (p as AppMapPart).name === 'string')
-    .map((p) => ({ name: s(p.name, 40), kind: (APP_MAP_KINDS as readonly string[]).includes(p.kind) ? p.kind : '기능', what: s(p.what, 160), folder: s(p.folder, 200), files: (Array.isArray(p.files) ? p.files : []).map((f) => s(f, 200)).slice(0, 8) }))
-    .slice(0, 24);
-  return parts.length ? { summary: s(m.summary, 300), parts, by: m.by === 'ai' ? 'ai' : 'rule' } : null;
+    .map((p) => ({ name: s(p.name, 40), kind: kinds.includes(p.kind) ? p.kind : other, what: s(p.what, 160), folder: s(p.folder, 200), files: (Array.isArray(p.files) ? p.files : []).map((f) => s(f, 200)).slice(0, 8) }))
+    .slice(0, by === 'skill' ? 40 : 24);
+  return parts.length ? { summary: s(m.summary, 300), parts, by } : null;
 }
 
 const KO: Record<string, [string, string]> = {
