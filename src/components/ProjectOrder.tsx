@@ -22,6 +22,10 @@ export function ProjectOrder({ projects, onSave }: { projects: Project[]; onSave
   // 손잡이가 포인터를 잡고(setPointerCapture), 손가락 아래 칸을 elementFromPoint로 찾는다. 끄는 동안은 화면 스크롤을 막는다.
   const moveTo = (x: number, y: number) => {
     if (!dragId) return;
+    // 끄는 동안 손가락이 화면 위·아래 끝에 가면 화면을 조금씩 민다(목록이 화면보다 길 때 v0.6.68)
+    const edge = 70;
+    if (y < edge) window.scrollBy(0, -Math.ceil((edge - y) / 4));
+    else if (y > window.innerHeight - edge) window.scrollBy(0, Math.ceil((y - (window.innerHeight - edge)) / 4));
     const li = document.elementFromPoint(x, y)?.closest<HTMLLIElement>('li[data-id]');
     const to = li?.dataset.id;
     if (!to || to === dragId || !listRef.current?.contains(li!)) return;
