@@ -92,3 +92,14 @@ describe('스킬 지도 분류(v0.6.61)', () => {
     expect(parseSkillMd('---\nname: a\ndescription: d\nmetadata:\n  minoffia-category: 시험·점검\n---\n# 가').category).toBe('시험·점검');
   });
 });
+
+describe('쓴 스킬 자동 채우기(v0.6.86)', () => {
+  it('줄이 없어도 시험 기록의 스킬 스크립트 실행과 "~ 절차로"를 센다', () => {
+    const summary = 'find-skills 절차로 디자인 스킬 후보 3개를 비교하고 frontend-design을 설치했습니다.\n\n바뀐 파일:\n.claude/skills/frontend-design/SKILL.md';
+    const testLog = 'python .claude/skills/skill-creator/scripts/quick_validate.py .claude/skills/frontend-design\nSkill is valid!';
+    expect(usedSkills(summary, testLog).sort()).toEqual(['find-skills', 'skill-creator']);
+  });
+  it('적어 준 줄은 그대로', () => {
+    expect(usedSkills('요약\n쓴 스킬: repo-map, ui-check')).toEqual(['repo-map', 'ui-check']);
+  });
+});
