@@ -17,6 +17,7 @@ import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
+import { skillUsage } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
@@ -334,6 +335,8 @@ export function App() {
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
+  // 반복되는 문제 → 스킬 만들기 창(v0.6.59)
+  const [skillPrefill, setSkillPrefill] = useState<{ what: string; rules: string; n: number } | null>(null);
   // 업무 보기 방식(v0.6.54): 목록 | 보드. 이 기기에만 기억(화면 편의)
   const [taskView, setTaskViewState] = useState<'list' | 'board'>(() => {
     try {
@@ -2096,6 +2099,14 @@ export function App() {
 
           {tab === 'projects' && (
             <ProjectPanel
+              onMakeSkill={
+                store.skills
+                  ? (p, issue) => {
+                      setSkillPrefill((cur) => ({ what: `${p.name}에서 반복되는 실수 막기: ${issue}`.slice(0, 200), rules: issue, n: (cur?.n ?? 0) + 1 }));
+                      setTab('skills');
+                    }
+                  : undefined
+              }
               setupIssuesOf={(p) => setupIssues(p.id, snap.tasks, snap.workflow)}
               projects={ordered}
               tasks={snap.tasks}
@@ -2148,6 +2159,8 @@ export function App() {
           {tab === 'skills' && store.skills && (
             <SkillsPanel
               load={() => store.skills!()}
+              usage={skillUsage(snap.workflow.results)}
+              prefill={skillPrefill}
               projects={snap.projects
                 .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')
                 .map((p) => ({ id: p.id, name: p.name, repo: p.repo! }))}

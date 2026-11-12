@@ -1,6 +1,7 @@
 // 업무 기록 타임라인(v0.6.54, 소유자 "다른 오케스트레이션 아이디어": 실행 추적·넘겨주기 표시).
 // 이미 저장된 기록(기획서·승인·계획·작업·결과·채점·PR·배포)을 시간순 한 줄씩으로 보여 준다. AI 호출 없음.
 import type { WorkflowData } from './workflow-types';
+import { usedSkills } from './skills';
 
 export type TimelineTone = 'info' | 'ok' | 'bad' | 'turn';
 export interface TimelineEvent {
@@ -74,7 +75,8 @@ export function taskTimeline(taskId: string, wf: WorkflowData): TimelineEvent[] 
   }
 
   for (const r of wf.results.filter((x) => x.taskId === taskId)) {
-    push(r.createdAt, `결과 v${r.revision} 도착 (${RESULT_SOURCE[r.source] ?? r.source})`, 'ok');
+    const used = usedSkills(r.summary ?? '');
+    push(r.createdAt, `결과 v${r.revision} 도착 (${RESULT_SOURCE[r.source] ?? r.source})${used.length ? ` · 쓴 스킬: ${used.join(', ')}` : ''}`, 'ok');
   }
   for (const v of (wf.reviews ?? []).filter((x) => x.taskId === taskId)) {
     const score = v.total == null ? '점수 없음' : `${v.total}점`;

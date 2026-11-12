@@ -14,6 +14,7 @@ export const BASE_RULES: readonly string[] = [
   '화면이 바뀌면 데스크톱·휴대폰 폭에서 콘솔 오류와 가로 넘침을 확인한다.',
   'Claude 세션 안에 Codex CLI·Grok CLI를 설치·실행하지 않는다.',
   'minho-nim/MinLab 저장소는 건드리지 않는다.',
+  '저장소의 스킬(.agents/skills·.claude/skills)을 따라 작업했으면 결과 요약 맨 끝에 "쓴 스킬: 이름1, 이름2" 한 줄을 적는다(안 썼으면 적지 않는다).',
 ];
 
 /** 한 번에 받는 새 규칙 수 */
