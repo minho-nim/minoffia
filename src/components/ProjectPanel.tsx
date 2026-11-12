@@ -48,13 +48,15 @@ interface Props {
   demoUrlOf?: (project: Project) => string | null;
   /** 준비 체크리스트의 막힌 흔적(v0.6.32) */
   setupIssuesOf?: (project: Project) => SetupIssues;
+  /** 반복되는 문제를 스킬로 만들기(v0.6.59): 스킬 탭 만들기 창을 이 내용으로 연다 */
+  onMakeSkill?: (project: Project, issue: string) => void;
 }
 
 /**
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, onMakeSkill }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
@@ -380,6 +382,14 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                                 <button type="button" className="link-btn small" onClick={() => onAddRule(p.id, x.text)}>
                                   지켜야 할 것에 추가
                                 </button>
+                                {onMakeSkill && (
+                                  <>
+                                    {' · '}
+                                    <button type="button" className="link-btn small" onClick={() => onMakeSkill(p, x.text)}>
+                                      스킬로 만들기
+                                    </button>
+                                  </>
+                                )}
                               </li>
                             ))}
                           </ul>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSkillMd, skillRequest, skillRisks, skillSource, toSkillView } from './skills';
+import { parseSkillMd, skillRequest, skillRisks, skillSource, skillUsage, toSkillView, usedSkills } from './skills';
 
 describe('저장소 스킬 보기(v0.6.55)', () => {
   it('앞머리에서 이름·설명, 나머지는 본문', () => {
@@ -48,5 +48,23 @@ describe('스킬 입력 창(v0.6.57)', () => {
     const t = skillRequest({ kind: 'find', what: '접근성 검사', areas: ['디자인', '이상한 것'] });
     expect(t.split('\n')[1]).toBe('분야: 디자인');
     expect(t).toContain('-g/-y 금지');
+  });
+});
+
+describe('쓴 스킬 읽기(v0.6.59)', () => {
+  it('요약 끝 한 줄에서 이름만', () => {
+    expect(usedSkills('바꿨어요\n쓴 스킬: deploy-steps, `report-format`')).toEqual(['deploy-steps', 'report-format']);
+    expect(usedSkills('스킬 확인: report-format')).toEqual(['report-format']);
+    expect(usedSkills('쓴 스킬: 없음')).toEqual([]);
+    expect(usedSkills('그냥 요약')).toEqual([]);
+  });
+  it('스킬별 쓰인 업무 수(같은 업무는 한 번)', () => {
+    const u = skillUsage([
+      { taskId: 't1', summary: '쓴 스킬: a' },
+      { taskId: 't1', summary: '쓴 스킬: a' },
+      { taskId: 't2', summary: '쓴 스킬: a, b' },
+    ]);
+    expect(u.get('a')).toBe(2);
+    expect(u.get('b')).toBe(1);
   });
 });

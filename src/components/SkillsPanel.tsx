@@ -12,7 +12,7 @@ export interface SkillProject {
   repo: string;
 }
 
-export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install }: {
+export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill }: {
   load: () => Promise<SkillFile[]>;
   onSend: (text: string) => void;
   canRequest: boolean;
@@ -20,6 +20,10 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   projects?: SkillProject[];
   status?: (skill: string) => Promise<Record<string, SkillInstallState>>;
   install?: (skill: string, projectIds: string[]) => Promise<{ started: string[]; failed: string[] }>;
+  /** 스킬별 쓰인 업무 수(결과 요약의 '쓴 스킬', v0.6.59) */
+  usage?: Map<string, number>;
+  /** 다른 곳(반복되는 문제)에서 넘어온 스킬 만들기 내용. n이 바뀔 때마다 만들기 창을 연다(v0.6.59) */
+  prefill?: { what: string; rules: string; n: number } | null;
 }) {
   // 프로젝트에 넣기 창(v0.6.58): 스킬 하나를 골라 프로젝트마다 들어 있는지 보고, 고른 곳에 넣는다
   const [installFor, setInstallFor] = useState<string | null>(null);
@@ -62,6 +66,11 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   // 바깥을 눌러 창이 닫혀도 쓴 글은 남겨 둔다(다시 열면 그대로)
   const [fields, setFields] = useState(EMPTY);
   const ready = fields.what.trim().length >= 2;
+  useEffect(() => {
+    if (!prefill) return;
+    setFields({ ...EMPTY, what: prefill.what, rules: prefill.rules });
+    setForm('make');
+  }, [prefill?.n]);
   const send = () => {
     if (!form || !ready) return;
     onSend(skillRequest({ kind: form, ...fields }));
@@ -82,6 +91,50 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   useEffect(refresh, []);
   const skills = useMemo(() => (files ?? []).map(toSkillView), [files]);
 
+  const used = skills.filter((s) => !s.meta);
+  const tools = skills.filter((s) => s.meta);
+  const card = (s: (typeof skills)[number]) => (
+    <li key={s.name} className="skill-card">
+      <div className="skill-top">
+        <b>{s.title}</b>
+        {s.title !== s.name && <span className="muted small">{s.name}</span>}
+        <span className="pill">{s.license}</span>
+        <span className="muted small">{s.source}</span>
+      </div>
+      <p className="skill-desc small">{s.description || '설명 없음'}</p>
+      <div className="skill-meta small">
+        <span>{usage.get(s.name) ? `쓰인 업무 ${usage.get(s.name)}` : s.meta ? '' : '아직 안 쓰임'}</span>
+      <span>파일 {s.files.length}{s.scripts ? ` · 스크립트 ${s.scripts}` : ''}</span>
+        {s.meta && <span className="pill">도구 · 미노피아 전용</span>}
+        {s.risks.map((r) => (
+          <span key={r} className="pill pill-warn" title="내용에 이런 글자가 있어요. 꼭 위험한 건 아니고, 읽어 볼 곳이에요.">
+            {RISK_LABEL[r]}
+          </span>
+        ))}
+      </div>
+      {/* 내용은 가운데 팝업(project-sections 팝업 그대로: ✕·바깥 누르면 닫힘, 열린 동안 뒤 화면 잠금) */}
+      <div className="project-sections skill-buttons">
+        {!s.meta && install && projects.length > 0 && (
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => openInstall(s.name)}>
+            프로젝트에 넣기
+          </button>
+        )}
+        <details open={open === s.name} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open ? s.name : open === s.name ? null : open)}>
+          <summary>내용 보기</summary>
+          {open === s.name && (
+            <div className="skill-body">
+              <p className="small">
+                <b>{s.title}</b> · {s.license} · {s.source}
+              </p>
+              <p className="small">{s.description}</p>
+              <pre>{s.body}</pre>
+              <p className="muted small">파일: {s.files.join(', ')}</p>
+            </div>
+          )}
+        </details>
+      </div>
+    </li>
+  );
   return (
     <div className="stack skills-panel">
       <div className="skills-head">
@@ -228,49 +281,14 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
       {error && <p className="task-error small">{error}</p>}
       {files === null && <p className="muted small">스킬을 읽는 중…</p>}
       {files && skills.length === 0 && !error && <p className="empty">아직 스킬이 없어요.</p>}
-      <ul className="skill-list">
-        {skills.map((s) => (
-          <li key={s.name} className="skill-card">
-            <div className="skill-top">
-              <b>{s.title}</b>
-              {s.title !== s.name && <span className="muted small">{s.name}</span>}
-              <span className="pill">{s.license}</span>
-              <span className="muted small">{s.source}</span>
-            </div>
-            <p className="skill-desc small">{s.description || '설명 없음'}</p>
-            <div className="skill-meta small">
-              <span>파일 {s.files.length}{s.scripts ? ` · 스크립트 ${s.scripts}` : ''}</span>
-              {s.meta && <span className="pill">도구 · 미노피아 전용</span>}
-              {s.risks.map((r) => (
-                <span key={r} className="pill pill-warn" title="내용에 이런 글자가 있어요. 꼭 위험한 건 아니고, 읽어 볼 곳이에요.">
-                  {RISK_LABEL[r]}
-                </span>
-              ))}
-            </div>
-            {/* 내용은 가운데 팝업(project-sections 팝업 그대로: ✕·바깥 누르면 닫힘, 열린 동안 뒤 화면 잠금) */}
-            <div className="project-sections skill-buttons">
-              {!s.meta && install && projects.length > 0 && (
-                <button type="button" className="btn btn-small btn-ghost" onClick={() => openInstall(s.name)}>
-                  프로젝트에 넣기
-                </button>
-              )}
-              <details open={open === s.name} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open ? s.name : open === s.name ? null : open)}>
-                <summary>내용 보기</summary>
-                {open === s.name && (
-                  <div className="skill-body">
-                    <p className="small">
-                      <b>{s.title}</b> · {s.license} · {s.source}
-                    </p>
-                    <p className="small">{s.description}</p>
-                    <pre>{s.body}</pre>
-                    <p className="muted small">파일: {s.files.join(', ')}</p>
-                  </div>
-                )}
-              </details>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <ul className="skill-list">{used.map(card)}</ul>
+      {/* 도구 스킬(스킬 만들기·찾기)은 접어 둔다(v0.6.59): 실제로 쓰는 스킬만 먼저 보이게 */}
+      {tools.length > 0 && (
+        <details className="skill-tools">
+          <summary className="small">도구 스킬 {tools.length}개 (스킬을 만들고 찾는 데 쓰는 것)</summary>
+          <ul className="skill-list">{tools.map(card)}</ul>
+        </details>
+      )}
     </div>
   );
 }
