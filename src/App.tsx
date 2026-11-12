@@ -348,6 +348,12 @@ export function App() {
   // 사무실 지도 팝업(역할·클라우드)
   const [officePop, setOfficePop] = useState<'role' | 'cloud' | null>(null);
   const [dockOpen, setDockOpen] = useState(false);
+  // 탭을 바꾸면 띄운 사무실과 '…' 펼침을 닫는다(탭마다 같은 시작 모습)
+  useEffect(() => {
+    setPeek(false);
+    setDockOpen(false);
+    setPicOpen(false);
+  }, [tab]);
   const [picOpen, setPicOpen] = useState(false);
   const [directOpen, setDirectOpen] = useState(false);
   // 대화 탭 프로젝트 칩 접기(v0.6.72). 이 기기에만 기억
@@ -1855,13 +1861,7 @@ export function App() {
           const id = tab === 'chat' ? chatProjectId : pf === 'all' ? null : pf;
           return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
         })()}
-        {/* 사무실을 접었을 때만: 눌러서 사무실을 잠깐 띄워 본다(v0.5.29) */}
-        {/* v0.6.46 소유자 "사무실 버튼은 대화 탭 말고는 오른쪽 아래만" */}
-        {tiny && tab === 'chat' && (
-          <button type="button" className={`bar-btn${peek ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={peek} onClick={() => setPeek((v) => !v)}>
-            사무실 {peek ? '▴' : '▾'}
-          </button>
-        )}
+        {/* 사무실 띄워 보기는 모든 탭에서 오른쪽 아래 '…' 하나로(v0.6.79 소유자 "대화에서 사무실 일관성이 없다"): 얇은 머리의 '사무실 ▾'는 뺐다 */}
         {/* 큰 머리 내용(연결·알림·사용량)을 펼쳐 본다(v0.5.31) */}
         <button type="button" className={`bar-btn bar-btn-usage${usageOpen ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={usageOpen} onClick={() => setUsageOpen((v) => !v)}>
           사용량 보기
