@@ -9,6 +9,16 @@ export type MapTab = 'brief' | 'detail' | 'relation' | 'tree' | 'role' | 'cloud'
 const NAME: Record<MapTab, string> = { brief: '간략', detail: '자세히', relation: '관계', tree: '구조도', role: '역할', cloud: '클라우드' };
 // 마지막에 본 탭(팝업을 다시 열면 그 탭으로, 앱을 켜 있는 동안만)
 const lastTab: Record<string, MapTab> = {};
+// 한 번 읽은 간략 지도·자세한 지도는 10분 동안 다시 읽지 않는다(v0.6.72 소유자 "구조도·앱 지도는 켤 때마다 로딩해야 돼?")
+const TTL = 600_000;
+const cache = new Map<string, { at: number; report?: HealthReport | null; html?: string | null }>();
+const cached = (id: string) => {
+  const c = cache.get(id);
+  return c && Date.now() - c.at < TTL ? c : undefined;
+};
+const remember = (id: string, v: { report?: HealthReport | null; html?: string | null }) => cache.set(id, { ...(cached(id) ?? { at: Date.now() }), ...v });
+/** 점검을 다시 하면 지도도 새로 읽게 */
+export const forgetMaps = (id: string) => cache.delete(id);
 
 export function StructureMaps({ id, health, structure, relation, office }: {
   /** 마지막 탭을 기억할 이름(프로젝트 id 등) */
@@ -25,15 +35,25 @@ export function StructureMaps({ id, health, structure, relation, office }: {
     lastTab[id] = t;
     setTabState(t);
   };
-  const [report, setReport] = useState<HealthReport | null | undefined>(undefined);
-  const [html, setHtml] = useState<string | null | undefined>(undefined);
+  const [report, setReport] = useState<HealthReport | null | undefined>(() => cached(id)?.report);
+  const [html, setHtml] = useState<string | null | undefined>(() => cached(id)?.html);
   const [msg, setMsg] = useState('');
   useEffect(() => {
     if (!health) return;
-    if (tab === 'brief' && report === undefined) health.load().then(setReport, () => setReport(null));
+    if (tab === 'brief' && report === undefined)
+      health.load().then(
+        (r) => {
+          setReport(r);
+          remember(id, { report: r });
+        },
+        () => setReport(null),
+      );
     if (tab === 'detail' && html === undefined)
       health.map().then(
-        (h) => setHtml(h ?? null),
+        (h) => {
+          setHtml(h ?? null);
+          if (h) remember(id, { html: h });
+        },
         (e) => {
           setHtml(null);
           setMsg((e as Error).message || '지도를 열지 못했어요.');

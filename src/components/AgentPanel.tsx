@@ -4,7 +4,7 @@ import { coverFor } from '../domain/router';
 import { speechFor } from '../office/speech';
 import { markFor, type AgentMark } from '../office/marks';
 import { buildScene } from '../office/scene';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { LinearProbe } from '../data/store';
 import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
 import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
@@ -314,14 +314,53 @@ export function AgentRoster({
 }
 
 /** 결과 평가 기록(v0.4.66, 소유자 "채점 결과 확인"): 최근 평가를 점수·판정과 함께. 누르면 그 업무 카드로 */
+// 본 평가 지우기(v0.6.72 소유자 "본 건 지울 수 있게, 스와이프나 X"): 평가는 추가만 하는 감사 기록이라 지우지 않고 이 화면에서만 숨긴다.
+// shortcut: 숨긴 목록은 이 기기에만 저장(다른 기기에서는 다시 보임), 여러 기기에서 같이 숨겨야 할 때 서버(inbox_state 등)에 옮긴다.
+const HIDDEN_KEY = 'reviewHidden';
+function readHidden(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]') as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
 export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultReview[]; tasks: Task[]; onOpenTask: (task: Task) => void }) {
   const [all, setAll] = useState(false);
-  const list = [...reviews].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const [hidden, setHidden] = useState<Set<string>>(readHidden);
+  const hide = (ids: string[]) =>
+    setHidden((h) => {
+      const n = new Set(h);
+      ids.forEach((id) => n.add(id));
+      // 지금 기록에 있는 것만 남겨 저장 공간이 커지지 않게
+      const keep = [...n].filter((id) => reviews.some((r) => r.id === id));
+      try {
+        localStorage.setItem(HIDDEN_KEY, JSON.stringify(keep));
+      } catch {
+        // 저장 못 해도 이번에는 숨김
+      }
+      return new Set(keep);
+    });
+  const unhideAll = () => {
+    setHidden(new Set());
+    try {
+      localStorage.removeItem(HIDDEN_KEY);
+    } catch {
+      // 무시
+    }
+  };
+  const list = [...reviews].filter((r) => !hidden.has(r.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const hiddenCount = reviews.filter((r) => hidden.has(r.id)).length;
   const rows = all ? list : list.slice(0, 5);
   return (
     <section className="review-log" aria-label="결과 평가 기록">
       <h3>
-        결과 평가 <span className="num num-count">{reviews.length}</span>
+        결과 평가 <span className="num num-count">{list.length}</span>
+        {list.length > 1 && (
+          <button type="button" className="link-btn small review-clear" onClick={() => hide(list.map((r) => r.id))}>
+            모두 지우기
+          </button>
+        )}
       </h3>
       {!reviews.length ? (
         <p className="muted small">아직 평가한 결과가 없어요. 개발 결과가 오면 규칙 검사와 Claude 채점(안 되면 Gemini)이 자동으로 돌아요.</p>
@@ -330,7 +369,7 @@ export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultRevie
           {rows.map((r) => {
             const t = tasks.find((x) => x.id === r.taskId);
             return (
-              <li key={r.id}>
+              <SwipeRow key={r.id} onRemove={() => hide([r.id])}>
                 <button type="button" className="link-btn review-log-row" disabled={!t} onClick={() => t && onOpenTask(t)}>
                   <span className={`review-verdict is-${r.verdict}`}>{VERDICT_LABEL[r.verdict]}</span>
                   <b className="num">{r.total === null ? '–' : `${r.total}점`}</b>
@@ -339,7 +378,7 @@ export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultRevie
                   </span>
                   <span className="muted small">{r.assignee ? AGENT_NAME_OF[r.assignee] ?? r.assignee : ''}</span>
                 </button>
-              </li>
+              </SwipeRow>
             );
           })}
         </ul>
@@ -349,7 +388,49 @@ export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultRevie
           {all ? '접기' : `모두 보기(${list.length})`}
         </button>
       )}
+      {hiddenCount > 0 && (
+        <button type="button" className="link-btn small" onClick={unhideAll}>
+          지운 {hiddenCount}개 다시 보기
+        </button>
+      )}
     </section>
+  );
+}
+
+/** 왼쪽으로 밀어 지우기(80px 넘게) 또는 ✕ */
+function SwipeRow({ children, onRemove }: { children: import('react').ReactNode; onRemove: () => void }) {
+  const [dx, setDx] = useState(0);
+  const start = useRef<{ x: number; y: number; id: number } | null>(null);
+  return (
+    <li
+      className="swipe-row"
+      style={dx ? { transform: `translateX(${dx}px)`, opacity: Math.max(0.3, 1 + dx / 200) } : undefined}
+      onPointerDown={(e) => {
+        if (e.pointerType === 'mouse') return;
+        start.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      }}
+      onPointerMove={(e) => {
+        const s = start.current;
+        if (!s || s.id !== e.pointerId) return;
+        const x = e.clientX - s.x, y = e.clientY - s.y;
+        if (Math.abs(y) > Math.abs(x) && Math.abs(x) < 10) return; // 위아래 스크롤은 그대로
+        setDx(Math.min(0, x));
+      }}
+      onPointerUp={() => {
+        if (dx < -80) onRemove();
+        setDx(0);
+        start.current = null;
+      }}
+      onPointerCancel={() => {
+        setDx(0);
+        start.current = null;
+      }}
+    >
+      {children}
+      <button type="button" className="swipe-x" aria-label="지우기(이 화면에서만 숨김)" onClick={onRemove}>
+        ✕
+      </button>
+    </li>
   );
 }
 
