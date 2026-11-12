@@ -336,8 +336,19 @@ export function App() {
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
-  // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다(2분 동안 다시 안 읽음)
+  // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
   const skillsData = useRef<{ at: number; p: Promise<{ files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData }> } | null>(null);
+  // 스킬 목록·프로젝트 상태는 한 번 읽어 10분 동안 나눠 쓴다(v0.6.67 소유자 "스킬은 켤 때마다 불러와야 돼?"). '다시 읽기'·넣기 뒤에는 새로 읽는다
+  const loadSkillsData = (force = false) => {
+    if (force || !skillsData.current || Date.now() - skillsData.current.at > 600_000) {
+      const p2 = Promise.all([store!.skills!(), store!.skillMap!()]).then(([files, map]) => ({ files, map }));
+      p2.catch(() => {
+        skillsData.current = null;
+      });
+      skillsData.current = { at: Date.now(), p: p2 };
+    }
+    return skillsData.current.p;
+  };
   // 스킬 탭에서 넣기 창을 바로 열 스킬(프로젝트 칸에서 넘어올 때)
   const [skillToInstall, setSkillToInstall] = useState<{ name: string; n: number } | null>(null);
   // 반복되는 문제 → 스킬 만들기 창(v0.6.59)
@@ -2159,21 +2170,11 @@ export function App() {
                   ? (p) => (
                       <ProjectSkills
                         projectId={p.id}
-                        load={() => {
-                          if (!skillsData.current || Date.now() - skillsData.current.at > 120_000) {
-                            const p2 = Promise.all([store.skills!(), store.skillMap!()]).then(([files, map]) => ({ files, map }));
-                            p2.catch(() => {
-                              skillsData.current = null;
-                            });
-                            skillsData.current = { at: Date.now(), p: p2 };
-                          }
-                          return skillsData.current.p;
-                        }}
+                        load={() => loadSkillsData()}
                         onManage={(skill) => {
                           // 팝업을 닫고(뒤 화면 잠금도 풀고) 스킬 탭으로. 이름이 있으면 그 스킬의 넣기 창을 연다
                           document.querySelectorAll<HTMLDetailsElement>('.project-sections > details[open]').forEach((d) => (d.open = false));
                           document.documentElement.classList.remove('popup-open');
-                          skillsData.current = null;
                           if (skill) setSkillToInstall((cur) => ({ name: skill, n: (cur?.n ?? 0) + 1 }));
                           setTab('skills');
                         }}
@@ -2205,16 +2206,23 @@ export function App() {
           {/* 설정(v0.6.43 소유자: 사용량 → 프로젝트 순서 → 팀 관리 → 알림 → 화면 → 계정, 팀 관리 탭을 여기로) */}
           {tab === 'skills' && store.skills && (
             <SkillsPanel
-              load={() => store.skills!()}
+              load={(force) => (store.skillMap ? loadSkillsData(force).then((d) => d.files) : store.skills!())}
               usage={skillUsage(snap.workflow.results)}
-              mapLoad={store.skillMap ? () => store.skillMap!() : undefined}
+              mapLoad={store.skillMap ? () => loadSkillsData().then((d) => d.map) : undefined}
               prefill={skillPrefill}
               installRequest={skillToInstall}
               projects={snap.projects
                 .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')
                 .map((p) => ({ id: p.id, name: p.name, repo: p.repo! }))}
               status={store.skillStatus ? (name) => store.skillStatus!(name) : undefined}
-              install={store.installSkill ? (name, ids, mode) => store.installSkill!(name, ids, mode) : undefined}
+              install={
+                store.installSkill
+                  ? (name, ids, mode) => {
+                      skillsData.current = null; // 넣기·빼기 뒤에는 프로젝트 상태를 새로 읽게
+                      return store.installSkill!(name, ids, mode);
+                    }
+                  : undefined
+              }
               canRequest={!!officeProject}
               onSend={(text) => {
                 if (!officeProject) return;
