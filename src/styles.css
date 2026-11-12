@@ -5554,19 +5554,37 @@ a.project-site {
   }
 }
 /* ③ 사무실을 숨긴 탭: 누르고 있는 동안만 보기(v0.6.41 소유자 "버튼을 누르고 있는 동안 보이게") */
-.office-hold {
+.office-dock {
   display: none;
 }
 @media (max-width: 1039px) {
-  .layout.tab-tasks > .office-hold,
-  .layout.tab-projects > .office-hold,
-  .layout.tab-team > .office-hold,
-  .layout.tab-settings > .office-hold {
+  /* 오른쪽 아래 버튼 묶음(v0.6.73): 역할 · 클라우드 · 사무실(누르는 동안) */
+  .layout.tab-tasks > .office-dock,
+  .layout.tab-projects > .office-dock,
+  .layout.tab-team > .office-dock,
+  .layout.tab-settings > .office-dock {
     display: inline-flex;
     position: fixed;
     right: max(12px, env(safe-area-inset-right));
     bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
     z-index: 460;
+    align-items: center;
+    gap: 6px;
+  }
+  .office-dock-btn {
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.8rem;
+    opacity: 0.92;
+    box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+  }
+  .office-dock > .office-hold {
+    display: inline-flex;
     align-items: center;
     gap: 4px;
     padding: 8px 14px;
@@ -5632,10 +5650,7 @@ a.project-site {
     display: none;
   }
   /* 누르고 보기 버튼은 작게(내용을 덜 가리게) */
-  .layout.tab-tasks > .office-hold,
-  .layout.tab-projects > .office-hold,
-  .layout.tab-team > .office-hold,
-  .layout.tab-settings > .office-hold {
+  .office-dock > .office-hold {
     padding: 6px 10px;
     opacity: 0.92;
   }
@@ -6899,4 +6914,41 @@ html.popup-open .project-sections > details[open] * {
 }
 .form-pop-body .form-title {
   display: none;
+}
+
+/* 사무실 그림 위 '역할·클라우드'(v0.6.73): 그림 오른쪽 위 모서리 */
+.office-map-btns {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+.office-map-btns button {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+/* 작은 사무실·접힌 사무실일 때는 숨긴다(그림이 작아 버튼이 겹침) */
+.stage.is-mini .office-map-btns {
+  display: none;
+}
+.form-pop-box.is-wide {
+  width: min(1040px, 100%);
+  height: min(86vh, 860px);
+}
+.form-pop-box.is-wide > .form-pop-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
 }

@@ -168,7 +168,7 @@ export function LineSvg({ rows, edges, sel, width, onPress }: { rows: RelNode[][
   const linked = new Set(sel ? edges.filter(on).flatMap((e) => [e[0], e[1]]) : []);
   const shown = edges.filter((e) => e[3] !== 'q').length;
   return (
-    <svg className={`rel-svg${!sel && shown > 30 ? ' dense' : ''}`} viewBox={`0 0 ${W} ${H}`} width={Math.max(W, Math.min(width - 24, W * 1.5))} role="img" aria-label="관계 지도">
+    <svg className={`rel-svg${!sel && shown > 30 ? ' dense' : ''}`} viewBox={`0 0 ${W} ${H}`} width={vertical && W > width - 24 ? Math.max(width - 24, 240) : Math.max(W, Math.min(width - 24, W * 1.5))} role="img" aria-label="관계 지도">
       {seps
         .filter((s) => s.ri === rows.length - 1 || !vertical)
         .map((s, i) =>
