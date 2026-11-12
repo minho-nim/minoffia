@@ -344,7 +344,8 @@ export function App() {
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
-  const [officeOpen, setOfficeOpen] = useState(false);
+  // 사무실 지도 팝업(역할·클라우드)
+  const [officePop, setOfficePop] = useState<'role' | 'cloud' | null>(null);
   const [directOpen, setDirectOpen] = useState(false);
   // 대화 탭 프로젝트 칩 접기(v0.6.72). 이 기기에만 기억
   const [chatChipsOpen, setChatChipsOpenState] = useState(() => {
@@ -1877,10 +1878,23 @@ export function App() {
         </>
       )}
 
+      {officePop && (
+        <FormPopup wide title={officePop === 'role' ? '역할 지도' : '클라우드 관계도'} onClose={() => setOfficePop(null)}>
+          {renderOffice(officePop)}
+        </FormPopup>
+      )}
       {peek && tab === 'chat' && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab === 'skills' ? 'settings tab-skills' : tab}`}>
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
         {(tab === 'tasks' || tab === 'projects' || tab === 'team' || tab === 'settings' || tab === 'skills') && (
+          <span className="office-dock">
+          {/* 사무실 지도(v0.6.73 소유자 "사무실 보기 버튼 옆에 역할·클라우드 나눠서, 열린 채로 팝업") */}
+          <button type="button" className="office-dock-btn" onClick={() => setOfficePop('role')}>
+            역할
+          </button>
+          <button type="button" className="office-dock-btn" onClick={() => setOfficePop('cloud')}>
+            클라우드
+          </button>
           <button
             type="button"
             className={`office-hold${holdOffice ? ' is-on' : ''}`}
@@ -1898,6 +1912,7 @@ export function App() {
           >
             🏢 사무실
           </button>
+          </span>
         )}
         <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek && tab === 'chat' ? ' is-peek' : ''}${holdOffice ? ' is-hold' : ''}`} aria-label="오피스">
           <OfficeView
@@ -1913,6 +1928,14 @@ export function App() {
             }}
             leave={snap.leave ?? []}
           />
+          <span className="office-map-btns" aria-label="사무실 지도">
+            <button type="button" onClick={() => setOfficePop('role')}>
+              역할
+            </button>
+            <button type="button" onClick={() => setOfficePop('cloud')}>
+              클라우드
+            </button>
+          </span>
           <p className="stage-note">
             캐릭터 위치와 말풍선은 업무 상태만 따릅니다. 진행 중이면 책상, 다른 방 일이면 도우러 가고, 열린 업무가 없으면 휴게실로 갑니다. 캐릭터를 누르면 상세가 열립니다.
           </p>
@@ -2293,14 +2316,6 @@ export function App() {
           )}
           {tab === 'projects' && <DevlogPanel snap={snap} loadChat={(f, t) => store.loadChat(f, t)} deleteChat={(f, t, p) => store.deleteChat(f, t, p)} onCopy={workflowActions.copy} />}
 
-          {tab === 'agent' && (
-            <div className="project-sections office-sections">
-              <details className="project-rules project-maps" onToggle={(e) => setOfficeOpen((e.currentTarget as HTMLDetailsElement).open)}>
-                <summary>사무실 지도</summary>
-                {officeOpen && <StructureMaps id="office" office={renderOffice} />}
-              </details>
-            </div>
-          )}
           {tab === 'agent' && <ReviewLog reviews={snap.workflow.reviews ?? []} tasks={snap.tasks} onOpenTask={(t) => showTask(t.id)} />}
           {tab === 'agent' && (
             <AgentRoster
