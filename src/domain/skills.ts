@@ -35,10 +35,12 @@ export interface SkillView {
   risks: SkillRisk[];
   scripts: number;
   meta: boolean;
+  /** 새 프로젝트 저장소를 만들 때 자동으로 넣는 기본 스킬 */
+  isDefault: boolean;
 }
 
 /** 앞머리(--- name/description ---)와 본문을 나눈다. 앞머리가 없으면 첫 제목·첫 문단을 쓴다 */
-export function parseSkillMd(md: string): { title: string; description: string; body: string } {
+export function parseSkillMd(md: string): { title: string; description: string; body: string; isDefault: boolean } {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   const front = m ? m[1] : '';
   const body = (m ? m[2] : md).trim();
@@ -49,7 +51,9 @@ export function parseSkillMd(md: string): { title: string; description: string; 
   const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? '';
   const firstPara = body.split(/\n\s*\n/).map((p) => p.trim()).find((p) => p && !p.startsWith('#') && !p.startsWith('>')) ?? '';
   // 한글 제목(# 스킬 찾기)이 있으면 그걸 이름으로 보인다(v0.6.56 소유자 "스킬은 한글로 통일"). 없으면 앞머리 name
-  return { title: /[가-힣]/.test(heading) ? heading : field('name') || heading, description: field('description') || firstPara.slice(0, 300), body };
+  // 새 프로젝트에 늘 넣는 기본 스킬(v0.6.60): 표준 앞머리 metadata 아래 minoffia-default: "true"
+  const isDefault = /^\s+minoffia-default:\s*["']?true["']?\s*$/m.test(front);
+  return { title: /[가-힣]/.test(heading) ? heading : field('name') || heading, description: field('description') || firstPara.slice(0, 300), body, isDefault };
 }
 
 const RISK_RULES: [SkillRisk, RegExp][] = [
@@ -74,7 +78,7 @@ export function skillSource(md: string, license: string): { license: string; sou
 }
 
 export function toSkillView(f: SkillFile): SkillView {
-  const { title, description, body } = parseSkillMd(f.skillMd);
+  const { title, description, body, isDefault } = parseSkillMd(f.skillMd);
   const { license, source } = skillSource(f.skillMd, f.license);
   return {
     name: f.name,
@@ -87,6 +91,7 @@ export function toSkillView(f: SkillFile): SkillView {
     risks: skillRisks(f.skillMd),
     scripts: f.files.filter((x) => /\.(py|js|mjs|ts|sh)$/.test(x)).length,
     meta: f.meta === true,
+    isDefault: isDefault && f.meta !== true,
   };
 }
 
@@ -98,6 +103,8 @@ export interface SkillForm {
   when?: string;
   rules?: string;
   areas?: string[];
+  /** 새 프로젝트에 늘 넣기(v0.6.60) */
+  isDefault?: boolean;
 }
 
 export const SKILL_PRESETS: { label: string; what: string; when: string; rules: string }[] = [
@@ -125,6 +132,7 @@ export function skillRequest(f: SkillForm): string {
     `@Claude 스킬 만들기: ${what}`,
     clean(f.when, 200) ? `언제: ${clean(f.when, 200)}` : '',
     rules ? `지킬 것: ${rules}` : '',
+    f.isDefault ? '새 프로젝트에 늘 넣기: 앞머리에 metadata: 아래 minoffia-default: "true"' : '',
     '(skill-creator 방식으로 .claude/skills/<짧은-영어-이름>/SKILL.md · 제목·설명·본문은 쉬운 한국어 · 다른 파일 고치지 않기)',
   ].filter(Boolean).join('\n');
 }

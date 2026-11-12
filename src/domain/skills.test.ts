@@ -68,3 +68,13 @@ describe('쓴 스킬 읽기(v0.6.59)', () => {
     expect(u.get('b')).toBe(1);
   });
 });
+
+describe('기본 스킬(v0.6.60)', () => {
+  it('앞머리 metadata의 minoffia-default로', () => {
+    expect(parseSkillMd('---\nname: a\ndescription: d\nmetadata:\n  minoffia-default: "true"\n---\n# 가').isDefault).toBe(true);
+    expect(parseSkillMd('---\nname: a\ndescription: d\n---\n# 가').isDefault).toBe(false);
+  });
+  it('만들기 요청에 기본 표시 줄', () => {
+    expect(skillRequest({ kind: 'make', what: '배포', isDefault: true })).toContain('minoffia-default');
+  });
+});

@@ -714,8 +714,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       for (const [id, v] of Object.entries((data.status ?? {}) as Record<string, unknown>)) if (v === 'same' || v === 'old' || v === 'none') out[id] = v;
       return out;
     },
-    async installSkill(skill, projectIds) {
-      const data = await invoke('repo-tree', { action: 'skillInstall', skill, projectIds });
+    async installSkill(skill, projectIds, mode = 'add') {
+      const data = await invoke('repo-tree', { action: 'skillInstall', skill, projectIds, mode });
       const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
       return { started: list(data.started), failed: list(data.failed) };
     },
