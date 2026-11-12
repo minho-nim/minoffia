@@ -17,6 +17,7 @@ import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
+import { StructureMaps } from './components/StructureMaps';
 import { ProjectSkills } from './components/ProjectSkills';
 import { SKILLS_REPO, skillUsage, toSkillView } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
@@ -337,17 +338,45 @@ export function App() {
   const [tiny, setTiny] = useState(false);
   const [peek, setPeek] = useState(false);
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
+  // 스킬 탭의 '구조 보기'·'점검' 칸(v0.6.70): 열었을 때만 그린다
+  const [skillMapsOpen, setSkillMapsOpen] = useState(false);
+  const [skillCheckOpen, setSkillCheckOpen] = useState(false);
   const skillsData = useRef<{ at: number; p: Promise<{ files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData }> } | null>(null);
   // 스킬 목록·프로젝트 상태는 한 번 읽어 10분 동안 나눠 쓴다(v0.6.67 소유자 "스킬은 켤 때마다 불러와야 돼?"). '다시 읽기'·넣기 뒤에는 새로 읽는다
+  // 앱을 다시 켜도 '읽는 중' 없이 바로 보이게(v0.6.70 소유자 "켤 때 스킬을 불러온다고 계속 나와", "서버로 올리면 안 돼?"):
+  // 서버에 저장해 둔 것(skill_cache 한 행)을 먼저 쓰고, 저장한 지 10분이 지났으면 뒤에서 GitHub에서 새로 읽는다(서버가 다시 저장).
   const loadSkillsData = (force = false) => {
-    if (force || !skillsData.current || Date.now() - skillsData.current.at > 600_000) {
-      const p2 = Promise.all([store!.skills!(), store!.skillMap!()]).then(([files, map]) => ({ files, map }));
-      p2.catch(() => {
-        skillsData.current = null;
+    if (!force && skillsData.current && Date.now() - skillsData.current.at <= 600_000) return skillsData.current.p;
+    if (!force && !skillsData.current && store?.skillCache) {
+      const p = store
+        .skillCache()
+        .catch(() => null)
+        .then((c) => {
+          if (!c || !c.files.length) return fetchSkills(true);
+          if (!(Date.now() - Date.parse(c.updatedAt) < 600_000)) void fetchSkills(true).catch(() => null);
+          return { files: c.files, map: c.map };
+        });
+      skillsData.current = { at: Date.now(), p };
+      p.catch(() => {
+        if (skillsData.current?.p === p) skillsData.current = null;
       });
-      skillsData.current = { at: Date.now(), p: p2 };
+      return p;
     }
-    return skillsData.current.p;
+    return fetchSkills();
+  };
+  /** GitHub에서 새로 읽기(서버 함수가 읽으면서 skill_cache에도 저장). background면 지금 보이는 것은 그대로 두고 끝나면 바꿔 둔다 */
+  const fetchSkills = (background = false) => {
+    const p2 = Promise.all([store!.skills!(), store!.skillMap!()]).then(([files, map]) => ({ files, map }));
+    p2.then(
+      (d) => {
+        skillsData.current = { at: Date.now(), p: Promise.resolve(d) };
+      },
+      () => {
+        if (skillsData.current?.p === p2) skillsData.current = null;
+      },
+    );
+    if (!background) skillsData.current = { at: Date.now(), p: p2 };
+    return p2;
   };
   // 스킬 탭에서 넣기 창을 바로 열 스킬(프로젝트 칸에서 넘어올 때)
   const [skillToInstall, setSkillToInstall] = useState<{ name: string; n: number } | null>(null);
@@ -1716,6 +1745,7 @@ export function App() {
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
   const ordered = snap.projects;
   // 스킬 만들기·찾기를 접수할 프로젝트(v0.6.65): 스킬 원본 저장소(minoffia-skills) 프로젝트, 없으면 이 저장소(minoffia)
+  const skillsProject = snap.projects.find((p) => (p.repo ?? '').toLowerCase() === SKILLS_REPO && !p.sample) ?? null;
   const officeProject =
     snap.projects.find((p) => (p.repo ?? '').toLowerCase() === SKILLS_REPO && !p.sample) ??
     snap.projects.find((p) => OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) && !p.sample) ??
@@ -1723,6 +1753,15 @@ export function App() {
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
   const renderHealth = store.healthCheck ? (p: Project) => <HealthCheck api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderStructure = (p: Project) => <RepoStructure load={() => store.repoTree(p.id)} changes={projectChanges(p.id, snap.tasks, snap.workflow.results)} />;
+  // '구조 보기'와 '점검'을 나눈다(v0.6.70): 프로젝트 칸과 스킬 탭이 같은 모양
+  const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => store.healthCheck!.start(p.id, force), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
+  const renderMaps = (p: Project) => (
+    <StructureMaps
+      id={p.id}
+      health={store.healthCheck && p.repo ? { load: () => store.healthCheck!.load(p.id), map: () => store.healthCheck!.map(p.id) } : undefined}
+      structure={() => renderStructure(p)}
+    />
+  );
   return (
     <div className="app">
       <header className="topbar" ref={topRef}>
@@ -2183,7 +2222,8 @@ export function App() {
                   : undefined
               }
               renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
-              renderHealth={renderHealth}
+              renderHealth={renderCheck}
+              renderMaps={renderMaps}
               renderStructure={renderStructure}
               renderHistory={(p) => <ProjectHistory snap={snap} projectId={p.id} loadChat={(f, t) => store.loadChat(f, t)} onOpenTask={(id) => showTask(id)} />}
             />
@@ -2211,6 +2251,22 @@ export function App() {
               mapLoad={store.skillMap ? () => loadSkillsData().then((d) => d.map) : undefined}
               prefill={skillPrefill}
               installRequest={skillToInstall}
+              renderMap={
+                skillsProject ? (
+                  <div className="project-sections skill-sections">
+                    <details className="project-rules project-maps" onToggle={(e) => setSkillMapsOpen((e.currentTarget as HTMLDetailsElement).open)}>
+                      <summary>구조 보기</summary>
+                      {skillMapsOpen && renderMaps(skillsProject)}
+                    </details>
+                    {renderCheck && (
+                      <details className="project-rules project-health" onToggle={(e) => setSkillCheckOpen((e.currentTarget as HTMLDetailsElement).open)}>
+                        <summary>점검</summary>
+                        {skillCheckOpen && renderCheck(skillsProject)}
+                      </details>
+                    )}
+                  </div>
+                ) : undefined
+              }
               projects={snap.projects
                 .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')
                 .map((p) => ({ id: p.id, name: p.name, repo: p.repo! }))}

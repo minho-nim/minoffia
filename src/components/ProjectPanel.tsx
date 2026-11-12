@@ -37,6 +37,8 @@ interface Props {
   renderStructure?: (project: Project) => ReactNode;
   /** 앱 점검(v0.5.53): 저장소가 있는 프로젝트만, 펼쳤을 때만 그린다 */
   renderHealth?: (project: Project) => ReactNode;
+  /** '구조 보기'(v0.6.70): 간략·자세히·구조도 탭. 있으면 구조도 칸 대신 쓰고 점검 칸은 점검만 */
+  renderMaps?: (project: Project) => ReactNode;
   /** 디자인 기준(v0.5.56): 저장소가 있는 프로젝트만, 펼쳤을 때만 그린다 */
   renderDesign?: (project: Project) => ReactNode;
   /** 이 프로젝트에 들어 있는 스킬(v0.6.66): 저장소 있는 프로젝트만, 펼쳤을 때만 그린다 */
@@ -58,7 +60,7 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, onMakeSkill }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderMaps, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, onMakeSkill }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [structureOpen, setStructureOpen] = useState<Record<string, boolean>>({});
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
@@ -299,15 +301,16 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   {historyOpen[p.id] && renderHistory(p)}
                 </details>
               )}
-              {renderStructure && (
-                <details className="project-rules project-structure" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setStructureOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>구조도</summary>
-                  {structureOpen[p.id] && renderStructure(p)}
+              {/* v0.6.70 소유자 "지도는 구조 보기 하나로": 간략·자세히·구조도는 '구조 보기' 탭으로, 점검은 따로 */}
+              {(renderMaps || renderStructure) && (
+                <details className="project-rules project-maps" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setStructureOpen((o) => ({ ...o, [p.id]: open })); }}>
+                  <summary>구조 보기</summary>
+                  {structureOpen[p.id] && (renderMaps ? renderMaps(p) : renderStructure!(p))}
                 </details>
               )}
               {renderHealth && p.repo && (
                 <details className="project-rules project-health" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHealthOpen((o) => ({ ...o, [p.id]: open })); }}>
-                  <summary>앱 지도·점검</summary>
+                  <summary>{renderMaps ? '점검' : '앱 지도·점검'}</summary>
                   {healthOpen[p.id] && renderHealth(p)}
                 </details>
               )}

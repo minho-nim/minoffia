@@ -112,6 +112,8 @@ Deno.serve(async (req) => {
         map[r.id] = got;
       }),
     );
+    // 앱이 켤 때 바로 읽게 저장(v0.6.70). 소유자 권한(RLS)으로 내 행만. 저장 실패는 응답에 영향 없음
+    await userClient.from('skill_cache').upsert({ owner_id: user.id, map, updated_at: new Date().toISOString() }).then(() => null, () => null);
     return reply(200, { ok: true, map });
   }
   // 프로젝트에 넣기: 고른 프로젝트마다 Actions '스킬 넣기'(skill-sync.yml)를 한 번씩 시작한다. 버튼을 누른 것이 소유자 승인이다
@@ -177,6 +179,7 @@ Deno.serve(async (req) => {
           return { name, dir, meta: META_SKILLS.includes(name), skillMd: md.slice(0, 60_000), files: list.slice(0, 80), license: licText.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3).join(' ').slice(0, 200) };
         }),
       );
+      await userClient.from('skill_cache').upsert({ owner_id: user.id, files: skills, updated_at: new Date().toISOString() }).then(() => null, () => null);
       return reply(200, { ok: true, repo, skills });
     } catch (e) {
       return reply(504, { ok: false, error: `GitHub가 늦게 답했습니다(${(e as Error).name}).` });
