@@ -111,7 +111,8 @@ interface Props {
   currentProject?: Project | null;
   /** 다른 탭에서 넘겨준 입력 초안(업무 카드 "대화로 묻기", 프로젝트 "요청하기"). n이 바뀔 때마다 채운다 */
   /** 다른 탭에서 넘어온 입력 초안. taskId가 있으면 그 업무에 대한 질문(보낼 때 업무 상태를 참고로 붙임, v0.5.1) */
-  draft?: { text: string; n: number; taskId?: string } | null;
+  /** send = 채우고 바로 보낸다(스킬 입력 창, v0.6.57) */
+  draft?: { text: string; n: number; taskId?: string; send?: boolean } | null;
   onAskGemini: (
     question: string,
     history: { role: 'user' | 'model'; text: string }[],
@@ -642,6 +643,11 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   // 다른 탭에서 넘어온 초안을 입력칸에 채우고 바로 쓸 수 있게 한다.
   useEffect(() => {
     if (!draft) return;
+    if (draft.send) {
+      // 다른 탭의 입력 창에서 다 쓴 글: 입력칸을 거치지 않고 바로 보낸다
+      window.setTimeout(() => submit(draft.text), 60);
+      return;
+    }
     setInput(draft.text);
     focusTask.current = draft.taskId ? { taskId: draft.taskId, prefix: draft.text.trim() } : null;
     window.setTimeout(() => {

@@ -6077,3 +6077,30 @@ html.popup-open .project-sections > details[open] * {
   border-radius: 8px;
   background: var(--bg);
 }
+
+/* 스킬 입력 창(v0.6.57): 닫혀 있으면 숨기고, 열리면 프로젝트 칸과 같은 가운데 팝업 */
+.skill-form-pop {
+  margin: 0;
+}
+.skill-form-pop > details:not([open]) {
+  display: none;
+}
+.skill-form {
+  display: grid;
+  gap: 10px;
+}
+.skill-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.skill-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+}
