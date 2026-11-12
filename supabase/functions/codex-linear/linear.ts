@@ -73,6 +73,8 @@ export interface CodexNews {
   /** Codex 작업 주소(있으면) */
   taskUrl: string | null;
   issueState: string;
+  /** Codex가 일한 환경 이름("Kicked off a task in '…' environment", v0.6.86) */
+  environment: string | null;
 }
 
 type Status = {
@@ -104,5 +106,22 @@ export function readNews(data: Status, since?: string | null): CodexNews {
         : 'working';
   // v0.6.19(소유자 "Codex 주, Claude 보조"): 오늘 두 번 막힌 '환경 없음'을 쉬운 말로
   const hint = /no available environments/i.test(body) ? 'Codex 환경 없음 — Codex 웹 설정 > 환경에서 이 저장소 환경을 만들고 "게시"하세요(프로젝트마다 한 번). ' : '';
-  return { last: (hint + body).slice(0, 240), kind, taskUrl, issueState: data.issue?.state?.name ?? '' };
+  const environment = all.match(/kicked off a task in ['"`]([^'"`]{1,100})['"`] environment/i)?.[1] ?? null;
+  return { last: (hint + body).slice(0, 240), kind, taskUrl, issueState: data.issue?.state?.name ?? '', environment };
+}
+
+/**
+ * Codex가 업무 저장소와 다른 환경에서 일했는지(v0.6.86 소유자 MIN-22: 미노피아 스킬 일을 worthit 환경에서 해 실패).
+ * Linear로 맡기면 그 저장소 환경이 없을 때 Codex가 다른 환경을 고른다. 이름만 비교한다(저장소 이름이 바뀐 경우는 경고만 하고 막지 않는다).
+ */
+export function envMismatch(environment: string | null, repo: string | null | undefined): boolean {
+  if (!environment || !repo) return false;
+  const norm = (s: string) => s.toLowerCase().split('/').pop()!.replace(/[^a-z0-9]/g, '');
+  const e = norm(environment), r = norm(repo);
+  return !!e && !!r && !e.includes(r) && !r.includes(e);
+}
+
+/** 경고 문구(작업 상태 앞에 붙인다) */
+export function envWarning(environment: string, repo: string): string {
+  return `환경 확인 — Codex가 '${environment}' 환경에서 시작했어요(업무 저장소 ${repo}). 그 저장소가 아니면 Codex 설정 → 환경에 ${repo}를 추가하고 다시 시도하세요. `;
 }

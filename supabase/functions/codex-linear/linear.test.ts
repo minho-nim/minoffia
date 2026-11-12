@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { issueInput, readLookup, readNews } from './linear';
+import { envMismatch, issueInput, readLookup, readNews } from './linear';
 
 describe('Codex Linear(v0.5.2)', () => {
   const lookup = {
@@ -53,5 +53,19 @@ describe('Codex Linear(v0.5.2)', () => {
     expect(readNews(data).kind).toBe('error');
     expect(readNews(data, '2026-11-10T03:47:37Z').kind).toBe('none');
     expect(readNews({ issue: { comments: { nodes: [{ body: 'Working on it', createdAt: '2026-11-10T03:48:00Z', user: { name: 'Codex' } }] } } }, '2026-11-10T03:47:37Z').kind).toBe('working');
+  });
+});
+
+describe('다른 저장소 환경 경고(v0.6.86)', () => {
+  it('"Kicked off a task in … environment"에서 환경 이름을 읽고 저장소와 다르면 경고', () => {
+    const n = readNews({ issue: { comments: { nodes: [
+      { body: "On it! I've received your request. Kicked off a task in 'minho-nim/worthit' environment. Track progress here: View task", createdAt: '1', user: { name: 'Codex' } },
+      { body: "Codex couldn't complete this task.", createdAt: '2', user: { name: 'Codex' } },
+    ] } } });
+    expect(n.environment).toBe('minho-nim/worthit');
+    expect(envMismatch(n.environment, 'minho-nim/minoffia-skills')).toBe(true);
+    expect(envMismatch('minho-nim/minoffia-skills', 'minho-nim/minoffia-skills')).toBe(false);
+    expect(envMismatch('MuscleMap', 'minho-nim/musclemap')).toBe(false);
+    expect(envMismatch(null, 'minho-nim/x')).toBe(false);
   });
 });

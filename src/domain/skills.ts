@@ -180,21 +180,27 @@ export function skillRequest(f: SkillForm): string {
 }
 
 /** 결과 요약에서 AI가 적은 "쓴 스킬: a, b"(기본 규칙, v0.6.59)·"스킬 확인: x"(시험용)를 읽는다. 이름 규칙에 맞는 것만 */
-export function usedSkills(summary: string): string[] {
+export function usedSkills(summary: string, testLog = ''): string[] {
   const out = new Set<string>();
+  const ok = (n: string) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(n);
   for (const m of summary.matchAll(/^(?:쓴 스킬|스킬 확인)\s*[:：]\s*(.+)$/gm)) {
     for (const n of m[1].split(/[,，、\s]+/)) {
       const name = n.trim().replace(/[`'".]/g, '').toLowerCase();
-      if (/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) out.add(name);
+      if (ok(name)) out.add(name);
     }
   }
+  // 자동 채우기(v0.6.86 소유자): AI가 '쓴 스킬' 줄을 빼먹어도 실제로 쓴 흔적으로 센다.
+  // 1) 시험 기록에서 스킬 폴더 안 스크립트를 실행한 것(.claude/skills/<이름>/… · .agents/skills/<이름>/…)
+  for (const m of testLog.matchAll(/(?:\.claude|\.agents)\/skills\/([a-z0-9][a-z0-9-]{0,63})\//g)) out.add(m[1]);
+  // 2) 요약에 "<이름> 절차로·스킬로·스킬대로·스킬을 따라"처럼 따랐다고 쓴 것(하이픈 있는 스킬 이름만, 고친 대상 이름과 헷갈리지 않게)
+  for (const m of summary.matchAll(/\b([a-z0-9]+(?:-[a-z0-9]+)+)\s*(?:절차|스킬)\s*(?:로|대로|을 따라|를 따라)/g)) if (ok(m[1])) out.add(m[1]);
   return [...out];
 }
 
 /** 스킬별로 쓰인 결과 수(같은 업무의 여러 결과는 한 번만) */
-export function skillUsage(results: { taskId: string; summary: string }[]): Map<string, number> {
+export function skillUsage(results: { taskId: string; summary: string; testLog?: string }[]): Map<string, number> {
   const seen = new Map<string, Set<string>>();
-  for (const r of results) for (const n of usedSkills(r.summary)) seen.set(n, (seen.get(n) ?? new Set()).add(r.taskId));
+  for (const r of results) for (const n of usedSkills(r.summary, r.testLog ?? '')) seen.set(n, (seen.get(n) ?? new Set()).add(r.taskId));
   return new Map([...seen].map(([n, s]) => [n, s.size]));
 }
 

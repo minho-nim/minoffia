@@ -75,7 +75,7 @@ export function taskTimeline(taskId: string, wf: WorkflowData): TimelineEvent[] 
   }
 
   for (const r of wf.results.filter((x) => x.taskId === taskId)) {
-    const used = usedSkills(r.summary ?? '');
+    const used = usedSkills(r.summary ?? '', r.testLog ?? '');
     push(r.createdAt, `결과 v${r.revision} 도착 (${RESULT_SOURCE[r.source] ?? r.source})${used.length ? ` · 쓴 스킬: ${used.join(', ')}` : ''}`, 'ok');
   }
   for (const v of (wf.reviews ?? []).filter((x) => x.taskId === taskId)) {

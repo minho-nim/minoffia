@@ -1105,6 +1105,10 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                           </>
                         )
                       )}
+                      {/* v0.6.86: Codex가 다른 저장소 환경에서 시작했으면 눈에 띄게(상태 글 앞의 '환경 확인' 문장) */}
+                      {a.assignee === 'codex' && a.actualProviderStatus?.includes('환경 확인') && (
+                        <p className="task-error small">⚠️ {a.actualProviderStatus.match(/환경 확인 — [^]*?하세요\./)?.[0] ?? '환경 확인 — Codex가 다른 저장소 환경에서 시작했어요.'}</p>
+                      )}
                       {a.dispatchStatus === 'failed' && a.actualProviderStatus && a.actualProviderStatus !== 'unknown' && <p className="task-error small">{a.actualProviderStatus.replace(/^linear: /, 'Codex: ')}</p>}
                       {a.assignee === 'codex' && a.dispatchStatus === 'started' && a.actualProviderStatus?.startsWith('linear') && (
                         <p className="small">

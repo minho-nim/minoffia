@@ -7,7 +7,7 @@ import { BASE_RULES } from './projectRules.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { dispatchTrackedIssue, type LinearIssue } from './trackedDispatch.ts';
 import { buildServerHandoff } from './serverHandoff.ts';
-import { CREATE_COMMENT, CREATE_ISSUE, issueInput, LOOKUP_QUERY, readLookup, readNews, STATUS_QUERY } from './linear.ts';
+import { CREATE_COMMENT, CREATE_ISSUE, issueInput, LOOKUP_QUERY, readLookup, readNews, STATUS_QUERY, envMismatch, envWarning } from './linear.ts';
 
 const MAX_TEXT = 60_000;
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
@@ -148,7 +148,10 @@ Deno.serve(async (req) => {
       const remoteIssue = data.issue as Partial<LinearIssue>;
       if (remoteIssue.id !== a.provider_execution_id || !remoteIssue.url) throw new Error('예약한 이슈의 주소를 확인하지 못했습니다.');
       const news = readNews(data as Parameters<typeof readNews>[0], a.started_at);
-      const note = news.kind === 'none' ? 'linear: Codex 소식 아직 없음' : `linear: ${news.kind === 'error' ? '시작 못 함 — ' : news.kind === 'failed' ? '끝내지 못함 — ' : ''}${news.last}`;
+      const { data: tk } = await admin.from('tasks').select('projects(repo)').eq('id', a.task_id).maybeSingle();
+      const repo = String((tk?.projects as { repo?: string } | null)?.repo ?? '');
+      const warn = envMismatch(news.environment, repo) ? envWarning(news.environment!, repo) : '';
+      const note = news.kind === 'none' ? 'linear: Codex 소식 아직 없음' : `linear: ${warn}${news.kind === 'error' ? '시작 못 함 — ' : news.kind === 'failed' ? '끝내지 못함 — ' : ''}${news.last}`;
       const patch: Record<string, unknown> = { actual_provider_status: note.slice(0, 300), provider_task_url: remoteIssue.url, status_source: 'server_verified', last_verified_at: new Date().toISOString() };
       if (a.dispatch_status === 'starting' || a.dispatch_status === 'started') patch.dispatch_status = news.kind === 'error' || news.kind === 'failed' ? 'failed' : 'started';
       const { data: saved, error: saveError } = await admin.from('agent_assignments').update(patch).eq('id', a.id).eq('provider_execution_id', a.provider_execution_id).eq('dispatch_status', a.dispatch_status).select('id').maybeSingle();
