@@ -349,8 +349,11 @@ export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultRevie
       // 무시
     }
   };
-  const list = [...reviews].filter((r) => !hidden.has(r.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const hiddenCount = reviews.filter((r) => hidden.has(r.id)).length;
+  // 하루 지난 평가는 이 화면에서 아예 안 보인다(v0.6.74 소유자). 기록은 업무 카드 타임라인에 그대로 남는다
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const recent = reviews.filter((r) => r.createdAt >= since);
+  const list = recent.filter((r) => !hidden.has(r.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const hiddenCount = recent.filter((r) => hidden.has(r.id)).length;
   const rows = all ? list : list.slice(0, 5);
   return (
     <section className="review-log" aria-label="결과 평가 기록">
@@ -362,8 +365,8 @@ export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultRevie
           </button>
         )}
       </h3>
-      {!reviews.length ? (
-        <p className="muted small">아직 평가한 결과가 없어요. 개발 결과가 오면 규칙 검사와 Claude 채점(안 되면 Gemini)이 자동으로 돌아요.</p>
+      {!list.length ? (
+        <p className="muted small">{reviews.length ? '최근 하루 동안 새 평가가 없어요. 지난 평가는 업무 카드 기록에 있어요.' : '아직 평가한 결과가 없어요.'} 개발 결과가 오면 규칙 검사와 Claude 채점(안 되면 Gemini)이 자동으로 돌아요.</p>
       ) : (
         <ul>
           {rows.map((r) => {

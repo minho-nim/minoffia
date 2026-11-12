@@ -346,6 +346,8 @@ export function App() {
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
   // 사무실 지도 팝업(역할·클라우드)
   const [officePop, setOfficePop] = useState<'role' | 'cloud' | null>(null);
+  const [dockOpen, setDockOpen] = useState(false);
+  const [picOpen, setPicOpen] = useState(false);
   const [directOpen, setDirectOpen] = useState(false);
   // 대화 탭 프로젝트 칩 접기(v0.6.72). 이 기기에만 기억
   const [chatChipsOpen, setChatChipsOpenState] = useState(() => {
@@ -1888,11 +1890,13 @@ export function App() {
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
         {(tab === 'tasks' || tab === 'projects' || tab === 'team' || tab === 'settings' || tab === 'skills') && (
           <span className="office-dock">
-          {/* 사무실 지도(v0.6.73 소유자 "사무실 보기 버튼 옆에 역할·클라우드 나눠서, 열린 채로 팝업") */}
-          <button type="button" className="office-dock-btn" onClick={() => setOfficePop('role')}>
+          {/* v0.6.74 소유자 "… 하나만, 열면 사무실·역할·클라우드": 평소엔 … 하나, 누르면 펼친다. 역할·클라우드는 열린 채로 팝업 */}
+          {dockOpen && (
+            <>
+          <button type="button" className="office-dock-btn" onClick={() => { setOfficePop('role'); setDockOpen(false); }}>
             역할
           </button>
-          <button type="button" className="office-dock-btn" onClick={() => setOfficePop('cloud')}>
+          <button type="button" className="office-dock-btn" onClick={() => { setOfficePop('cloud'); setDockOpen(false); }}>
             클라우드
           </button>
           <button
@@ -1912,6 +1916,11 @@ export function App() {
           >
             🏢 사무실
           </button>
+            </>
+          )}
+          <button type="button" className="office-dock-btn office-dock-more" aria-expanded={dockOpen} aria-label={dockOpen ? '닫기' : '사무실·역할·클라우드 보기'} onClick={() => setDockOpen((v) => !v)}>
+            {dockOpen ? '✕' : '…'}
+          </button>
           </span>
         )}
         <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek && tab === 'chat' ? ' is-peek' : ''}${holdOffice ? ' is-hold' : ''}`} aria-label="오피스">
@@ -1929,11 +1938,18 @@ export function App() {
             leave={snap.leave ?? []}
           />
           <span className="office-map-btns" aria-label="사무실 지도">
-            <button type="button" onClick={() => setOfficePop('role')}>
-              역할
-            </button>
-            <button type="button" onClick={() => setOfficePop('cloud')}>
-              클라우드
+            {picOpen && (
+              <>
+                <button type="button" onClick={() => { setOfficePop('role'); setPicOpen(false); }}>
+                  역할
+                </button>
+                <button type="button" onClick={() => { setOfficePop('cloud'); setPicOpen(false); }}>
+                  클라우드
+                </button>
+              </>
+            )}
+            <button type="button" aria-expanded={picOpen} aria-label={picOpen ? '닫기' : '역할·클라우드 보기'} onClick={() => setPicOpen((v) => !v)}>
+              {picOpen ? '✕' : '…'}
             </button>
           </span>
           <p className="stage-note">
