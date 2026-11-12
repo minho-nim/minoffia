@@ -1914,7 +1914,7 @@ export function App() {
             onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && setHoldOffice(true)}
             onKeyUp={() => setHoldOffice(false)}
           >
-            🏢 사무실
+            사무실
           </button>
             </>
           )}
