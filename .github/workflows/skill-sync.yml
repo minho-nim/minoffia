@@ -16,6 +16,10 @@ on:
       source:
         description: '스킬 모음 저장소(owner/repo)'
         required: true
+      mode:
+        description: 'add = 넣기·갱신, remove = 빼기(v0.6.60)'
+        required: false
+        default: add
 
 permissions:
   contents: read
@@ -34,16 +38,18 @@ jobs:
           REPO: ${{ inputs.repo }}
           SKILL: ${{ inputs.skill }}
           SOURCE: ${{ inputs.source }}
+          MODE: ${{ inputs.mode }}
           GH_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
         run: |
           echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::저장소 이름이 이상합니다"; exit 1; }
           echo "$SOURCE" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::error::스킬 모음 저장소 이름이 이상합니다"; exit 1; }
           echo "$SKILL" | grep -Eq '^[a-z0-9][a-z0-9-]{0,63}$' || { echo "::error::스킬 이름은 영어 소문자·숫자·하이픈만"; exit 1; }
           [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "::error::이 저장소는 대상으로 받지 않습니다."; exit 1; }
+          case "${MODE:-add}" in add|remove) ;; *) echo "::error::mode는 add 또는 remove"; exit 1;; esac
           git clone -q --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/$SOURCE.git" /tmp/src
           dir=$(cd /tmp/src && find . -path ./.git -prune -o -type f -name SKILL.md -path "*/$SKILL/SKILL.md" -print | head -1 | xargs -r dirname)
-          [ -n "$dir" ] || { echo "::error::스킬 모음에서 $SKILL/SKILL.md를 찾지 못했습니다"; exit 1; }
-          echo "원본: $SOURCE $dir"
+          [ -n "$dir" ] || [ "$MODE" = "remove" ] || { echo "::error::스킬 모음에서 $SKILL/SKILL.md를 찾지 못했습니다"; exit 1; }
+          echo "원본: $SOURCE $dir ($MODE)"
           base=$(gh api "repos/$REPO" --jq .default_branch)
           git clone -q --depth 1 --branch "$base" "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" /tmp/repo
           cd /tmp/repo
@@ -53,17 +59,20 @@ jobs:
           git checkout -q -b "$head"
           for dest in .agents/skills .claude/skills; do
             rm -rf "$dest/$SKILL"
-            mkdir -p "$dest"
-            cp -R "/tmp/src/$dir" "$dest/$SKILL"
+            if [ "$MODE" != "remove" ]; then
+              mkdir -p "$dest"
+              cp -R "/tmp/src/$dir" "$dest/$SKILL"
+            fi
           done
-          git add -A .agents/skills .claude/skills
-          if git diff --cached --quiet; then echo "이미 같은 스킬이 들어 있어요. 바꿀 것이 없습니다."; exit 0; fi
+          git add -A .agents/skills .claude/skills 2>/dev/null || true
+          if git diff --cached --quiet; then echo "바꿀 것이 없습니다(이미 같거나 이미 없음)."; exit 0; fi
           src_sha=$(git -C /tmp/src rev-parse --short HEAD)
-          git commit -q -m "스킬 넣기: $SKILL ($SOURCE@$src_sha)"
+          verb=$([ "$MODE" = "remove" ] && echo "스킬 빼기" || echo "스킬 넣기")
+          git commit -q -m "$verb: $SKILL ($SOURCE@$src_sha)"
           git push -q --force origin "$head"
           owner=${REPO%%/*}
           url=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$head" --jq '.[0].html_url // empty')
-          [ -n "$url" ] || url=$(gh api -X POST "repos/$REPO/pulls" -f title="스킬 넣기: $SKILL" -f head="$head" -f base="$base" -f body="미노피아 스킬 탭에서 넣은 스킬. 원본: $SOURCE@$src_sha ($dir). .agents/skills(Codex·Gemini 등)와 .claude/skills(Claude)에 같은 내용." --jq .html_url)
+          [ -n "$url" ] || url=$(gh api -X POST "repos/$REPO/pulls" -f title="$verb: $SKILL" -f head="$head" -f base="$base" -f body="미노피아 스킬 탭에서 한 일($verb). 원본: $SOURCE@$src_sha ($dir). .agents/skills(Codex·Gemini 등)와 .claude/skills(Claude) 둘 다." --jq .html_url)
           num=${url##*/}
           gh api -X PUT "repos/$REPO/pulls/$num/merge" -f merge_method=squash >/dev/null && echo "병합함: $url" || { echo "::error::PR은 열었지만 병합하지 못했습니다: $url"; exit 1; }
           gh api -X DELETE "repos/$REPO/git/refs/heads/$head" >/dev/null 2>&1 || true

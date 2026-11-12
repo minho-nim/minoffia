@@ -17,7 +17,7 @@ import { orderProjects } from './domain/projectOrder';
 import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
-import { skillUsage } from './domain/skills';
+import { skillUsage, toSkillView } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
@@ -1643,6 +1643,18 @@ export function App() {
       const r = await store.createRepo(project.id, name);
       setSnap(await store.load());
       say(r.warning ? 'error' : 'ok', r.warning ?? `${r.repo} 비공개 저장소를 만들고 ${project.name}에 연결했습니다.`);
+      // 기본 스킬(v0.6.60): 새 저장소에 '기본' 표시가 있는 스킬을 자동으로 넣는다(실패해도 저장소 만들기는 끝난 것)
+      if (store.skills && store.installSkill) {
+        void (async () => {
+          try {
+            const defaults = (await store.skills!()).map(toSkillView).filter((s) => s.isDefault);
+            for (const s of defaults) await store.installSkill!(s.name, [project.id], 'add');
+            if (defaults.length) say('ok', `새 저장소에 기본 스킬 ${defaults.length}개(${defaults.map((s) => s.title).join(', ')})를 넣기 시작했어요(1~2분).`);
+          } catch {
+            // 스킬 넣기 실패는 저장소 만들기와 별개(스킬 탭에서 다시 넣을 수 있다)
+          }
+        })();
+      }
       return r.repo;
     } catch (e) {
       say('error', `저장소를 만들지 못했습니다: ${(e as Error).message}`);
@@ -2165,7 +2177,7 @@ export function App() {
                 .filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab')
                 .map((p) => ({ id: p.id, name: p.name, repo: p.repo! }))}
               status={store.skillStatus ? (name) => store.skillStatus!(name) : undefined}
-              install={store.installSkill ? (name, ids) => store.installSkill!(name, ids) : undefined}
+              install={store.installSkill ? (name, ids, mode) => store.installSkill!(name, ids, mode) : undefined}
               canRequest={!!officeProject}
               onSend={(text) => {
                 if (!officeProject) return;

@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { projectId?: string; action?: string; projectIds?: string[]; skill?: string };
+  let body: { projectId?: string; action?: string; projectIds?: string[]; skill?: string; mode?: string };
   try {
     body = await req.json();
   } catch {
@@ -85,10 +85,11 @@ Deno.serve(async (req) => {
   if (body.action === 'skillInstall') {
     const name = String(body.skill ?? '');
     if (!SKILL_NAME.test(name)) return reply(400, { ok: false, error: '스킬 이름이 이상합니다.' });
-    if (META_SKILLS.includes(name)) return reply(409, { ok: false, error: '스킬을 만들고 찾는 도구 스킬은 미노피아에만 둬요.' });
+    const mode = body.mode === 'remove' ? 'remove' : 'add';
+    if (META_SKILLS.includes(name) && mode === 'add') return reply(409, { ok: false, error: '스킬을 만들고 찾는 도구 스킬은 미노피아에만 둬요.' });
     const actionsToken = env('GITHUB_ACTIONS_TOKEN');
     if (!actionsToken) return reply(503, { ok: false, error: 'Actions를 시작할 토큰(GITHUB_ACTIONS_TOKEN)이 없습니다.' });
-    if (!(await sourceSkillPath(name))) return reply(404, { ok: false, error: '스킬 모음에서 그 스킬을 찾지 못했어요.' });
+    if (mode === 'add' && !(await sourceSkillPath(name))) return reply(404, { ok: false, error: '스킬 모음에서 그 스킬을 찾지 못했어요.' });
     const ids = (Array.isArray(body.projectIds) ? body.projectIds : []).filter((x) => typeof x === 'string').slice(0, 12);
     const { data: rows } = await userClient.from('projects').select('id, repo').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
     const officeRepo = env('OFFICE_REPO') || 'minho-nim/minoffia';
@@ -100,7 +101,7 @@ Deno.serve(async (req) => {
       const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/skill-sync.yml/dispatches`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${actionsToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ref: 'main', inputs: { repo, skill: name, source: skillsRepo } }),
+        body: JSON.stringify({ ref: 'main', inputs: { repo, skill: name, source: skillsRepo, mode } }),
         signal: AbortSignal.timeout(15_000),
       }).catch(() => null);
       (res && res.ok ? started : failed).push(repo);

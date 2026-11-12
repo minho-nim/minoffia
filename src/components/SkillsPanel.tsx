@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { INSTALL_LABEL, RISK_LABEL, SKILL_AREAS, SKILL_PRESETS, skillRequest, toSkillView, type SkillFile, type SkillInstallState } from '../domain/skills';
 
-const EMPTY = { what: '', when: '', rules: '', areas: [] as string[] };
+const EMPTY = { what: '', when: '', rules: '', areas: [] as string[], isDefault: false };
 
 export interface SkillProject {
   id: string;
@@ -19,7 +19,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   /** 스킬을 넣을 수 있는 프로젝트(저장소 있는 것, MinLab 제외) */
   projects?: SkillProject[];
   status?: (skill: string) => Promise<Record<string, SkillInstallState>>;
-  install?: (skill: string, projectIds: string[]) => Promise<{ started: string[]; failed: string[] }>;
+  install?: (skill: string, projectIds: string[], mode?: 'add' | 'remove') => Promise<{ started: string[]; failed: string[] }>;
   /** 스킬별 쓰인 업무 수(결과 요약의 '쓴 스킬', v0.6.59) */
   usage?: Map<string, number>;
   /** 다른 곳(반복되는 문제)에서 넘어온 스킬 만들기 내용. n이 바뀔 때마다 만들기 창을 연다(v0.6.59) */
@@ -47,14 +47,17 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
       },
     );
   };
-  const doInstall = async () => {
-    if (!installFor || !install || picked.size === 0) return;
+  // 빼기는 들어 있는 곳(들어 있음·옛 버전) 중 고른 곳만(v0.6.60)
+  const removable = [...picked].filter((id) => states?.[id] === 'same' || states?.[id] === 'old');
+  const doInstall = async (mode: 'add' | 'remove' = 'add') => {
+    const ids = mode === 'remove' ? removable : [...picked];
+    if (!installFor || !install || ids.length === 0) return;
     setInstalling(true);
     setInstallMsg('');
     try {
-      const r = await install(installFor, [...picked]);
+      const r = await install(installFor, ids, mode);
       setInstallMsg(
-        `${r.started.length}곳에 넣기 시작했어요(GitHub Actions, 1~2분). 끝나면 각 저장소에 PR이 열리고 바로 병합돼요.${r.failed.length ? ` 시작 못 함: ${r.failed.join(', ')}` : ''} 잠시 뒤 다시 열면 상태가 바뀌어 있어요.`,
+        `${r.started.length}곳에서 ${mode === 'remove' ? '빼기' : '넣기'}를 시작했어요(GitHub Actions, 1~2분). 끝나면 각 저장소에 PR이 열리고 바로 병합돼요.${r.failed.length ? ` 시작 못 함: ${r.failed.join(', ')}` : ''} 잠시 뒤 다시 열면 상태가 바뀌어 있어요.`,
       );
     } catch (e) {
       setInstallMsg((e as Error).message || '넣지 못했어요.');
@@ -106,6 +109,7 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
         <span>{usage.get(s.name) ? `쓰인 업무 ${usage.get(s.name)}` : s.meta ? '' : '아직 안 쓰임'}</span>
       <span>파일 {s.files.length}{s.scripts ? ` · 스크립트 ${s.scripts}` : ''}</span>
         {s.meta && <span className="pill">도구 · 미노피아 전용</span>}
+        {s.isDefault && <span className="pill" title="새 프로젝트 저장소를 만들 때 자동으로 넣어요">기본</span>}
         {s.risks.map((r) => (
           <span key={r} className="pill pill-warn" title="내용에 이런 글자가 있어요. 꼭 위험한 건 아니고, 읽어 볼 곳이에요.">
             {RISK_LABEL[r]}
@@ -196,7 +200,12 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
                   <button type="button" className="btn btn-ghost" onClick={() => setInstallFor(null)}>
                     닫기
                   </button>
-                  <button type="button" className="btn btn-primary" disabled={installing || picked.size === 0 || states === null} onClick={() => void doInstall()}>
+                  {removable.length > 0 && (
+                    <button type="button" className="btn btn-ghost" disabled={installing || states === null} onClick={() => void doInstall('remove')}>
+                      {removable.length}곳에서 빼기
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-primary" disabled={installing || picked.size === 0 || states === null} onClick={() => void doInstall('add')}>
                     {picked.size}곳에 넣기
                   </button>
                 </span>
@@ -236,6 +245,9 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
                   <label className="field">
                     <span>언제 쓰면 좋을까? (선택)</span>
                     <input id="skill-when" value={fields.when} maxLength={200} onChange={(e) => setFields({ ...fields, when: e.target.value })} placeholder='예: "배포해줘"라고 할 때' />
+                  </label>
+                  <label className="check small">
+                    <input id="skill-default" type="checkbox" checked={fields.isDefault} onChange={(e) => setFields({ ...fields, isDefault: e.target.checked })} /> 새 프로젝트에 늘 넣기(기본 스킬)
                   </label>
                   <label className="field">
                     <span>꼭 지킬 순서·규칙 (선택, 여러 줄)</span>
