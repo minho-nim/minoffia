@@ -4,21 +4,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppMapView, type HealthApi } from './HealthCheck';
 import type { HealthReport } from '../domain/healthText';
+import { freshReport, mapHtml, savedReport } from '../data/mapCache';
 
 export type MapTab = 'brief' | 'detail' | 'relation' | 'tree' | 'role' | 'cloud';
 const NAME: Record<MapTab, string> = { brief: '간략', detail: '자세히', relation: '관계', tree: '구조도', role: '역할', cloud: '클라우드' };
 // 마지막에 본 탭(팝업을 다시 열면 그 탭으로, 앱을 켜 있는 동안만)
 const lastTab: Record<string, MapTab> = {};
-// 한 번 읽은 간략 지도·자세한 지도는 10분 동안 다시 읽지 않는다(v0.6.72 소유자 "구조도·앱 지도는 켤 때마다 로딩해야 돼?")
-const TTL = 600_000;
-const cache = new Map<string, { at: number; report?: HealthReport | null; html?: string | null }>();
-const cached = (id: string) => {
-  const c = cache.get(id);
-  return c && Date.now() - c.at < TTL ? c : undefined;
-};
-const remember = (id: string, v: { report?: HealthReport | null; html?: string | null }) => cache.set(id, { ...(cached(id) ?? { at: Date.now() }), ...v });
-/** 점검을 다시 하면 지도도 새로 읽게 */
-export const forgetMaps = (id: string) => cache.delete(id);
+// 지도는 이 기기에 저장해 두고 점검 시각이 바뀔 때만 다시 받는다(v0.6.78, data/mapCache.ts)
+export { forgetMaps } from '../data/mapCache';
 
 export function StructureMaps({ id, health, structure, relation, office }: {
   /** 마지막 탭을 기억할 이름(프로젝트 id 등) */
@@ -35,31 +28,42 @@ export function StructureMaps({ id, health, structure, relation, office }: {
     lastTab[id] = t;
     setTabState(t);
   };
-  const [report, setReport] = useState<HealthReport | null | undefined>(() => cached(id)?.report);
-  const [html, setHtml] = useState<string | null | undefined>(() => cached(id)?.html);
+  const [report, setReport] = useState<HealthReport | null | undefined>(undefined);
+  const [html, setHtml] = useState<string | null | undefined>(undefined);
   const [msg, setMsg] = useState('');
+  // 1) 저장해 둔 점검 결과를 바로 보이고 2) 새 점검이 있었는지 작은 파일 하나로 확인한다
   useEffect(() => {
     if (!health) return;
-    if (tab === 'brief' && report === undefined)
-      health.load().then(
-        (r) => {
-          setReport(r);
-          remember(id, { report: r });
-        },
-        () => setReport(null),
-      );
-    if (tab === 'detail' && html === undefined)
-      health.map().then(
-        (h) => {
-          setHtml(h ?? null);
-          if (h) remember(id, { html: h });
-        },
-        (e) => {
-          setHtml(null);
-          setMsg((e as Error).message || '지도를 열지 못했어요.');
-        },
-      );
-  }, [tab]);
+    let alive = true;
+    savedReport(id).then((r) => alive && r && setReport((cur) => (cur === undefined ? r : cur)));
+    freshReport(id, health).then(
+      (r) => alive && setReport(r),
+      () => alive && setReport((cur) => (cur === undefined ? null : cur)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // 자세한 지도: 같은 점검 것이 저장돼 있으면 그대로
+  const checkedAt = report?.checkedAt;
+  useEffect(() => {
+    if (!health || tab !== 'detail' || !checkedAt) return;
+    let alive = true;
+    mapHtml(id, checkedAt, health).then(
+      (h) => alive && setHtml(h ?? null),
+      (e) => {
+        if (!alive) return;
+        setHtml(null);
+        setMsg((e as Error).message || '지도를 열지 못했어요.');
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [tab, checkedAt]);
+  useEffect(() => {
+    if (tab === 'detail' && report === null) setHtml(null);
+  }, [tab, report]);
   if (!tabs.length) return <p className="muted small">볼 수 있는 지도가 없어요.</p>;
 
   return (

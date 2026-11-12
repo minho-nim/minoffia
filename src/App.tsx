@@ -18,6 +18,7 @@ import { taskTimeline } from './domain/timeline';
 import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
 import { forgetMaps, StructureMaps } from './components/StructureMaps';
+import { freshReport, savedReport } from './data/mapCache';
 import { RelationLoader } from './components/RelationMap';
 import { OfficeMap } from './components/OfficeMap';
 import { FormPopup } from './components/FormPopup';
@@ -1785,7 +1786,15 @@ export function App() {
   const loadTree = (id: string) => {
     const c = treeCache.get(id);
     if (c && Date.now() - c.at < 600_000) return c.p;
-    const p = store.repoTree(id);
+    // 점검 때 저장한 파일 목록이 있으면 그것을(이 기기에 저장한 것 → 없으면 점검 결과 파일), 없을 때만 GitHub(v0.6.78)
+    const health = store.healthCheck;
+    const p = (async () => {
+      const saved = await savedReport(id).catch(() => null);
+      if (saved?.tree?.length) return saved.tree;
+      const fresh = health ? await freshReport(id, { load: () => health.load(id) }).catch(() => null) : null;
+      if (fresh?.tree?.length) return fresh.tree;
+      return store.repoTree(id);
+    })();
     treeCache.set(id, { at: Date.now(), p });
     p.catch(() => treeCache.delete(id));
     return p;
