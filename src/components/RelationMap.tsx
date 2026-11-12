@@ -357,7 +357,8 @@ export function NetView({ spec, style, focus }: { spec: { nodes: { id: string; l
     size();
     fit();
     if (focus) {
-      const n = g.byId.get(`p:${focus}`);
+      // focus는 이미 'p:<id>'(v0.6.88: 'p:p:<id>'로 찾아 가운데로 못 옮기던 것)
+      const n = g.byId.get(focus);
       const r = el.getBoundingClientRect();
       if (n) Object.assign(g.view, { tx: r.width / 2 - n.x * g.view.scale, ty: r.height / 2 - n.y * g.view.scale });
       paint();
