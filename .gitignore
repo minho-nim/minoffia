@@ -6,3 +6,5 @@ dist-artifact
 .env.*.local
 supabase/.temp
 *.log
+__pycache__/
+*.pyc

@@ -12,6 +12,7 @@ on:
       pr: { description: 'PR 주소', required: false }
       agent: { description: '만든 AI', required: false }
       skills: { description: '쓴 스킬(쉼표)', required: false }
+      mcp: { description: '쓴 MCP(쉼표)', required: false }
       date: { description: '날짜(YYYY-MM-DD)', required: false }
 permissions:
   contents: read
@@ -47,7 +48,8 @@ jobs:
           PR: ${{ inputs.pr }}
           AGENT: ${{ inputs.agent }}
           SKILLS: ${{ inputs.skills }}
+          MCP: ${{ inputs.mcp }}
           DATE: ${{ inputs.date }}
         run: |
-          node -e 'const e=process.env;require("fs").writeFileSync("/tmp/entry.json",JSON.stringify({version:e.VER,task:e.TASK,score:e.SCORE,pr:e.PR,agent:e.AGENT,skills:(e.SKILLS||"").split(",").filter(Boolean),date:e.DATE}))'
+          node -e 'const e=process.env;require("fs").writeFileSync("/tmp/entry.json",JSON.stringify({version:e.VER,task:e.TASK,score:e.SCORE,pr:e.PR,agent:e.AGENT,skills:(e.SKILLS||"").split(",").filter(Boolean),mcp:(e.MCP||"").split(",").filter(Boolean),date:e.DATE}))'
           bash scripts/notes-run.sh "버전: $PROJECT ${VER:-$DATE}" version "$PROJECT" /tmp/entry.json
