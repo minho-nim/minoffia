@@ -87,7 +87,8 @@ export function homeNote(projects) {
   return [
     '# minoffia', '',
     '> [!info] 프로젝트마다 앱 지도와 버전 노트를 자동으로 만들어요. 직접 쓰는 메모는 **내 메모** 폴더에 두세요(자동으로 건드리지 않아요).', '',
-    ...projects.map((p) => `- ${p.note ? `[[${p.name}]]` : p.name}${p.map ? ` · [[${p.name}/앱 지도|앱 지도]]` : ' · 아직 지도 없음'}`),
+    // 홈 → 프로젝트만(앱 지도는 프로젝트 노트에서 이어진다)
+    ...projects.map((p) => (p.note ? `- [[${p.name}]]` : p.map ? `- [[${p.name}/앱 지도|${p.name}]]` : `- ${p.name}`)),
     '', `[미노피아 열기](${APP_URL})`, '',
   ].join('\n');
 }
@@ -128,7 +129,7 @@ function finish(notes) {
 export const SHARED = ['스킬', 'AI'];
 const ENTRY_MARK = /<!-- minoffia:entries (.*?) -->/s;
 const SKILL_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const AGENTS = ['Codex', 'Claude', 'Gemini', '직접'];
+const AGENTS = ['Codex', 'Claude', 'Gemini'];
 
 /** 버전 이름: package.json 버전이 있으면 v1.2.3, 없으면 날짜(2026.11.13) */
 export function versionName(entry) {
@@ -152,7 +153,8 @@ export function addEntry(list, entry) {
     date: /^\d{4}-\d{2}-\d{2}$/.test(entry.date ?? '') ? entry.date : '',
     score: /^\d{1,3}$/.test(String(entry.score ?? '')) ? Number(entry.score) : null,
     pr: /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(entry.pr ?? '') ? entry.pr : '',
-    agent: AGENTS.includes(entry.agent) ? entry.agent : '직접',
+    // Claude 대화로 하지 않은 것은 모두 Codex(소유자 2026-11-13)
+    agent: AGENTS.includes(entry.agent) ? entry.agent : 'Codex',
     skills: [...new Set((entry.skills ?? []).filter((n) => SKILL_RE.test(n)))].slice(0, 12),
   };
   return [...list.filter((x) => x.task !== e.task), e];
@@ -166,7 +168,7 @@ export function versionNote(project, name, list) {
     '',
   ]);
   return [
-    '---', 'tags: [minoffia/버전]', `프로젝트: "[[${project}]]"`, `버전: ${name}`, '---',
+    '---', 'tags: [minoffia/버전]', `프로젝트: "${project}"`, `버전: ${name}`, '---',
     `# ${project} ${name}`, '', ...body,
     `← [[${project} 버전]]`, '',
     `<!-- minoffia:entries ${JSON.stringify(list)} -->`, '',
@@ -175,43 +177,37 @@ export function versionNote(project, name, list) {
 /** 큰 단위(v0.6, 2026.11)로 묶어 최신부터 */
 const group = (n) => n.split('.').slice(0, 2).join('.');
 const cmp = (a, b) => b.localeCompare(a, undefined, { numeric: true });
-export function hubNotes(project, versions, installed = []) {
+export function hubNotes(project, versions) {
   const names = Object.keys(versions).sort(cmp);
   const groups = [...new Set(names.map(group))];
-  const all = Object.values(versions).flat();
-  const count = (key) => {
-    const m = new Map();
-    for (const e of all) for (const k of key(e)) m.set(k, (m.get(k) ?? 0) + 1);
-    return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  };
-  const table = (rows, head) => (rows.length ? [`| ${head} | 업무 수 |`, '|---|---|', ...rows.map(([k, n]) => `| ${k} | ${n} |`)] : ['아직 없어요.']);
   return {
-    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 버전 ${names.length}개`, `- [[${project} 쓴 스킬]]`, `- [[${project} 개발]]`, `- [[${project}/앱 지도|앱 지도]]`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
-    [`${project} 버전.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 버전`, '', '> [!info] 배포할 때마다 자동으로 더해져요. 제목(▸)을 눌러 지난 묶음을 접을 수 있어요.', '', ...groups.flatMap((g) => [`## ${g}`, ...names.filter((n) => group(n) === g).map((n) => `- [[${project} ${n}|${n}]] · 업무 ${versions[n].length}개`), '']), `← [[${project}]]`, ''].join('\n'),
-    [`${project} 쓴 스킬.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 쓴 스킬`, '', '> [!info] 그래프가 복잡하지 않게 링크 없이 숫자만 적어요. 스킬 노트의 백링크에서 쓴 버전을 볼 수 있어요.', '', ...table(count((e) => e.skills), '스킬'), '', '## 저장소에 들어 있는 스킬', installed.length ? installed.join(', ') : '없음', '', `← [[${project}]]`, '', `<!-- minoffia:installed ${JSON.stringify(installed)} -->`, ''].join('\n'),
-    [`${project} 개발.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 개발`, '', ...table(count((e) => [e.agent]), '만든 AI'), '', `← [[${project}]]`, ''].join('\n'),
+    // 프로젝트 → 프로젝트 버전 · 앱 지도만(소유자 "프로젝트 > 프로젝트 버전으로만 묶고, 앱 지도는 프로젝트에서")
+    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 버전 ${names.length}개`, `- [[${project}/앱 지도|앱 지도]]`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
+    [`${project} 버전.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 버전`, '', '> [!info] 배포할 때마다 자동으로 더해져요. 버전을 누르면 쓴 스킬과 만든 AI로 이어져요. 제목(▸)을 눌러 지난 묶음을 접을 수 있어요.', '', ...groups.flatMap((g) => [`## ${g}`, ...names.filter((n) => group(n) === g).map((n) => `- [[${project} ${n}|${n}]] · ${versions[n].map((e) => e.task).join(' / ').slice(0, 80)}`), '']), `← [[${project}]]`, ''].join('\n'),
   };
 }
 export const skillStub = (n) => `---\ntags: [minoffia/스킬]\n---\n# ${n}\n\n스킬(공용 노트). 이 스킬을 쓴 버전은 아래 백링크에 모여요.\n`;
 export const aiStub = (n) => `---\ntags: [minoffia/AI]\n---\n# ${n}\n\n개발 AI(공용 노트). 이 AI가 만든 버전은 아래 백링크에 모여요.\n`;
 
-const INSTALLED_MARK = /<!-- minoffia:installed (.*?) -->/;
-function writeHubs(dir, project, vdir, installed) {
-  let keep = installed;
-  if (!keep) {
-    try { keep = JSON.parse((read(path.join(dir, `${project} 쓴 스킬.md`)).match(INSTALLED_MARK) ?? [])[1] ?? '[]'); } catch { keep = []; }
-  }
+/** 버전 목록·프로젝트 노트를 다시 쓰고, 버전 노트 글도 지금 모양으로 맞춘다. 예전 '쓴 스킬'·'개발' 묶음은 지운다 */
+function writeHubs(dir, project, vdir) {
+  for (const f of [`${project} 쓴 스킬.md`, `${project} 개발.md`]) fs.rmSync(path.join(dir, f), { force: true });
   // 파일 이름은 '<프로젝트> <버전>.md'(다른 프로젝트의 같은 버전과 링크가 섞이지 않게). 예전 'v0.6.89.md'는 이름을 바꾼다
   const pre = `${project} `;
   if (fs.existsSync(vdir)) for (const f of fs.readdirSync(vdir)) if (f.endsWith('.md') && !f.startsWith(pre)) fs.renameSync(path.join(vdir, f), path.join(vdir, pre + f));
-  const versions = fs.existsSync(vdir) ? Object.fromEntries(fs.readdirSync(vdir).filter((f) => f.endsWith('.md')).map((f) => [f.slice(pre.length, -3), readEntries(read(path.join(vdir, f)))])) : {};
-  for (const [f, text] of Object.entries(hubNotes(project, versions, (keep ?? []).filter((n) => SKILL_RE.test(n))))) fs.writeFileSync(path.join(dir, f), text);
+  const versions = {};
+  for (const f of fs.existsSync(vdir) ? fs.readdirSync(vdir).filter((x) => x.endsWith('.md')) : []) {
+    const name = f.slice(pre.length, -3);
+    const list = readEntries(read(path.join(vdir, f))).map((e) => addEntry([], e)[0]);
+    versions[name] = list;
+    fs.writeFileSync(path.join(vdir, f), versionNote(project, name, list));
+  }
+  for (const [f, text] of Object.entries(hubNotes(project, versions))) fs.writeFileSync(path.join(dir, f), text);
 }
 const AI_DESC = {
   Codex: '주 개발. Linear로 업무를 받아 Codex 클라우드에서 개발하고, 결과를 미노피아로 보낸다.',
   Claude: 'PM과 보조 개발. 요청을 기획서로 나누고, 루틴으로 받아 개발하거나 올리기 승인 뒤 PR을 연다.',
   Gemini: '결과 채점(기본)과 분배 보조. 무료 키만 쓴다.',
-  직접: '앱 업무를 거치지 않고 소유자나 AI 세션이 저장소를 직접 바꾼 것.',
 };
 export const aiNote = (n) => `---\ntags: [minoffia/AI]\n---\n# ${n}\n\n${AI_DESC[n] ?? '개발 AI.'}\n\n이 AI가 만든 버전은 아래 백링크에 모여요.\n`;
 /** 스킬 노트: 설명·분류·함께 쓰는 스킬(링크)·들어 있는 프로젝트(글자만, 선을 늘리지 않게) */
@@ -242,10 +238,10 @@ function writeBackfill(notes, data) {
       const name = versionName(v);
       const file = path.join(vdir, `${project} ${name}.md`);
       const had = readEntries(read(file));
-      if (had.length) continue;
+      if (had.some((e) => e.pr)) continue;
       fs.writeFileSync(file, versionNote(project, name, addEntry([], v)));
     }
-    writeHubs(dir, project, vdir, p.skills ?? []);
+    writeHubs(dir, project, vdir);
   }
   const SKILLS = path.join(notes, '스킬');
   fs.mkdirSync(SKILLS, { recursive: true });
@@ -256,6 +252,7 @@ function writeBackfill(notes, data) {
   }
   fs.mkdirSync(path.join(notes, 'AI'), { recursive: true });
   for (const n of AGENTS) fs.writeFileSync(path.join(notes, 'AI', `${n}.md`), aiNote(n));
+  fs.rmSync(path.join(notes, 'AI', '직접.md'), { force: true });
 }
 
 function writeVersion(notes, project, entry) {
