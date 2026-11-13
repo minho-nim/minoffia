@@ -1592,14 +1592,14 @@ export function App() {
             }
           }
         : undefined,
-    crossReview:
-      store.mode === 'supabase' && store.crossReview
+    finishReview:
+      store.mode === 'supabase' && store.finishReview
         ? async (task, rev) => {
             try {
-              await store.crossReview!(task.id, rev);
-              say('ok', 'Claude에게 교차 채점을 맡겼어요(몇 분). 점수가 오면 평가 칸에 평균과 함께 보여요.');
+              const r = await store.finishReview!(task.id, rev);
+              say('ok', `모인 점수로 판정했어요${r.total === null ? '' : `(평균 ${r.total}점)`}.`);
             } catch (e) {
-              say('error', `교차 채점을 시작하지 못했어요: ${(e as Error).message}`);
+              say('error', `판정하지 못했어요: ${(e as Error).message}`);
             } finally {
               setSnap(await store.load());
             }

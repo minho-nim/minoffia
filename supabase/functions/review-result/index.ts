@@ -1,18 +1,21 @@
-// 결과 점수 평가(v0.4.64, 소유자 2026-11-02): 결과 패키지 하나를 규칙 검사(토큰 0) → Gemini 무료 채점(100점) → 판정한다.
-// 같은 결과 버전은 한 번만 채점한다(result_reviews unique). 경계 점수(70~85)면 한 번 더 채점해 평균 낸다.
+// 결과 점수 평가(v0.4.64, 소유자 2026-11-02): 결과 패키지 하나를 규칙 검사(토큰 0) → AI 채점(100점) → 판정한다.
+// v0.7.8 3중 평가(소유자 2026-11-12): Gemini A(요청·사용자)·Gemini B(코드 품질·안전)를 함께 부르고, 동료 개발 AI(Codex 결과 → Claude)에 맡긴다.
+// 항목은 같고 관점만 다르다. 평균이나 과반이 80점 미만이면 자동 다시 개발. 동료 점수는 submit-review가 같은 줄에 채운다.
+// 같은 결과 버전은 한 줄만(result_reviews unique).
 // 판정만 기록하고, 다시 개발 보내기는 앱이 기존 수정 요청 길(PM 재계획 → 실행 승인)로 한다. 올리기 승인(B)은 늘 소유자가 한다.
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않는다. 글은 저장하지 않고 점수·이유만 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { requestRedoOnServer } from './redo.ts';
-import { averageScores, buildReviewPrompt, needsSecondOpinion, parseScore, ranChecks, redoFeedback, REVIEW_SYSTEM, SECOND_OPINION_NOTE, ruleCheck, total, verdictOf, type Score } from './rubric.ts';
+import { buildReviewPrompt, panelEntry, panelJudge, panelOutcome, parseScore, pendingEntry, PASS_SCORE, PEER_NOTE, PERSPECTIVE_NOTE, ranChecks, redoFeedback, REVIEW_SYSTEM, ruleCheck, type Gate, type PanelEntry, type Score } from './rubric.ts';
 import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
 import { designReviewSection } from './designReview.ts';
 
-const HARD_DAILY_CAP = 50;
-const DEFAULT_DAILY_CAP = 20;
+// v0.7.8: 결과 하나에 Gemini 두 번(A·B)이라 상한도 두 배
+const HARD_DAILY_CAP = 100;
+const DEFAULT_DAILY_CAP = 40;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 45_000;
 const CLAUDE_HARD_DAILY_CAP = 20;
@@ -62,6 +65,30 @@ async function readRepoFile(repo: string, path: string): Promise<string | null> 
   }
 }
 
+// deno-lint-ignore no-explicit-any
+type Admin = ReturnType<typeof createClient<any>>;
+
+/** 모인 점수로 판정(지난 다시 개발 지적·자동 횟수·실행 기록 반영) */
+async function settle(admin: Admin, taskId: string, revision: number, gates: Gate[], panel: PanelEntry[], testLog: string) {
+  const { count: redos } = await admin.from('result_reviews').select('id', { count: 'exact', head: true }).eq('task_id', taskId).eq('verdict', 'redo');
+  // v0.5.93: 지난 '다시 개발' 판정의 지적(같은 문제가 또 나오면 자동으로 돌리지 않음)과 시험·화면 확인 기록 유무
+  const { data: lastRedo } = await admin.from('result_reviews').select('reasons').eq('task_id', taskId).eq('verdict', 'redo').lt('result_revision', revision).order('result_revision', { ascending: false }).limit(1).maybeSingle();
+  const previousReasons = Array.isArray(lastRedo?.reasons) ? (lastRedo.reasons as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+  const out = panelOutcome(gates, panel, redos ?? 0, { executed: ranChecks(testLog), previousReasons });
+  const feedback = out.verdict === 'pass' || out.waiting ? '' : redoFeedback(gates, out.score, out.reasons);
+  return { ...out, feedback, redos: redos ?? 0 };
+}
+
+/** v0.6.12: '다시 개발'이면 서버가 바로 수정 요청·PM 재계획(앱이 닫혀 있어도). 응답은 기다리지 않는다 */
+async function fireRedo(admin: Admin, ownerId: string, taskId: string, revision: number, feedback: string) {
+  const redo = requestRedoOnServer(admin, ownerId, taskId, revision, feedback).catch(() => 'skipped');
+  const er = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+  if (er) er.waitUntil(redo);
+  else await redo;
+}
+
+const asPanel = (v: unknown): PanelEntry[] => (Array.isArray(v) ? (v as PanelEntry[]) : []);
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'POST만 받습니다.' });
@@ -98,10 +125,32 @@ Deno.serve(async (req) => {
 
   // RLS를 거쳐 내 업무만 읽는다.
   const { data: existing } = await userClient.from('result_reviews').select('*').eq('task_id', taskId).eq('result_revision', revision).maybeSingle();
-  // v0.6.26: 교차 채점은 기본 채점이 있은 뒤 소유자가 누를 때만(토큰 아끼기)
-  if (body.action === 'cross' && !existing) return reply(409, { ok: false, error: '기본 채점(Gemini)이 끝난 뒤에 교차 채점을 추가할 수 있어요.' });
-  if (existing && body.action !== 'cross') return reply(200, { ok: true, review: existing, cached: true });
-  if (existing && existing.cross_total != null) return reply(200, { ok: true, review: existing, cached: true });
+  const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
+  if (existing) {
+    // v0.7.8: 동료 평가를 기다리는 중이면, 소유자가 '기다리지 않고 판정'을 눌렀거나 제출표 기한이 지났을 때만 지금 점수로 판정한다.
+    const panel = asPanel(existing.panel);
+    if (!panel.some((p) => p.status === 'pending')) return reply(200, { ok: true, review: existing, cached: true });
+    const { data: sent } = await admin.from('plan_submit_tokens').select('expires_at').eq('task_id', taskId).eq('kind', 'review').eq('result_revision', revision).maybeSingle();
+    const expired = !sent || new Date(sent.expires_at).getTime() <= Date.now();
+    if (body.action !== 'finalize' && !expired) return reply(200, { ok: true, review: existing, cached: true });
+    const note = expired ? '기한 안에 점수가 오지 않음' : '사장님이 기다리지 않고 판정';
+    const closed = panel.map((p) => (p.status === 'pending' ? { ...p, status: 'skipped' as const, note } : p));
+    const { data: res } = await admin.from('result_packages').select('test_log').eq('task_id', taskId).eq('revision', revision).maybeSingle();
+    const gatesNow = (existing.gates as Gate[]) ?? [];
+    const out = await settle(admin, taskId, revision, gatesNow, closed, String(res?.test_log ?? ''));
+    const { data: updated } = await admin
+      .from('result_reviews')
+      .update({ panel: closed, score: out.score, total: out.total, verdict: out.verdict, reasons: out.reasons, feedback: out.feedback, auto_redo: out.redos, judge: panelJudge(closed) })
+      .eq('id', existing.id)
+      .filter('panel', 'cs', JSON.stringify([{ status: 'pending' }]))
+      .select('*');
+    if (!updated?.length) {
+      const { data: again } = await userClient.from('result_reviews').select('*').eq('id', existing.id).maybeSingle();
+      return reply(200, { ok: true, review: again ?? existing, cached: true });
+    }
+    if (out.verdict === 'redo' && out.feedback) await fireRedo(admin, user.id, taskId, revision, out.feedback);
+    return reply(200, { ok: true, review: updated[0] });
+  }
   const { data: result } = await userClient.from('result_packages').select('revision, plan_revision, work_item_id, source, diff, test_log, remaining_issues').eq('task_id', taskId).eq('revision', revision).maybeSingle();
   if (!result) return reply(404, { ok: false, error: '결과 패키지를 찾을 수 없습니다.' });
   const { data: task } = await userClient.from('tasks').select('id, project_id, projects(repo, design_md)').eq('id', taskId).maybeSingle();
@@ -117,8 +166,6 @@ Deno.serve(async (req) => {
     assignee = String(a?.assignee ?? '');
   }
   const projectRules = await loadRules(userClient, task.project_id);
-  const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const { count: redos } = await admin.from('result_reviews').select('id', { count: 'exact', head: true }).eq('task_id', taskId).eq('verdict', 'redo');
 
   const reviewMaterial = () =>
     buildReviewPrompt({
@@ -163,7 +210,7 @@ Deno.serve(async (req) => {
       resultRevision: revision,
       repo,
       branch: resultBranch(String(result.source ?? ''), taskId, String(result.work_item_id ?? '')),
-      material: reviewMaterial(),
+      material: `${reviewMaterial()}\n\n${PEER_NOTE}`,
       submit: { url: `${env('SUPABASE_URL')}/functions/v1/submit-review`, token: ticket },
     });
     try {
@@ -186,21 +233,9 @@ Deno.serve(async (req) => {
 
   // 1단계: 규칙 검사(토큰 0). 막히면 AI를 부르지 않는다.
   const gates = ruleCheck({ diff: String(result.diff ?? ''), testLog: String(result.test_log ?? ''), changeScope: String(spec.change_scope ?? ''), rules: projectRules });
-  // v0.6.26(소유자 "채점은 제미니가 기본, 필요할 때 교차 채점"): 기본은 아래 Gemini. 교차 채점은 소유자가 누를 때만:
-  // Codex·Gemini 결과 → Claude, Claude 결과 → Codex(Linear 연결 뒤, 아직 없음). 점수는 submit-review가 cross_*에 붙인다.
-  if (body.action === 'cross') {
-    const madeByClaude = assignee === 'claude' || ['claude_session_auto', 'claude_manual'].includes(String(result.source ?? ''));
-    if (madeByClaude) return reply(409, { ok: false, error: 'Claude 결과의 교차 채점(Codex)은 Codex Linear 연결이 풀린 뒤에 켜져요.' });
-    const pending = await askClaude();
-    if (pending) return reply(200, { ok: true, pending: true, judge: 'Claude', sessionUrl: pending.sessionUrl });
-    return reply(409, { ok: false, error: 'Claude가 지금 채점할 수 없어요(휴가·하루 상한·연결 확인).' });
-  }
-
-  let score: Score | null = null;
-  let judge = '규칙';
+  const panel: PanelEntry[] = [];
   if (!gates.some((g) => g.blocking && !g.ok)) {
-    // 2단계: Gemini 무료 채점(v0.6.26부터 늘 기본. Claude 채점은 위 '교차 채점'으로 소유자가 누를 때만)
-    // 2단계(대신): Gemini 무료 채점
+    // 2단계: Gemini A·B를 함께(무료). A는 Studio A 키 먼저, B는 Studio B 키 먼저. 한쪽이 휴가·없음이면 다른 키로 둘 다.
     const keys = [env('GEMINI_API_KEY'), env('GEMINI_API_KEY2')];
     const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
     const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
@@ -212,58 +247,58 @@ Deno.serve(async (req) => {
     const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
     // 화면·디자인 업무면 디자인 채점 기준과 프로젝트 디자인 기준을 붙인다(v0.5.56, 호출 수 그대로)
     const prompt = `${reviewMaterial()}${designReviewSection(`${spec.final_prompt ?? ''}\n${spec.change_scope ?? ''}`, String((task.projects as unknown as { design_md?: string } | null)?.design_md ?? ''))}`;
-    // 파일 요청(v0.5.52): 첫 채점에서만 "이 파일이 필요해"를 허용하고, 서버가 GitHub에서 읽어 한 번만 다시 묻는다.
     let used = count ?? 0;
-    let filesAsked = false;
     const repoName = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
-    const ask = async (text = prompt, allowFiles = false): Promise<Score | null> => {
-      for (const [i, key] of keys.entries()) {
-        if (!key) continue;
-        let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
-        try {
-          r = await callGemini(key, model, allowFiles ? `${text}\n\n${NEED_FILES_ASK}` : text);
-        } catch (e) {
-          r = { status: 0, text: '', message: (e as Error).name };
+    const canReadFiles = repoName.includes('/') && repoName.toLowerCase() !== 'minho-nim/minlab';
+    // 파일 요청(v0.5.52): 첫 채점에서만 "이 파일이 필요해"를 허용하고, 서버가 GitHub에서 읽어 한 번만 다시 묻는다.
+    const askGemini = async (who: 'A' | 'B', order: number[]): Promise<PanelEntry> => {
+      let filesAsked = false;
+      const run = async (text: string, allowFiles: boolean): Promise<{ score: Score; slot: number } | null> => {
+        for (const i of order) {
+          if (!keys[i] || used >= cap) continue;
+          let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
+          try {
+            r = await callGemini(keys[i], model, allowFiles ? `${text}\n\n${NEED_FILES_ASK}` : text);
+          } catch (e) {
+            r = { status: 0, text: '', message: (e as Error).name };
+          }
+          const parsed = r.status === 200 ? parseScore(r.text) : null;
+          const need = !parsed && allowFiles && r.status === 200 ? parseNeedFiles(r.text) : null;
+          await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed || need), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}), ...(parsed || need ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
+          used += parsed || need ? 1 : 0;
+          if (parsed) return { score: parsed, slot: i };
+          if (need && used < cap) {
+            filesAsked = true;
+            const files = await Promise.all(need.map(async (path) => ({ path, text: await readRepoFile(repoName, path) })));
+            return run(withFiles(text, files), false);
+          }
+          if (r.status === 400 || r.status === 404) break;
         }
-        const parsed = r.status === 200 ? parseScore(r.text) : null;
-        const need = !parsed && allowFiles && r.status === 200 ? parseNeedFiles(r.text) : null;
-        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed || need), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}), ...(parsed || need ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
-        used += parsed || need ? 1 : 0;
-        if (parsed) {
-          judge = `Gemini · Studio ${i === 0 ? 'A' : 'B'}`;
-          return parsed;
-        }
-        if (need && used < cap) {
-          filesAsked = true;
-          const files = await Promise.all(need.map(async (path) => ({ path, text: await readRepoFile(repoName, path) })));
-          return ask(withFiles(text, files));
-        }
-        if (r.status === 400 || r.status === 404) break;
-      }
-      return null;
+        return null;
+      };
+      const got = await run(`${prompt}\n\n${PERSPECTIVE_NOTE[who]}`, canReadFiles);
+      if (!got) return panelEntry(who, `Gemini ${who}`, null, used >= cap ? '오늘 채점 한도에 닿음' : '점수를 받지 못함(키·응답 확인)');
+      return panelEntry(who, `Gemini · Studio ${got.slot === 0 ? 'A' : 'B'}${filesAsked ? ' · 파일 확인' : ''}`, got.score);
     };
-    if ((count ?? 0) < cap && (keys[0] || keys[1])) {
-      score = await ask(prompt, repoName.includes('/') && repoName.toLowerCase() !== 'minho-nim/minlab');
-      if (filesAsked) judge += ' · 파일 확인';
-      // 경계 점수면 한 번 더 채점해 평균(무료 호출 1번 더). 두 번째는 '반대 쪽 검토자' 입장(v0.5.37)
-      if (score && needsSecondOpinion(score) && used < cap) {
-        const again = await ask(`${prompt}\n\n${SECOND_OPINION_NOTE}`);
-        if (again) {
-          score = averageScores(score, again);
-          judge += ' ×2';
-        }
-      }
+    if (keys[0] || keys[1]) panel.push(...(await Promise.all([askGemini('A', [0, 1]), askGemini('B', [1, 0])])));
+    else panel.push(panelEntry('A', 'Gemini A', null, '두 키 모두 휴가·없음'), panelEntry('B', 'Gemini B', null, '두 키 모두 휴가·없음'));
+
+    // 3단계: 동료 개발 AI. 두 Gemini가 이미 둘 다 기준 미달이면(3개 중 2개 = 과반) 부르지 않는다(토큰 아끼기).
+    const madeByClaude = assignee === 'claude' || ['claude_session_auto', 'claude_manual'].includes(String(result.source ?? ''));
+    const lowAB = panel.filter((p) => p.status === 'done' && (p.total ?? 0) < PASS_SCORE).length;
+    if (lowAB >= 2) panel.push(panelEntry('peer', madeByClaude ? 'Codex' : 'Claude', null, 'Gemini 둘 다 기준 미달이라 부르지 않음(토큰 아끼기)'));
+    else if (madeByClaude) panel.push(panelEntry('peer', 'Codex', null, 'Claude 결과의 동료 평가(Codex)는 Codex Linear 연결 뒤에 켜져요'));
+    else {
+      const pending = await askClaude();
+      panel.push(pending ? pendingEntry('peer', 'Claude', '브랜치를 직접 보고 채점하는 중(몇 분)') : panelEntry('peer', 'Claude', null, 'Claude가 지금 평가할 수 없음(휴가·하루 상한·연결)'));
     }
   }
 
-  // v0.5.93: 지난 '다시 개발' 판정의 지적(같은 문제가 또 나오면 자동으로 돌리지 않음)과 시험·화면 확인 기록 유무
-  const { data: lastRedo } = await admin.from('result_reviews').select('reasons').eq('task_id', taskId).eq('verdict', 'redo').lt('result_revision', revision).order('result_revision', { ascending: false }).limit(1).maybeSingle();
-  const previousReasons = Array.isArray(lastRedo?.reasons) ? (lastRedo.reasons as unknown[]).filter((x): x is string => typeof x === 'string') : [];
-  const { verdict, reasons } = verdictOf(gates, score, redos ?? 0, { executed: ranChecks(String(result.test_log ?? '')), previousReasons });
-  const feedback = verdict === 'pass' ? '' : redoFeedback(gates, score, reasons);
+  const testLog = String(result.test_log ?? '');
+  const out = await settle(admin, taskId, revision, gates, panel, testLog);
   const { data: saved, error } = await admin
     .from('result_reviews')
-    .insert({ owner_id: user.id, task_id: taskId, result_revision: revision, work_item_id: String(result.work_item_id ?? ''), assignee, gates, score, total: score ? total(score) : null, verdict, reasons, feedback, auto_redo: redos ?? 0, judge })
+    .insert({ owner_id: user.id, task_id: taskId, result_revision: revision, work_item_id: String(result.work_item_id ?? ''), assignee, gates, score: out.score, total: out.total, verdict: out.verdict, reasons: out.reasons, feedback: out.feedback, auto_redo: out.redos, judge: panelJudge(panel), panel })
     .select('*')
     .single();
   if (error) {
@@ -272,12 +307,6 @@ Deno.serve(async (req) => {
     if (again) return reply(200, { ok: true, review: again, cached: true });
     return reply(500, { ok: false, error: `평가를 저장하지 못했습니다: ${error.message}` });
   }
-  // v0.6.12: '다시 개발'이면 서버가 바로 수정 요청·PM 재계획(앱이 닫혀 있어도). 응답은 기다리지 않는다
-  if (verdict === 'redo' && feedback) {
-    const redo = requestRedoOnServer(admin, user.id, taskId, revision, feedback).catch(() => 'skipped');
-    const er = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
-    if (er) er.waitUntil(redo);
-    else await redo;
-  }
+  if (out.verdict === 'redo' && out.feedback) await fireRedo(admin, user.id, taskId, revision, out.feedback);
   return reply(200, { ok: true, review: saved });
 });

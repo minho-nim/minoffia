@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { averageScores, buildReviewPrompt, changedFiles, needsSecondOpinion, parseScore, redoFeedback, ruleCheck, total, verdictOf, type Score } from './review';
+import { averageMany, buildReviewPrompt, changedFiles, panelEntry, panelOutcome, pendingEntry, parseScore, redoFeedback, ruleCheck, total, verdictOf, type Score } from './review';
 
 const diff = ['diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@', '-old', '+new'].join('\n');
 const passLog = ' Test Files  3 passed (3)\n      Tests  20 passed (20)\n✓ built in 1.2s';
@@ -55,10 +55,37 @@ describe('결과 평가 2단계: 점수와 판정', () => {
     const blocked = ruleCheck({ diff: '', testLog: passLog, changeScope: '' });
     expect(verdictOf(blocked, null, 0).verdict).toBe('redo');
   });
-  it('경계 점수면 한 번 더, 평균 낸다', () => {
-    expect(needsSecondOpinion(score())).toBe(false);
-    expect(needsSecondOpinion(score({ acceptance: 25 }))).toBe(true);
-    expect(total(averageScores(score({ acceptance: 20 }), score({ acceptance: 30 })))).toBe(79);
+  it('3중 평가: 평균과 과반으로 판정한다', () => {
+    const g = ruleCheck({ diff, testLog: passLog, changeScope: '' });
+    expect(total(averageMany([score({ acceptance: 20 }), score({ acceptance: 30 })]))).toBe(79);
+    const A = (a: number) => panelEntry('A', 'Gemini · Studio A', score({ acceptance: a }));
+    const B = (a: number) => panelEntry('B', 'Gemini · Studio B', score({ acceptance: a }));
+    const peer = (a: number) => panelEntry('peer', 'Claude', score({ acceptance: a }));
+    // 셋 다 높으면 통과, 평균 = 각 점수 평균
+    const ok = panelOutcome(g, [A(40), B(36), peer(34)], 0);
+    expect(ok.verdict).toBe('pass');
+    expect(ok.total).toBe(91);
+    // 평균은 80점 이상이어도 셋 중 둘이 80점 미만이면(과반) 다시 개발
+    const maj2 = panelOutcome(g, [panelEntry('A', 'a', score({ acceptance: 20, quality: 9 })), panelEntry('B', 'b', score({ acceptance: 20, quality: 9 })), panelEntry('peer', 'c', score({ acceptance: 40 }))], 0);
+    expect(maj2.total).toBe(81);
+    expect(maj2.verdict).toBe('redo');
+    expect(maj2.reasons.join(' ')).toContain('과반');
+    // 평균이 80점 미만이면 다시 개발
+    expect(panelOutcome(g, [A(40), B(10), peer(10)], 0).verdict).toBe('redo');
+    // 동료 평가를 기다리는 중: 한 명만 미달이면 판정을 미룬다
+    const wait = panelOutcome(g, [A(40), B(10), pendingEntry('peer', 'Claude')], 0);
+    expect(wait.waiting).toBe(true);
+    expect(wait.verdict).toBe('owner');
+    // 둘 다 미달이면 기다리지 않고 바로 다시 개발(3명 중 2명 = 과반)
+    const both = panelOutcome(g, [A(10), B(10), pendingEntry('peer', 'Claude')], 0);
+    expect(both.waiting).toBe(false);
+    expect(both.verdict).toBe('redo');
+    // 동료를 못 부르면(건너뜀) 두 점수로 판정
+    expect(panelOutcome(g, [A(40), B(36), panelEntry('peer', 'Codex', null, '연결 뒤')], 0).verdict).toBe('pass');
+    // 완료 기준은 과반이 미충족일 때만 미충족
+    const c = (status: 'met' | 'unmet') => score({}, { criteria: [{ text: '(필수) 버튼 보임', status, evidence: 'a.tsx:1' }] });
+    expect(averageMany([c('met'), c('unmet'), c('met')]).criteria[0].status).toBe('partial');
+    expect(averageMany([c('unmet'), c('unmet'), c('met')]).criteria[0].status).toBe('unmet');
   });
   it('다시 개발 요청 글에는 고칠 것만', () => {
     const s = score({ acceptance: 10 }, { criteria: [{ text: '모바일 넘침 없음', status: 'unmet', evidence: '' }], fixes: ['400px에서 표 줄이기'] });

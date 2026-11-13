@@ -63,7 +63,12 @@ export function nowInfo(view: WorkflowView, opts: { done: boolean; review?: Resu
     case 'result_review':
     case 'github_approval_pending': {
       const r = opts.review;
-      const score = r ? (r.total === null ? '' : ` · 평가 ${r.crossTotal != null && r.total !== null ? Math.round((r.total + r.crossTotal) / 2) : r.total}점`) : ' · 평가 중';
+      // v0.7.8 3중 평가: 평균과 채점자별 점수(A·B·동료)를 함께
+      const panel = r?.panel ?? [];
+      const each = panel.map((p) => `${p.who === 'peer' ? p.judge : p.who} ${p.status === 'done' ? p.total : p.status === 'pending' ? '…' : '-'}`).join(' · ');
+      const waiting = panel.some((p) => p.status === 'pending');
+      const avg = r?.crossTotal != null && r.total !== null ? Math.round((r.total + r.crossTotal) / 2) : r?.total;
+      const score = !r ? ' · 평가 중' : avg == null ? (waiting ? ' · 평가 모으는 중' : '') : ` · 평가 ${panel.length > 1 ? '평균 ' : ''}${avg}점${each ? `(${each})` : ''}${waiting ? ', 동료 점수 기다리는 중' : ''}`;
       return {
         tone: 'turn',
         text: `결과(v${view.result?.revision ?? ''})가 왔어요${score}. 보고 결과 승인하면 PR이 열려요.`,

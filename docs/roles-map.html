@@ -156,7 +156,7 @@ tr:last-child td { border-bottom: 0; }
         <li><b>승인 3개</b>: 이것만 누르면 끝까지 간다
           <div class="gates" style="margin-top:4px"><span class="gate">기획 승인</span><span class="gate">올리기 승인</span><span class="gate">배포 승인</span></div>
         </li>
-        <li><b>고르기(선택)</b>: 교차 채점 추가 · 두 AI 비교 · 담당 바꾸기 · 업무 취소</li>
+        <li><b>고르기(선택)</b>: 두 AI 비교 · 담당 바꾸기 · 업무 취소</li>
         <li><b>설정</b>: 팀 근무·휴가, 프로젝트 순서, 새 저장소를 Codex 레거시 환경·Claude 루틴에 추가</li>
       </ul>
     </div>
@@ -185,7 +185,7 @@ tr:last-child td { border-bottom: 0; }
       <article class="card c-claude">
         <h3><span class="who c-claude">Claude</span><span class="tag">PM · 보조 개발</span></h3>
         <div class="conn">Claude 구독 · 클라우드 루틴</div>
-        <p>큰 일을 작업으로 나누기(PM), 보조 개발, Codex가 못 하면 이어받기, 교차 채점.</p>
+        <p>큰 일을 작업으로 나누기(PM), 보조 개발, Codex가 못 하면 이어받기, Codex 결과의 동료 평가.</p>
       </article>
       <article class="card c-mino">
         <h3><span class="who c-mino">미노</span><span class="tag">CI 봇</span></h3>
@@ -239,7 +239,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="detail"><ul>
           <li>규칙 검사(AI 0회) → <span class="who c-sa">Gemini</span> 100점 채점</li>
           <li>80점 미만이면 고칠 점을 적어 자동으로 다시 개발(최대 2번)</li>
-          <li>선택: 교차 채점(평균) · 두 AI 비교(다른 AI에게도 따로 맡겨 점수 비교)</li>
+          <li>결과마다 3중 평가(Gemini A·B + 동료 AI, 각 점수와 평균) · 선택: 두 AI 비교(다른 AI에게도 따로 맡겨 점수 비교)</li>
         </ul></div></div></li>
       <li class="me"><div class="step"><div class="row"><span class="who c-owner">나</span> <span class="mark">올리기 승인</span></div></div></li>
       <li><div class="step"><div class="row"><span class="who c-mino">미노</span> PR 열기·검사</div><div class="detail">승인된 변경 그대로 PR. 저장소에 CI가 없으면 대신 검사</div></div></li>
