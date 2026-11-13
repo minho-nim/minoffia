@@ -1,6 +1,6 @@
 import type { AgentId, RoomId, WorkType } from './types';
 
-export type AgentMode = 'rule' | 'cloud' | 'manual' | 'ci';
+export type AgentMode = 'rule' | 'cloud' | 'manual' | 'ci' | 'api';
 
 export interface AgentPalette {
   hair: string;
@@ -31,6 +31,7 @@ export const MODE_LABEL: Record<AgentMode, string> = {
   cloud: 'Cloud 실행',
   manual: '수동 인계',
   ci: 'CI 연동 예정',
+  api: '서버 자동',
 };
 
 export const AGENTS: Agent[] = [
@@ -74,17 +75,17 @@ export const AGENTS: Agent[] = [
     palette: { hair: '#1c1f26', skin: '#e2b48f', shirt: '#2f9e7a', pants: '#2b3140', accent: '#c9f2e2' },
   },
   {
-    id: 'grok',
-    name: 'Grok',
-    role: '리서치',
-    provider: 'Grok Build (무료)',
-    mode: 'manual',
+    id: 'exa',
+    name: 'Exa',
+    role: '웹 조사',
+    provider: 'Exa 검색 API(무료 사용량) + Gemini 정리',
+    mode: 'api',
     home: 'research',
-    skills: ['research'],
-    dailyCap: 6,
-    note: '무료 계정의 외부 호출은 확인되지 않았다. 수동 인계만 가능하다.',
+    skills: [],
+    dailyCap: null,
+    note: '대화에서 찾아봐야 하는 질문이 오면 서버가 Exa로 웹 글 5개를 찾고 Gemini(Studio A·B)가 정리한다. 업무는 맡지 않는다(v0.7.2, 소유자 "리서치 자리는 Exa").',
     sprite: 'person',
-    palette: { hair: '#d8d8d8', skin: '#e9c09c', shirt: '#2d2f36', pants: '#4a4e5a', accent: '#9aa0ad' },
+    palette: { hair: '#3a3a3a', skin: '#efc8a6', shirt: '#4a7bd0', pants: '#2f3442', accent: '#e8eef8' },
   },
   {
     id: 'studioA',
@@ -127,7 +128,24 @@ export const AGENTS: Agent[] = [
   },
 ];
 
-export const AGENT_BY_ID = Object.fromEntries(AGENTS.map((a) => [a.id, a])) as Record<AgentId, Agent>;
+/** 미배정으로 돌린 AI(2026-11-13 Grok: 무료 자동 호출이 안 돼 쓰지 않음). 사무실·사용량·팀 관리에는 안 나오고 예전 기록 이름에만 쓴다 */
+export const RETIRED_AGENTS: Agent[] = [
+  {
+      id: 'grok',
+      name: 'Grok',
+      role: '리서치',
+      provider: 'Grok Build (무료)',
+      mode: 'manual',
+      home: 'research',
+      skills: ['research'],
+      dailyCap: 6,
+      note: '무료 계정의 외부 호출은 확인되지 않았다. 수동 인계만 가능하다.',
+      sprite: 'person',
+      palette: { hair: '#d8d8d8', skin: '#e9c09c', shirt: '#2d2f36', pants: '#4a4e5a', accent: '#9aa0ad' },
+    },
+];
+
+export const AGENT_BY_ID = Object.fromEntries([...AGENTS, ...RETIRED_AGENTS].map((a) => [a.id, a])) as Record<AgentId, Agent>;
 
 /** 작업 유형별 배정 후보, 앞쪽이 우선. */
 export const CANDIDATES: Record<WorkType, AgentId[]> = {
@@ -135,8 +153,8 @@ export const CANDIDATES: Record<WorkType, AgentId[]> = {
   dev: ['codex', 'claude'],
   design: ['studioA', 'studioB'],
   prototype: ['studioB', 'studioA'],
-  // 조사: Grok이 휴가면 Gemini(무료, Google 검색 연결)가 먼저, Claude는 마지막(v0.4.76 소유자 "대신 해줄 AI")
-  research: ['grok', 'studioA', 'studioB', 'claude'],
+  // 조사 업무: Gemini(Studio A·B)가 먼저, Claude는 마지막. 대화의 웹 조사는 Exa가 찾고 Gemini가 정리(업무 배정과 별개). Grok은 미배정(2026-11-13)
+  research: ['studioA', 'studioB', 'claude'],
   qa: ['ci'],
 };
 

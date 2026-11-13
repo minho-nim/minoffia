@@ -42,7 +42,7 @@ describe('buildScene', () => {
   });
 
   it('차단된 업무는 자기 방에서 차단 상태로 보인다', () => {
-    expect(of([task({ id: 'a', type: 'research', assignee: 'grok', status: 'blocked' })], 'grok').activity).toBe('blocked');
+    expect(of([task({ id: 'a', type: 'research', assignee: 'studioA', status: 'blocked' })], 'studioA').activity).toBe('blocked');
   });
 
   it('완료된 업무만 있으면 휴게실로 간다', () => {
