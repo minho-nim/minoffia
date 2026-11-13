@@ -10,7 +10,7 @@ export interface TimelineEvent {
   tone: TimelineTone;
 }
 
-const WHO: Record<string, string> = { codex: 'Codex', claude: 'Claude', gemini: 'Gemini', grok: 'Grok' };
+const WHO: Record<string, string> = { codex: 'Codex', claude: 'Claude', gemini: 'Gemini' };
 const who = (a: string) => WHO[a] ?? a;
 const GATE: Record<string, string> = { A: '기획 승인', P: '견본 승인', E: '실행 승인', B: '올리기 승인', C: '배포 승인' };
 const RESULT_SOURCE: Record<string, string> = {

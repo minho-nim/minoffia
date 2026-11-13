@@ -1,7 +1,7 @@
 import type { Stage, WorkflowData } from './workflow-types';
 
-/** grok은 미배정(2026-11-13, 예전 기록 표시용으로만 남김). exa = 웹 조사(서버 자동, 업무는 맡지 않음) */
-export type AgentId = 'mina' | 'claude' | 'codex' | 'grok' | 'exa' | 'studioA' | 'studioB' | 'ci';
+/** exa = 웹 조사(서버 자동, 업무는 맡지 않음). Grok은 2026-11-13 완전히 뺐다(소유자) */
+export type AgentId = 'mina' | 'claude' | 'codex' | 'exa' | 'studioA' | 'studioB' | 'ci';
 export type RoomId = 'research' | 'dev' | 'terminal' | 'planning' | 'lounge';
 export type WorkType = 'planning' | 'dev' | 'design' | 'prototype' | 'research' | 'qa';
 export type RequestedType = WorkType | 'auto';
@@ -126,7 +126,7 @@ export interface Snapshot {
   /** 최근 Gemini 질문 기록(Supabase 모드만) */
   aiCalls?: AiCall[];
   /** AI별 동시 작업 상한(소유자가 바꾼 것만, 나머지는 기본값) */
-  agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
+  agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini', number>>;
   /** 휴가 중인 AI(v0.4.39). 새 배정·PM 계획에서 뺀다 */
   leave?: AgentId[];
   /** 프로젝트에서 지켜야 할 것(v0.4.57) */

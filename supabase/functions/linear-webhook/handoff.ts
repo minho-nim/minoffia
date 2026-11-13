@@ -8,7 +8,7 @@ type Admin = any;
 type Item = { id: string; title?: string; goal?: string; assignee_preference?: string; execution_mode?: string };
 
 export const HANDOFF_MARK = '담당 바꿈';
-const AGENT: Record<string, string> = { codex_primary: 'codex', claude_support: 'claude', gemini_optional: 'gemini', grok_optional: 'grok', gemini_dev: 'gemini' };
+const AGENT: Record<string, string> = { codex_primary: 'codex', claude_support: 'claude', gemini_optional: 'gemini', gemini_dev: 'gemini' };
 
 /** 한 작업만 Claude로 바꾼 계획 본문(나머지는 그대로) */
 export function toClaude(body: { mode_reason?: string; work_items?: Item[] }, workItemId: string, why: string, nextRevision: number) {

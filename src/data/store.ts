@@ -94,7 +94,7 @@ export interface OfficeStore {
   /** 기간의 대화 기록(시간순) */
   loadChat(fromIso: string, toIso: string): Promise<ChatEntry[]>;
   /** AI별 동시 작업 상한(1~5) */
-  setAgentLimit(assignee: 'codex' | 'claude' | 'gemini' | 'grok', maxRunning: number): Promise<void>;
+  setAgentLimit(assignee: 'codex' | 'claude' | 'gemini', maxRunning: number): Promise<void>;
   /** AI 휴가(true)·근무(false) 바꾸기(v0.4.39) */
   setLeave(agent: AgentId, onLeave: boolean): Promise<void>;
   /** 프로젝트에서 지켜야 할 것: 소유자가 직접 추가·지우기(v0.4.57). AI가 적는 것은 서버가 넣는다 */

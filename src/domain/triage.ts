@@ -64,7 +64,7 @@ function agentInText(text: string): AgentId | null {
 
 /** 업무 기록으로 답할 수 있는 질문이면 답, 아니면 null */
 /** 웹에서 찾아 달라는 말 */
-const ASKS_WEB = /찾아\s?(봐|줘|주세요)|검색해|조사해|알아\s?봐|출처|요즘|최신|최근\s?(소식|뉴스|가격|버전)/;
+const ASKS_WEB = /찾아\s?(봐|줘|주세요)|검색해|조사해|알아\s?봐|출처|요즘|최신|최근\s?(소식|뉴스|가격|버전)|@(exa|엑사)(?![a-z])/i;
 
 export function answerStatus(text: string, snap: Snapshot, now: Date = new Date()): string | null {
   if (!STATUS_WORDS.test(text)) return null;

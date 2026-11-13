@@ -1,7 +1,7 @@
 /**
  * AI별 오늘 한도 상태(v0.2 §6: known/unknown/exhausted).
  * 공급자의 남은 토큰은 알 수 없다. 이 오피스가 기록한 횟수와 받은 한도 오류(429)로만 판단하고,
- * 셀 수 없는 AI(ChatGPT·Codex·Grok 등)는 '알 수 없음'으로 정직하게 둔다.
+ * 셀 수 없는 AI(ChatGPT·Codex 등)는 '알 수 없음'으로 정직하게 둔다.
  */
 import { AGENT_BY_ID } from './agents';
 import type { AgentId, AiCall, Snapshot } from './types';
@@ -62,8 +62,6 @@ export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date())
       const ok = todays.filter((c) => c.ok).length;
       return { state: 'available', label: `오늘 조사 ${ok}회`, detail: `오늘 웹 조사 ${ok}회 답함(Exa로 찾고 Gemini가 정리). Exa 무료 사용량은 Exa 대시보드에서 본다.` };
     }
-    case 'grok':
-      return { state: 'unknown', label: '알 수 없음', detail: 'Grok은 연결되지 않아 사용량을 알 수 없다.' };
     case 'ci':
       return { state: 'unknown', label: '해당 없음', detail: 'GitHub Actions 무료 범위에서 돈다. AI 사용량이 아니다.' };
   }

@@ -119,7 +119,7 @@ export function stageNotices(tasks: Task[], all: WorkflowData, seen: Record<stri
   return { notices, seen: next };
 }
 
-const AGENT: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
+const AGENT: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' };
 /**
  * 개발이 오래 걸릴 때 대화창 알림(v0.6.80 소유자 "너무 오래 걸리면 대화창이나 알림으로 알려줘"): 지금 계획의 작업 중
  * 시작했는데 소식이 없는 것(staleStart, 업무 카드 경고와 같은 기준)을 한 번씩. id는 작업+시작 시각이라 다시 시작하면 다시 알린다.

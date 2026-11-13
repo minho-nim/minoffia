@@ -13,7 +13,7 @@ export interface UnassignedCharacter {
 const LABEL: Record<string, string> = {
   planner: '기획 · 긴 생머리',
   nightdev: '야간 개발 · 투블럭',
-  grok: '리서치 · 은발 (예전 Grok)',
+  lead: '팀장 · 안경',
 };
 
 export function unassignedCharacters(source: Record<string, string> = files): UnassignedCharacter[] {
