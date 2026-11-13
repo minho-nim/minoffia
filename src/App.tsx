@@ -1822,7 +1822,13 @@ export function App() {
   // 관계 지도에 나오는 프로젝트(저장소 있음, 예시·MinLab 제외, 프로젝트 순서대로)
   const relProjects = ordered.filter((p) => p.repo && !p.sample && p.repo.toLowerCase() !== 'minho-nim/minlab').map((p) => ({ id: p.id, name: p.name }));
   // '구조 보기'와 '점검'을 나눈다(v0.6.70): 프로젝트 칸과 스킬 탭이 같은 모양
-  const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => (forgetMaps(p.id), store.healthCheck!.start(p.id, force)), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
+  // 점검 문제 '고치기 요청'(v0.6.95): 그 프로젝트 대화창으로 가서 입력칸에 써 둔다(보내기는 소유자가)
+  const fixInChat = (p: Project) => (text: string) => {
+    setChatProject(p.id);
+    setTab('chat');
+    setDraft((d) => ({ text, n: (d?.n ?? 0) + 1 }));
+  };
+  const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} onFix={fixInChat(p)} api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => (forgetMaps(p.id), store.healthCheck!.start(p.id, force)), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderMaps = (p: Project) => (
     <StructureMaps
       id={p.id}

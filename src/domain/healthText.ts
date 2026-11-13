@@ -66,3 +66,16 @@ export function parseHealth(raw: unknown): HealthReport | null {
     ...(Array.isArray((r as { tree?: unknown }).tree) ? { tree: ((r as { tree: unknown[] }).tree).filter((x): x is string => typeof x === 'string').slice(0, 3000) } : {}),
   };
 }
+
+/** 점검 결과 → 대화창에 넣을 고치기 요청(v0.6.95 소유자 "점검 경고를 고치는 버튼, 누르면 대화 탭에 자동으로 써지게"). AI 호출 없음 */
+export function fixRequest(issues: HealthIssue[]): string {
+  if (!issues.length) return '';
+  const line = (i: HealthIssue) => {
+    const k = koIssue(i);
+    const where = i.items.length ? ` (대상: ${i.items.slice(0, 10).join(', ')}${i.items.length > 10 ? ` 외 ${i.items.length - 10}개` : ''})` : '';
+    return `- [${k.severity}] ${k.title}${where}`;
+  };
+  return issues.length === 1
+    ? `점검에서 나온 문제를 고쳐줘.\n${line(issues[0])}\n${koIssue(issues[0]).detail}`
+    : `점검에서 나온 문제 ${issues.length}개를 고쳐줘. 중요한 것부터.\n${issues.map(line).join('\n')}`;
+}
