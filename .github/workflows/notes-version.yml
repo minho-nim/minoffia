@@ -1,0 +1,53 @@
+# 옵시디언 버전 노트(v0.6.89): 배포가 성공하면 서버 함수 deploy-release가 시작한다. AI 없음.
+# 대상 저장소의 package.json 버전(그 커밋)을 읽어 '<프로젝트>/버전/v<버전>.md'에 업무 한 칸을 더한다. package.json이 없으면 날짜 버전.
+name: 옵시디언 버전 노트
+on:
+  workflow_dispatch:
+    inputs:
+      project: { description: '프로젝트 이름', required: true }
+      repo: { description: '저장소(owner/name)', required: true }
+      sha: { description: '배포한 커밋', required: false }
+      task: { description: '업무 제목', required: false }
+      score: { description: '점수', required: false }
+      pr: { description: 'PR 주소', required: false }
+      agent: { description: '만든 AI', required: false }
+      skills: { description: '쓴 스킬(쉼표)', required: false }
+      date: { description: '날짜(YYYY-MM-DD)', required: false }
+permissions:
+  contents: read
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 버전 읽기
+        env:
+          TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+          REPO: ${{ inputs.repo }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          ver=""
+          if [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && [ -n "$TOKEN" ]; then
+            ref="${SHA:-HEAD}"
+            curl -fsS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/$REPO/contents/package.json?ref=$ref" -o /tmp/pkg.json 2>/dev/null \
+              && ver=$(node -e 'try{const v=require("/tmp/pkg.json").version;if(/^\d+\.\d+\.\d+[\w.-]*$/.test(v||""))process.stdout.write(v)}catch{}')
+          fi
+          echo "VER=$ver" >> "$GITHUB_ENV"
+      - name: 노트 올리기
+        env:
+          NOTES_REPO: ${{ vars.NOTES_REPO || 'minho-nim/minoffia-notes' }}
+          NOTES_TOKEN: ${{ secrets.NOTES_REPO_TOKEN || secrets.TARGET_REPO_TOKEN }}
+          PROJECT: ${{ inputs.project }}
+          TASK: ${{ inputs.task }}
+          SCORE: ${{ inputs.score }}
+          PR: ${{ inputs.pr }}
+          AGENT: ${{ inputs.agent }}
+          SKILLS: ${{ inputs.skills }}
+          DATE: ${{ inputs.date }}
+        run: |
+          node -e 'const e=process.env;require("fs").writeFileSync("/tmp/entry.json",JSON.stringify({version:e.VER,task:e.TASK,score:e.SCORE,pr:e.PR,agent:e.AGENT,skills:(e.SKILLS||"").split(",").filter(Boolean),date:e.DATE}))'
+          bash scripts/notes-run.sh "버전: $PROJECT ${VER:-$DATE}" version "$PROJECT" /tmp/entry.json

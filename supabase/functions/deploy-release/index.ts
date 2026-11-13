@@ -6,6 +6,7 @@
 // 성공 = release 갱신(HTTP 200)이지 Cloudflare 빌드 완료가 아니다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { decideDeploy, parsePrUrl } from './decide.ts';
+import { versionInputs } from './versionNote.ts';
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 
@@ -55,6 +56,29 @@ Deno.serve(async (req) => {
   const refuse = async (status: number, error: string, fromSha = '', toSha = '') => {
     await record(false, fromSha, toSha, error);
     return reply(status, { ok: false, error });
+  };
+
+  // 배포가 성공하면 옵시디언 버전 노트를 Actions에 맡긴다(v0.6.89). 실패해도 배포 결과는 바뀌지 않는다.
+  const versionNote = async (sha: string) => {
+    try {
+      const ghToken = env('GITHUB_ACTIONS_TOKEN');
+      if (!ghToken) return;
+      const { data: t } = await userClient.from('tasks').select('title, projects(name)').eq('id', task.id).maybeSingle();
+      const { data: b } = await userClient.from('approvals').select('approved_revision').eq('task_id', task.id).eq('gate', 'B').eq('decision', 'approved').order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const rq = userClient.from('result_packages').select('revision, source, summary, test_log').eq('task_id', task.id);
+      const { data: r } = await (b?.approved_revision != null ? rq.eq('revision', b.approved_revision) : rq).order('revision', { ascending: false }).limit(1).maybeSingle();
+      const { data: rv } = r ? await userClient.from('result_reviews').select('total').eq('task_id', task.id).eq('result_revision', r.revision).order('created_at', { ascending: false }).limit(1).maybeSingle() : { data: null };
+      const project = (t?.projects as { name?: string } | null)?.name || repo;
+      const inputs = versionInputs({ project, repo, sha, task: String(t?.title ?? ''), score: rv?.total ?? null, pr: String(task.pr_url ?? '').trim().replace(/\/$/, ''), source: String(r?.source ?? ''), summary: String(r?.summary ?? ''), testLog: String(r?.test_log ?? ''), at: new Date().toISOString() });
+      await fetch(`https://api.github.com/repos/${env('OFFICE_REPO') || 'minho-nim/minoffia'}/actions/workflows/notes-version.yml/dispatches`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ghToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: 'main', inputs }),
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch {
+      // 노트는 덤이다
+    }
   };
 
   const full = repo.toLowerCase();
@@ -115,6 +139,7 @@ Deno.serve(async (req) => {
     if (release.status === 404) {
       const mainHead = String((main.data.object as { sha?: string })?.sha ?? mergeSha);
       await record(true, '', mainHead, '');
+      await versionNote(mainHead);
       return reply(200, { ok: true, updated: false, mainOnly: true, to: mainHead });
     }
     if (release.status !== 200) return refuse(502, `release 브랜치를 읽지 못했습니다(HTTP ${release.status}).`);
@@ -155,6 +180,7 @@ Deno.serve(async (req) => {
     if (decision.action === 'wait') return reply(202, { ok: false, wait: true, error: decision.reason });
     if (decision.action === 'noop') {
       await record(true, releaseSha, mainSha, '');
+      await versionNote(mainSha);
       return reply(200, { ok: true, updated: false, from: releaseSha, to: mainSha });
     }
 
@@ -164,6 +190,7 @@ Deno.serve(async (req) => {
       return refuse(502, `release를 갱신하지 못했습니다(HTTP ${upd.status}).${hint}`, releaseSha, mainSha);
     }
     await record(true, releaseSha, mainSha, '');
+    await versionNote(mainSha);
     return reply(200, { ok: true, updated: true, from: releaseSha, to: mainSha });
   } catch (e) {
     return refuse(504, `GitHub가 응답하지 않았습니다(${(e as Error).name}).`);
