@@ -152,6 +152,8 @@ const treeCache = new Map<string, { at: number; p: Promise<string[]> }>();
 export function App() {
   const [booting, setBooting] = useState(true);
   const [client, setClient] = useState<SupabaseClient | null>(null);
+  // 체험 모드(v0.7.6, 소유자 "미니어리처럼 체험 모드"): 로그인 없이 예시 데이터로 이 기기에서만. 주소 끝 #demo로 바로 들어온다
+  const [trying, setTrying] = useState(() => typeof location !== 'undefined' && location.hash === '#demo');
   const [session, setSession] = useState<Session | null>(null);
   const [store, setStore] = useState<OfficeStore | null>(null);
   const [rawSnap, setSnap] = useState<Snapshot>(EMPTY);
@@ -200,7 +202,8 @@ export function App() {
     void (async () => {
       const sb = await getSupabase();
       if (cancelled) return;
-      if (!sb) {
+      if (!sb || trying) {
+        if (sb) setClient(sb);
         const local = createLocalStore();
         setStore(local);
         setSnap(await local.load());
@@ -220,7 +223,7 @@ export function App() {
 
   // 로그인하면 Supabase 저장소로 전환
   useEffect(() => {
-    if (!client || !session) return;
+    if (!client || !session || trying) return;
     let alive = true;
     void import('./data/supabaseStore').then(({ createSupabaseStore }) => {
       if (alive) setStore(createSupabaseStore(client));
@@ -229,6 +232,28 @@ export function App() {
       alive = false;
     };
   }, [client, session]);
+
+  /** 체험 시작: 예시 데이터 저장소로(실제 서버·업무에는 닿지 않는다) */
+  const startTry = () => {
+    const local = createLocalStore();
+    setTrying(true);
+    setStore(local);
+    void local.load().then(setSnap);
+    try {
+      history.replaceState(null, '', '#demo');
+    } catch {
+      // 주소 바꾸기는 덤
+    }
+  };
+  /** 체험 끝내기: 주소의 #demo를 지우고 처음(로그인 화면)으로 */
+  const endTry = () => {
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch {
+      // 무시
+    }
+    location.reload();
+  };
 
   const reload = useCallback(async () => {
     if (!store) return;
@@ -570,7 +595,7 @@ export function App() {
   const ciFixTried = useRef(new Set<string>());
   const handoffTried = useRef(new Set<string>());
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
-  if (client && !session) return <Login client={client} />;
+  if (client && !session && !trying) return <Login client={client} onTry={startTry} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
 
   // 오늘 사용량(큰 머리와 얇은 머리의 '사용량 보기'가 같이 쓴다)
@@ -1668,7 +1693,7 @@ export function App() {
   };
 
   const dispatch = async (task: Task, ack: boolean): Promise<boolean> => {
-    if (!client) return false;
+    if (!client || store.mode === 'local') return false;
     const res = await dispatchClaude(client, task.id, ack);
     await reload();
     if (res.ok) say('ok', 'Claude Cloud 세션을 시작했습니다. 세션 링크에서 진행 상황을 확인하세요.');
@@ -1846,7 +1871,12 @@ export function App() {
           </span>
           {store.mode === 'local' ? (
             <span className="mode mode-local" title="데이터는 이 브라우저의 localStorage에만 저장됩니다">
-              로컬 데모 · 이 기기에만 저장
+              {trying ? '체험 모드 · 예시 데이터' : '로컬 데모 · 이 기기에만 저장'}
+              {trying && client && (
+                <button type="button" className="link-btn" onClick={endTry}>
+                  체험 끝내기
+                </button>
+              )}
             </span>
           ) : (
             <span className="mode mode-cloud">

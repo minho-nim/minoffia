@@ -1,6 +1,6 @@
 # 현재 상태 · 2026-11-13
 
-소스 버전은 package.json(지금 v0.7.5). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.5까지 배포. 운영 Supabase에는 마이그레이션 0056까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
+소스 버전은 package.json(지금 v0.7.6). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.6까지 배포. 로그인 없이 체험: 로그인 화면 버튼 또는 주소 끝 #demo(예시 데이터, 이 기기만). 운영 Supabase에는 마이그레이션 0056까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
 
 ## 소유자 결정(현재 기준)
 
