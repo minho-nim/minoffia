@@ -6,8 +6,21 @@ import { SLIM_MARKER_SKILL } from '../domain/devHabits';
 import type { SkillMapData } from '../domain/skills';
 
 const slim = new Set<string>();
+/** 프로젝트마다 저장소에 들어 있는 스킬 이름(v0.7.0 개발 스킬 고르기 추천용) */
+const installed = new Map<string, string[]>();
 export function setSlimProjects(map: SkillMapData) {
   slim.clear();
-  for (const [id, m] of Object.entries(map)) if (m?.[SLIM_MARKER_SKILL]) slim.add(id);
+  installed.clear();
+  for (const [id, m] of Object.entries(map)) {
+    if (m?.[SLIM_MARKER_SKILL]) slim.add(id);
+    installed.set(id, Object.keys(m ?? {}));
+  }
 }
+/** 스킬 쉬운 이름(SKILL.md 설명 첫 문장) */
+const titles = new Map<string, string>();
+export function setSkillTitles(list: { name: string; title: string }[]) {
+  for (const s of list) if (s.title && s.title !== s.name) titles.set(s.name, s.title);
+}
+export const skillTitleOf = (name: string): string => titles.get(name) ?? '';
+export const installedSkillsOf = (id?: string | null): string[] => (id ? (installed.get(id) ?? []) : []);
 export const isSlimProject = (id?: string | null): boolean => !!id && slim.has(id);

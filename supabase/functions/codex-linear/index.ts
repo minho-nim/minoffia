@@ -3,6 +3,7 @@
 //   기본은 위임(delegateId, Linear 공식 에이전트 방식). CODEX_LINEAR_TRIGGER=mention이면 대신 @codex 멘션 댓글로 시작한다.
 // action 'status': 그 이슈의 Codex 댓글만 읽어 진행 소식·작업 주소·시작 실패(한도·환경 없음)를 배정 기록에 남긴다(완료 판정은 사람이).
 // 비밀값: LINEAR_API_KEY(소유자 계정 개인 키)는 secrets에만. 이슈 생성은 소유자 이름으로 된다.
+import { skillPickRule } from './skillPick.ts';
 import { BASE_RULES } from './projectRules.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { dispatchTrackedIssue, type LinearIssue } from './trackedDispatch.ts';
@@ -60,7 +61,7 @@ export function submitSection(taskId: string, token: string, url = `${env('SUPAB
 /** 서버가 부를 때의 지시서(앱 지시서와 같은 뼈대, 첨부 설명 제외) */
 // deno-lint-ignore no-explicit-any
 async function serverText(admin: any, a: { task_id: string; plan_revision: number; work_item_id: string }): Promise<string> {
-  const { data: t } = await admin.from('tasks').select('project_id, owner_id, projects(repo)').eq('id', a.task_id).maybeSingle();
+  const { data: t } = await admin.from('tasks').select('project_id, owner_id, skills, projects(repo)').eq('id', a.task_id).maybeSingle();
   const { data: spec } = await admin.from('task_specs').select('revision, final_prompt, change_scope, preserve_constraints, test_criteria').eq('task_id', a.task_id).order('revision', { ascending: false }).limit(1).maybeSingle();
   const { data: plan } = await admin.from('pm_plans').select('target_base_revision, plan').eq('task_id', a.task_id).eq('plan_revision', a.plan_revision).maybeSingle();
   const item = ((plan?.plan as { work_items?: Record<string, unknown>[] } | undefined)?.work_items ?? []).find((w) => w.id === a.work_item_id);
@@ -77,7 +78,8 @@ async function serverText(admin: any, a: { task_id: string; plan_revision: numbe
     item: { id: String(item.id), title: String(item.title ?? ''), goal: String(item.goal ?? ''), acceptance_tests: item.acceptance_tests as string[] | undefined, preserve_constraints: item.preserve_constraints as string[] | undefined },
     baseRevision: String(plan?.target_base_revision ?? ''),
     // 기본 규칙(모든 프로젝트)도 함께(v0.6.59: 서버가 시작한 Codex에는 프로젝트 규칙만 가고 기본 규칙이 빠져 있었다)
-    rules: slim ? (rules ?? []).map((r: { rule: string }) => r.rule) : [...new Set([...BASE_RULES, ...(rules ?? []).map((r: { rule: string }) => r.rule)])],
+    // 소유자가 고른 개발 스킬(v0.7.0)은 맨 끝에 한 줄
+    rules: [...(slim ? (rules ?? []).map((r: { rule: string }) => r.rule) : [...new Set([...BASE_RULES, ...(rules ?? []).map((r: { rule: string }) => r.rule)])]), ...skillPickRule(t.skills as string[] | null)],
     attachmentCount: count ?? 0,
     slim,
   });
