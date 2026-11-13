@@ -271,8 +271,15 @@ export function createLocalStore(): OfficeStore {
       commit({ ...state, workflow: { ...state.workflow, attachments: state.workflow.attachments.filter((a) => a.id !== prev.id) } });
       dropUnusedFiles();
     },
-    async checkPr() {
-      throw new Error('로컬 데모에서는 GitHub PR·CI를 확인할 수 없습니다.');
+    // 체험(v0.7.7): 실제 GitHub 대신 '검사 통과'를 이 기기에 기록한다(체험 업무 흐름을 끝까지 보게)
+    async checkPr(taskId) {
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (!task) throw new Error('task not found');
+      const now = new Date().toISOString();
+      const prUrl = task.prUrl || 'https://github.com/minho-nim/minoffia/pulls';
+      const check = { id: newId(), taskId, prUrl, prState: 'open' as const, merged: false, headSha: 'demo001', ciState: 'success' as const, checks: [{ name: 'verify (체험)', status: 'completed', conclusion: 'success' }], checkedAt: now };
+      commit({ ...state, tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, prUrl } : t)), workflow: { ...state.workflow, prChecks: [...state.workflow.prChecks, check] } });
+      return check;
     },
     async addProjectRule(projectId, rule) {
       const text = rule.replace(/\s+/g, ' ').trim().slice(0, 200);
@@ -306,8 +313,11 @@ export function createLocalStore(): OfficeStore {
     async codexLinearStatus() {
       return { kind: 'none' as const, last: '', taskUrl: null };
     },
-    async deployRelease() {
-      throw new Error('로컬 데모에서는 운영 배포를 할 수 없습니다.');
+    // 체험(v0.7.7): 실제 배포 대신 '배포 완료'를 이 기기에 기록한다
+    async deployRelease(taskId) {
+      const now = new Date().toISOString();
+      commit({ ...state, workflow: { ...state.workflow, deployments: [...state.workflow.deployments, { id: newId(), taskId, repo: '체험(실제 배포 아님)', fromSha: 'demo000', toSha: 'demo001', ok: true, error: '', createdAt: now }] } });
+      return { updated: true, to: 'demo001' };
     },
     async appendChat(entries) {
       try {
