@@ -232,6 +232,12 @@ function writeBackfill(notes, data) {
     const dir = path.join(notes, project);
     const vdir = path.join(dir, '버전');
     fs.mkdirSync(vdir, { recursive: true });
+    // 다시 채울 때: 이번 목록에 없고 PR도 없는(지난 채우기가 만든) 버전 노트는 지운다. 배포 때 만든 것(PR 있음)은 남긴다
+    const want = new Set((p.versions ?? []).map((v) => `${project} ${versionName(v)}.md`));
+    for (const f of fs.existsSync(vdir) ? fs.readdirSync(vdir) : []) {
+      const list = readEntries(read(path.join(vdir, f)));
+      if (f.endsWith('.md') && f.startsWith(`${project} `) && !want.has(f) && list.length && list.every((e) => !e.pr)) fs.rmSync(path.join(vdir, f));
+    }
     for (const v of p.versions ?? []) {
       const name = versionName(v);
       const file = path.join(vdir, `${project} ${name}.md`);
