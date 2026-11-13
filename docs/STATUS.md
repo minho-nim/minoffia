@@ -6,7 +6,7 @@
 
 - 승인은 기획·올리기·배포 3개. 실행 승인(E)은 기획 승인에 포함해 자동 기록한다(앱·서버). 견본 단계는 끔(코드는 남김).
 - 웹 조사 담당은 Exa(사무실 캐릭터 '팀장·안경', 업무는 안 맡음, 대화 @Exa). Grok은 완전히 뺐다(2026-11-13, 0056). 규칙의 'Grok CLI 설치·실행 금지'는 그대로.
-- 개발은 Codex 주, Claude 보조. Gemini 쉬운 개발(@Gemini)은 뺐다(2026-11-13, DB의 gemini_actions 값·claim_gemini_dev 함수는 쓰는 곳 없이 남김). 채점은 Gemini 기본, '교차 채점 추가'를 누를 때만 한 번 더.
+- 개발은 Codex 주, Claude 보조. Gemini 쉬운 개발(@Gemini)은 뺐다(2026-11-13, DB의 gemini_actions 값·claim_gemini_dev 함수는 쓰는 곳 없이 남김). 채점은 3중 평가(Gemini A·B + 동료 Claude, v0.7.8). Claude 결과의 동료(Codex)는 Linear 연결 뒤라 빠지고 Gemini 둘로 판정.
 - 실패하면 업무 카드의 '다시 시도(같은 AI)'·다른 AI로 넘기기. Codex '시작 못 함'은 서버가 Claude로 자동으로 넘기고, '끝내지 못함'은 소유자가 고른다.
 - 지시서는 할 일만: 늘 지킬 것은 각 저장소 AGENTS.md·CLAUDE.md의 `<!-- minoffia-rules v1 -->` 칸(원본 minoffia-skills/rules), 가끔 필요한 방법은 스킬(repo-map·code-graph·ui-check·db-security-check·debugging-and-error-recovery). 규칙 칸·repo-map이 없는 저장소에는 예전처럼 전체를 보낸다.
 - 스킬 원본은 minho-nim/minoffia-skills. 프로젝트에는 스킬 탭 '프로젝트에 넣기'(Actions 스킬 넣기, 규칙 칸도 같은 PR)로 넣는다. 11개 프로젝트에 기본 스킬·규칙 칸, 미노피아에는 기본 스킬 13개(규칙은 이 CLAUDE.md)가 들어가 있다(MinLab 제외). 스킬 지도·넣었는지 표시는 .agents/skills와 .claude/skills를 함께 본다.
@@ -31,7 +31,7 @@
 - 옵시디언 버전 노트(v0.6.89): 앱 업무의 배포 승인 뒤 자동으로 생기는지(지금까지는 손으로 돌린 시험·지난 기록 채우기만). 지난 버전에는 쓴 스킬·MCP 기록이 없다(앞으로 결과·커밋의 '쓴 스킬:'·'쓴 MCP:' 줄부터).
 - 점검 '고치기 요청' 버튼(실제 점검 화면), 대화 '멈추기'(데모에서는 처리가 바로 끝나 못 눌러 봄).
 - 개발 스킬 고르기(v0.7.0): 실제 업무에서 고른 스킬이 지시서에 들어가고 AI가 따르는지.
-- 교차 채점, 앱을 닫아 둔 채 서버만으로 개발 시작·결과 받기 끝까지.
+- 3중 평가 운영 첫 실행(동료 Claude 점수가 submit-review로 와서 판정이 바뀌는지), 앱을 닫아 둔 채 서버만으로 개발 시작·결과 받기 끝까지.
 - 아이폰 실기기: 사무실 크게 띄운 뒤 바깥 눌러 닫기, 그물 보기 끌기·두 손가락 확대, 결과 평가 밀어서 지우기.
 
 ## 운영 정리 남은 것

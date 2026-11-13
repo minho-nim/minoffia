@@ -214,6 +214,7 @@ const toReview = (r: Row): ResultReview => ({
   crossTotal: (r.cross_total as number | null) ?? null,
   crossJudge: (r.cross_judge as string | null) ?? null,
   crossReasons: (r.cross_reasons as string[] | null) ?? [],
+  panel: Array.isArray(r.panel) ? (r.panel as ResultReview['panel']) : [],
   createdAt: r.created_at as string,
 });
 
@@ -847,9 +848,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       if (onLeave) check(await client.from('agent_leave').upsert({ agent }));
       else check(await client.from('agent_leave').delete().eq('agent', agent));
     },
-    async crossReview(taskId, resultRevision) {
-      const data = await invoke('review-result', { taskId, resultRevision, action: 'cross' });
-      return { sessionUrl: (data.sessionUrl as string | null) ?? null };
+    async finishReview(taskId, resultRevision) {
+      const data = await invoke('review-result', { taskId, resultRevision, action: 'finalize' });
+      return toReview(data.review as Row);
     },
     async reviewResult(taskId, resultRevision) {
       const data = await invoke('review-result', { taskId, resultRevision });

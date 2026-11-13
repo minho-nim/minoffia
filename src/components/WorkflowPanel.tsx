@@ -1,5 +1,5 @@
 import { timelineTime } from '../domain/timeline';
-import { PART_LABEL, VERDICT_LABEL, WEIGHTS, type Part } from '../domain/review';
+import { PART_LABEL, PASS_SCORE, VERDICT_LABEL, WEIGHTS, type PanelEntry, type Part } from '../domain/review';
 import { ArchifyView } from './ArchifyView';
 import { uncoveredRequirements } from '../domain/requirements';
 import { recommendedReply } from '../domain/recommend';
@@ -79,8 +79,8 @@ export interface WorkflowActions {
   startCodexLinear?: (assignment: AgentAssignment, acknowledgeRetry: boolean, text: string) => Promise<boolean>;
   /** PR 다시 열기(v0.6.31): 결과 승인 뒤 PR이 안 열렸을 때 GitHub Actions로 다시 */
   openPr?: (task: Task) => Promise<void>;
-  /** 교차 채점 추가(v0.6.26) */
-  crossReview?: (task: Task, resultRevision: number) => Promise<void>;
+  /** 3중 평가(v0.7.8): 동료 평가를 기다리지 않고 판정 */
+  finishReview?: (task: Task, resultRevision: number) => Promise<void>;
   /** Codex 앱에 붙여 넣을 지시서에 결과 자동 제출 절을 붙인다(실패하면 빈 문자열, v0.6.21) */
   codexManualSection?: (assignment: AgentAssignment) => Promise<string>;
   /** Codex 소식 손으로 다시 읽기(웹훅이 안 올 때, v0.5.3) */
@@ -1361,7 +1361,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               })()}
               <ReviewCard
                 review={reviews.find((r) => r.resultRevision === view.result!.revision) ?? null}
-                onCross={actions.crossReview && !view.bApproved ? () => run(() => actions.crossReview!(task, view.result!.revision)) : undefined}
+                onFinish={actions.finishReview && !view.bApproved ? () => run(() => actions.finishReview!(task, view.result!.revision)) : undefined}
                 busy={busy}
               />
               {view.result.previewUrl && (
@@ -1700,38 +1700,71 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
 
 const MARK: Record<'met' | 'partial' | 'unmet', string> = { met: '✓', partial: '△', unmet: '✗' };
 
-/** 결과 점수표(v0.4.64): 규칙 검사·AI 점수·판정. 올리기 승인은 늘 사람이 한다. */
-function ReviewCard({ review, onCross, busy }: { review: ResultReview | null; onCross?: () => void; busy?: boolean }) {
-  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Gemini 무료 채점)</p>;
+/** 결과 점수표(v0.4.64): 규칙 검사·AI 점수·판정. 올리기 승인은 늘 사람이 한다.
+ *  v0.7.8 3중 평가: Gemini A(요청·사용자)·Gemini B(코드 품질·안전)·동료 개발 AI 점수를 각각, 그리고 평균. */
+function ReviewCard({ review, onFinish, busy }: { review: ResultReview | null; onFinish?: () => void; busy?: boolean }) {
+  if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Gemini A·B → 동료 AI)</p>;
   const bad = review.gates.filter((g) => !g.ok);
-  // 교차 채점(v0.6.26 소유자 "제미니 기본 + 필요할 때 교차 채점, 평균"): 두 점수와 평균. 20점 넘게 엇갈리면 직접 보라고 알린다
-  const cross = review.crossTotal ?? null;
-  const avg = review.total !== null && cross !== null ? Math.round((review.total + cross) / 2) : null;
-  const split = avg !== null && Math.abs(review.total! - cross!) >= 20;
-  const byClaude = review.assignee === 'claude';
+  const panel = review.panel ?? [];
+  const waiting = panel.some((p) => p.status === 'pending');
+  // 옛 기록(v0.6.26 교차 채점): 두 점수와 평균
+  const cross = panel.length ? null : (review.crossTotal ?? null);
+  const avg = cross !== null && review.total !== null ? Math.round((review.total + cross) / 2) : review.total;
+  const totals = panel.length ? panel.filter((p) => p.status === 'done').map((p) => p.total ?? 0) : cross !== null && review.total !== null ? [review.total, cross] : [];
+  const split = totals.length >= 2 && Math.max(...totals) - Math.min(...totals) >= 20;
+  const name = (p: PanelEntry) => (p.who === 'peer' ? p.judge : `Gemini ${p.who}`) + (p.judge.includes('파일 확인') ? ' · 파일 확인' : '');
   return (
-    <div className={`review-card is-${review.verdict}`}>
+    <div className={`review-card is-${waiting ? 'wait' : review.verdict}`}>
       <p className="review-head">
-        <b>AI 평가{avg !== null ? ` 평균 ${avg}점` : review.total === null ? '' : ` ${review.total}점`}</b>
-        <span className={`review-verdict is-${review.verdict}`}>{VERDICT_LABEL[review.verdict]}</span>
+        <b>AI 평가{avg === null ? '' : totals.length >= 2 ? ` 평균 ${avg}점` : ` ${avg}점`}</b>
+        <span className={`review-verdict is-${waiting ? 'wait' : review.verdict}`}>{waiting ? '점수 모으는 중' : VERDICT_LABEL[review.verdict]}</span>
         <span className="muted small">{review.judge}</span>
       </p>
-      {cross !== null ? (
+      {panel.length > 0 && (
+        <ul className="review-panel small">
+          {panel.map((p) => (
+            <li key={p.who} className={`is-${p.status}`}>
+              <span className="review-who">
+                <b>{name(p)}</b> <span className="muted">· {p.perspective}</span>
+              </span>
+              <span className={`mono review-score${p.status === 'done' && (p.total ?? 0) < PASS_SCORE ? ' is-low' : ''}`}>{p.status === 'done' ? `${p.total}점` : p.status === 'pending' ? '기다리는 중' : '빠짐'}</span>
+              {p.status === 'done' && (p.summary || p.points.length > 0) && (
+                <details className="review-who-more">
+                  <summary>{p.points.length ? `지적 ${p.points.length}개` : '총평'}</summary>
+                  {p.summary && <p>{p.summary}</p>}
+                  {p.points.length > 0 && (
+                    <ul>
+                      {p.points.map((x, i) => (
+                        <li key={i}>{x}</li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
+              )}
+              {p.status !== 'done' && p.note && <span className="muted review-who-more">{p.note}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {cross !== null && (
         <p className="small">
           {review.judge.split(' ·')[0]} {review.total ?? '-'}점 · {review.crossJudge ?? '교차'} {cross}점
-          {split && <b className="warn-text"> · 채점이 엇갈려요(20점 넘게 차이). 직접 확인해 주세요.</b>}
           {review.crossReasons && review.crossReasons.length > 0 && <span className="muted"> — {review.crossJudge} 지적: {review.crossReasons.join(' / ')}</span>}
         </p>
-      ) : (
-        onCross &&
-        review.total !== null && (
-          <p className="small">
-            <button type="button" className="btn btn-small btn-ghost" disabled={busy || byClaude} onClick={onCross} title={byClaude ? 'Claude 결과는 Codex가 교차 채점해요(Codex Linear 연결 뒤)' : 'Claude가 한 번 더 채점해 평균을 보여 줘요(Claude 한도 1회)'}>
-              교차 채점 추가({byClaude ? 'Codex · 연결 뒤' : 'Claude'})
-            </button>
-          </p>
-        )
       )}
+      {split && (
+        <p className="small">
+          <b className="warn-text">채점이 엇갈려요(20점 넘게 차이). 직접 확인해 주세요.</b>
+        </p>
+      )}
+      {waiting && onFinish && (
+        <p className="small">
+          <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={onFinish} title="동료 AI 점수를 기다리지 않고 지금 모인 점수(평균·과반)로 판정해요">
+            기다리지 않고 지금 판정
+          </button>
+        </p>
+      )}
+      {review.score && panel.filter((p) => p.status === 'done').length > 1 && <p className="muted small">항목별 평균</p>}
       {review.score && (
         <ul className="review-parts">
           {(Object.keys(WEIGHTS) as Part[]).map((k) => (
@@ -1747,7 +1780,7 @@ function ReviewCard({ review, onCross, busy }: { review: ResultReview | null; on
           ))}
         </ul>
       )}
-      {review.score?.summary && <p className="small">{review.score.summary}</p>}
+      {!panel.length && review.score?.summary && <p className="small">{review.score.summary}</p>}
       {review.score && review.score.criteria.length > 0 && (
         <details>
           <summary className="small">완료 기준 {review.score.criteria.filter((c) => c.status === 'met').length}/{review.score.criteria.length} 충족</summary>
@@ -1770,7 +1803,7 @@ function ReviewCard({ review, onCross, busy }: { review: ResultReview | null; on
           ))}
         </ul>
       )}
-      {review.verdict !== 'pass' && review.reasons.length > 0 && (
+      {!waiting && review.verdict !== 'pass' && review.reasons.length > 0 && (
         <p className="small">
           {review.verdict === 'redo' ? '자동으로 다시 개발을 보냈어요: ' : '사장님이 정해 주세요: '}
           {review.reasons.join(' / ')}

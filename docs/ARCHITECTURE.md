@@ -23,7 +23,7 @@ Supabase (서울)
      ├─ deploy-release       배포 승인 → 확인한 커밋 squash 병합 → release fast-forward
      ├─ draft-plan            Claude PM 불가 시 Gemini 분배
      ├─ dispatch-gemini-dev   쉬운 개발 → GitHub Actions
-     ├─ review-result · submit-review  결과 검사·교차 채점
+     ├─ review-result · submit-review  결과 검사·3중 평가(Gemini A·B + 동료 AI)
      ├─ codex-linear · linear-webhook  Codex 위임·소식
      └─ fetch-link · create-repo
         │

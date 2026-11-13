@@ -6,6 +6,7 @@ import type { Snapshot, Task } from '../domain/types';
 import { deriveWorkflow } from '../domain/workflow';
 import type { AgentAssignment, PmPlan, ResultPackage, TaskSpec } from '../domain/workflow-types';
 import { parsePmPlan } from '../domain/pmPlan';
+import { panelEntry, panelJudge, panelOutcome, ruleCheck, type Score } from '../domain/review';
 
 export const DEMO_TAG = '[체험]';
 const DEMO_TITLE = `${DEMO_TAG} 로그인 버튼 색 바꾸기`;
@@ -87,12 +88,30 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
     };
     await store.addResult(result);
     await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: '체험: 끝남', updatedAt: iso });
-    try {
-      await store.reviewResult(task.id, 1);
-    } catch {
-      // 채점은 덤(로컬은 규칙 검사만)
-    }
-    return '체험: Codex 결과가 왔어요. 업무 카드에서 바뀐 곳·시험 기록을 보고 [결과 승인](올리기 승인)을 눌러 보세요.';
+    // 3중 평가(v0.7.8): 정해진 점수로 Gemini A·B·동료(Claude) 채점을 보여 준다. 판정은 진짜 규칙(panelOutcome)으로.
+    const s = (acceptance: number, spec: number, quality: number, summary: string, fixes: string[] = []): Score => ({
+      parts: { acceptance, spec, constraints: 15, scope: 10, quality },
+      criteria: [
+        { text: '(필수) 로그인 버튼이 주황색으로 보인다', status: 'met', evidence: 'src/components/Login.tsx:52 btn-primary' },
+        { text: '(필수) npm test 통과', status: 'met', evidence: '시험 로그 500 passed' },
+        { text: '(권장) 휴대폰 400px에서 가로 넘침 없음', status: 'met', evidence: '시험 로그 화면 확인' },
+      ],
+      violations: [],
+      fixes,
+      summary,
+    });
+    const panel = [
+      panelEntry('A', 'Gemini · Studio A', s(38, 24, 9, '요청대로 로그인 버튼만 주황색이 됐어요.')),
+      panelEntry('B', 'Gemini · Studio B', s(36, 22, 8, '바뀐 줄이 하나라 깨질 곳이 없어요.', ['버튼 색 시험을 하나 더 두면 좋아요'])),
+      panelEntry('peer', 'Claude', s(37, 23, 9, '브랜치에서 화면을 열어 확인했어요.')),
+    ];
+    const gates = ruleCheck({ diff: `diff --git a/src/components/Login.tsx b/src/components/Login.tsx\n${result.diff}`, testLog: result.testLog, changeScope: 'src/components/Login.tsx' });
+    const out = panelOutcome(gates, panel, 0, { executed: true });
+    await store.putDemoReview?.({
+      id: nid(), taskId: task.id, resultRevision: 1, workItemId: a.workItemId, assignee: 'codex', gates, score: out.score, total: out.total, verdict: out.verdict,
+      reasons: out.reasons, feedback: '', autoRedo: 0, judge: panelJudge(panel), panel, createdAt: iso,
+    });
+    return '체험: Codex 결과가 왔고 AI 셋(Gemini A·B, Claude)이 같은 항목을 다른 관점으로 채점했어요. 업무 카드에서 점수와 평균을 보고 [결과 승인](올리기 승인)을 눌러 보세요.';
   }
   if (step === 'pr') {
     await store.checkPr(task.id);

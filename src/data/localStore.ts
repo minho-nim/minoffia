@@ -238,6 +238,10 @@ export function createLocalStore(): OfficeStore {
       commit({ ...state, workflow: { ...state.workflow, reviews: [...(state.workflow.reviews ?? []), review] } });
       return review;
     },
+    async putDemoReview(review) {
+      if ((state.workflow.reviews ?? []).some((r) => r.taskId === review.taskId && r.resultRevision === review.resultRevision)) return;
+      commit({ ...state, workflow: { ...state.workflow, reviews: [...(state.workflow.reviews ?? []), review] } });
+    },
     async addAttachment(att, file) {
       const task = state.tasks.find((t) => t.id === att.taskId);
       if (!task) throw new Error('task not found');
