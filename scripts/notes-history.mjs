@@ -58,8 +58,11 @@ export function skillsOfCommit(body) {
   return [...out];
 }
 
+/** 기록을 바로잡을 커밋(소유자 "실제 내용만"): v0.6.98 커밋의 '쓴 MCP: supabase'는 형식 시험이라 실제로 쓰지 않았다 */
+export const NOT_REAL_MCP = new Set(['b4634c3640c8c538134404c4fc5c9810c32fde13']);
 /** 커밋 본문의 '쓴 MCP:' 줄(v0.6.98) */
-export function mcpOfCommit(body) {
+export function mcpOfCommit(body, sha = '') {
+  if (NOT_REAL_MCP.has(sha)) return [];
   const out = new Set();
   for (const m of String(body ?? '').matchAll(/^쓴 MCP\s*[:：]\s*(.+)$/gim)) for (const n of m[1].split(/[,，、\s]+/)) { const k = n.trim().replace(/[`'".]/g, '').toLowerCase(); if (/^[a-z0-9][a-z0-9_-]{0,40}$/.test(k)) out.add(k); }
   return [...out];
@@ -113,11 +116,11 @@ export function projectVersions(dir) {
   if (log.length >= 3) {
     return log.reverse().map((e) => {
       const b = byVer.get(e.version);
-      return { version: e.version, date: e.date || b?.date || '', task: e.task, agent: b ? agentOfCommit(b.author, b.body) : 'Codex', skills: b ? skillsOfCommit(b.body) : [], mcp: b ? mcpOfCommit(b.body) : [] };
+      return { version: e.version, date: e.date || b?.date || '', task: e.task, agent: b ? agentOfCommit(b.author, b.body) : 'Codex', skills: b ? skillsOfCommit(b.body) : [], mcp: b ? mcpOfCommit(b.body, b.sha) : [] };
     });
   }
   // 버전을 거의 안 올린 저장소(3번 미만)는 날짜별 커밋이 더 자세하다
-  if (bumps.length >= 3) return bumps.map((b) => ({ version: b.version, date: b.date, task: b.subject.slice(0, 120), agent: agentOfCommit(b.author, b.body), skills: skillsOfCommit(b.body), mcp: mcpOfCommit(b.body) }));
+  if (bumps.length >= 3) return bumps.map((b) => ({ version: b.version, date: b.date, task: b.subject.slice(0, 120), agent: agentOfCommit(b.author, b.body), skills: skillsOfCommit(b.body), mcp: mcpOfCommit(b.body, b.sha) }));
   // 3) 버전 번호가 없거나 거의 안 바뀌면 커밋을 날짜별로(최근 MAX_DAYS일)
   const days = new Map();
   for (const c of commits(dir)) days.set(c.date, [...(days.get(c.date) ?? []), c]);
@@ -129,7 +132,7 @@ export function projectVersions(dir) {
       task: `${list[list.length - 1].subject.slice(0, 100)}${list.length > 1 ? ` 외 ${list.length - 1}개` : ''}`,
       agent: agents.includes('Claude') ? 'Claude' : agents[0] ?? 'Codex',
       skills: [...new Set(list.flatMap((c) => skillsOfCommit(c.body)))],
-      mcp: [...new Set(list.flatMap((c) => mcpOfCommit(c.body)))],
+      mcp: [...new Set(list.flatMap((c) => mcpOfCommit(c.body, c.sha)))],
     };
   });
 }
