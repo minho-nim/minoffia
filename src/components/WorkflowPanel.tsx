@@ -75,8 +75,6 @@ export interface WorkflowActions {
   replanByPm?: (task: Task) => Promise<void>;
   /** Claude 보조 개발: 실행 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작(Supabase 모드만) */
   startClaudeDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
-  /** Gemini 개발: 실행 승인한 Gemini 개발 작업을 서버가 GitHub Actions 워크플로로 시작(Supabase 모드만, v0.4.82) */
-  startGeminiDev?: (assignment: AgentAssignment, acknowledgeRetry: boolean) => Promise<boolean>;
   /** Codex를 Linear로 맡기기(v0.5.2): 지시서는 패널이 만들어 넘긴다 */
   startCodexLinear?: (assignment: AgentAssignment, acknowledgeRetry: boolean, text: string) => Promise<boolean>;
   /** PR 다시 열기(v0.6.31): 결과 승인 뒤 PR이 안 열렸을 때 GitHub Actions로 다시 */
@@ -291,7 +289,7 @@ function FollowupBox({ followups, busy, canRedo, onAdd, onRedo }: { followups: i
 }
 
 /** 같은 AI로 다시(담당 그대로 새 계획 버전) */
-const samePref = (assignee: string): AssigneePreference => (assignee === 'claude' ? 'claude_support' : assignee === 'codex' ? 'codex_primary' : 'gemini_dev');
+const samePref = (assignee: string): AssigneePreference => (assignee === 'claude' ? 'claude_support' : 'codex_primary');
 
 export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], canReadLinks, dispatchBlocker, actions, timeline, results = [] }: Props) {
   const current = stepIndex(view);
@@ -953,13 +951,11 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
             {view.assignments.map((a) => {
               const item = view.plan!.plan.work_items.find((w) => w.id === a.workItemId);
               const adapter = adapterFor(a.assignee, a.executionMode);
-              // 자동 실행 길: Claude 보조 개발(루틴) 또는 Gemini 개발(GitHub Actions, v0.4.82)
+              // 자동 실행 길: Claude 보조 개발(루틴) 또는 Codex(Linear)
               const auto =
                 a.assignee === 'claude' && actions.startClaudeDev
                   ? { start: actions.startClaudeDev, label: 'Claude 보조 개발 시작(자동)', ack: 'Routines 기록에서 실제로 시작되지 않았음을 확인했습니다', note: '실행 승인하면 Claude가 클라우드에서 바로 개발을 시작합니다(PM과 함께 하루 상한).' }
-                  : a.executionMode === 'gemini_actions' && actions.startGeminiDev
-                    ? { start: actions.startGeminiDev, label: 'Gemini 개발 시작(자동)', ack: 'GitHub Actions 기록에서 실제로 돌지 않았음을 확인했습니다', note: '실행 승인하면 Gemini(무료 키)가 GitHub Actions에서 바로 개발을 시작합니다.' }
-                    : a.assignee === 'codex' && actions.startCodexLinear && item
+                  : a.assignee === 'codex' && actions.startCodexLinear && item
                       ? {
                           start: (x: AgentAssignment, ack: boolean) =>
                             actions.startCodexLinear!(x, ack, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules, isSlimProject(task.projectId))),

@@ -47,8 +47,7 @@ export function preparePlanImport(task: Task, text: string, source: PmPlan['sour
     title: w.title,
     assignee: PREF_AGENT[w.assignee_preference],
     // 자동 실행 경로가 검증되기 전까지는 계획이 codex_cloud라고 해도 수동 인계로 둔다.
-    // Gemini 개발(gemini_dev)은 실행 승인 뒤 서버가 GitHub Actions 워크플로로 시작한다(v0.4.82).
-    executionMode: w.assignee_preference === 'gemini_dev' ? 'gemini_actions' : 'manual_handoff',
+    executionMode: 'manual_handoff',
     dispatchStatus: 'awaiting_user_execution_approval',
     statusSource: 'none',
     providerExecutionId: null,

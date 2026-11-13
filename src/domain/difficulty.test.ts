@@ -15,7 +15,7 @@ describe('난이도 기반 배정(v0.4.71)', () => {
   });
   it('쉬운·보통 일은 Codex, 어려운 일은 Claude, 휴가면 다른 쪽', () => {
     // v0.4.82: 쉬움은 Gemini 개발(무료)이 먼저, 보통은 Codex
-    expect(suggestedPreference(2)).toBe('gemini_dev');
+    expect(suggestedPreference(2)).toBe('codex_primary');
     expect(suggestedPreference(5)).toBe('codex_primary');
     expect(suggestedPreference(8)).toBe('claude_support');
     expect(suggestedPreference(2, { gemini: true })).toBe('codex_primary');

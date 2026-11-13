@@ -4,7 +4,7 @@ import type { AgentKind } from './workflow-types';
 export type AdapterState = 'verified' | 'not_verified' | 'not_connected' | 'manual_only';
 
 export interface AdapterInfo {
-  agent: AgentKind | 'gpt' | 'gemini_vision' | 'claude_dev' | 'gemini_dev';
+  agent: AgentKind | 'gpt' | 'gemini_vision' | 'claude_dev';
   label: string;
   role: string;
   state: AdapterState;
@@ -70,17 +70,6 @@ export const ADAPTERS: AdapterInfo[] = [
     reason: '무료 API 키와 프로젝트별 한도를 아직 연결·확인하지 않았다.',
     checkedAt: '2026-10-29',
   },
-  {
-    agent: 'gemini_dev',
-    label: 'Gemini 개발 (GitHub Actions)',
-    role: 'PM이 쉬운 일(난이도 1~3)로 매긴 작업 구현(무료 키, 작업 브랜치만 push)',
-    state: 'not_verified',
-    autoStart: true,
-    worksWithPcOff: true,
-    reason:
-      '실행 승인 뒤 서버가 GitHub Actions 워크플로(Gemini CLI)를 시작한다. 워크플로가 고치고 시험한 뒤 작업 브랜치만 push하고 결과를 보낸다. 손 실행 시험은 성공(2026-11-02), 앱에서 시작하는 길은 첫 실행 전이라 미검증.',
-    checkedAt: '2026-11-02',
-  },
 ];
 
 /**
@@ -115,7 +104,7 @@ export const ADAPTER_STATE_LABEL: Record<AdapterState, string> = {
 };
 
 /** 배정된 작업의 실행 경로. Claude 작업은 PM이 아니라 보조 개발 루틴이다. */
-export function adapterFor(agent: AgentKind, mode?: string): AdapterInfo {
-  const key = agent === 'claude' ? 'claude_dev' : agent === 'gemini' && mode === 'gemini_actions' ? 'gemini_dev' : agent;
+export function adapterFor(agent: AgentKind, _mode?: string): AdapterInfo {
+  const key = agent === 'claude' ? 'claude_dev' : agent;
   return ADAPTERS.find((a) => a.agent === key) ?? ADAPTERS.find((a) => a.agent === 'codex')!;
 }

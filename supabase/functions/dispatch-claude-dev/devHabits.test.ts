@@ -2,12 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { bugSteps, isBugWork, REPO_MAP_SCRIPT, repoMapStep } from '../../../src/domain/devHabits';
-import { buildGeminiTask } from '../dispatch-gemini-dev/payload';
 
 describe('개발 습관·저장소 지도(v0.4.96)', () => {
   it('서버 함수 3곳은 같은 파일을 쓴다', () => {
     const app = readFileSync('src/domain/devHabits.ts', 'utf8');
-    for (const f of ['dispatch-claude', 'dispatch-claude-dev', 'dispatch-gemini-dev', 'draft-plan']) expect(readFileSync(`supabase/functions/${f}/devHabits.ts`, 'utf8')).toBe(app);
+    for (const f of ['dispatch-claude', 'dispatch-claude-dev', 'draft-plan']) expect(readFileSync(`supabase/functions/${f}/devHabits.ts`, 'utf8')).toBe(app);
   });
   it('지도 스크립트는 scripts/repo-map.mjs와 같다', () => {
     expect(REPO_MAP_SCRIPT).toBe(readFileSync('scripts/repo-map.mjs', 'utf8').trim());
@@ -36,10 +35,5 @@ describe('버그 진단 순서(v0.5.22, mattpocock diagnosing-bugs)', () => {
     expect(isBugWork('저장하면 오류가 나요')).toBe(true);
     expect(isBugWork('저장하면 오류가 나요', false)).toBe(false);
     expect(isBugWork('색 바꾸기', true)).toBe(true);
-  });
-  it('Gemini 개발 지시서에도 버그일 때만', () => {
-    const base = { title: '저장 버튼', goal: '', finalPrompt: '', changeScope: '', preserve: [], acceptance: [], projectRules: [] };
-    expect(buildGeminiTask({ ...base, goal: '누르면 오류가 남' })).toContain('### 버그 진단 순서');
-    expect(buildGeminiTask({ ...base, goal: '색 바꾸기' })).not.toContain('버그 진단');
   });
 });

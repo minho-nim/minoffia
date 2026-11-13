@@ -67,7 +67,6 @@ export interface OfficeStore {
   /** Claude 보조 개발: 실행 승인한 Claude 작업을 서버가 두 번째 루틴으로 시작한다(세션 주소). 로컬 데모는 지원하지 않음. */
   startClaudeDev(assignmentId: string, acknowledgeRetry: boolean): Promise<{ sessionUrl: string | null }>;
   /** Gemini 개발: 서버가 GitHub Actions 워크플로를 시작(v0.4.82). runUrl은 워크플로 실행 목록 */
-  startGeminiDev(assignmentId: string, acknowledgeRetry: boolean): Promise<{ runUrl: string | null; key: string }>;
   /** Codex를 Linear로 맡기기(v0.5.2): 앱이 만든 Codex 지시서로 Linear 이슈를 만들고 Codex에게 맡긴다 */
   startCodexLinear(assignmentId: string, acknowledgeRetry: boolean, text: string): Promise<{ issueUrl: string; identifier: string }>;
   /** Codex 앱에 직접 붙여 넣을 때 지시서 끝에 붙일 결과 제출 절(v0.6.21). 작업을 '시작함'으로 기록한다 */
