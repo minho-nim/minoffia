@@ -99,3 +99,12 @@ describe('앞 대화를 이어서 개발 요청(v0.3.9)', () => {
     expect(t.length).toBeLessThan(2200);
   });
 });
+
+describe('웹 조사 요청은 사용량 안내로 가지 않는다(v0.7.2)', () => {
+  it("'한도 얼마'가 있어도 '찾아줘'·'요즘'이면 웹 조사 쪽", async () => {
+    const { answerStatus } = await import('./triage');
+    const snap = { tasks: [], usage: [], projects: [], workflow: {} } as never;
+    expect(answerStatus('요즘 Gemini 무료 한도 얼마야? 찾아줘', snap)).toBeNull();
+    expect(answerStatus('Claude 한도 몇 번 남았어?', snap)).toContain('오늘 실행 기록');
+  });
+});

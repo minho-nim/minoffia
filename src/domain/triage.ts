@@ -63,8 +63,13 @@ function agentInText(text: string): AgentId | null {
 }
 
 /** 업무 기록으로 답할 수 있는 질문이면 답, 아니면 null */
+/** 웹에서 찾아 달라는 말 */
+const ASKS_WEB = /찾아\s?(봐|줘|주세요)|검색해|조사해|알아\s?봐|출처|요즘|최신|최근\s?(소식|뉴스|가격|버전)/;
+
 export function answerStatus(text: string, snap: Snapshot, now: Date = new Date()): string | null {
   if (!STATUS_WORDS.test(text)) return null;
+  // 웹에서 찾아 달라는 말이 있으면 기록 답이 아니라 웹 조사로(v0.7.2: '요즘 Gemini 무료 한도 얼마야? 찾아줘'가 사용량 안내로 가던 것)
+  if (ASKS_WEB.test(text)) return null;
   const open = snap.tasks.filter((t) => t.status !== 'done');
 
   if (/(남은|남았|몇\s?번|사용량|한도)/.test(text)) {

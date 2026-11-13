@@ -57,6 +57,11 @@ export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date())
       return { state: 'unknown', label: '알 수 없음', detail: 'ChatGPT Plus 사용량은 앱에서 알 수 없다(수동 인계, 추가 비용 없음).' };
     case 'codex':
       return { state: 'unknown', label: '알 수 없음', detail: `Codex(ChatGPT Plus) 사용량은 앱에서 알 수 없다. 오늘 수동 시작 기록 ${runsToday(snap.usage, 'codex', now)}회.` };
+    case 'exa': {
+      const todays = (snap.aiCalls ?? []).filter((c) => c.purpose === 'research' && today(c.createdAt, now));
+      const ok = todays.filter((c) => c.ok).length;
+      return { state: 'available', label: `오늘 조사 ${ok}회`, detail: `오늘 웹 조사 ${ok}회 답함(Exa로 찾고 Gemini가 정리). Exa 무료 사용량은 Exa 대시보드에서 본다.` };
+    }
     case 'grok':
       return { state: 'unknown', label: '알 수 없음', detail: 'Grok은 연결되지 않아 사용량을 알 수 없다.' };
     case 'ci':

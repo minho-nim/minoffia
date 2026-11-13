@@ -43,10 +43,11 @@ const CLOUD: { nodes: N[]; links: [string, string, string][] } = {
     ['linear', 'Linear', 'ext', 'Codex에게 업무를 넘기는 통로.'],
     ['codexc', 'Codex 클라우드', 'agent', '주 개발 AI가 일하는 곳.'],
     ['routine', 'Claude 루틴', 'agent', '보조 개발 AI가 일하는 곳.'],
-    ['gem', 'Gemini API', 'ext', '채점·초안(무료 키).'],
+    ['gem', 'Gemini API', 'ext', '채점·초안·질문 답(무료 키).'],
+    ['exa', 'Exa 검색', 'ext', '웹 조사: 찾은 글을 Gemini가 정리(무료 사용량).'],
     ['notes', '노트 보관함', 'ext', '앱 지도·버전 노트(Obsidian, 저장소가 있을 때).'],
   ],
-  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
+  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['sb', 'exa', '웹 조사'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
 };
 const STYLE: NetStyle = {
   person: { color: '--accent', name: '사람·기기', size: 11 },
@@ -82,7 +83,7 @@ export function OfficeMap({ tab, state = {} }: { tab: 'role' | 'cloud'; state?: 
       const edges: RelEdge[] = ROLE.links.filter(([a, b]) => who.includes(a) && flow.includes(b)).map(([a, b]) => [b, a, 1]);
       return { rows: [flow.map(node), who.map(node)], edges, hint: '왼쪽(넓은 화면은 위) = 업무 순서(굵은 테두리 = 소유자 승인), 오른쪽 = 누가 하는지. 상자를 누르면 이어진 선만 진하게.' };
     }
-    const rows = [['app'], ['cf', 'sb', 'gh'], ['linear', 'codexc', 'routine', 'gem', 'notes']];
+    const rows = [['app'], ['cf', 'sb', 'gh'], ['linear', 'codexc', 'routine', 'gem', 'exa', 'notes']];
     return { rows: rows.map((r) => r.map(node)), edges: CLOUD.links.map(([a, b]): RelEdge => [a, b, 1]), hint: '위에서 아래로: 휴대폰 → 화면·서버·저장소 → 일하는 곳과 외부 서비스. 상자를 누르면 무엇이 오가는지 옆에 나와요.' };
   }, [tab, state.lastDeploy, state.onLeave?.join()]);
   const [width, setWidth] = useState(360);
