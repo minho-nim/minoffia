@@ -16,10 +16,12 @@ const ROLE: { nodes: N[]; links: [string, string][] } = {
   nodes: [
     ['owner', '나(소유자)', 'person', '요청하고, 승인 3개(기획·올리기·배포)만 누른다.'],
     ['pm', 'Claude PM', 'agent', '요청을 기획서와 작업으로 나누고 담당을 정한다.'],
-    ['codex', 'Codex', 'agent', '주 개발. Linear로 받아 저장소에서 개발하고 결과를 보낸다.'],
-    ['claude', 'Claude', 'agent', '보조 개발. 루틴으로 받아 개발한다.'],
-    ['gemini', 'Gemini', 'agent', '결과 채점(기본)과 분배 보조. 무료 키.'],
-    ['server', '서버(자동)', 'server', '실행 승인 자동 기록, PR 열기, 배포, 알림.'],
+    ['codex', 'Codex', 'agent', '주 개발. Linear로 받아 클라우드에서 개발·시험하고 결과를 보낸다.'],
+    ['claude', 'Claude', 'agent', '보조 개발. Codex가 못 하거나 휴가면 맡고, 올리기 승인 뒤 PR을 연다.'],
+    ['gemini', 'Gemini A·B', 'agent', '결과 채점(같은 항목, 다른 관점)·질문 답·기획서 초안. 무료 키 2개.'],
+    ['exa', 'Exa', 'agent', '대화의 웹 조사. 찾은 글을 Gemini가 정리한다.'],
+    ['mino', '미노(CI)', 'server', 'GitHub Actions: PR 검사·배포, 바뀐 곳 구조도·앱 지도.'],
+    ['server', '서버(자동)', 'server', '실행 승인 자동 기록, 결과 받기, 알림.'],
     ['skills', '저장소 스킬', 'skill', '개발 AI가 필요할 때 꺼내 쓰는 작업 설명서(프로젝트마다).'],
     ['s-req', '요청', 'stage', '대화창에 쓴 요청.'],
     ['s-plan', '기획', 'stage', '기획서와 작업 나누기.'],
@@ -31,7 +33,7 @@ const ROLE: { nodes: N[]; links: [string, string][] } = {
     ['g-c', '배포 승인', 'gate', '소유자가 누름.'],
     ['s-dep', '배포', 'stage', '서버가 운영에 올림.'],
   ],
-  links: [['owner', 's-req'], ['owner', 'g-a'], ['owner', 'g-b'], ['owner', 'g-c'], ['pm', 's-plan'], ['codex', 's-dev'], ['claude', 's-dev'], ['gemini', 's-rev'], ['server', 'g-a'], ['server', 's-pr'], ['server', 's-dep'], ['codex', 'skills'], ['claude', 'skills'],
+  links: [['owner', 's-req'], ['owner', 'g-a'], ['owner', 'g-b'], ['owner', 'g-c'], ['pm', 's-plan'], ['codex', 's-dev'], ['claude', 's-dev'], ['gemini', 's-rev'], ['exa', 's-req'], ['server', 'g-a'], ['server', 's-rev'], ['mino', 's-pr'], ['mino', 's-dep'], ['codex', 'skills'], ['claude', 'skills'],
     ['s-req', 's-plan'], ['s-plan', 'g-a'], ['g-a', 's-dev'], ['s-dev', 's-rev'], ['s-rev', 'g-b'], ['g-b', 's-pr'], ['s-pr', 'g-c'], ['g-c', 's-dep']],
 };
 const CLOUD: { nodes: N[]; links: [string, string, string][] } = {
@@ -79,7 +81,7 @@ export function OfficeMap({ tab, state = {} }: { tab: 'role' | 'cloud'; state?: 
   const line = useMemo(() => {
     if (tab === 'role') {
       const flow = ['s-req', 's-plan', 'g-a', 's-dev', 's-rev', 'g-b', 's-pr', 'g-c', 's-dep'];
-      const who = ['owner', 'pm', 'codex', 'claude', 'gemini', 'server'];
+      const who = ['owner', 'pm', 'codex', 'claude', 'gemini', 'exa', 'mino', 'server'];
       const edges: RelEdge[] = ROLE.links.filter(([a, b]) => who.includes(a) && flow.includes(b)).map(([a, b]) => [b, a, 1]);
       return { rows: [flow.map(node), who.map(node)], edges, hint: '왼쪽(넓은 화면은 위) = 업무 순서(굵은 테두리 = 소유자 승인), 오른쪽 = 누가 하는지. 상자를 누르면 이어진 선만 진하게.' };
     }
