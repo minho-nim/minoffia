@@ -86,6 +86,8 @@ export interface Task {
   prUrl?: string | null;
   /** PM에 보낸 기획서 버전 */
   dispatchSpecRevision?: number | null;
+  /** 소유자가 대화에서 고른 개발 스킬(v0.7.0). 지시서에 한 줄로 들어간다 */
+  skills?: string[];
   createdAt: string;
   updatedAt: string;
 }

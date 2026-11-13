@@ -54,6 +54,7 @@ const toTask = (r: Row): Task => ({
   userOriginalText: (r.user_original_text as string | null) ?? undefined,
   prUrl: (r.pr_url as string | null) ?? null,
   dispatchSpecRevision: (r.dispatch_spec_revision as number | null) ?? null,
+  skills: (r.skills as string[] | null) ?? [],
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
 });
@@ -417,6 +418,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           stage: t.stage ?? 'received',
           user_original_text: t.userOriginalText ?? null,
           pr_url: t.prUrl ?? null,
+          skills: t.skills ?? [],
         }),
       );
     },
