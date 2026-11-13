@@ -202,7 +202,7 @@ export const OFFICE_CLOUD = {
   links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['sb', 'exa', '웹 조사'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
 };
 export const OFFICE_FLOW = [['s-req', '요청'], ['s-plan', '기획'], ['g-a', '기획 승인'], ['s-dev', '개발'], ['s-rev', '채점'], ['g-b', '올리기 승인'], ['s-pr', 'PR'], ['g-c', '배포 승인'], ['s-dep', '배포']];
-export const OFFICE_WHO = [['owner', '나(소유자)', ['s-req', 'g-a', 'g-b', 'g-c']], ['pm', 'Claude PM', ['s-plan']], ['codex', 'Codex', ['s-dev']], ['claude', 'Claude', ['s-dev']], ['gemini', 'Gemini', ['s-rev']], ['server', '서버(자동)', ['g-a', 's-pr', 's-dep']]];
+export const OFFICE_WHO = [['owner', '나(소유자)', ['s-req', 'g-a', 'g-b', 'g-c']], ['pm', 'Claude PM', ['s-plan']], ['codex', 'Codex', ['s-dev']], ['claude', 'Claude', ['s-dev']], ['gemini', 'Gemini A·B', ['s-rev']], ['exa', 'Exa', ['s-req']], ['mino', '미노(CI)', ['s-pr', 's-dep']], ['server', '서버(자동)', ['g-a', 's-rev']]];
 export function officeCanvas(projects) {
   const nodes = [];
   const edges = [];
@@ -217,7 +217,7 @@ export function officeCanvas(projects) {
   OFFICE_FLOW.forEach(([id, label], i) => nodes.push({ id: `f-${id}`, type: 'text', text: `**${label}**`, x: -620 + i * step, y: fy, width: 140, height: 60, color: id.startsWith('g-') ? '2' : undefined }));
   for (let i = 1; i < OFFICE_FLOW.length; i++) edges.push({ id: `fe${i}`, fromNode: `f-${OFFICE_FLOW[i - 1][0]}`, toNode: `f-${OFFICE_FLOW[i][0]}`, fromSide: 'right', toSide: 'left' });
   OFFICE_WHO.forEach(([id, label, does], i) => {
-    nodes.push({ id: `w-${id}`, type: 'text', text: `**${label}**`, x: -620 + i * 230, y: wy, width: 170, height: 60, color: id === 'owner' ? '6' : '5' });
+    nodes.push({ id: `w-${id}`, type: 'text', text: `**${label}**`, x: -620 + i * 195, y: wy, width: 150, height: 60, color: id === 'owner' ? '6' : '5' });
     does.forEach((d, j) => edges.push({ id: `we-${id}-${j}`, fromNode: `w-${id}`, toNode: `f-${d}`, fromSide: 'top', toSide: 'bottom' }));
   });
   // 3) 프로젝트(노트로 바로 열림)

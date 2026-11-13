@@ -22,6 +22,7 @@ import { freshReport, savedReport } from './data/mapCache';
 import { installedSkillsOf, isSlimProject, setSkillTitles, setSlimProjects, skillTitleOf } from './data/slimRepos';
 import { skillPickRule } from './domain/skillPick';
 import { endDrawing, startDrawing } from './office/drawing';
+import { advanceDemo, demoTask, newDemoTask } from './demo/demoServer';
 
 /** 점검(앱 지도 그리기)을 시작한 시각, 프로젝트별(v0.7.4 미노 말풍선) */
 const drawStarted = new Map<string, number>();
@@ -152,8 +153,9 @@ const treeCache = new Map<string, { at: number; p: Promise<string[]> }>();
 export function App() {
   const [booting, setBooting] = useState(true);
   const [client, setClient] = useState<SupabaseClient | null>(null);
-  // 체험 모드(v0.7.6, 소유자 "미니어리처럼 체험 모드"): 로그인 없이 예시 데이터로 이 기기에서만. 주소 끝 #demo로 바로 들어온다
-  const [trying, setTrying] = useState(() => typeof location !== 'undefined' && location.hash === '#demo');
+  // 데모판(v0.7.7, 소유자 "/portfolio는 포트폴리오, /demo는 데모판, 기본 주소는 그대로"): /demo로 들어오면 로그인 없이 예시 데이터로 이 기기에서만.
+  // 소유자 클라우드(Supabase)·AI는 부르지 않는다. 기본 주소(/)는 늘 로그인
+  const [trying] = useState(() => typeof location !== 'undefined' && (location.pathname.replace(/\/+$/, '') === '/demo' || location.hash === '#demo'));
   const [session, setSession] = useState<Session | null>(null);
   const [store, setStore] = useState<OfficeStore | null>(null);
   const [rawSnap, setSnap] = useState<Snapshot>(EMPTY);
@@ -203,7 +205,6 @@ export function App() {
       const sb = await getSupabase();
       if (cancelled) return;
       if (!sb || trying) {
-        if (sb) setClient(sb);
         const local = createLocalStore();
         setStore(local);
         setSnap(await local.load());
@@ -233,26 +234,17 @@ export function App() {
     };
   }, [client, session]);
 
-  /** 체험 시작: 예시 데이터 저장소로(실제 서버·업무에는 닿지 않는다) */
-  const startTry = () => {
-    const local = createLocalStore();
-    setTrying(true);
-    setStore(local);
-    void local.load().then(setSnap);
-    try {
-      history.replaceState(null, '', '#demo');
-    } catch {
-      // 주소 바꾸기는 덤
-    }
-  };
-  /** 체험 끝내기: 주소의 #demo를 지우고 처음(로그인 화면)으로 */
-  const endTry = () => {
-    try {
-      history.replaceState(null, '', location.pathname + location.search);
-    } catch {
-      // 무시
-    }
-    location.reload();
+  /** 체험 업무(v0.7.7): 정해진 업무 하나를 만들고, AI·서버 몫은 이 기기 안의 체험 서버가 채운다(승인 3번만 직접) */
+  const startDemoTask = async () => {
+    if (!store || store.mode !== 'local') return;
+    const cur = await store.load();
+    if (demoTask(cur)) return say('ok', '체험 업무가 이미 진행 중이에요. 업무 탭에서 이어서 해 보세요.');
+    const project = cur.projects[0];
+    if (!project) return say('error', '프로젝트가 없어 체험 업무를 만들 수 없어요. 예시 데이터로 초기화해 주세요.');
+    await store.saveTask(newDemoTask(project.id));
+    setSnap(await store.load());
+    setTab('tasks');
+    say('ok', `체험 업무를 '${project.name}'에 만들었어요. 승인 3번(기획 → 올리기 → 배포)만 누르면 AI 팀이 나머지를 해요. 실제 서버·AI는 쓰지 않아요.`);
   };
 
   const reload = useCallback(async () => {
@@ -262,6 +254,30 @@ export function App() {
     } catch (e) {
       say('error', `불러오기 실패: ${(e as Error).message}`);
     }
+  }, [store, say]);
+
+  // 체험 서버(v0.7.7): 로컬 데모일 때만 1.5초마다 체험 업무를 한 걸음씩(AI·서버 몫). 실제 서버·AI는 부르지 않는다
+  const demoSnap = useRef<Snapshot | null>(null);
+  demoSnap.current = snap;
+  useEffect(() => {
+    if (!store || store.mode !== 'local') return;
+    let busy = false;
+    const t = window.setInterval(() => {
+      const cur = demoSnap.current;
+      if (busy || !cur || !demoTask(cur)) return;
+      busy = true;
+      void advanceDemo(store, cur)
+        .then(async (msg) => {
+          if (!msg) return;
+          setSnap(await store.load());
+          say('ok', msg);
+        })
+        .catch((e) => say('error', `체험 진행 실패: ${(e as Error).message}`))
+        .finally(() => {
+          busy = false;
+        });
+    }, 1500);
+    return () => window.clearInterval(t);
   }, [store, say]);
 
   // 입력창 대화가 다른 기기에서 바뀌면 올려서 Inbox가 바로 다시 받게 한다.
@@ -595,7 +611,7 @@ export function App() {
   const ciFixTried = useRef(new Set<string>());
   const handoffTried = useRef(new Set<string>());
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
-  if (client && !session && !trying) return <Login client={client} onTry={startTry} />;
+  if (client && !session && !trying) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
 
   // 오늘 사용량(큰 머리와 얇은 머리의 '사용량 보기'가 같이 쓴다)
@@ -1035,13 +1051,22 @@ export function App() {
   };
 
   /** 입력창 알림·내 차례 목록에서 바로 하는 기획·올리기 승인. 업무 카드의 버튼과 같은 규칙(canApprove)을 지난다. */
-  const quickApprove = async (task: Task, gate: 'A' | 'B'): Promise<boolean> => {
+  const quickApprove = async (task: Task, gate: 'A' | 'B' | 'C'): Promise<boolean> => {
     const view = deriveWorkflow(task, snap.workflow);
     if (!canApprove(view, gate).ok) return false;
+    // 배포 승인 바로 하기는 체험(로컬 데모)에서만(v0.7.7). 실제 앱은 업무 카드에서
+    if (gate === 'C') {
+      if (store.mode !== 'local' || !view.result) return false;
+      const ok = await workflowActions.decide(task, 'C', view.result.revision, 'approved', '', { pr_url: task.prUrl, ci: 'demo' });
+      if (ok) await store.deployRelease(task.id).catch(() => null);
+      setSnap(await store.load());
+      return ok;
+    }
     if (gate === 'A') return view.spec ? workflowActions.decide(task, 'A', view.spec.revision, 'approved') : false;
     return view.result ? workflowActions.decide(task, 'B', view.result.revision, 'approved', '', { result_sha256: view.result.sha256 }) : false;
   };
-  const turns = myTurns(snap.tasks, snap.workflow);
+  // 체험(로컬 데모)에서는 '배포' 차례에 [배포 승인] 바로 버튼(v0.7.7)
+  const turns = myTurns(snap.tasks, snap.workflow).map((it) => (store.mode === 'local' && it.word === '배포' && !it.alert && !it.quick ? { ...it, quick: 'C' as const } : it));
 
   /** 업무 카드로 이동(입력창 알림·사무실 말풍선). 지금 필터에 없으면 '전체'로 바꾼다. */
   const showTask = (id: string, step?: TurnStep) => {
@@ -1871,12 +1896,7 @@ export function App() {
           </span>
           {store.mode === 'local' ? (
             <span className="mode mode-local" title="데이터는 이 브라우저의 localStorage에만 저장됩니다">
-              {trying ? '체험 모드 · 예시 데이터' : '로컬 데모 · 이 기기에만 저장'}
-              {trying && client && (
-                <button type="button" className="link-btn" onClick={endTry}>
-                  체험 끝내기
-                </button>
-              )}
+              {trying ? '데모판 · 예시 데이터' : '로컬 데모 · 이 기기에만 저장'}
             </span>
           ) : (
             <span className="mode mode-cloud">
@@ -1892,6 +1912,22 @@ export function App() {
         </div>
         {usageList}
       </header>
+      {/* 체험 띠(v0.7.7): 휴대폰에서도 보이게 머리 아래에. 체험 업무 시작·끝내기 */}
+      {store.mode === 'local' && (
+        <div className="demo-band" role="region" aria-label="체험 모드">
+          <span>{trying ? '데모판 · 예시 데이터로 이 기기에서만 돌아가요(실제 서버·AI 안 씀)' : '로컬 데모 · 이 기기에만 저장'}</span>
+          <span className="demo-band-actions">
+            <button type="button" className="btn btn-small btn-primary" onClick={() => void startDemoTask()}>
+              체험 업무 시작
+            </button>
+            {trying && (
+              <a className="btn btn-small btn-ghost" href="/portfolio">
+                포트폴리오로
+              </a>
+            )}
+          </span>
+        </div>
+      )}
 
       <div className={`topbar-mini${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
         <button type="button" tabIndex={barOn ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">

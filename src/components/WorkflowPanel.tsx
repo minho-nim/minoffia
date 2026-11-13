@@ -417,7 +417,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   const now = nowInfo(view, {
     done: task.status === 'done',
     review: view.result ? reviews.find((r) => r.resultRevision === view.result!.revision) ?? null : null,
-    ciPassed: actions.checkPr ? prCheckPasses(prCheck ?? null) && !!task.prUrl : false,
+    ciPassed: actions.checkPr || prCheck ? prCheckPasses(prCheck ?? null) && !!task.prUrl : false,
     prUrl: task.prUrl,
     deploy: deployment ? { ok: deployment.ok, error: deployment.error } : null,
   });
@@ -1677,7 +1677,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               <button
                 type="button"
                 className="btn btn-small btn-primary"
-                disabled={busy || !cCheck.ok || !task.prUrl || (actions.checkPr ? !prCheckPasses(prCheck ?? null) : !ciChecked)}
+                disabled={busy || !cCheck.ok || !task.prUrl || (actions.checkPr || prCheck ? !prCheckPasses(prCheck ?? null) : !ciChecked)}
                 onClick={() =>
                   void run(async () => {
                     const ok = await actions.decide(task, 'C', view.result!.revision, 'approved', '', { pr_url: task.prUrl, ci: prCheck ? { state: prCheck.ciState, merged: prCheck.merged, sha: prCheck.headSha } : 'manual' });

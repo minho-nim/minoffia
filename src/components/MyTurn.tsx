@@ -6,10 +6,10 @@ interface Props {
   /** 업무 카드로 이동(step이 있으면 그 칸까지 내려간다, v0.4.86) */
   onOpen: (taskId: string, step?: TurnStep) => void;
   /** 목록에서 바로 승인(업무 카드와 같은 규칙). 없으면 버튼을 숨긴다 */
-  onApprove?: (taskId: string, gate: 'A' | 'B') => Promise<boolean>;
+  onApprove?: (taskId: string, gate: 'A' | 'B' | 'C') => Promise<boolean>;
 }
 
-const QUICK_LABEL = { A: '기획 승인', B: '결과 승인' } as const;
+const QUICK_LABEL = { A: '기획 승인', B: '결과 승인', C: '배포 승인' } as const;
 
 /** 업무 탭 맨 위 "내 차례": 내가 손대야 하는 일만 보인다(? = 승인·답·시작, ! = 막힘). */
 export function MyTurnList({ items, onOpen, onApprove }: Props) {
