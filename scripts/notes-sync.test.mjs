@@ -45,3 +45,27 @@ describe('옵시디언 노트 쌓기(v0.5.62)', () => {
     expect(appMapNote('P', { checkedAt: '' })).toContain('아직 쉬운 지도가 없어요');
   });
 });
+
+describe('버전 노트(v0.6.89)', () => {
+  it('버전 이름: package.json 버전, 없으면 날짜', async () => {
+    const { versionName } = await import('./notes-sync.mjs');
+    expect(versionName({ version: '0.6.89', date: '2026-11-13' })).toBe('v0.6.89');
+    expect(versionName({ version: '', date: '2026-11-13' })).toBe('2026.11.13');
+  });
+  it('같은 업무는 바꾸고, 링크는 버전→스킬·AI만, 묶음은 숫자 목록', async () => {
+    const { addEntry, versionNote, readEntries, hubNotes } = await import('./notes-sync.mjs');
+    let list = addEntry([], { task: '버튼', date: '2026-11-13', score: '90', pr: 'https://github.com/a/b/pull/3', agent: 'Codex', skills: ['repo-map', 'Bad Name', 'ui-check'] });
+    list = addEntry(list, { task: '버튼', date: '2026-11-13', score: '95', agent: 'Claude', skills: ['ui-check'] });
+    expect(list).toHaveLength(1);
+    const note = versionNote('미노피아', 'v0.6.89', list);
+    expect(note).toContain('[[Claude]]');
+    expect(note).toContain('[[ui-check]]');
+    expect(note).not.toContain('Bad Name');
+    expect(readEntries(note)).toEqual(list);
+    const hubs = hubNotes('미노피아', { 'v0.6.89': list, 'v0.6.88': [], 'v0.5.1': [] });
+    expect(hubs['미노피아 버전.md'].indexOf('## v0.6')).toBeLessThan(hubs['미노피아 버전.md'].indexOf('## v0.5'));
+    expect(hubs['미노피아 쓴 스킬.md']).toContain('| ui-check | 1 |');
+    expect(hubs['미노피아 쓴 스킬.md']).not.toContain('[[ui-check]]');
+    expect(hubs['미노피아 개발.md']).toContain('| Claude | 1 |');
+  });
+});

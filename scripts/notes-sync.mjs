@@ -5,6 +5,7 @@
 //   node scripts/notes-sync.mjs archify <notes> <프로젝트> <업무> <버전> <그림.png> [그림.html] [요약.txt]
 //   node scripts/notes-sync.mjs graph   <notes> <프로젝트> <graphify obsidian 폴더>
 //   node scripts/notes-sync.mjs remove  <notes> <프로젝트> [업무]
+//   node scripts/notes-sync.mjs version <notes> <프로젝트> <entry.json>   (v0.6.89 버전 노트)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,7 +96,7 @@ export const OLD_AUTO = ['점검.md', '업무', '코드 그래프', '앱 지도.
 
 function scanProjects(notes) {
   return fs.readdirSync(notes, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== MY_NOTES)
+    .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== MY_NOTES && !SHARED.includes(d.name))
     .map((d) => {
       const dir = path.join(notes, d.name);
       for (const old of OLD_AUTO) fs.rmSync(path.join(dir, old), { recursive: true, force: true });
@@ -118,6 +119,98 @@ function finish(notes) {
     ] }, null, 1));
   }
   fs.writeFileSync(path.join(notes, '홈.md'), homeNote(scanProjects(notes)));
+}
+
+// ── 버전 노트(v0.6.89, 소유자 "버전마다 쓴 스킬·만든 AI로 이어지게, 너무 복잡하지 않게") ──
+// 선은 버전 → 스킬, 버전 → AI, 버전 → '<프로젝트> 버전' 묶음만. '쓴 스킬'·'개발' 묶음은 숫자 목록(링크 없음)이라 선을 늘리지 않는다.
+// 스킬·AI 노트는 모든 프로젝트가 같이 쓰는 공용 폴더 하나씩.
+export const SHARED = ['스킬', 'AI'];
+const ENTRY_MARK = /<!-- minoffia:entries (.*?) -->/s;
+const SKILL_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const AGENTS = ['Codex', 'Claude', 'Gemini', '직접'];
+
+/** 버전 이름: package.json 버전이 있으면 v1.2.3, 없으면 날짜(2026.11.13) */
+export function versionName(entry) {
+  if (/^\d+\.\d+\.\d+[\w.-]*$/.test(entry.version ?? '')) return `v${entry.version}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(entry.date ?? '') ? entry.date.replaceAll('-', '.') : '날짜 없음';
+}
+/** 노트에 숨겨 둔 업무 목록 읽기 */
+export function readEntries(text) {
+  try {
+    const m = String(text ?? '').match(ENTRY_MARK);
+    const list = m ? JSON.parse(m[1]) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+/** 같은 업무(제목)는 새 것으로 바꾸고, 아니면 더한다 */
+export function addEntry(list, entry) {
+  const e = {
+    task: safeName(entry.task || '업무'),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(entry.date ?? '') ? entry.date : '',
+    score: /^\d{1,3}$/.test(String(entry.score ?? '')) ? Number(entry.score) : null,
+    pr: /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(entry.pr ?? '') ? entry.pr : '',
+    agent: AGENTS.includes(entry.agent) ? entry.agent : '직접',
+    skills: [...new Set((entry.skills ?? []).filter((n) => SKILL_RE.test(n)))].slice(0, 12),
+  };
+  return [...list.filter((x) => x.task !== e.task), e];
+}
+export function versionNote(project, name, list) {
+  const body = list.flatMap((e) => [
+    `## ${e.task}`,
+    `- ${[e.date, e.score != null ? `점수 ${e.score}` : '', e.pr ? `[PR #${e.pr.split('/').pop()}](${e.pr})` : ''].filter(Boolean).join(' · ') || '기록 없음'}`,
+    `- 만든 AI: [[${e.agent}]]`,
+    `- 쓴 스킬: ${e.skills.length ? e.skills.map((n) => `[[${n}]]`).join(' ') : '없음'}`,
+    '',
+  ]);
+  return [
+    '---', 'tags: [minoffia/버전]', `프로젝트: "[[${project}]]"`, `버전: ${name}`, '---',
+    `# ${project} ${name}`, '', ...body,
+    `← [[${project} 버전]]`, '',
+    `<!-- minoffia:entries ${JSON.stringify(list)} -->`, '',
+  ].join('\n');
+}
+/** 큰 단위(v0.6, 2026.11)로 묶어 최신부터 */
+const group = (n) => n.split('.').slice(0, 2).join('.');
+const cmp = (a, b) => b.localeCompare(a, undefined, { numeric: true });
+export function hubNotes(project, versions) {
+  const names = Object.keys(versions).sort(cmp);
+  const groups = [...new Set(names.map(group))];
+  const all = Object.values(versions).flat();
+  const count = (key) => {
+    const m = new Map();
+    for (const e of all) for (const k of key(e)) m.set(k, (m.get(k) ?? 0) + 1);
+    return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  };
+  const table = (rows, head) => (rows.length ? [`| ${head} | 업무 수 |`, '|---|---|', ...rows.map(([k, n]) => `| ${k} | ${n} |`)] : ['아직 없어요.']);
+  return {
+    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 버전 ${names.length}개`, `- [[${project} 쓴 스킬]]`, `- [[${project} 개발]]`, `- [[${project}/앱 지도|앱 지도]]`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
+    [`${project} 버전.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 버전`, '', '> [!info] 배포할 때마다 자동으로 더해져요. 제목(▸)을 눌러 지난 묶음을 접을 수 있어요.', '', ...groups.flatMap((g) => [`## ${g}`, ...names.filter((n) => group(n) === g).map((n) => `- [[${n}]] · 업무 ${versions[n].length}개`), '']), `← [[${project}]]`, ''].join('\n'),
+    [`${project} 쓴 스킬.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 쓴 스킬`, '', '> [!info] 그래프가 복잡하지 않게 링크 없이 숫자만 적어요. 스킬 노트의 백링크에서 쓴 버전을 볼 수 있어요.', '', ...table(count((e) => e.skills), '스킬'), '', `← [[${project}]]`, ''].join('\n'),
+    [`${project} 개발.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 개발`, '', ...table(count((e) => [e.agent]), '만든 AI'), '', `← [[${project}]]`, ''].join('\n'),
+  };
+}
+export const skillStub = (n) => `---\ntags: [minoffia/스킬]\n---\n# ${n}\n\n스킬(공용 노트). 이 스킬을 쓴 버전은 아래 백링크에 모여요.\n`;
+export const aiStub = (n) => `---\ntags: [minoffia/AI]\n---\n# ${n}\n\n개발 AI(공용 노트). 이 AI가 만든 버전은 아래 백링크에 모여요.\n`;
+
+function writeVersion(notes, project, entry) {
+  const dir = path.join(notes, project);
+  const vdir = path.join(dir, '버전');
+  fs.mkdirSync(vdir, { recursive: true });
+  const name = versionName(entry);
+  const file = path.join(vdir, `${name}.md`);
+  const list = addEntry(readEntries(read(file)), entry);
+  fs.writeFileSync(file, versionNote(project, name, list));
+  const versions = Object.fromEntries(fs.readdirSync(vdir).filter((f) => f.endsWith('.md')).map((f) => [f.slice(0, -3), readEntries(read(path.join(vdir, f)))]));
+  for (const [f, text] of Object.entries(hubNotes(project, versions))) fs.writeFileSync(path.join(dir, f), text);
+  const last = list[list.length - 1];
+  for (const n of last.skills) {
+    const f = path.join(notes, '스킬', `${n}.md`);
+    if (!fs.existsSync(f)) (fs.mkdirSync(path.dirname(f), { recursive: true }), fs.writeFileSync(f, skillStub(n)));
+  }
+  const a = path.join(notes, 'AI', `${last.agent}.md`);
+  if (!fs.existsSync(a)) (fs.mkdirSync(path.dirname(a), { recursive: true }), fs.writeFileSync(a, aiStub(last.agent)));
 }
 
 const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '');
@@ -158,6 +251,9 @@ function main([cmd, notes, projectRaw, ...rest]) {
       else if (f.endsWith('.canvas')) fs.writeFileSync(path.join(out, f), scopeCanvas(fs.readFileSync(src, 'utf8'), prefix));
       else fs.copyFileSync(src, path.join(out, f));
     }
+  } else if (cmd === 'version') {
+    const [entryFile] = rest;
+    writeVersion(notes, project, JSON.parse(fs.readFileSync(entryFile, 'utf8')));
   } else if (cmd === 'remove') {
     const [taskRaw] = rest;
     if (taskRaw) {
