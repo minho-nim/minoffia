@@ -44,9 +44,9 @@ const CLOUD: { nodes: N[]; links: [string, string, string][] } = {
     ['codexc', 'Codex 클라우드', 'agent', '주 개발 AI가 일하는 곳.'],
     ['routine', 'Claude 루틴', 'agent', '보조 개발 AI가 일하는 곳.'],
     ['gem', 'Gemini API', 'ext', '채점·초안(무료 키).'],
-    ['notes', '노트 보관함', 'ext', '점검 노트(Obsidian, 저장소가 있을 때).'],
+    ['notes', '노트 보관함', 'ext', '앱 지도·버전 노트(Obsidian, 저장소가 있을 때).'],
   ],
-  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['gh', 'cf', '배포'], ['gh', 'notes', '점검 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
+  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
 };
 const STYLE: NetStyle = {
   person: { color: '--accent', name: '사람·기기', size: 11 },
