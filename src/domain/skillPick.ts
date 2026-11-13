@@ -1,6 +1,6 @@
 // 개발 스킬 고르기(v0.7.0, 소유자 "개발할 때 스킬을 쓸까요? 물어보고, 대화에서 고르면 그걸 참고해서 시작"):
 // 업무 글에서 규칙으로 알맞은 스킬을 추천하고(AI 호출 없음), 소유자가 고른 스킬은 지시서 규칙에 한 줄로 넣는다.
-// skillPickRule은 서버 함수(codex-linear·dispatch-claude-dev·dispatch-gemini-dev)의 skillPick.ts에 그대로 복사돼 있다(같은지는 시험이 확인).
+// skillPickRule은 서버 함수(codex-linear·dispatch-claude-dev)의 skillPick.ts에 그대로 복사돼 있다(같은지는 시험이 확인).
 
 /** 글에 이런 말이 있으면 이 스킬을 추천(앞쪽이 먼저) */
 export const SKILL_HINTS: [RegExp, string[]][] = [

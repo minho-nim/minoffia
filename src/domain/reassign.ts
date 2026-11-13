@@ -16,9 +16,8 @@ export function compareTarget(assignee: string): 'claude_support' | 'codex_prima
   return assignee === 'claude' ? 'codex_primary' : 'claude_support';
 }
 
-export const PREF_LABEL: Record<'claude_support' | 'gemini_dev' | 'codex_primary', string> = {
+export const PREF_LABEL: Record<'claude_support' | 'codex_primary', string> = {
   claude_support: 'Claude',
-  gemini_dev: 'Gemini 개발',
   codex_primary: 'Codex',
 };
 
@@ -29,9 +28,10 @@ export function quotaHit(a: Pick<AgentAssignment, 'dispatchStatus' | 'actualProv
 
 /** 바꿀 수 있는 담당(지금 담당 제외, AI Office 저장소에는 Gemini 개발 없음) */
 export function reassignTargets(current: AgentAssignment['assignee'], officeRepo: boolean): (keyof typeof PREF_LABEL)[] {
-  const all: (keyof typeof PREF_LABEL)[] = ['claude_support', 'gemini_dev', 'codex_primary'];
-  const now = current === 'claude' ? 'claude_support' : current === 'codex' ? 'codex_primary' : current === 'gemini' ? 'gemini_dev' : null;
-  return all.filter((p) => p !== now && !(officeRepo && p === 'gemini_dev'));
+  const all: (keyof typeof PREF_LABEL)[] = ['claude_support', 'codex_primary'];
+  const now = current === 'claude' ? 'claude_support' : current === 'codex' ? 'codex_primary' : null;
+  void officeRepo;
+  return all.filter((p) => p !== now);
 }
 
 /** 한 작업의 담당만 바꾼 새 계획(JSON 글). 이어받는 AI가 알 수 있게 이전 담당·이유를 목표 끝에 적는다 */
@@ -67,13 +67,12 @@ export function ciFixWhy(check: { headSha: string; checks: { name: string; concl
 export const ciFixDone = (modeReason: string | undefined, headSha: string) => (modeReason ?? '').includes(`CI 고치기 ${headSha.slice(0, 7)}`);
 
 export function prefOf(assignee: AgentAssignment['assignee']): AssigneePreference {
-  return assignee === 'claude' ? 'claude_support' : assignee === 'codex' ? 'codex_primary' : 'gemini_dev';
+  return assignee === 'claude' ? 'claude_support' : 'codex_primary';
 }
 
-/** 한도에 걸린 작업을 넘길 다음 AI(v0.5.81): Gemini 개발 → Claude → Codex 순, 지금 담당·휴가·AI Office의 Gemini는 뺀다 */
-export function nextAgent(current: AgentAssignment['assignee'], away: { claude?: boolean; codex?: boolean; gemini?: boolean }, officeRepo: boolean): AssigneePreference | null {
+/** 한도에 걸린 작업을 넘길 다음 AI(v0.5.81): Claude → Codex 순, 지금 담당·휴가는 뺀다(Gemini 개발은 2026-11-13 뺐다) */
+export function nextAgent(current: AgentAssignment['assignee'], away: { claude?: boolean; codex?: boolean; gemini?: boolean }, _officeRepo: boolean): AssigneePreference | null {
   const order: [AssigneePreference, boolean][] = [
-    ['gemini_dev', !away.gemini && !officeRepo && current !== 'gemini'],
     ['claude_support', !away.claude && current !== 'claude'],
     ['codex_primary', !away.codex && current !== 'codex'],
   ];

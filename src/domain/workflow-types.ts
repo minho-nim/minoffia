@@ -47,8 +47,8 @@ export interface Approval {
   createdAt: string;
 }
 
-/** gemini_dev = Gemini 개발(GitHub Actions의 Gemini CLI, 쉬운 일, v0.4.82). gemini_optional은 견본(AI Studio) */
-export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional' | 'gemini_dev';
+/** gemini_optional은 견본(AI Studio). Gemini 개발(gemini_dev)은 2026-11-13 뺐다(소유자, 한 번도 안 쓰임) */
+export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional';
 export type ExecutionMode = 'codex_cloud' | 'manual_handoff';
 
 export interface WorkItem {

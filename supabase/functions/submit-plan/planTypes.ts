@@ -2,7 +2,7 @@
 // OFFICE_REPOS는 src/domain/smallTask.ts와 같다.
 export const OFFICE_REPOS = ['minho-nim/minlab-ai-office', 'minho-nim/minoffia'];
 
-export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional' | 'gemini_dev';
+export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional';
 
 export type ExecutionMode = 'codex_cloud' | 'manual_handoff';
 

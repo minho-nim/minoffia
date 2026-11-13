@@ -117,14 +117,8 @@ describe('난이도(v0.4.71)', () => {
 });
 
 describe('Gemini 개발 배정(v0.4.82)', () => {
-  it('gemini_dev를 받아 담당을 gemini로 둔다(견본 gemini_optional과 구별)', async () => {
-    const { PREF_AGENT } = await import('./pmPlan');
-    const r = parsePmPlan(
-      plan({ work_items: [{ id: 'W1', title: '문구', goal: 'g', dependencies: [], assignee_preference: 'gemini_dev', execution_mode: 'manual_handoff', difficulty: 2 }] }),
-      TASK,
-    );
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.plan.work_items[0].assignee_preference).toBe('gemini_dev');
-    expect(PREF_AGENT.gemini_dev).toBe('gemini');
+  it('gemini_dev는 받지 않는다(2026-11-13 Gemini 개발 뺌)', () => {
+    const r = parsePmPlan(plan({ work_items: [{ id: 'W1', title: '문구', goal: 'g', dependencies: [], assignee_preference: 'gemini_dev', execution_mode: 'manual_handoff' }] }), TASK);
+    expect(r.ok).toBe(false);
   });
 });
