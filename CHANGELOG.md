@@ -1,5 +1,10 @@
 # 변경 기록
 
+## 쓴 MCP도 적기(v0.6.99) — 2026-11-13
+
+- 기본 규칙(앱·서버 함수 10곳 복사본)과 스킬 저장소 규칙 칸에 "MCP(Supabase·Playwright 등)를 실제로 썼으면 '쓴 MCP: …' 한 줄" 추가(소유자 승인). 프로젝트 저장소 규칙 칸은 Actions 스킬 넣기로 맞춘다.
+- 옵시디언: v0.6.98 커밋의 '쓴 MCP: supabase'는 형식 시험이라 실제 기록에서 뺀다(소유자 "실제 내용만").
+
 ## 옵시디언 Claude·MCP·앱 지도 이름(v0.6.98) — 2026-11-13
 
 - 만든 AI 찾기: 커밋 제목에 'Codex'라는 글자만 있어도 Codex로 보던 것을 고쳐, Claude 표시(Co-authored-by·Claude-Session·Claude Code)를 먼저 본다. 미노피아 대부분 버전이 Claude로 이어진다.
