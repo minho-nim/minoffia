@@ -2149,6 +2149,7 @@ export function App() {
                 onCreateRepo={store.mode === 'supabase' ? createRepo : undefined}
                 sync={inboxSync}
                 onArchive={(entries) => store.appendChat(entries)}
+                onCancelTask={cancelTask}
                 onAutoDraft={store.mode === 'supabase' ? (t) => void draftSpec(t.id) : undefined}
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={showTask}
