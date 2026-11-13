@@ -240,11 +240,14 @@ const ENTRY_MARK = /<!-- minoffia:entries (.*?) -->/s;
 const SKILL_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const AGENTS = ['Codex', 'Claude', 'Gemini'];
 
-/** 버전 이름: package.json 버전이 있으면 v1.2.3, 없으면 날짜(2026.11.13) */
+/** 작은 버전 이름: package.json 버전이 있으면 v1.2.3, 없으면 날짜(2026.11.13) */
 export function versionName(entry) {
   if (/^\d+\.\d+\.\d+[\w.-]*$/.test(entry.version ?? '')) return `v${entry.version}`;
   return /^\d{4}-\d{2}-\d{2}$/.test(entry.date ?? '') ? entry.date.replaceAll('-', '.') : '날짜 없음';
 }
+/** 큰 버전(v0.6.89 → v0.6, 2026.11.13 → 2026.11). 노트는 큰 버전마다 하나(v0.6.97 소유자 "버전 점이 너무 많다") */
+export const groupName = (n) => String(n).split('.').slice(0, 2).join('.');
+const FULL = /^(v\d+\.\d+\.\d+[\w.-]*|\d{4}\.\d{2}\.\d{2})$/;
 /** 노트에 숨겨 둔 업무 목록 읽기 */
 export function readEntries(text) {
   try {
@@ -255,9 +258,10 @@ export function readEntries(text) {
     return [];
   }
 }
-/** 같은 업무(제목)는 새 것으로 바꾸고, 아니면 더한다 */
+/** 같은 작은 버전의 같은 업무(제목)는 새 것으로 바꾸고, 아니면 더한다. v = 작은 버전 이름 */
 export function addEntry(list, entry) {
   const e = {
+    v: FULL.test(entry.v ?? '') ? entry.v : versionName(entry),
     task: safeName(entry.task || '업무'),
     date: /^\d{4}-\d{2}-\d{2}$/.test(entry.date ?? '') ? entry.date : '',
     score: /^\d{1,3}$/.test(String(entry.score ?? '')) ? Number(entry.score) : null,
@@ -266,52 +270,61 @@ export function addEntry(list, entry) {
     agent: AGENTS.includes(entry.agent) ? entry.agent : 'Codex',
     skills: [...new Set((entry.skills ?? []).filter((n) => SKILL_RE.test(n)))].slice(0, 12),
   };
-  return [...list.filter((x) => x.task !== e.task), e];
+  return [...list.filter((x) => !(x.task === e.task && (x.v ?? e.v) === e.v)), e];
 }
-export function versionNote(project, name, list) {
-  const body = list.flatMap((e) => [
-    `## ${e.task}`,
-    `- ${[e.date, e.score != null ? `점수 ${e.score}` : '', e.pr ? `[PR #${e.pr.split('/').pop()}](${e.pr})` : ''].filter(Boolean).join(' · ') || '기록 없음'}`,
-    `- 만든 AI: [[${e.agent}]]`,
-    `- 쓴 스킬: ${e.skills.length ? e.skills.map((n) => `[[${n}]]`).join(' ') : '없음'}`,
+const cmp = (a, b) => b.localeCompare(a, undefined, { numeric: true });
+/** 큰 버전 노트: 맨 위에 만든 AI·쓴 스킬 링크(한 번씩), 아래는 작은 버전마다 칸(링크 없이 글자) */
+export function versionNote(project, group, list) {
+  const sorted = [...list].sort((a, b) => cmp(a.v, b.v));
+  const agents = [...new Set(sorted.map((e) => e.agent))];
+  const skills = [...new Set(sorted.flatMap((e) => e.skills))].sort();
+  const body = sorted.flatMap((e) => [
+    `## ${e.v} · ${e.task}`,
+    `- ${[e.date, e.score != null ? `점수 ${e.score}` : '', e.pr ? `[PR #${e.pr.split('/').pop()}](${e.pr})` : '', e.agent, e.skills.length ? `스킬 ${e.skills.join(', ')}` : ''].filter(Boolean).join(' · ')}`,
     '',
   ]);
   return [
-    '---', 'tags: [minoffia/버전]', `프로젝트: "${project}"`, `버전: ${name}`, '---',
-    `# ${project} ${name}`, '', ...body,
+    '---', 'tags: [minoffia/버전]', `프로젝트: "${project}"`, `버전: ${group}`, `작은 버전: ${sorted.length}`, '---',
+    `# ${project} ${group}`, '',
+    `만든 AI: ${agents.map((a) => `[[${a}]]`).join(' ') || '없음'}`,
+    `쓴 스킬: ${skills.length ? skills.map((n) => `[[${n}]]`).join(' ') : '없음'}`, '',
+    ...body,
     `← [[${project} 버전]]`, '',
-    `<!-- minoffia:entries ${JSON.stringify(list)} -->`, '',
+    `<!-- minoffia:entries ${JSON.stringify(sorted)} -->`, '',
   ].join('\n');
 }
-/** 큰 단위(v0.6, 2026.11)로 묶어 최신부터 */
-const group = (n) => n.split('.').slice(0, 2).join('.');
-const cmp = (a, b) => b.localeCompare(a, undefined, { numeric: true });
-export function hubNotes(project, versions) {
-  const names = Object.keys(versions).sort(cmp);
-  const groups = [...new Set(names.map(group))];
+export function hubNotes(project, groups) {
+  const names = Object.keys(groups).sort(cmp);
+  const total = names.reduce((n, g) => n + groups[g].length, 0);
   return {
     // 프로젝트 → 프로젝트 버전 · 앱 지도만(소유자 "프로젝트 > 프로젝트 버전으로만 묶고, 앱 지도는 프로젝트에서")
-    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 버전 ${names.length}개`, `- [[${project}/앱 지도|앱 지도]] · 기능 표 · 흐름 그림 · 폴더 구조`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
-    [`${project} 버전.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 버전`, '', '> [!info] 배포할 때마다 자동으로 더해져요. 버전을 누르면 쓴 스킬과 만든 AI로 이어져요. 제목(▸)을 눌러 지난 묶음을 접을 수 있어요.', '', ...groups.flatMap((g) => [`## ${g}`, ...names.filter((n) => group(n) === g).map((n) => `- [[${project} ${n}|${n}]] · ${versions[n].map((e) => e.task).join(' / ').slice(0, 80)}`), '']), `← [[${project}]]`, ''].join('\n'),
+    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 큰 버전 ${names.length}개 · 작은 버전 ${total}개`, `- [[${project}/앱 지도|앱 지도]] · 기능 표 · 흐름 그림 · 폴더 구조`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
+    [`${project} 버전.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 버전`, '', '> [!info] 큰 버전마다 노트 하나예요. 누르면 그 안의 작은 버전들과 만든 AI·쓴 스킬이 보여요. 배포할 때마다 자동으로 더해져요.', '',
+      ...names.map((g) => {
+        const latest = [...groups[g]].sort((a, b) => cmp(a.v, b.v))[0];
+        return `- [[${project} ${g}|${g}]] · 작은 버전 ${groups[g].length}개${latest ? ` · 최근 ${latest.v} ${latest.task.slice(0, 40)}` : ''}`;
+      }),
+      '', `← [[${project}]]`, ''].join('\n'),
   };
 }
 export const skillStub = (n) => `---\ntags: [minoffia/스킬]\n---\n# ${n}\n\n스킬(공용 노트). 이 스킬을 쓴 버전은 아래 백링크에 모여요.\n`;
 export const aiStub = (n) => `---\ntags: [minoffia/AI]\n---\n# ${n}\n\n개발 AI(공용 노트). 이 AI가 만든 버전은 아래 백링크에 모여요.\n`;
 
-/** 버전 목록·프로젝트 노트를 다시 쓰고, 버전 노트 글도 지금 모양으로 맞춘다. 예전 '쓴 스킬'·'개발' 묶음은 지운다 */
+/** 버전 노트를 큰 버전마다 하나로 모으고(예전 작은 버전 파일은 합친 뒤 지움), 버전 목록·프로젝트 노트를 다시 쓴다 */
 function writeHubs(dir, project, vdir) {
   for (const f of [`${project} 쓴 스킬.md`, `${project} 개발.md`]) fs.rmSync(path.join(dir, f), { force: true });
-  // 파일 이름은 '<프로젝트> <버전>.md'(다른 프로젝트의 같은 버전과 링크가 섞이지 않게). 예전 'v0.6.89.md'는 이름을 바꾼다
   const pre = `${project} `;
-  if (fs.existsSync(vdir)) for (const f of fs.readdirSync(vdir)) if (f.endsWith('.md') && !f.startsWith(pre)) fs.renameSync(path.join(vdir, f), path.join(vdir, pre + f));
-  const versions = {};
+  const groups = {};
   for (const f of fs.existsSync(vdir) ? fs.readdirSync(vdir).filter((x) => x.endsWith('.md')) : []) {
-    const name = f.slice(pre.length, -3);
-    const list = readEntries(read(path.join(vdir, f))).map((e) => addEntry([], e)[0]);
-    versions[name] = list;
-    fs.writeFileSync(path.join(vdir, f), versionNote(project, name, list));
+    const name = (f.startsWith(pre) ? f.slice(pre.length) : f).slice(0, -3);
+    // 예전 파일 이름이 작은 버전(v0.6.89 · 2026.11.13)이면 그 이름을 업무에 붙여 큰 버전으로 옮긴다
+    const small = FULL.test(name);
+    const g = small ? groupName(name) : name;
+    for (const e of readEntries(read(path.join(vdir, f)))) groups[g] = addEntry(groups[g] ?? [], { ...e, v: e.v ?? (small ? name : undefined) });
+    if (small || !f.startsWith(pre)) fs.rmSync(path.join(vdir, f));
   }
-  for (const [f, text] of Object.entries(hubNotes(project, versions))) fs.writeFileSync(path.join(dir, f), text);
+  for (const [g, list] of Object.entries(groups)) fs.writeFileSync(path.join(vdir, `${pre}${g}.md`), versionNote(project, g, list));
+  for (const [f, text] of Object.entries(hubNotes(project, groups))) fs.writeFileSync(path.join(dir, f), text);
 }
 const AI_DESC = {
   Codex: '주 개발. Linear로 업무를 받아 Codex 클라우드에서 개발하고, 결과를 미노피아로 보낸다.',
@@ -337,18 +350,20 @@ function writeBackfill(notes, data) {
     const dir = path.join(notes, project);
     const vdir = path.join(dir, '버전');
     fs.mkdirSync(vdir, { recursive: true });
-    // 다시 채울 때: 이번 목록에 없고 PR도 없는(지난 채우기가 만든) 버전 노트는 지운다. 배포 때 만든 것(PR 있음)은 남긴다
-    const want = new Set((p.versions ?? []).map((v) => `${project} ${versionName(v)}.md`));
-    for (const f of fs.existsSync(vdir) ? fs.readdirSync(vdir) : []) {
-      const list = readEntries(read(path.join(vdir, f)));
-      if (f.endsWith('.md') && f.startsWith(`${project} `) && !want.has(f) && list.length && list.every((e) => !e.pr)) fs.rmSync(path.join(vdir, f));
+    // 다시 채울 때: 배포 때 만든 업무(PR 있음)만 남기고 나머지는 이번 기록으로 다시 쓴다
+    writeHubs(dir, project, vdir);
+    const fresh = {};
+    for (const v of p.versions ?? []) { const e = addEntry([], v)[0]; fresh[groupName(e.v)] = [...(fresh[groupName(e.v)] ?? []), e]; }
+    for (const f of fs.readdirSync(vdir).filter((x) => x.endsWith('.md'))) {
+      const g = f.slice(project.length + 1, -3);
+      const kept = readEntries(read(path.join(vdir, f))).filter((e) => e.pr);
+      if (!kept.length && !fresh[g]) fs.rmSync(path.join(vdir, f));
+      else if (!fresh[g]) fs.writeFileSync(path.join(vdir, f), versionNote(project, g, kept));
     }
-    for (const v of p.versions ?? []) {
-      const name = versionName(v);
-      const file = path.join(vdir, `${project} ${name}.md`);
-      const had = readEntries(read(file));
-      if (had.some((e) => e.pr)) continue;
-      fs.writeFileSync(file, versionNote(project, name, addEntry([], v)));
+    for (const [g, list] of Object.entries(fresh)) {
+      const file = path.join(vdir, `${project} ${g}.md`);
+      const kept = readEntries(read(file)).filter((e) => e.pr);
+      fs.writeFileSync(file, versionNote(project, g, list.reduce((acc, e) => (acc.some((k) => k.v === e.v && k.task === e.task) ? acc : [...acc, e]), kept)));
     }
     writeHubs(dir, project, vdir);
     const am = path.join(dir, '앱 지도.md');
@@ -372,14 +387,13 @@ function writeVersion(notes, project, entry) {
   const dir = path.join(notes, project);
   const vdir = path.join(dir, '버전');
   fs.mkdirSync(vdir, { recursive: true });
-  const name = versionName(entry);
-  const old = path.join(vdir, `${name}.md`);
-  const file = path.join(vdir, `${project} ${name}.md`);
-  if (fs.existsSync(old) && !fs.existsSync(file)) fs.renameSync(old, file);
-  const list = addEntry(readEntries(read(file)), entry);
-  fs.writeFileSync(file, versionNote(project, name, list));
   writeHubs(dir, project, vdir);
-  const last = list[list.length - 1];
+  const e = addEntry([], entry)[0];
+  const file = path.join(vdir, `${project} ${groupName(e.v)}.md`);
+  const list = addEntry(readEntries(read(file)), e);
+  fs.writeFileSync(file, versionNote(project, groupName(e.v), list));
+  writeHubs(dir, project, vdir);
+  const last = e;
   for (const n of last.skills) {
     const f = path.join(notes, '스킬', `${n}.md`);
     if (!fs.existsSync(f)) (fs.mkdirSync(path.dirname(f), { recursive: true }), fs.writeFileSync(f, skillStub(n)));
