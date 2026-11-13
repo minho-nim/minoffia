@@ -39,6 +39,69 @@ export function healthNote(project, report, previous = '') {
   ].join('\n');
 }
 
+// ── 구조(v0.6.94, 소유자 "프로젝트별 파일 구조도"): 링크 없이 그림·글자만(그래프에 점이 늘지 않게) ──
+const FOLDER_HINT = {
+  src: '앱 소스', components: '화면 조각', pages: '화면(페이지)', app: '화면(라우트)', routes: '화면(라우트)', hooks: '화면 공용 동작',
+  domain: '업무 규칙', lib: '공용 도구', utils: '공용 도구', data: '저장·불러오기', api: '서버와 주고받기', services: '외부 연결',
+  store: '상태 저장', styles: '모양(CSS)', assets: '그림·글꼴', public: '그대로 내보내는 파일', types: '자료 모양(타입)',
+  supabase: 'Supabase', functions: '서버 함수', migrations: 'DB 변경 기록', tests: '시험', test: '시험', e2e: '화면 시험',
+  scripts: '도구 스크립트', docs: '문서', archive: '지난 기록', icons: '아이콘', fonts: '글꼴', workflow: '업무 흐름', '.github': 'GitHub 설정', workflows: '자동 작업(Actions)', '.agents': 'AI 스킬(Codex)', '.claude': 'AI 스킬(Claude)',
+};
+/** 파일 목록 → 폴더 나무(3단계까지, 폴더마다 설명·파일 수). 스킬 폴더 안은 펼치지 않는다 */
+export function folderTree(files, map, depth = 3) {
+  if (!Array.isArray(files) || !files.length) return [];
+  const count = new Map();
+  for (const f of files) {
+    const parts = String(f).split('/').slice(0, -1);
+    const stop = parts[0] === '.agents' || parts[0] === '.claude' ? 1 : depth;
+    for (let i = 1; i <= Math.min(parts.length, stop); i++) { const k = parts.slice(0, i).join('/'); count.set(k, (count.get(k) ?? 0) + 1); }
+  }
+  const desc = new Map((map?.parts ?? []).filter((p) => p.folder).map((p) => [p.folder.replace(/\/$/, ''), p.name]));
+  const dirs = [...count.keys()].sort((a, b) => a.localeCompare(b));
+  const rootFiles = files.filter((f) => !String(f).includes('/')).length;
+  const lines = dirs.map((d) => {
+    const name = d.split('/').pop();
+    const note = desc.get(d) ?? FOLDER_HINT[name] ?? '';
+    return `${'  '.repeat(d.split('/').length - 1)}${name}/`.padEnd(32) + `${note ? `${note} ` : ''}(${count.get(d)})`;
+  });
+  return ['## 폴더 구조', `파일 ${files.length}개${rootFiles ? ` · 맨 위 파일 ${rootFiles}개` : ''} · 3단계까지`, '```', ...lines.slice(0, 120), ...(lines.length > 120 ? [`… 폴더 ${lines.length - 120}개 더`] : []), '```', ''];
+}
+/** 앱 지도 부분을 화면 → 기능 → 서버 → 데이터 흐름 그림(Mermaid)으로 */
+export function flowMermaid(map) {
+  const kinds = MAP_KINDS.filter((k) => k !== '설정' && (map?.parts ?? []).some((p) => p.kind === k));
+  if (kinds.length < 2) return [];
+  const q = (t) => String(t ?? '').replace(/["`<>{}|[\]]/g, ' ').slice(0, 30);
+  const out = ['## 흐름', '```mermaid', 'flowchart LR'];
+  kinds.forEach((k, i) => {
+    out.push(`  subgraph K${i}["${k}"]`);
+    map.parts.filter((p) => p.kind === k).slice(0, 5).forEach((p, j) => out.push(`    K${i}_${j}["${q(p.name)}"]`));
+    out.push('  end');
+  });
+  for (let i = 1; i < kinds.length; i++) out.push(`  K${i - 1} --> K${i}`);
+  out.push('```', '');
+  return out;
+}
+
+/** 이미 있는 앱 지도 노트에 폴더 구조·흐름 그림을 넣거나 바꾼다(지난 기록 채우기 때, 점검 없이) */
+export function upgradeAppMap(text, files) {
+  const t = String(text ?? '');
+  const parts = [];
+  let kind = '';
+  for (const line of t.split('\n')) {
+    const h = line.match(/^## (.+)$/);
+    if (h) { kind = MAP_KINDS.includes(h[1]) ? h[1] : ''; continue; }
+    const r = kind && line.match(/^\| \*\*(.+?)\*\* \| (.*?) \| (.*?) \|$/);
+    if (r) parts.push({ kind, name: r[1], what: r[2], folder: r[3].endsWith('/') ? r[3].slice(0, -1) : '', files: [] });
+  }
+  const map = { parts };
+  const add = [...flowMermaid(map), ...folderTree(files, map)].join('\n');
+  // 예전에 넣은 흐름·폴더 구조 칸은 빼고 다시
+  const base = t.replace(/## 흐름\n```mermaid[\s\S]*?```\n+/g, '').replace(/## 폴더 구조\n[\s\S]*?```\n[\s\S]*?```\n+/g, '');
+  if (!add) return base;
+  const at = base.search(/^!\[\[.*앱 지도\.png\]\]/m);
+  return at >= 0 ? `${base.slice(0, at)}${add}\n${base.slice(at)}` : `${base.trimEnd()}\n\n${add}\n`;
+}
+
 /** 앱 지도 노트(v0.5.94 소유자 "옵시디언에서는 앱 지도만 프로젝트별로"): 쉬운 지도 + 파일 위치. 나중에 개발 AI도 참고한다 */
 export const MAP_KINDS = ['화면', '기능', '서버', '데이터', '설정'];
 export function appMapNote(project, report) {
@@ -57,6 +120,8 @@ export function appMapNote(project, report) {
     `# ${project} 앱 지도`, '',
     map?.summary ? `> [!summary] ${cell(map.summary)}` : '', '',
     ...body,
+    ...flowMermaid(map),
+    ...folderTree(report.tree, map),
     `![[${project}/앱 지도.png]]`, '',
     `${date} 점검 기준 · [미노피아 열기](${APP_URL})`, '',
   ].join('\n').replace(/\n{3,}/g, '\n\n');
@@ -89,7 +154,7 @@ export function homeNote(projects) {
     '> [!info] 프로젝트마다 앱 지도와 버전 노트를 자동으로 만들어요. 직접 쓰는 메모는 **내 메모** 폴더에 두세요(자동으로 건드리지 않아요).', '',
     // 홈 → 프로젝트만(앱 지도는 프로젝트 노트에서 이어진다)
     ...projects.map((p) => (p.note ? `- [[${p.name}]]` : p.map ? `- [[${p.name}/앱 지도|${p.name}]]` : `- ${p.name}`)),
-    '', `[미노피아 열기](${APP_URL})`, '',
+    '', '사무실 그림: [[미노피아 사무실.canvas|미노피아 사무실]]', '', `[미노피아 열기](${APP_URL})`, '',
   ].join('\n');
 }
 
@@ -107,6 +172,48 @@ function scanProjects(notes) {
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 }
 
+// ── 사무실 그림판(v0.6.94, 소유자 "캔버스"): 보관함 맨 위 '미노피아 사무실.canvas'. 점검·배포 때마다 다시 쓴다.
+// 내용은 앱 사무실 지도(src/components/OfficeMap.tsx)와 같다(이름이 같은지는 시험이 확인).
+export const OFFICE_CLOUD = {
+  nodes: [
+    ['app', '휴대폰 앱', '아이폰 홈 화면 앱(미노피아)', 0, 0, '6'],
+    ['cf', 'Cloudflare Pages', '화면 파일을 내려 준다(release 브랜치)', -340, 200, '4'],
+    ['sb', 'Supabase', 'DB · 서버 함수 · 알림 · 파일', 0, 200, '4'],
+    ['gh', 'GitHub', '저장소와 Actions(검사·배포·스킬 넣기·점검)', 340, 200, '4'],
+    ['linear', 'Linear', 'Codex에게 업무를 넘기는 통로', -510, 420, '3'],
+    ['codexc', 'Codex 클라우드', '주 개발 AI가 일하는 곳', -255, 420, '5'],
+    ['routine', 'Claude 루틴', '보조 개발 AI가 일하는 곳', 0, 420, '5'],
+    ['gem', 'Gemini API', '채점·초안(무료 키)', 255, 420, '3'],
+    ['notes', '노트 보관함', '앱 지도·버전 노트(이 Obsidian)', 510, 420, '3'],
+  ],
+  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
+};
+export const OFFICE_FLOW = [['s-req', '요청'], ['s-plan', '기획'], ['g-a', '기획 승인'], ['s-dev', '개발'], ['s-rev', '채점'], ['g-b', '올리기 승인'], ['s-pr', 'PR'], ['g-c', '배포 승인'], ['s-dep', '배포']];
+export const OFFICE_WHO = [['owner', '나(소유자)', ['s-req', 'g-a', 'g-b', 'g-c']], ['pm', 'Claude PM', ['s-plan']], ['codex', 'Codex', ['s-dev']], ['claude', 'Claude', ['s-dev']], ['gemini', 'Gemini', ['s-rev']], ['server', '서버(자동)', ['g-a', 's-pr', 's-dep']]];
+export function officeCanvas(projects) {
+  const nodes = [];
+  const edges = [];
+  const W = 220, H = 90;
+  // 1) 클라우드
+  nodes.push({ id: 'grp-cloud', type: 'group', label: '클라우드 — 서비스끼리 무엇이 오가나', x: -660, y: -80, width: 1400, height: 640 });
+  for (const [id, label, desc, x, y, color] of OFFICE_CLOUD.nodes) nodes.push({ id: `c-${id}`, type: 'text', text: `**${label}**\n${desc}`, x: x - W / 2, y, width: W, height: H, color });
+  OFFICE_CLOUD.links.forEach(([a, b, label], i) => edges.push({ id: `ce${i}`, fromNode: `c-${a}`, toNode: `c-${b}`, label }));
+  // 2) 업무 흐름과 역할
+  const fy = 700, wy = 920, step = 170;
+  nodes.push({ id: 'grp-role', type: 'group', label: '역할 — 누가 업무의 어디를 맡나 (주황 = 소유자 승인)', x: -660, y: fy - 80, width: Math.max(1400, OFFICE_FLOW.length * step + 80), height: 420 });
+  OFFICE_FLOW.forEach(([id, label], i) => nodes.push({ id: `f-${id}`, type: 'text', text: `**${label}**`, x: -620 + i * step, y: fy, width: 140, height: 60, color: id.startsWith('g-') ? '2' : undefined }));
+  for (let i = 1; i < OFFICE_FLOW.length; i++) edges.push({ id: `fe${i}`, fromNode: `f-${OFFICE_FLOW[i - 1][0]}`, toNode: `f-${OFFICE_FLOW[i][0]}`, fromSide: 'right', toSide: 'left' });
+  OFFICE_WHO.forEach(([id, label, does], i) => {
+    nodes.push({ id: `w-${id}`, type: 'text', text: `**${label}**`, x: -620 + i * 230, y: wy, width: 170, height: 60, color: id === 'owner' ? '6' : '5' });
+    does.forEach((d, j) => edges.push({ id: `we-${id}-${j}`, fromNode: `w-${id}`, toNode: `f-${d}`, fromSide: 'top', toSide: 'bottom' }));
+  });
+  // 3) 프로젝트(노트로 바로 열림)
+  const px = 1040;
+  nodes.push({ id: 'grp-proj', type: 'group', label: '프로젝트 — 누르면 프로젝트 노트', x: px - 40, y: -80, width: 560, height: Math.max(300, Math.ceil(projects.length / 2) * 110 + 80) });
+  projects.forEach((p, i) => nodes.push({ id: `p-${i}`, type: 'file', file: p.note ? `${p.name}/${p.name}.md` : `${p.name}/앱 지도.md`, x: px + (i % 2) * 250, y: (Math.floor(i / 2)) * 110, width: 230, height: 90 }));
+  return JSON.stringify({ nodes: nodes.map((n) => Object.fromEntries(Object.entries(n).filter(([, v]) => v !== undefined))), edges }, null, 1);
+}
+
 function finish(notes) {
   fs.mkdirSync(path.join(notes, MY_NOTES), { recursive: true });
   const keep = path.join(notes, MY_NOTES, '여기에 메모하세요.md');
@@ -120,7 +227,9 @@ function finish(notes) {
       { query: `path:"${MY_NOTES}"`, color: color('b06bd6') },
     ] }, null, 1));
   }
-  fs.writeFileSync(path.join(notes, '홈.md'), homeNote(scanProjects(notes)));
+  const projects = scanProjects(notes);
+  fs.writeFileSync(path.join(notes, '홈.md'), homeNote(projects));
+  fs.writeFileSync(path.join(notes, '미노피아 사무실.canvas'), officeCanvas(projects.filter((p) => p.note || p.map)));
 }
 
 // ── 버전 노트(v0.6.89, 소유자 "버전마다 쓴 스킬·만든 AI로 이어지게, 너무 복잡하지 않게") ──
@@ -182,7 +291,7 @@ export function hubNotes(project, versions) {
   const groups = [...new Set(names.map(group))];
   return {
     // 프로젝트 → 프로젝트 버전 · 앱 지도만(소유자 "프로젝트 > 프로젝트 버전으로만 묶고, 앱 지도는 프로젝트에서")
-    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 버전 ${names.length}개`, `- [[${project}/앱 지도|앱 지도]]`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
+    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 버전 ${names.length}개`, `- [[${project}/앱 지도|앱 지도]] · 기능 표 · 흐름 그림 · 폴더 구조`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
     [`${project} 버전.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 버전`, '', '> [!info] 배포할 때마다 자동으로 더해져요. 버전을 누르면 쓴 스킬과 만든 AI로 이어져요. 제목(▸)을 눌러 지난 묶음을 접을 수 있어요.', '', ...groups.flatMap((g) => [`## ${g}`, ...names.filter((n) => group(n) === g).map((n) => `- [[${project} ${n}|${n}]] · ${versions[n].map((e) => e.task).join(' / ').slice(0, 80)}`), '']), `← [[${project}]]`, ''].join('\n'),
   };
 }
@@ -242,6 +351,8 @@ function writeBackfill(notes, data) {
       fs.writeFileSync(file, versionNote(project, name, addEntry([], v)));
     }
     writeHubs(dir, project, vdir);
+    const am = path.join(dir, '앱 지도.md');
+    if (fs.existsSync(am) && Array.isArray(p.files) && p.files.length) fs.writeFileSync(am, upgradeAppMap(read(am), p.files));
   }
   const SKILLS = path.join(notes, '스킬');
   fs.mkdirSync(SKILLS, { recursive: true });
