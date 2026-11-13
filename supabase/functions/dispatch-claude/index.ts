@@ -239,8 +239,8 @@ Deno.serve(async (req) => {
 
   // 5-1. 휴가 중인 AI(v0.4.39, 0026_agent_leave). 표가 없거나 읽기에 실패하면 모두 근무로 본다.
   const { data: leaveRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
-  const LEAVE_PREF: Record<string, string> = { codex: 'codex_primary', claude: 'claude_support', grok: 'grok_optional', studioA: 'gemini_optional', studioB: 'gemini_optional' };
-  const LEAVE_NAME: Record<string, string> = { codex: 'Codex', claude: 'Claude', grok: 'Grok', studioA: 'Studio A(AI Studio 견본)', studioB: 'Studio B(AI Studio 견본)' };
+  const LEAVE_PREF: Record<string, string> = { codex: 'codex_primary', claude: 'claude_support', studioA: 'gemini_optional', studioB: 'gemini_optional' };
+  const LEAVE_NAME: Record<string, string> = { codex: 'Codex', claude: 'Claude', studioA: 'Studio A(AI Studio 견본)', studioB: 'Studio B(AI Studio 견본)' };
   const away = [...new Set((leaveRows ?? []).map((r: { agent: string }) => r.agent).filter((a) => LEAVE_PREF[a]))];
   const leaveLines = away.length
     ? [

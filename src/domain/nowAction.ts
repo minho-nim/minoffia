@@ -5,7 +5,7 @@ import { canApprove } from './workflow';
 import type { AgentAssignment, ResultReview } from './workflow-types';
 import type { SimpleState } from './simpleState';
 
-const WHO: Record<string, string> = { codex: 'Codex', claude: 'Claude', gemini: 'Gemini', grok: 'Grok' };
+const WHO: Record<string, string> = { codex: 'Codex', claude: 'Claude', gemini: 'Gemini' };
 
 export type NowAction =
   | { kind: 'approveA' | 'approveB' | 'approveC' | 'openPr' | 'deploy' }

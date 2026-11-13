@@ -57,10 +57,10 @@ export function reportCard(reviews: ResultReview[], kind: string | undefined): {
 }
 
 /** 오피스 캐릭터 → 개발 작업을 맡는 AI(동시 작업 상한 대상) */
-const KIND_OF: Partial<Record<AgentId, AgentKind>> = { codex: 'codex', claude: 'claude', grok: 'grok', studioA: 'gemini', studioB: 'gemini' };
+const KIND_OF: Partial<Record<AgentId, AgentKind>> = { codex: 'codex', claude: 'claude', studioA: 'gemini', studioB: 'gemini' };
 
 /** 오피스 캐릭터 → 실행 경로(어댑터) */
-const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', grok: 'grok', studioA: 'gemini_vision', studioB: 'gemini_vision' };
+const ADAPTER_OF: Partial<Record<AgentId, string>> = { claude: 'claude', codex: 'codex', studioA: 'gemini_vision', studioB: 'gemini_vision' };
 
 /** Codex for Linear 연결 확인(읽기만). 결정 문서 docs/archive/CODEX_LINEAR_DECISION_2026-10-30.md 4-1단계 */
 function LinearCheck({ onProbe }: { onProbe: () => Promise<LinearProbe> }) {
@@ -437,4 +437,4 @@ function SwipeRow({ children, onRemove }: { children: import('react').ReactNode;
   );
 }
 
-const AGENT_NAME_OF: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
+const AGENT_NAME_OF: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' };

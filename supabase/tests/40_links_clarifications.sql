@@ -35,7 +35,7 @@ end $$;
 
 select pg_temp.as_user('11111111-1111-4111-8111-111111111111', 'owner@example.invalid');
 insert into tasks (id, project_id, title, type, assignee) values
-  ('ffffffff-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000001', '링크 시험', 'research', 'grok');
+  ('ffffffff-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000001', '링크 시험', 'research', 'studioA');
 
 -- 링크: 사용자는 직접 기록할 수 없다(서버만)
 select pg_temp.expect_fail($q$insert into link_refs (owner_id, task_id, url, kind, status) values ('11111111-1111-4111-8111-111111111111', 'ffffffff-0000-4000-8000-000000000001', 'https://example.com', 'webpage', 'ok')$q$, 'row-level security');
