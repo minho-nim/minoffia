@@ -107,8 +107,9 @@ export function projectVersions(dir) {
       return { version: e.version, date: e.date || b?.date || '', task: e.task, agent: b ? agentOfCommit(b.author, b.body) : '직접', skills: b ? skillsOfCommit(b.body) : [] };
     });
   }
-  if (bumps.length) return bumps.map((b) => ({ version: b.version, date: b.date, task: b.subject.slice(0, 120), agent: agentOfCommit(b.author, b.body), skills: skillsOfCommit(b.body) }));
-  // 3) 버전 번호가 없으면 커밋을 날짜별로(최근 MAX_DAYS일)
+  // 버전을 거의 안 올린 저장소(3번 미만)는 날짜별 커밋이 더 자세하다
+  if (bumps.length >= 3) return bumps.map((b) => ({ version: b.version, date: b.date, task: b.subject.slice(0, 120), agent: agentOfCommit(b.author, b.body), skills: skillsOfCommit(b.body) }));
+  // 3) 버전 번호가 없거나 거의 안 바뀌면 커밋을 날짜별로(최근 MAX_DAYS일)
   const days = new Map();
   for (const c of commits(dir)) days.set(c.date, [...(days.get(c.date) ?? []), c]);
   return [...days].slice(-MAX_DAYS).map(([date, list]) => {
