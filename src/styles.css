@@ -6970,3 +6970,11 @@ html.popup-open .project-sections > details[open] * {
     bottom: calc(max(16px, calc(env(safe-area-inset-bottom) + 8px)) + 84px);
   }
 }
+
+/* 점검 고치기 요청(v0.6.95) */
+.health-fix-all {
+  margin: 6px 0;
+}
+.health-list .health-fix {
+  margin-top: 4px;
+}

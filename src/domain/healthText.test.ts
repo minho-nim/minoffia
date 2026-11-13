@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appMapKinds, koIssue, parseAppMap, parseHealth } from './healthText';
+import { appMapKinds, fixRequest, koIssue, parseAppMap, parseHealth } from './healthText';
 
 describe('앱 점검 결과(v0.5.53)', () => {
   it('종류별로 한국어로 바꾸고 모르는 종류는 원문', () => {
@@ -25,5 +25,20 @@ describe('스킬 모음 저장소 지도(v0.6.70)', () => {
     const m = parseAppMap({ summary: '', by: 'ai', parts: [{ name: 'a', kind: '시험·점검', what: '', folder: '', files: [] }] });
     expect(m?.parts[0].kind).toBe('기능');
     expect(appMapKinds(m!)).toEqual(['화면', '기능', '서버', '데이터', '설정']);
+  });
+});
+
+describe('점검 고치기 요청(v0.6.95)', () => {
+  const a = { kind: 'x', severity: 'high', title: 'Secret leak', detail: '열쇠가 보여요', items: Array.from({ length: 12 }, (_, i) => `f${i}.ts`) };
+  const b = { kind: 'y', severity: 'low', title: 'Big file', detail: '큼', items: [] };
+  it('하나면 설명까지, 대상은 10개까지', () => {
+    const t = fixRequest([a]);
+    expect(t).toContain('점검에서 나온 문제를 고쳐줘.');
+    expect(t).toContain('f9.ts 외 2개');
+    expect(t).not.toContain('f10.ts');
+  });
+  it('여러 개면 목록으로, 없으면 빈 글', () => {
+    expect(fixRequest([a, b]).split('\n')).toHaveLength(3);
+    expect(fixRequest([])).toBe('');
   });
 });

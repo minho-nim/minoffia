@@ -352,7 +352,9 @@ function writeBackfill(notes, data) {
     }
     writeHubs(dir, project, vdir);
     const am = path.join(dir, '앱 지도.md');
-    if (fs.existsSync(am) && Array.isArray(p.files) && p.files.length) fs.writeFileSync(am, upgradeAppMap(read(am), p.files));
+    // 모든 프로젝트에 구조를(v0.6.95 소유자 "전체적으로"): 앱 지도가 아직 없으면 폴더 구조만 있는 앱 지도를 만든다(기능 표는 점검 때)
+    const base = fs.existsSync(am) ? read(am) : ['---', `프로젝트: "${project}"`, 'tags: [minoffia/앱지도]', '---', `# ${project} 앱 지도`, '', '> [!info] 기능 표와 흐름 그림은 미노피아 앱에서 이 프로젝트를 점검하면 생겨요.', ''].join('\n');
+    if (Array.isArray(p.files) && p.files.length) fs.writeFileSync(am, upgradeAppMap(base, p.files));
   }
   const SKILLS = path.join(notes, '스킬');
   fs.mkdirSync(SKILLS, { recursive: true });
