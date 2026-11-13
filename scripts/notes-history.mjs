@@ -45,7 +45,8 @@ export function agentOfCommit(author, body) {
   if (/codex|chatgpt/.test(t)) return 'Codex';
   if (/co-authored-by:\s*claude|claude\[bot\]|noreply@anthropic\.com|^claude/m.test(t)) return 'Claude';
   if (/gemini/.test(t)) return 'Gemini';
-  return '직접';
+  // Claude 대화로 하지 않은 것은 모두 Codex(소유자 2026-11-13)
+  return 'Codex';
 }
 
 /** 커밋 본문의 '쓴 스킬:' 줄과 '<스킬> 절차로' */
@@ -104,7 +105,7 @@ export function projectVersions(dir) {
   if (log.length >= 3) {
     return log.reverse().map((e) => {
       const b = byVer.get(e.version);
-      return { version: e.version, date: e.date || b?.date || '', task: e.task, agent: b ? agentOfCommit(b.author, b.body) : '직접', skills: b ? skillsOfCommit(b.body) : [] };
+      return { version: e.version, date: e.date || b?.date || '', task: e.task, agent: b ? agentOfCommit(b.author, b.body) : 'Codex', skills: b ? skillsOfCommit(b.body) : [] };
     });
   }
   // 버전을 거의 안 올린 저장소(3번 미만)는 날짜별 커밋이 더 자세하다
@@ -118,7 +119,7 @@ export function projectVersions(dir) {
       version: '',
       date,
       task: `${list[list.length - 1].subject.slice(0, 100)}${list.length > 1 ? ` 외 ${list.length - 1}개` : ''}`,
-      agent: agents.find((a) => a !== '직접') ?? '직접',
+      agent: agents.includes('Claude') ? 'Claude' : agents[0] ?? 'Codex',
       skills: [...new Set(list.flatMap((c) => skillsOfCommit(c.body)))],
     };
   });
