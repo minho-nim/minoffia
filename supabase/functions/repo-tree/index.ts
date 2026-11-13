@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     const data = (await res.json()) as { tree?: { path: string; type: string }[] };
     return (data.tree ?? []).find((t) => t.type === 'blob' && (t.path === `${name}/SKILL.md` || t.path.endsWith(`/${name}/SKILL.md`)))?.path ?? '';
   };
-  // 프로젝트마다 이 스킬이 들어 있는지(.agents/skills 기준): same = 모음과 같음, old = 다름(옛 버전), none = 없음
+  // 프로젝트마다 이 스킬이 들어 있는지(.agents/skills, 없으면 .claude/skills): same = 모음과 같음, old = 다름(옛 버전), none = 없음
   if (body.action === 'skillStatus') {
     const name = String(body.skill ?? '');
     if (!SKILL_NAME.test(name)) return reply(400, { ok: false, error: '스킬 이름이 이상합니다.' });
@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
       (rows ?? []).map(async (r: { id: string; repo: string | null }) => {
         const repo = (r.repo ?? '').trim();
         if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') return;
-        const sha = await skillBlob(repo, `.agents/skills/${name}/SKILL.md`);
+        // .claude/skills에만 둔 저장소도 '있음'으로(v0.6.92, 스킬 지도와 같게)
+        const sha = (await skillBlob(repo, `.agents/skills/${name}/SKILL.md`)) || (await skillBlob(repo, `.claude/skills/${name}/SKILL.md`));
         status[r.id] = !sha ? 'none' : sha === srcSha ? 'same' : 'old';
       }),
     );
