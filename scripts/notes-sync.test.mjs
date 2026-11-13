@@ -28,10 +28,10 @@ describe('옵시디언 노트 쌓기(v0.5.62)', () => {
     expect(scopeLinks('- [[App()]] - calls\n- [[밖]]\n- [[Inbox()|받은함]]', 'P/코드 그래프', names)).toBe('- [[P/코드 그래프/App()|App()]] - calls\n- [[밖]]\n- [[P/코드 그래프/Inbox()|받은함]]');
     expect(JSON.parse(scopeCanvas('{"nodes":[{"type":"file","file":"App().md"},{"type":"group"}]}', 'P/코드 그래프')).nodes[0].file).toBe('P/코드 그래프/App().md');
   });
-  it('홈 노트는 프로젝트별 앱 지도 링크만', () => {
-    const home = homeNote([{ name: 'P', map: true }, { name: 'Q', map: false }]);
-    expect(home).toContain('- [[P/앱 지도|P]]');
-    expect(home).toContain('- Q (아직 지도 없음)');
+  it('홈 노트는 프로젝트 노트와 앱 지도 링크(v0.6.90)', () => {
+    const home = homeNote([{ name: 'P', map: true, note: true }, { name: 'Q', map: false }]);
+    expect(home).toContain('- [[P]] · [[P/앱 지도|앱 지도]]');
+    expect(home).toContain('- Q · 아직 지도 없음');
   });
   it('앱 지도 노트: 종류별 표, 표 글자 안의 | 는 바꾼다(v0.5.94)', () => {
     const note = appMapNote('P', { checkedAt: '2026-11-09T10:00:00Z', appMap: { summary: '운동 기록 앱', parts: [
@@ -67,5 +67,23 @@ describe('버전 노트(v0.6.89)', () => {
     expect(hubs['미노피아 쓴 스킬.md']).toContain('| ui-check | 1 |');
     expect(hubs['미노피아 쓴 스킬.md']).not.toContain('[[ui-check]]');
     expect(hubs['미노피아 개발.md']).toContain('| Claude | 1 |');
+  });
+});
+
+describe('지난 기록 채우기(v0.6.90)', () => {
+  it('CHANGELOG 제목·버전·날짜, 제목이 버전뿐이면 첫 항목', async () => {
+    const { parseChangelog } = await import('./notes-history.mjs');
+    expect(parseChangelog('## 지도 고치기(v0.6.88) — 2026-11-12\n- a\n## 0.2.3 — 2026-10-29\n\n- **이미지 첨부(v0.2 §4)**: 설명\n## 0.2.3 — 다시')).toEqual([
+      { version: '0.6.88', date: '2026-11-12', task: '지도 고치기' },
+      { version: '0.2.3', date: '2026-10-29', task: '이미지 첨부(v0.2 §4)' },
+    ]);
+  });
+  it('커밋으로 만든 AI·쓴 스킬', async () => {
+    const { agentOfCommit, skillsOfCommit, parseSkill } = await import('./notes-history.mjs');
+    expect(agentOfCommit('me <a@b>', 'x\n\nCo-Authored-By: Claude Opus <noreply@anthropic.com>')).toBe('Claude');
+    expect(agentOfCommit('chatgpt-codex-connector[bot] <x>', '')).toBe('Codex');
+    expect(agentOfCommit('me <a@b>', '그냥')).toBe('직접');
+    expect(skillsOfCommit('요약\n쓴 스킬: repo-map, ui-check')).toEqual(['repo-map', 'ui-check']);
+    expect(parseSkill('---\nname: ui-check\ndescription: "화면 확인. 설명"\nmetadata:\n  minoffia-category: 화면·디자인\n  minoffia-related: impeccable, x y\n---\n')).toEqual({ name: 'ui-check', title: '화면 확인', description: '화면 확인. 설명', category: '화면·디자인', related: ['impeccable'] });
   });
 });
