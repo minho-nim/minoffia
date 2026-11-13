@@ -1,10 +1,11 @@
 // v0.4.94 Claude 채점 받기: review-result가 보조 개발 루틴에 맡긴 채점 결과를 세션이 이 함수로 보낸다(로그인 없이, 1회용 제출표로 확인).
 // 제출표는 review-result가 만들고 해시만 저장한다(결과 버전 하나 전용, 6시간, 3번까지).
-// 판정은 서버가 Gemini 채점과 같은 규칙(rubric.ts = src/domain/review.ts 복사)으로 다시 계산해 result_reviews에 한 번만 넣는다.
+// 판정은 서버가 Gemini 채점과 같은 규칙(rubric.ts = src/domain/review.ts 복사)으로 다시 계산한다.
+// v0.7.8 3중 평가: review-result가 먼저 Gemini A·B 점수와 '동료 기다리는 중'을 한 줄로 넣어 두고, 여기서 동료(Claude) 점수를 채워 평균·과반으로 판정한다.
 // verify_jwt = false(세션에 Supabase 로그인이 없다). 대신 제출표가 맞아야만 한 줄을 넣을 수 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { requestRedoOnServer } from './redo.ts';
-import { parseScore, ranChecks, redoFeedback, ruleCheck, total, verdictOf } from './rubric.ts';
+import { panelEntry, panelJudge, panelOutcome, parseScore, ranChecks, redoFeedback, ruleCheck, total, verdictOf, type Gate, type PanelEntry } from './rubric.ts';
 
 const MAX_USES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -46,14 +47,35 @@ Deno.serve(async (req) => {
   const { data: bumped } = await admin.from('plan_submit_tokens').update({ uses: ticket.uses + 1 }).eq('id', ticket.id).eq('uses', ticket.uses).select('id');
   if (!bumped?.length) return reply(409, { ok: false, error: 'retry' });
 
-  const { data: existing } = await admin.from('result_reviews').select('id, cross_total').eq('task_id', taskId).eq('result_revision', ticket.result_revision).maybeSingle();
-  // v0.6.26: 기본 채점(Gemini)이 이미 있으면 이것은 소유자가 누른 '교차 채점'이다. 점수만 붙이고 판정은 그대로 둔다.
+  const { data: existing } = await admin.from('result_reviews').select('id, gates, panel').eq('task_id', taskId).eq('result_revision', ticket.result_revision).maybeSingle();
   if (existing) {
-    if (existing.cross_total != null) return reply(200, { ok: true, message: '이미 교차 채점된 결과입니다.' });
-    const reasonsOf = score.criteria.filter((c) => c.status !== 'met').map((c) => `${c.status === 'partial' ? '일부' : '미충족'}: ${c.text}`.slice(0, 160)).slice(0, 8);
-    const { error: crossError } = await admin.from('result_reviews').update({ cross_total: total(score), cross_judge: 'Claude', cross_reasons: reasonsOf }).eq('id', existing.id).is('cross_total', null);
-    if (crossError) return reply(500, { ok: false, error: 'could not save cross review' });
-    return reply(200, { ok: true, total: total(score), message: 'AI Office에 교차 채점 점수를 보냈습니다.' });
+    const panel = Array.isArray(existing.panel) ? (existing.panel as PanelEntry[]) : [];
+    const at = panel.findIndex((p) => p.who === 'peer' && p.status === 'pending');
+    if (at < 0) return reply(200, { ok: true, message: '이 결과의 평가는 이미 끝났습니다(기한이 지났거나 소유자가 먼저 판정).' });
+    const filled = panel.map((p, i) => (i === at ? panelEntry('peer', 'Claude', score) : p));
+    const { data: res } = await admin.from('result_packages').select('test_log').eq('task_id', taskId).eq('revision', ticket.result_revision).maybeSingle();
+    const gates = (existing.gates as Gate[]) ?? [];
+    const { count: redos } = await admin.from('result_reviews').select('id', { count: 'exact', head: true }).eq('task_id', taskId).eq('verdict', 'redo');
+    const { data: lastRedo } = await admin.from('result_reviews').select('reasons').eq('task_id', taskId).eq('verdict', 'redo').lt('result_revision', ticket.result_revision).order('result_revision', { ascending: false }).limit(1).maybeSingle();
+    const previousReasons = Array.isArray(lastRedo?.reasons) ? (lastRedo.reasons as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+    const out = panelOutcome(gates, filled, redos ?? 0, { executed: ranChecks(String(res?.test_log ?? '')), previousReasons });
+    const feedback = out.verdict === 'pass' || out.waiting ? '' : redoFeedback(gates, out.score, out.reasons);
+    // 기다리는 중일 때만 고친다(그 사이 소유자가 먼저 판정했으면 그대로 둔다)
+    const { data: updated, error: updateError } = await admin
+      .from('result_reviews')
+      .update({ panel: filled, score: out.score, total: out.total, verdict: out.verdict, reasons: out.reasons, feedback, auto_redo: redos ?? 0, judge: panelJudge(filled) })
+      .eq('id', existing.id)
+      .filter('panel', 'cs', JSON.stringify([{ who: 'peer', status: 'pending' }]))
+      .select('id');
+    if (updateError) return reply(500, { ok: false, error: 'could not save review' });
+    if (!updated?.length) return reply(200, { ok: true, message: '이 결과의 평가는 이미 끝났습니다.' });
+    if (out.verdict === 'redo' && feedback) {
+      const redo = requestRedoOnServer(admin, ticket.owner_id, taskId, ticket.result_revision, feedback).catch(() => 'skipped');
+      const er = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+      if (er) er.waitUntil(redo);
+      else await redo;
+    }
+    return reply(200, { ok: true, total: total(score), average: out.total, verdict: out.verdict, message: 'AI Office에 동료 평가 점수를 보냈습니다.' });
   }
 
   const { data: result } = await admin.from('result_packages').select('plan_revision, work_item_id, diff, test_log').eq('task_id', taskId).eq('revision', ticket.result_revision).maybeSingle();

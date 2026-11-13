@@ -32,6 +32,15 @@ describe('지금 할 일(v0.6.27)', () => {
     expect(n.text).toContain('평가 85점');
     expect(n.tone).toBe('turn');
   });
+  it('3중 평가는 평균과 채점자별 점수를 함께(v0.7.8)', () => {
+    const panel = [
+      { who: 'A', judge: 'Gemini · Studio A', status: 'done', total: 90 },
+      { who: 'B', judge: 'Gemini · Studio B', status: 'done', total: 80 },
+      { who: 'peer', judge: 'Claude', status: 'pending', total: null },
+    ];
+    const n = nowInfo(v({ stage: 'github_approval_pending', result: { revision: 1, diff: 'x' } as never }), { done: false, review: { total: 85, panel } as never });
+    expect(n.text).toContain('평가 평균 85점(A 90 · B 80 · Claude …), 동료 점수 기다리는 중');
+  });
   it('CI 통과 전에는 배포 버튼을 내지 않는다', () => {
     expect(nowInfo(v({ stage: 'deployment_approval_pending' }), { done: false, ciPassed: false, prUrl: 'https://github.com/o/r/pull/1' }).primary).toBeUndefined();
   });

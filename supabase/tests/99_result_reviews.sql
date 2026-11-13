@@ -17,6 +17,13 @@ do $$ begin
     raise exception '판정은 셋 중 하나';
   exception when check_violation then null;
   end;
+  -- v0.7.8 3중 평가: 채점자 목록(panel)은 배열만, 기본은 빈 배열
+  if (select panel from result_reviews where result_revision = 1) <> '[]'::jsonb then raise exception 'panel 기본값은 빈 배열'; end if;
+  begin
+    insert into result_reviews (owner_id, task_id, result_revision, verdict, panel) values ('55555555-5555-4555-8555-555555555555', 'bbbbbbbb-0000-4000-8000-0000000000b2', 4, 'owner', '{}'::jsonb);
+    raise exception 'panel은 배열만';
+  exception when check_violation then null;
+  end;
 end $$;
 set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"55555555-5555-4555-8555-555555555555","role":"authenticated"}', false);

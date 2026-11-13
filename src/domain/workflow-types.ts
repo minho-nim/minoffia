@@ -234,6 +234,8 @@ export interface ResultReview {
   crossTotal?: number | null;
   crossJudge?: string | null;
   crossReasons?: string[];
+  /** 3중 평가(v0.7.8): 채점자별 점수·관점·지적. 옛 기록은 빈 배열 */
+  panel?: import('./review').PanelEntry[];
   createdAt: string;
 }
 

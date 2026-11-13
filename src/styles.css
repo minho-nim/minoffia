@@ -3603,6 +3603,59 @@ a.project-site {
   color: var(--danger);
 }
 
+/* 3중 평가(v0.7.8): 채점자별 점수 */
+.review-card.is-wait {
+  border-left-color: var(--line);
+}
+
+.review-verdict.is-wait {
+  color: var(--muted);
+}
+
+.review-panel {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.review-panel > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-panel > li:last-child {
+  border-bottom: 0;
+}
+
+.review-who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-score.is-low {
+  color: var(--danger);
+}
+
+.review-who-more {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+
+.review-who-more p,
+.review-who-more ul {
+  margin: 4px 0;
+}
+
+.review-who-more ul {
+  padding-left: 1.1em;
+}
+
 .review-parts {
   display: grid;
   gap: 3px;

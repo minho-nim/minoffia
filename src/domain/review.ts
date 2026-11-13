@@ -1,11 +1,9 @@
 // 결과 점수 평가(v0.4.64, 소유자 2026-11-02 "8번 하자"). 외부 의존 없음: 앱과 서버(review-result/rubric.ts에 복사, 같은지 시험이 확인)가 같이 쓴다.
 // 1단계 규칙 검사(토큰 0) → 막히면 AI를 부르지 않고 다시 개발.
-// 2단계 AI 점수(100점, Gemini 무료) → 80점 이상·위반 없음이면 통과, 아니면 고칠 점만 적어 다시 개발(자동 최대 2번, 그다음은 소유자).
+// 2단계 AI 점수(100점, v0.7.8부터 3중 평가: Gemini A·B + 동료 개발 AI, 아래 panelOutcome) → 평균 80점 이상·위반 없음이면 통과, 아니면 고칠 점만 적어 다시 개발(자동 최대 2번, 그다음은 소유자).
 // 참고: MCP as a Judge(마지막 관문), CodeView(규칙 먼저), codex-mcp(JSON 점수표), MCP-Bench(경계 점수는 한 번 더).
 
 export const PASS_SCORE = 80;
-/** 이 구간이면 한 번 더 채점해 평균 낸다 */
-export const BORDER: [number, number] = [70, 85];
 /** 자동으로 다시 개발을 보내는 최대 횟수(그다음은 소유자가 정함) */
 export const MAX_AUTO_REDO = 2;
 
@@ -183,18 +181,6 @@ export function total(score: Score): number {
   return (Object.keys(WEIGHTS) as Part[]).reduce((s, k) => s + score.parts[k], 0);
 }
 
-export function needsSecondOpinion(score: Score): boolean {
-  const t = total(score);
-  return t >= BORDER[0] && t <= BORDER[1];
-}
-
-/** 두 번 채점한 점수의 평균(항목별 평균, 위반·고칠 점은 합침) */
-export function averageScores(a: Score, b: Score): Score {
-  const parts = Object.fromEntries((Object.keys(WEIGHTS) as Part[]).map((k) => [k, Math.round((a.parts[k] + b.parts[k]) / 2)])) as Record<Part, number>;
-  const uniq = (xs: string[]) => [...new Set(xs)].slice(0, 10);
-  return { parts, criteria: a.criteria.length ? a.criteria : b.criteria, violations: uniq([...a.violations, ...b.violations]), fixes: uniq([...a.fixes, ...b.fixes]), summary: a.summary || b.summary };
-}
-
 /** 판정: 규칙 막힘·위반·점수 미달이면 다시 개발(자동 횟수를 넘으면 소유자), 아니면 통과 */
 /** 위반 글에 근거가 있는지: 파일 이름(점과 확장자)·줄 번호·코드 조각(백틱)·'근거' 표시 중 하나 */
 const HAS_GROUND = /[\w-]+\.[a-z]{1,5}\b|:\d+|`[^`]+`|근거|line \d+|L\d+/i;
@@ -237,7 +223,7 @@ export function verdictOf(
   gates: Gate[],
   score: Score | null,
   autoRedos: number,
-  opts: { executed?: boolean; previousReasons?: string[] } = {},
+  opts: { executed?: boolean; previousReasons?: string[]; extraReasons?: string[] } = {},
 ): { verdict: Verdict; reasons: string[] } {
   const reasons: string[] = [];
   for (const g of gates) if (g.blocking && !g.ok) reasons.push(`${g.label}: ${g.detail}`);
@@ -246,9 +232,10 @@ export function verdictOf(
     for (const v of score.violations) reasons.push(`위반: ${v}`);
     // (필수) 완료 기준이 못 지켜졌으면 점수와 상관없이 다시 개발(v0.5.80)
     for (const c of score.criteria) if (mustCriterion(c.text) && c.status === 'unmet') reasons.push(`필수 완료 기준 미충족: ${c.text.slice(0, 120)}`);
-    const t = total(score);
+    const t = Math.round(total(score));
     if (t < PASS_SCORE) reasons.push(`점수 ${t}점(통과 ${PASS_SCORE}점)`);
   }
+  reasons.push(...(opts.extraReasons ?? []));
   if (!reasons.length) {
     // 시험·화면 확인을 못 돌렸으면 점수가 높아도 통과로 단정하지 않는다(v0.5.93)
     if (opts.executed === false) return { verdict: 'owner', reasons: ['실행 확인 없음: 시험·화면 확인 기록이 없어 통과를 확정하지 않았어요(점수는 통과권).'] };
@@ -329,12 +316,109 @@ export function buildReviewPrompt(p: {
     .join('\n');
 }
 
-/**
- * 경계 점수(70~85) 두 번째 채점의 입장(v0.5.37, zen-mcp-server의 consensus 'against' 입장에서 착안, Apache-2.0).
- * 같은 호출 수로 더 날카롭게: 통과시키면 안 되는 이유를 먼저 찾되, 사실·근거는 입장과 상관없이 인정한다.
- */
-export const SECOND_OPINION_NOTE = [
-  '## 이번 채점의 입장: 반대 쪽 검토자',
-  '이 결과를 통과시키면 안 되는 이유를 먼저 찾는다(빠진 완료 기준, 기획서와 다른 점, 범위 밖 변경, 깨질 수 있는 곳).',
-  '다만 근거가 확인된 것은 입장과 상관없이 그대로 인정하고, 근거 없이 점수를 깎지 않는다. 형식은 위와 같은 JSON.',
+// ── 3중 평가(v0.7.8, 소유자 2026-11-12 "관점은 다르게, 항목은 동일. 각각 점수와 평균, 평균이나 과반이 기준점 미만이면 자동 다시 개발") ──
+// Gemini A(요청·사용자)·Gemini B(코드 품질·안전)·동료 개발 AI(Codex 결과 → Claude, Claude 결과 → Codex)가 같은 항목으로 채점한다.
+
+export type PanelWho = 'A' | 'B' | 'peer';
+export interface PanelEntry {
+  who: PanelWho;
+  /** 채점한 AI(Gemini · Studio A, Claude 등) */
+  judge: string;
+  /** 보는 관점 */
+  perspective: string;
+  /** done = 점수 옴, pending = 기다리는 중, skipped = 못 부름·안 부름(note에 이유) */
+  status: 'done' | 'pending' | 'skipped';
+  total: number | null;
+  summary: string;
+  /** 못 지킨 기준·고칠 점(짧게) */
+  points: string[];
+  note: string;
+  score: Score | null;
+}
+
+export const PANEL_PERSPECTIVE: Record<PanelWho, string> = { A: '요청·사용자', B: '코드 품질·안전', peer: '동료 개발 AI' };
+
+/** Gemini 두 채점자의 관점 안내(항목·형식은 같고 보는 눈만 다르다) */
+export const PERSPECTIVE_NOTE: Record<'A' | 'B', string> = {
+  A: [
+    '## 이번 채점의 관점: 요청·사용자',
+    '소유자가 요청한 것이 실제로 되었는지, 화면·문구·흐름이 쓰는 사람에게 맞는지를 중심으로 본다(완료 기준·기획서 요구).',
+    '채점 항목과 JSON 형식은 위와 같다. 근거가 확인된 것은 관점과 상관없이 인정하고, 근거 없이 깎지 않는다.',
+  ].join('\n'),
+  B: [
+    '## 이번 채점의 관점: 코드 품질·안전',
+    '깨질 수 있는 곳, 오류 처리, 보안·비밀값, 범위 밖 변경, 시험이 실제로 바뀐 것을 확인하는지를 중심으로 본다.',
+    '채점 항목과 JSON 형식은 위와 같다. 근거가 확인된 것은 관점과 상관없이 인정하고, 근거 없이 깎지 않는다.',
+  ].join('\n'),
+};
+
+/** 동료 개발 AI 채점 안내(브랜치를 직접 볼 수 있다) */
+export const PEER_NOTE = [
+  '## 이번 채점의 관점: 동료 개발 AI',
+  '같은 일을 하는 개발자로서 작업 브랜치를 직접 열어 실제로 돌아가는지, 더 쉬운 방법이나 빠진 곳이 없는지 본다. 채점 항목과 JSON 형식은 위와 같다.',
 ].join('\n');
+
+export function panelEntry(who: PanelWho, judge: string, score: Score | null, note = ''): PanelEntry {
+  const points = score
+    ? [
+        ...score.criteria.filter((c) => c.status !== 'met').map((c) => `${c.status === 'partial' ? '일부' : '미충족'}: ${c.text}`),
+        ...score.violations.map((v) => `위반: ${v}`),
+        ...score.fixes,
+      ]
+        .map((x) => x.slice(0, 160))
+        .slice(0, 6)
+    : [];
+  return { who, judge, perspective: PANEL_PERSPECTIVE[who], status: score ? 'done' : 'skipped', total: score ? total(score) : null, summary: score?.summary ?? '', points, note, score };
+}
+
+export function pendingEntry(who: PanelWho, judge: string, note = ''): PanelEntry {
+  return { ...panelEntry(who, judge, null, note), status: 'pending' };
+}
+
+/** 여러 채점의 평균: 항목 점수는 평균, 완료 기준은 과반 판단, 위반·고칠 점은 합침 */
+export function averageMany(scores: Score[]): Score {
+  if (scores.length === 1) return scores[0];
+  const parts = Object.fromEntries((Object.keys(WEIGHTS) as Part[]).map((k) => [k, Math.round((10 * scores.reduce((s, x) => s + x.parts[k], 0)) / scores.length) / 10])) as Record<Part, number>;
+  const key = (t: string) => t.replace(/\s+/g, ' ').trim();
+  const base = scores.find((x) => x.criteria.length)?.criteria ?? [];
+  const criteria = base.map((c) => {
+    const all = scores.map((x) => x.criteria.find((y) => key(y.text) === key(c.text))).filter((y): y is Criterion => Boolean(y));
+    const unmet = all.filter((y) => y.status === 'unmet').length;
+    const status: Criterion['status'] = unmet * 2 > all.length ? 'unmet' : all.some((y) => y.status !== 'met') ? 'partial' : 'met';
+    return { ...c, status, evidence: all.find((y) => y.status === status)?.evidence ?? c.evidence };
+  });
+  const uniq = (xs: string[]) => [...new Set(xs)].slice(0, 12);
+  return { parts, criteria, violations: uniq(scores.flatMap((x) => x.violations)), fixes: uniq(scores.flatMap((x) => x.fixes)), summary: scores.find((x) => x.summary)?.summary ?? '' };
+}
+
+/** 채점자들 이름(점수 온 쪽만) */
+export function panelJudge(panel: PanelEntry[]): string {
+  const done = panel.filter((p) => p.status === 'done').map((p) => p.judge.replace(/^Gemini · Studio /, 'Gemini '));
+  return done.length ? done.join(' + ') : '규칙';
+}
+
+/**
+ * 3중 평가 판정. 점수 온 채점의 평균을 기존 규칙(verdictOf)으로 보고, 기준점 미만이 과반이면 다시 개발.
+ * 아직 기다리는 채점이 있으면, 이미 과반이 미달이 아닌 한 판정을 미룬다(waiting).
+ */
+export function panelOutcome(
+  gates: Gate[],
+  panel: PanelEntry[],
+  autoRedos: number,
+  opts: { executed?: boolean; previousReasons?: string[] } = {},
+): { verdict: Verdict; reasons: string[]; score: Score | null; total: number | null; waiting: boolean } {
+  const done = panel.filter((p) => p.status === 'done' && p.score);
+  const expected = panel.filter((p) => p.status !== 'skipped').length;
+  const low = done.filter((p) => (p.total ?? 0) < PASS_SCORE).length;
+  const majorityLow = expected > 0 && low * 2 > expected;
+  const score = done.length ? averageMany(done.map((p) => p.score!)) : null;
+  const avg = score ? Math.round(total(score)) : null;
+  const blocked = gates.some((g) => g.blocking && !g.ok);
+  if (!blocked && !majorityLow && panel.some((p) => p.status === 'pending')) {
+    const who = panel.filter((p) => p.status === 'pending').map((p) => p.judge).join(', ');
+    return { verdict: 'owner', reasons: [`평가 기다리는 중(${who}): 점수가 다 모이면 판정해요.`], score, total: avg, waiting: true };
+  }
+  const extraReasons = majorityLow ? [`평가 ${expected}개 중 ${low}개가 ${PASS_SCORE}점 미만(과반)`] : [];
+  const r = verdictOf(gates, score, autoRedos, { ...opts, extraReasons });
+  return { ...r, score, total: avg, waiting: false };
+}
