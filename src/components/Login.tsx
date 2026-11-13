@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { useState } from 'react';
 import { ALLOW_SIGNUP } from '../lib/supabase';
 
-export function Login({ client }: { client: SupabaseClient }) {
+export function Login({ client, onTry }: { client: SupabaseClient; /** 로그인 없이 체험하기(v0.7.6) */ onTry?: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +57,14 @@ export function Login({ client }: { client: SupabaseClient }) {
           </button>
         </div>
       </form>
+      {onTry && (
+        <div className="login-try">
+          <button type="button" className="btn btn-ghost" onClick={onTry}>
+            로그인 없이 체험하기
+          </button>
+          <p className="muted small">예시 데이터로 이 기기 안에서만 돌아가요. 실제 업무·서버와는 연결되지 않아요.</p>
+        </div>
+      )}
     </main>
   );
 }

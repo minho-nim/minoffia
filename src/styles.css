@@ -7000,3 +7000,16 @@ html.popup-open .project-sections > details[open] * {
   display: block;
   margin-top: 4px;
 }
+
+/* 로그인 없이 체험하기(v0.7.6) */
+.login-try {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+  text-align: center;
+}
+.login-try p {
+  margin: 0;
+}
