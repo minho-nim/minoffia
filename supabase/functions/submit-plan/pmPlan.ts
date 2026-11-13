@@ -1,14 +1,13 @@
 import { cleanDifficulty } from './difficulty.ts';
 import type { AgentKind, AssigneePreference, DevelopmentMode, ExecutionMode, PlanBody, WorkItem } from './planTypes.ts';
 
-const PREFS: AssigneePreference[] = ['codex_primary', 'claude_support', 'gemini_optional', 'gemini_dev'];
+const PREFS: AssigneePreference[] = ['codex_primary', 'claude_support', 'gemini_optional'];
 const MODES: ExecutionMode[] = ['codex_cloud', 'manual_handoff'];
 
 export const PREF_AGENT: Record<AssigneePreference, AgentKind> = {
   codex_primary: 'codex',
   claude_support: 'claude',
   gemini_optional: 'gemini',
-  gemini_dev: 'gemini',
 };
 
 export type ParseResult = { ok: true; plan: PlanBody } | { ok: false; errors: string[] };

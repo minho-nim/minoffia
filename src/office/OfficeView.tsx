@@ -61,8 +61,8 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
   const drawing = useDrawing();
   const speech = useMemo(() => {
     const m: Map<AgentId, Speech> = workflow ? speechFor(tasks, workflow, leaveKey ? (leaveKey.split(',') as AgentId[]) : []) : new Map();
-    // 미노가 그림을 그리는 중(v0.7.4): PR·배포 말풍선이 없을 때만
-    if (drawing && !m.has('ci')) m.set('ci', { text: '그림[…]', label: `${drawing}을(를) 그리는 중`, kind: 'busy', taskId: '' });
+    // 미노가 앱 지도·구조도를 만드는 중(v0.7.4): PR·배포 말풍선이 없을 때만
+    if (drawing && !m.has('ci')) m.set('ci', { text: `${drawing}[…]`, label: `${drawing}을(를) 만드는 중`, kind: 'busy', taskId: '' });
     return m;
   }, [tasks, workflow, leaveKey, drawing]);
   const sceneRef = useRef(scene);

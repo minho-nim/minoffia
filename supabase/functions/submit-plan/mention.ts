@@ -6,8 +6,7 @@ import type { AssigneePreference, WorkItem } from './planTypes.ts';
 const NAMES: [RegExp, AssigneePreference, string][] = [
   [/@(코덱스|codex)/i, 'codex_primary', 'Codex'],
   [/@(클로드|claude)/i, 'claude_support', 'Claude'],
-  // v0.6.24: @StudioA·@StudioB는 '누가 답할지'(질문용)라 개발 담당으로 읽지 않는다
-  [/@(제미나이|제미니|gemini)(?![a-z])/i, 'gemini_dev', 'Gemini 개발'],
+  // v0.6.24: @StudioA·@StudioB는 '누가 답할지'(질문용)라 개발 담당으로 읽지 않는다. @Gemini 개발은 2026-11-13 뺐다
 ];
 
 export type Mention = { preference: AssigneePreference; label: string };
@@ -24,7 +23,10 @@ export function mentionedAssignee(text: string | null | undefined): Mention | nu
 
 /** 이 저장소에서 쓸 수 있는 지정인지(AI Office 자신에는 Gemini 개발을 쓰지 않는다) */
 export function mentionAllowed(m: Mention, repo: string | null | undefined): boolean {
-  return m.preference !== 'gemini_dev' || !OFFICE_REPOS.includes((repo ?? '').toLowerCase());
+  void OFFICE_REPOS;
+  void repo;
+  void m;
+  return true;
 }
 
 /** 계획의 모든 작업 담당을 지정한 AI로 바꾼다 */
@@ -36,7 +38,6 @@ export function applyMention(items: WorkItem[], m: Mention): WorkItem[] {
 export const MENTION_OPTIONS = [
   { tag: 'Claude', ko: '클로드', desc: '개발·꼼꼼한 수정' },
   { tag: 'Codex', ko: '코덱스', desc: 'Linear로 맡기는 개발' },
-  { tag: 'Gemini', ko: '제미나이', desc: '쉬운 개발(다른 저장소만)' },
   // v0.6.24(소유자 "제미나이도 각각 태그"): 질문에 누가 답할지. 그 키가 안 되면 다른 쪽이 대신 답한다
   { tag: 'StudioA', ko: '스튜디오A', desc: 'Gemini 답(키 A)' },
   { tag: 'StudioB', ko: '스튜디오B', desc: 'Gemini 답(키 B)' },

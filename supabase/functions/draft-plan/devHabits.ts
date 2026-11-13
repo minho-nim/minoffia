@@ -2,7 +2,7 @@
 // 출처(MIT): Ponytail(DietrichGebert/ponytail)의 "가장 작은 완전한 변경"·저장소 지도, Agent Skills(addyosmani/agent-skills)의
 // planning·incremental·debugging·TDD·security·frontend·code-review, The Agency(msitarzewski/agency-agents)의
 // AI 코드 보안 감사·현실 점검·화면 마감 검토에서 우리 단계에 맞는 것만 골라 짧게 옮겼다.
-// 서버 함수(dispatch-claude·dispatch-claude-dev·dispatch-gemini-dev)에 같은 파일을 복사한다(같은지는 시험이 확인).
+// 서버 함수(dispatch-claude·dispatch-claude-dev·draft-plan)에 같은 파일을 복사한다(같은지는 시험이 확인).
 
 /** 개발(Claude·Gemini·Codex 공통) */
 export const DEV_HABITS: readonly string[] = [

@@ -1,6 +1,6 @@
 // 개발 지시서에 붙이는 앱 지도(v0.5.95, 소유자 "앱 지도를 AI가 참고하게 연결"): 점검 때 만든 쉬운 지도에서
 // '어느 화면·기능이 어느 폴더에 있는지'만 짧게(최대 2,000자) 붙여 개발 AI가 고칠 파일을 바로 찾게 한다. 모델 호출 없음.
-// 서버 복사본: supabase/functions/dispatch-gemini-dev/appMap.ts, dispatch-claude-dev/appMap.ts(같은지 시험이 확인)
+// 서버 복사본: supabase/functions/dispatch-claude-dev/appMap.ts 등(같은지 시험이 확인)
 const MAX = 2000;
 
 export function appMapSection(raw: unknown): string {

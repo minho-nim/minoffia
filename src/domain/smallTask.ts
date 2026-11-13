@@ -52,9 +52,7 @@ export function checkSmallTask(
   const text = [spec.finalPrompt, spec.changeScope].join('\n');
   for (const [re, label] of RISKY) if (re.test(text)) why.push(label);
   if (!repo || !repo.includes('/')) why.push('저장소 없음');
-  const geminiOk = !away.gemini && !OFFICE_REPOS.includes(repo?.toLowerCase() ?? '');
-  const wantOk =
-    want === 'gemini_dev' ? geminiOk : want === 'codex_primary' ? !away.codex : want === 'claude_support' ? !away.claude : false;
+  const wantOk = want === 'codex_primary' ? !away.codex : want === 'claude_support' ? !away.claude : false;
   // v0.6.19(소유자 "Codex 주, Claude 보조"): 개발은 Codex, Codex가 휴가면 Claude, 둘 다면 쉬운 일만 Gemini
   const preference: AssigneePreference | null = wantOk && want
     ? want

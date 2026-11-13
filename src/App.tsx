@@ -1222,8 +1222,6 @@ export function App() {
           if (blocked) say('ok', `실행 승인했어요. ${blocked.replace('시작할 수 있습니다.', '자동으로 시작해요.')}`);
           const a = blocked ? undefined : found;
           if (a?.assignee === 'claude') await workflowActions.startClaudeDev?.(a, false);
-          // Gemini 개발(v0.4.82): 실행 승인 → 서버가 GitHub Actions 워크플로 시작
-          if (a?.assignee === 'gemini' && a.executionMode === 'gemini_actions') await workflowActions.startGeminiDev?.(a, false);
         }
         if (gate === 'B') {
           const r = snap.workflow.results.find((x) => x.taskId === task.id && x.revision === revision);
@@ -1531,22 +1529,6 @@ export function App() {
             }
           }
         : undefined,
-    startGeminiDev:
-      store.mode === 'supabase'
-        ? async (a, ack) => {
-            try {
-              const r = await store.startGeminiDev(a.id, ack);
-              say('ok', `Gemini 개발을 시작했습니다(키 ${r.key || '?'}, 완료 아님). GitHub Actions에서 고치고 시험한 뒤 결과를 자동으로 보냅니다.`);
-              return true;
-            } catch (e) {
-              say('error', `Gemini 개발을 시작하지 못했습니다: ${(e as Error).message}`);
-              await markQuota(a, (e as Error).message);
-              return false;
-            } finally {
-              setSnap(await store.load());
-            }
-          }
-        : undefined,
     openPr:
       store.mode === 'supabase' && store.openPr
         ? async (task) => {
@@ -1670,7 +1652,6 @@ export function App() {
       chainTried.current.add(a.id);
       say('ok', item.dependencies?.length ? `앞 작업이 끝나서 ${a.workItemId}을(를) 자동으로 시작해요.` : `${a.workItemId}을(를) 자동으로 시작해요.`);
       if (a.assignee === 'claude') void workflowActions.startClaudeDev?.(a, false);
-      else if (a.assignee === 'gemini' && a.executionMode === 'gemini_actions') void workflowActions.startGeminiDev?.(a, false);
       else if (a.assignee === 'codex' && view.spec) {
         const project = projectById.get(task.projectId);
         const rules = [...withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === task.projectId).map((r) => r.rule)), ...skillPickRule(task.skills)];
@@ -1727,7 +1708,7 @@ export function App() {
       if (check.ok) {
         const failed = await importPlanText(task, smallPlanText(task.id, repo, view.spec, check), 'rule_small', data);
         if (!failed) {
-          say('ok', `작은 일이라 PM 없이 ${check.preference === 'gemini_dev' ? 'Gemini 개발' : check.preference === 'claude_support' ? 'Claude' : 'Codex'}에 바로 배정했어요(${task.title}). 실행 승인하면 시작해요.`);
+          say('ok', `작은 일이라 PM 없이 ${check.preference === 'claude_support' ? 'Claude' : 'Codex'}에 바로 배정했어요(${task.title}). 실행 승인하면 시작해요.`);
           return;
         }
       }
