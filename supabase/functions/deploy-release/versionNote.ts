@@ -22,7 +22,8 @@ export function agentOf(source: string): string {
   if (s.startsWith('codex')) return 'Codex';
   if (s.startsWith('claude')) return 'Claude';
   if (s.startsWith('gemini')) return 'Gemini';
-  return '직접';
+  // 수동으로 붙인 결과 등도 Codex로 본다(소유자 2026-11-13 "Claude로 대화 안 한 건 다 Codex")
+  return 'Codex';
 }
 
 const clean = (v: unknown, max: number) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
