@@ -1,0 +1,43 @@
+# 옵시디언 지난 기록 채우기(v0.6.90, 소유자 "깃허브 모두 다 긁어서 올려줘"): 손으로 시작한다. AI 없음.
+# 프로젝트 저장소를 읽기 전용으로 받아(TARGET_REPO_TOKEN) 버전 기록·들어 있는 스킬을 모으고, 스킬 모음의 설명과 함께 노트 보관함에 올린다.
+# 이미 있는 버전 노트(배포 때 만든 것)는 건드리지 않는다. minho-nim/MinLab은 읽지 않는다.
+name: 옵시디언 지난 기록 채우기
+on:
+  workflow_dispatch:
+    inputs:
+      projects:
+        description: '프로젝트 목록 JSON: [{"name":"미노피아","repo":"minho-nim/minoffia"}]'
+        required: true
+permissions:
+  contents: read
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 저장소 받기
+        env:
+          TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+          PROJECTS: ${{ inputs.projects }}
+          SKILLS_REPO: ${{ vars.SKILLS_REPO || 'minho-nim/minoffia-skills' }}
+        run: |
+          mkdir -p /tmp/repos
+          git clone -q "https://x-access-token:${TOKEN}@github.com/${SKILLS_REPO}.git" /tmp/skills || mkdir -p /tmp/skills
+          node -e '
+            const list = JSON.parse(process.env.PROJECTS);
+            const ok = list.filter((p) => /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(p.repo) && p.repo.toLowerCase() !== "minho-nim/minlab" && typeof p.name === "string");
+            require("fs").writeFileSync("/tmp/projects.json", JSON.stringify(ok.map((p, i) => ({ name: p.name.slice(0, 80), repo: p.repo, dir: "/tmp/repos/" + i }))));
+          '
+          node -e 'for (const p of require("/tmp/projects.json")) console.log(p.repo + " " + p.dir)' | while read -r repo dir; do
+            git clone -q "https://x-access-token:${TOKEN}@github.com/${repo}.git" "$dir" || echo "::warning::${repo} 받기 실패"
+          done
+      - name: 기록 모으기
+        run: node scripts/notes-history.mjs /tmp/projects.json /tmp/skills /tmp/history.json
+      - name: 노트 올리기
+        env:
+          NOTES_REPO: ${{ vars.NOTES_REPO || 'minho-nim/minoffia-notes' }}
+          NOTES_TOKEN: ${{ secrets.NOTES_REPO_TOKEN || secrets.TARGET_REPO_TOKEN }}
+        run: bash scripts/notes-run.sh "지난 기록 채우기" backfill 전체 /tmp/history.json
