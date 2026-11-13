@@ -11,9 +11,9 @@ export interface UnassignedCharacter {
 }
 
 const LABEL: Record<string, string> = {
-  planner: '기획 · 긴 생머리',
+  clipboard: '기획 · 클립보드 (예전 Claude)',
+  hoodie: '개발 · 보라 후드 (예전 Studio B)',
   nightdev: '야간 개발 · 투블럭',
-  lead: '팀장 · 안경',
 };
 
 export function unassignedCharacters(source: Record<string, string> = files): UnassignedCharacter[] {
