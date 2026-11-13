@@ -1,7 +1,7 @@
 // 앱 점검·기본 지도(floorplan 1단계, v0.5.53, 소유자 목록 28번): 프로젝트 카드에서 점검을 시작하고 결과를 쉬운 한국어로 본다.
 // 점검은 GitHub Actions가 AI 없이 돌린다(2~5분). 지도는 floorplan이 만든 HTML이라 앱과 분리된 창(sandbox, 같은 출처 권한 없음)에서만 연다.
 import { useEffect, useRef, useState } from 'react';
-import { appMapKinds, koIssue, type AppMap, type HealthReport } from '../domain/healthText';
+import { appMapKinds, fixRequest, koIssue, type AppMap, type HealthReport } from '../domain/healthText';
 
 export type HealthApi = {
   load: () => Promise<HealthReport | null>;
@@ -50,7 +50,7 @@ export function AppMapView({ map }: { map: AppMap }) {
 const when = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /** maps=false(v0.6.70): 지도 버튼은 빼고 점검만('구조 보기'가 지도를 맡을 때) */
-export function HealthCheck({ api, maps = true }: { api: HealthApi; maps?: boolean }) {
+export function HealthCheck({ api, maps = true, onFix }: { api: HealthApi; maps?: boolean; /** 고치기 요청을 대화 탭 입력칸에 넣기(v0.6.95) */ onFix?: (text: string) => void }) {
   const [report, setReport] = useState<HealthReport | null>(null);
   const [state, setState] = useState<'loading' | 'idle' | 'checking' | 'error'>('loading');
   const [msg, setMsg] = useState('');
@@ -138,6 +138,11 @@ export function HealthCheck({ api, maps = true }: { api: HealthApi; maps?: boole
         (issues.length ? (
           <details className="health-issues">
             <summary>점검 결과 보기 ({issues.length}개)</summary>
+            {onFix && (
+              <button type="button" className="btn btn-small btn-primary health-fix-all" onClick={() => onFix(fixRequest(issues))}>
+                모두 고치기 요청
+              </button>
+            )}
             <ul className="health-list">
               {issues.map((i, n) => {
                 const k = koIssue(i);
@@ -146,6 +151,11 @@ export function HealthCheck({ api, maps = true }: { api: HealthApi; maps?: boole
                     <span className={`pill health-${i.severity}`}>{k.severity}</span> <b>{k.title}</b>
                     <p className="muted small">{k.detail}</p>
                     {i.items.length > 0 && <p className="small health-items">{i.items.slice(0, 5).join(', ')}{i.items.length > 5 ? ` 외 ${i.items.length - 5}개` : ''}</p>}
+                    {onFix && (
+                      <button type="button" className="btn btn-small btn-ghost health-fix" onClick={() => onFix(fixRequest([i]))}>
+                        고치기 요청
+                      </button>
+                    )}
                   </li>
                 );
               })}
