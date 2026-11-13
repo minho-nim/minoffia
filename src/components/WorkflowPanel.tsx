@@ -29,7 +29,7 @@ import { DesignCheckView } from './DesignCheckView';
 import { SiteCheckView } from './SiteCheckView';
 import { canCompare, COMPARE_WHY, compareTarget, PREF_LABEL, quotaHit, reassignTargets, staleStart } from '../domain/reassign';
 
-const AGENT_NAME: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
+const AGENT_NAME: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' };
 import { OFFICE_REPOS } from '../domain/smallTask';
 import { nowInfo, type NowAction } from '../domain/nowAction';
 import { SIMPLE_LABEL } from '../domain/simpleState';
@@ -140,7 +140,7 @@ interface Props {
   /** 이 업무의 최신 운영 배포 기록 */
   deployment?: Deployment | null;
   /** AI별 동시 작업 상한 */
-  agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini' | 'grok', number>>;
+  agentLimits?: Partial<Record<'codex' | 'claude' | 'gemini', number>>;
   /** 모든 업무의 링크·확인 질문(이 업무 것만 골라 쓴다) */
   links: LinkRef[];
   clarifications: Clarification[];

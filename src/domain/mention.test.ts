@@ -41,7 +41,7 @@ describe('@ 목록(v0.5.47)', () => {
     expect(mentionQuery('다크모드 @', 6)).toEqual({ start: 5, query: '' });
     expect(mentionQuery('@cl', 3)).toEqual({ start: 0, query: 'cl' });
     expect(mentionQuery('a@b', 3)).toBeNull();
-    expect(mentionOptions('').length).toBe(5);
+    expect(mentionOptions('').length).toBe(6);
     expect(mentionOptions('cl').map((o) => o.tag)).toEqual(['Claude']);
     expect(mentionOptions('제').map((o) => o.tag)).toEqual(['Gemini']);
     expect(insertMention('고쳐줘 @cl', 7, 4, 'Claude')).toEqual({ text: '고쳐줘 @Claude ', caret: 12 });
@@ -55,5 +55,16 @@ describe('@ 목록(v0.5.47)', () => {
     expect(mentionedAssignee('@StudioB 버튼 고쳐줘')).toBeNull();
     expect(mentionedAssignee('@Gemini 버튼 고쳐줘')?.preference).toBe('gemini_dev');
     expect(mentionOptions('스튜').map((o) => o.tag)).toEqual(['StudioA', 'StudioB']);
+  });
+});
+
+describe('@Exa(v0.7.3)', () => {
+  it('@Exa·@엑사면 웹 조사, 목록에도 나온다', async () => {
+    const { asksExa, mentionOptions } = await import('./mention');
+    expect(asksExa('@Exa 요즘 Gemini 무료 한도')).toBe(true);
+    expect(asksExa('@엑사 찾아줘')).toBe(true);
+    expect(asksExa('exa라는 회사')).toBe(false);
+    expect(asksExa('@Exabyte')).toBe(false);
+    expect(mentionOptions('ex').map((o) => o.tag)).toEqual(['Exa']);
   });
 });

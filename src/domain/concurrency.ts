@@ -1,6 +1,6 @@
 /**
  * 개발 작업 시작 규칙(DB 0009_concurrency_limit.sql과 같다).
- * - AI별 동시 작업 상한: Codex Cloud·Claude Code는 여러 작업을 동시에 돌릴 수 있다. 기본 Codex 3·Claude 3·Gemini 2·Grok 1,
+ * - AI별 동시 작업 상한: Codex Cloud·Claude Code는 여러 작업을 동시에 돌릴 수 있다. 기본 Codex 3·Claude 3·Gemini 2,
  *   소유자가 1~5로 바꾼다. 다른 AI끼리는 서로 세지 않는다.
  * - 순서: PM 계획의 dependencies에 적힌 앞 작업이 끝나야(completed) 시작한다(같은 파일 충돌 방지).
  */
@@ -9,7 +9,7 @@ import type { AgentAssignment, AgentKind, PmPlan } from './workflow-types';
 
 export type AgentLimits = Partial<Record<AgentKind, number>>;
 
-export const DEFAULT_AGENT_LIMITS: Record<AgentKind, number> = { codex: 3, claude: 3, gemini: 2, grok: 1 };
+export const DEFAULT_AGENT_LIMITS: Record<AgentKind, number> = { codex: 3, claude: 3, gemini: 2 };
 export const MAX_AGENT_LIMIT = 5;
 
 export function limitFor(kind: AgentKind, limits: AgentLimits = {}): number {

@@ -12,7 +12,7 @@ const plan = (over: Record<string, unknown> = {}) =>
     questions: [],
     work_items: [
       { id: 'W1', title: '버튼', goal: 'g', dependencies: [], assignee_preference: 'codex_primary', execution_mode: 'manual_handoff', acceptance_tests: ['npm test'], preserve_constraints: [], attachment_refs: [], requires_execution_approval: false },
-      { id: 'W2', title: '리뷰', goal: 'g', dependencies: ['W1'], assignee_preference: 'grok_optional', execution_mode: 'manual_handoff' },
+      { id: 'W2', title: '리뷰', goal: 'g', dependencies: ['W1'], assignee_preference: 'claude_support', execution_mode: 'manual_handoff' },
     ],
     ...over,
   });

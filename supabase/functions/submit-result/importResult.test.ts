@@ -18,7 +18,7 @@ describe('서버에서 결과 바로 받기(v0.5.90)', () => {
     expect(importDecision({ ...base, assignment: null })).toBe('skip');
     expect(importDecision({ ...base, latestPlanRevision: 3 })).toBe('skip');
     expect(importDecision({ ...base, assignment: { ...base.assignment!, dispatch_status: 'completed' } })).toBe('skip');
-    expect(importDecision({ ...base, assignment: { ...base.assignment!, assignee: 'grok', execution_mode: 'manual_handoff' } })).toBe('skip');
+    expect(importDecision({ ...base, assignment: { ...base.assignment!, assignee: 'gemini', execution_mode: 'manual_handoff' } })).toBe('skip');
     expect(importDecision({ ...base, latestResult: { revision: 1, plan_revision: 2 }, latestResultBApproved: true })).toBe('skip');
   });
   it('Codex(Linear)가 제출표로 보낸 결과도 받는다(v0.6.19)', () => {

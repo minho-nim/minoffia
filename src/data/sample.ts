@@ -34,9 +34,9 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
       routeReason: "키워드 '화면', '도트', '캐릭터' → UI·디자인 → Studio A",
     }),
     t({
-      id: 's-4', projectId: 'p-minlab', title: '무료 호스팅 한도 비교 조사', type: 'research', assignee: 'grok', status: 'blocked',
-      routeReason: "키워드 '비교', '조사' → 리서치 → Grok",
-      dispatch: { state: 'none', error: 'Grok 무료 한도 확인 필요. 내일 다시 전달.' },
+      id: 's-4', projectId: 'p-minlab', title: '무료 호스팅 한도 비교 조사', type: 'research', assignee: 'studioA', status: 'blocked',
+      routeReason: "키워드 '비교', '조사' → 리서치 → Studio A",
+      dispatch: { state: 'none', error: 'Gemini 무료 한도 확인 필요. 내일 다시 전달.' },
     }),
     t({
       id: 's-5', projectId: 'p-musclemap', title: '로그인 회귀 테스트 점검', type: 'qa', assignee: 'ci', status: 'done',
@@ -63,11 +63,10 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
       createdAt: at(120),
     },
   ];
-  // Grok은 수동 없이 쓸 길이 없어 휴가로 시작한다(v0.4.56, 소유자).
   // 프로젝트에서 지켜야 할 것(v0.4.57): AI가 적어 둔 예시
   const projectRules = [
     { id: 'r-mm-1', projectId: 'p-musclemap', rule: '운동 기록은 기기 안에만 저장하고 서버로 보내지 않는다', source: 'spec' as const, taskId: null, createdAt: at(2500) },
     { id: 'r-mm-2', projectId: 'p-musclemap', rule: '모바일 400px에서 가로 넘침 없이 한 손으로 쓸 수 있게', source: 'plan' as const, taskId: null, createdAt: at(2400) },
   ];
-  return { projects, tasks, usage, leave: ['grok'], projectRules, workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] } };
+  return { projects, tasks, usage, leave: [], projectRules, workflow: { specs, approvals: [], plans: [], assignments: [], results: [], revisionRequests: [], attachments: [], imageAnalyses: [], links: [], prChecks: [], deployments: [], clarifications: [] } };
 }

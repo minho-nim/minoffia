@@ -90,7 +90,7 @@ class Sim {
   }
   /** PM 세션이 submit-plan으로 보낸 JSON을 앱 규칙(parsePmPlan)으로 받아 계획·배정을 만든다 */
   receivePlan(planRevision: number, specRevision: number, items: { id: string; who: AgentKind }[], mode: 'direct' | 'prototype_first' = 'direct') {
-    const pref = { codex: 'codex_primary', claude: 'claude_support', gemini: 'gemini_optional', grok: 'grok_optional' } as const;
+    const pref = { codex: 'codex_primary', claude: 'claude_support', gemini: 'gemini_optional' } as const;
     const json = JSON.stringify({
       task_id: this.task.id, repository: 'minho-nim/MinLab-AI-Office', target_base_revision: 'abc1234', plan_revision: planRevision,
       status: 'planned', questions: [], development_mode: mode, mode_reason: '시험',

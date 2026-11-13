@@ -81,16 +81,6 @@ export const ADAPTERS: AdapterInfo[] = [
       '실행 승인 뒤 서버가 GitHub Actions 워크플로(Gemini CLI)를 시작한다. 워크플로가 고치고 시험한 뒤 작업 브랜치만 push하고 결과를 보낸다. 손 실행 시험은 성공(2026-11-02), 앱에서 시작하는 길은 첫 실행 전이라 미검증.',
     checkedAt: '2026-11-02',
   },
-  {
-    agent: 'grok',
-    label: 'Grok (리뷰)',
-    role: '리뷰·추가 검증',
-    state: 'not_connected',
-    autoStart: false,
-    worksWithPcOff: false,
-    reason: '무료 계정의 무인 실행 경로가 확인되지 않았다.',
-    checkedAt: '2026-10-29',
-  },
 ];
 
 /**

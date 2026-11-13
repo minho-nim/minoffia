@@ -1,11 +1,11 @@
 # 현재 상태 · 2026-11-13
 
-소스 버전은 package.json(지금 v0.7.2). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.2까지 배포. 운영 Supabase에는 마이그레이션 0055까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
+소스 버전은 package.json(지금 v0.7.3). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.3까지 배포. 운영 Supabase에는 마이그레이션 0056까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
 
 ## 소유자 결정(현재 기준)
 
 - 승인은 기획·올리기·배포 3개. 실행 승인(E)은 기획 승인에 포함해 자동 기록한다(앱·서버). 견본 단계는 끔(코드는 남김).
-- 웹 조사 담당은 Exa(사무실 캐릭터 '팀장·안경', 업무는 안 맡음). Grok은 미배정(2026-11-13): 예전 기록 이름만 남김. PM 기획의 grok_optional 선택지는 아직 코드에 남아 있다.
+- 웹 조사 담당은 Exa(사무실 캐릭터 '팀장·안경', 업무는 안 맡음, 대화 @Exa). Grok은 완전히 뺐다(2026-11-13, 0056). 규칙의 'Grok CLI 설치·실행 금지'는 그대로.
 - 개발은 Codex 주, Claude 보조. Gemini 개발은 @Gemini로 고를 때만. 채점은 Gemini 기본, '교차 채점 추가'를 누를 때만 한 번 더.
 - 실패하면 업무 카드의 '다시 시도(같은 AI)'·다른 AI로 넘기기. Codex '시작 못 함'은 서버가 Claude로 자동으로 넘기고, '끝내지 못함'은 소유자가 고른다.
 - 지시서는 할 일만: 늘 지킬 것은 각 저장소 AGENTS.md·CLAUDE.md의 `<!-- minoffia-rules v1 -->` 칸(원본 minoffia-skills/rules), 가끔 필요한 방법은 스킬(repo-map·code-graph·ui-check·db-security-check·debugging-and-error-recovery). 규칙 칸·repo-map이 없는 저장소에는 예전처럼 전체를 보낸다.

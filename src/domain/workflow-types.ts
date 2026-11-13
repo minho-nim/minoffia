@@ -48,7 +48,7 @@ export interface Approval {
 }
 
 /** gemini_dev = Gemini 개발(GitHub Actions의 Gemini CLI, 쉬운 일, v0.4.82). gemini_optional은 견본(AI Studio) */
-export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional' | 'grok_optional' | 'gemini_dev';
+export type AssigneePreference = 'codex_primary' | 'claude_support' | 'gemini_optional' | 'gemini_dev';
 export type ExecutionMode = 'codex_cloud' | 'manual_handoff';
 
 export interface WorkItem {
@@ -107,7 +107,7 @@ export interface PmPlan {
   createdAt: string;
 }
 
-export type AgentKind = 'codex' | 'claude' | 'gemini' | 'grok';
+export type AgentKind = 'codex' | 'claude' | 'gemini';
 export type DispatchStatus =
   | 'proposed' | 'awaiting_user_execution_approval' | 'ready' | 'starting' | 'started'
   | 'blocked_integration' | 'blocked_quota' | 'failed' | 'completed';

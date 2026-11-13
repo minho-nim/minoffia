@@ -1,6 +1,6 @@
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
-import { answerSlot, insertMention, mentionOptions, mentionQuery } from '../domain/mention';
+import { answerSlot, asksExa, insertMention, mentionOptions, mentionQuery } from '../domain/mention';
 import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
 import { useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
@@ -944,7 +944,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     }
     else if (canAskGemini) {
       // v0.4.29(소유자 2026-11-01): 그 밖의 말은 AI가 먼저 판단한다(질문·업무·애매 + 프로젝트). 질문이면 같은 한 번에 답한다.
-      askGemini(text, questionProject(text, snap.projects)?.name, { prior }, { research: needsResearch(text) });
+      // @Exa면 판단 없이 바로 웹 조사(v0.7.3)
+      if (asksExa(text)) askGemini(text, questionProject(text, snap.projects)?.name, undefined, { research: true });
+      else askGemini(text, questionProject(text, snap.projects)?.name, { prior }, { research: needsResearch(text) });
     }
     else ruleRoute(text, prior);
   };
@@ -1113,7 +1115,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
 
   const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }, extra: { research?: boolean } = {}) => {
     // 조사(v0.4.61): 웹에서 찾아야 하는 질문은 Gemini Google 검색 연결로 답하고 출처를 붙인다(규칙으로 고름, 실패하면 검색 없이 다시).
-    const research = extra.research ?? needsResearch(text);
+    const research = extra.research ?? (needsResearch(text) || asksExa(text));
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).

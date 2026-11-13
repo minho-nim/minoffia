@@ -26,6 +26,6 @@ describe('quotaFor', () => {
   });
 
   it('셀 수 없는 AI는 알 수 없음', () => {
-    for (const a of ['mina', 'codex', 'grok'] as const) expect(quotaFor(a, base, now).state).toBe('unknown');
+    for (const a of ['mina', 'codex'] as const) expect(quotaFor(a, base, now).state).toBe('unknown');
   });
 });
