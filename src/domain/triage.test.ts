@@ -28,9 +28,8 @@ describe('triage', () => {
   });
 
   it('앱 상태 질문은 기록으로 바로 답한다', () => {
-    const r = triage('Claude 오늘 몇 번 남았어?', snap, now);
-    expect(r.kind).toBe('status');
-    if (r.kind === 'status') expect(r.answer).toContain('Claude:');
+    // v0.7.4: 남은 횟수·사용량은 대화로 답하지 않는다(위쪽 막대·에이전트 탭)
+    expect(answerStatus('Claude 오늘 몇 번 남았어?', snap, now)).toBeNull();
     expect(answerStatus('진행 중인 업무 뭐야', snap, now)).toContain('진행 중인 업무');
     expect(answerStatus('막힌 거 있어?', snap, now)).toContain('차단된 업무');
     expect(answerStatus('MuscleMap 어디까지 했어?', snap, now)).toContain('MuscleMap 업무');
@@ -105,6 +104,6 @@ describe('웹 조사 요청은 사용량 안내로 가지 않는다(v0.7.2)', ()
     const { answerStatus } = await import('./triage');
     const snap = { tasks: [], usage: [], projects: [], workflow: {} } as never;
     expect(answerStatus('요즘 Gemini 무료 한도 얼마야? 찾아줘', snap)).toBeNull();
-    expect(answerStatus('Claude 한도 몇 번 남았어?', snap)).toContain('오늘 실행 기록');
+    expect(answerStatus('Claude 한도 몇 번 남았어?', snap)).toBeNull();
   });
 });

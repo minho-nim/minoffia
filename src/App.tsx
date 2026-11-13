@@ -21,6 +21,10 @@ import { forgetMaps, StructureMaps } from './components/StructureMaps';
 import { freshReport, savedReport } from './data/mapCache';
 import { installedSkillsOf, isSlimProject, setSkillTitles, setSlimProjects, skillTitleOf } from './data/slimRepos';
 import { skillPickRule } from './domain/skillPick';
+import { endDrawing, startDrawing } from './office/drawing';
+
+/** 점검(앱 지도 그리기)을 시작한 시각, 프로젝트별(v0.7.4 미노 말풍선) */
+const drawStarted = new Map<string, number>();
 import { RelationLoader } from './components/RelationMap';
 import { OfficeMap } from './components/OfficeMap';
 import { FormPopup } from './components/FormPopup';
@@ -1092,7 +1096,15 @@ export function App() {
   };
 
   const workflowActions: WorkflowActions = {
-    archify: store.archify ? (taskId, revision) => store.archify!(taskId, revision) : undefined,
+    // 미노(CI)가 구조도를 그리는 동안 말풍선(v0.7.4): 시작했으면 켜고, 그림이 오면 끈다
+    archify: store.archify
+      ? (taskId, revision) =>
+          store.archify!(taskId, revision).then((r) => {
+            if (r.html) endDrawing(`archify:${taskId}:${revision}`);
+            else if (r.started) startDrawing(`archify:${taskId}:${revision}`, '구조도');
+            return r;
+          })
+      : undefined,
     // 담당 바꾸기·한도 넘기기(v0.5.73): 지금 계획에서 그 작업 담당만 바꾼 새 계획 버전을 만든다. 실행 승인(E)은 다시 받는다.
     pickResult: async (task, r) => {
       // 두 AI 비교에서 고른 결과(v0.6.54): 같은 변경·같은 출처를 새 버전으로 다시 저장해 최신 결과로 만든다(올리기 승인은 최신 결과만 받는다).
@@ -1831,7 +1843,7 @@ export function App() {
     setTab('chat');
     setDraft((d) => ({ text, n: (d?.n ?? 0) + 1 }));
   };
-  const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} onFix={fixInChat(p)} api={{ load: () => store.healthCheck!.load(p.id), start: (force?: boolean) => (forgetMaps(p.id), store.healthCheck!.start(p.id, force)), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
+  const renderCheck = store.healthCheck ? (p: Project) => <HealthCheck maps={false} onFix={fixInChat(p)} api={{ load: () => store.healthCheck!.load(p.id).then((r) => (r && drawStarted.get(p.id) && Date.parse(r.checkedAt) >= drawStarted.get(p.id)! - 60_000 && endDrawing(`map:${p.id}`), r)), start: (force?: boolean) => (forgetMaps(p.id), drawStarted.set(p.id, Date.now()), startDrawing(`map:${p.id}`, '앱 지도'), store.healthCheck!.start(p.id, force)), map: () => store.healthCheck!.map(p.id) }} /> : undefined;
   const renderMaps = (p: Project) => (
     <StructureMaps
       id={p.id}
