@@ -90,3 +90,48 @@ describe('지난 기록 채우기(v0.6.90)', () => {
     expect(parseSkill('---\nname: ui-check\ndescription: "화면 확인. 설명"\nmetadata:\n  minoffia-category: 화면·디자인\n  minoffia-related: impeccable, x y\n---\n')).toEqual({ name: 'ui-check', title: '화면 확인', description: '화면 확인. 설명', category: '화면·디자인', related: ['impeccable'] });
   });
 });
+
+describe('구조·사무실 그림판(v0.6.94)', () => {
+  it('폴더 나무: 3단계까지, 설명·파일 수, 스킬 폴더는 접음', async () => {
+    const { folderTree } = await import('./notes-sync.mjs');
+    const t = folderTree(['README.md', 'src/components/A.tsx', 'src/components/B.tsx', 'src/domain/x/y/z.ts', '.claude/skills/ui-check/SKILL.md'], { parts: [{ folder: 'src/components', name: '업무 화면' }] }).join('\n');
+    expect(t).toContain('파일 5개 · 맨 위 파일 1개');
+    expect(t).toMatch(/ {2}components\/\s+업무 화면 \(2\)/);
+    expect(t).toMatch(/ {4}x\//);
+    expect(t).not.toContain('y/');
+    expect(t).not.toContain('skills/');
+    expect(folderTree([], null)).toEqual([]);
+  });
+  it('흐름 그림은 종류가 둘 이상일 때만, 이름의 특수 글자는 뺀다', async () => {
+    const { flowMermaid } = await import('./notes-sync.mjs');
+    expect(flowMermaid({ parts: [{ kind: '화면', name: 'a' }] })).toEqual([]);
+    const m = flowMermaid({ parts: [{ kind: '화면', name: '대화"창' }, { kind: '서버', name: '함수' }] }).join('\n');
+    expect(m).toContain('```mermaid');
+    expect(m).toContain('K0_0["대화 창"]');
+    expect(m).toContain('K0 --> K1');
+  });
+  it('그림판: 선은 있는 상자만 잇고, 앱 사무실 지도와 이름이 같다', async () => {
+    const fs = await import('node:fs');
+    const { officeCanvas, OFFICE_CLOUD, OFFICE_FLOW, OFFICE_WHO } = await import('./notes-sync.mjs');
+    const c = JSON.parse(officeCanvas([{ name: '미노피아', note: true }, { name: 'MINOVA', map: true }]));
+    const ids = new Set(c.nodes.map((n) => n.id));
+    expect(ids.size).toBe(c.nodes.length);
+    for (const e of c.edges) expect(ids.has(e.fromNode) && ids.has(e.toNode)).toBe(true);
+    expect(c.nodes.filter((n) => n.type === 'file').map((n) => n.file)).toEqual(['미노피아/미노피아.md', 'MINOVA/앱 지도.md']);
+    const app = fs.readFileSync(new URL('../src/components/OfficeMap.tsx', import.meta.url), 'utf8');
+    for (const [, label] of OFFICE_CLOUD.nodes) expect(app).toContain(`'${label}'`);
+    for (const [, label] of [...OFFICE_FLOW, ...OFFICE_WHO]) expect(app).toContain(`'${label}'`);
+  });
+});
+
+describe('앱 지도 고치기(v0.6.94)', () => {
+  it('표에서 부분을 읽어 흐름·폴더 구조를 그림 앞에 넣고, 두 번 해도 한 번만', async () => {
+    const { appMapNote, upgradeAppMap } = await import('./notes-sync.mjs');
+    const note = appMapNote('P', { checkedAt: '2026-11-09T10:00:00Z', appMap: { summary: 's', parts: [{ kind: '화면', name: '대화', what: '말하기', folder: 'src/components', files: [] }, { kind: '서버', name: '함수', what: '처리', folder: '', files: ['f.ts'] }] } });
+    const once = upgradeAppMap(note, ['src/components/A.tsx', 'f.ts']);
+    const twice = upgradeAppMap(once, ['src/components/A.tsx', 'f.ts']);
+    expect(twice).toBe(once);
+    expect(once.indexOf('## 흐름')).toBeLessThan(once.indexOf('![[P/앱 지도.png]]'));
+    expect(once).toMatch(/components\/\s+대화 \(1\)/);
+  });
+});

@@ -135,6 +135,11 @@ export function installedSkills(dir) {
   return [...names].sort();
 }
 
+/** 저장소 파일 목록(점검과 같은 제외 규칙, 3000개까지) — 앱 지도의 폴더 구조용 */
+export function repoFiles(dir) {
+  return git(dir, ['ls-files']).split('\n').filter((f) => f && !/(^|\/)(node_modules|dist|build|vendor|\.git|coverage|\.next|\.turbo|\.cache)\//.test(f)).slice(0, 3000);
+}
+
 function main([projectsFile, skillsDir, outFile]) {
   const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
   const skills = [];
@@ -147,7 +152,7 @@ function main([projectsFile, skillsDir, outFile]) {
     }
   }
   const out = {
-    projects: projects.filter((p) => fs.existsSync(p.dir)).map((p) => ({ name: p.name, versions: projectVersions(p.dir), skills: installedSkills(p.dir) })),
+    projects: projects.filter((p) => fs.existsSync(p.dir)).map((p) => ({ name: p.name, versions: projectVersions(p.dir), skills: installedSkills(p.dir), files: repoFiles(p.dir) })),
     skills,
   };
   fs.writeFileSync(outFile, JSON.stringify(out));
