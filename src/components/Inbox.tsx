@@ -33,6 +33,8 @@ interface Msg {
   via?: string;
   /** 단계 알림: 그 업무가 아직 이 단계일 때만 버튼을 보인다 */
   taskId?: string;
+  /** 업무를 접수한 메시지(v0.6.97): '접수 취소' 버튼을 붙인다 */
+  created?: boolean;
   stage?: string;
   actions?: NoticeAction[];
   /** 쓴 대화창(v0.4.66): '' = 기본 대화창, 아니면 그 프로젝트 대화창 */
@@ -131,6 +133,8 @@ interface Props {
   sync?: { load: () => Promise<InboxState | null>; save: (state: InboxState) => Promise<void> };
   /** 대화 기록(개발일지 원본)에 추가. 프로젝트 업무와 연결된 메시지만 보낸다(일반 대화·질문은 남기지 않음). */
   onArchive?: (entries: NewChatEntry[]) => Promise<void>;
+  /** 접수된 업무 취소(v0.6.97, 업무 카드의 '업무 취소'와 같다) */
+  onCancelTask?: (task: Task) => void;
   /** 접수 직후 Gemini 기획서 초안을 자동으로 시작한다(Supabase 모드). 없으면 ChatGPT 기획을 안내한다. */
   onAutoDraft?: (task: Task) => void;
   /** Gemini 초안의 확인 질문에 입력창으로 답했을 때: 답을 기록하면 Gemini가 다시 쓴다 */
@@ -252,7 +256,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -274,6 +278,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     }
   }, [thread]);
   const [busy, setBusy] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   // 계정 대화를 처음 받아 온 뒤에 단계 알림을 넣는다(받아 온 대화에 덮이지 않게).
   const [syncReady, setSyncReady] = useState(!sync);
   const [showOther, setShowOther] = useState(false);
@@ -282,6 +287,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   /** 답을 기다리는 동안 보낸 말(v0.4.58): 앞 일이 끝나면 차례로 처리한다 */
   const [queue, setQueue] = useState<{ text: string; files: File[] }[]>([]);
   const runs = useRef(0);
+  /** 처리 중 '멈추기'(v0.6.97): 켜져 있는 동안 늦게 온 답·접수 카드는 버린다. 하던 일이 다 끝나면 저절로 꺼진다 */
+  const muted = useRef(false);
   const [photos, setPhotosState] = useState<File[]>(photoStore.draft);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -722,9 +729,10 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     // 처음 열 때 남은 것만 올린다.
   }, []);
   // 소유자 결정(2026-10-30): 일반 대화·질문은 기록하지 않고, 프로젝트·업무가 정해진 메시지만 개발일지용으로 남긴다.
-  const say = (from: From, text: string, link: { projectId?: string; taskId?: string } = {}) => {
+  const say = (from: From, text: string, link: { projectId?: string; taskId?: string; created?: boolean } = {}) => {
+    if (muted.current && from !== 'me') return;
     // v0.4.66: 지금 대화창에 쓰고, 프로젝트가 정해진 말은 그 프로젝트 대화창에도 보인다.
-    setLog((l) => [...l, { id: mid(), from, text, home: thread, ...(link.projectId && link.projectId !== thread ? { projects: [link.projectId] } : {}), ...(link.taskId ? { taskId: link.taskId } : {}) }].slice(-KEEP));
+    setLog((l) => [...l, { id: mid(), from, text, home: thread, ...(link.projectId && link.projectId !== thread ? { projects: [link.projectId] } : {}), ...(link.taskId ? { taskId: link.taskId } : {}), ...(link.created ? { created: true } : {}) }].slice(-KEEP));
     if (link.projectId || link.taskId) archive({ role: from, text, projectId: link.projectId ?? null, taskId: link.taskId ?? null });
   };
   // 여러 일이 겹쳐도(답 기다리는 중 접수 카드를 눌러도) 모두 끝나야 '처리 중'이 풀린다.
@@ -735,14 +743,26 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       await fn();
     } finally {
       runs.current -= 1;
-      if (runs.current === 0) setBusy(false);
+      if (runs.current === 0) {
+        setBusy(false);
+        muted.current = false;
+      }
     }
+  };
+  /** 처리 중 멈추기: 화면에서 기다리던 답을 버린다(이미 접수된 업무는 그대로, 취소는 접수 메시지의 '접수 취소') */
+  const stop = () => {
+    if (!runs.current) return;
+    muted.current = true;
+    setBusy(false);
+    setPending(null);
+    setLog((l) => [...l.filter((m) => !(m.from === 'gemini' && !m.text)), { id: mid(), from: 'office' as From, text: '멈췄어요. 늦게 오는 답은 보이지 않아요. 이미 접수된 업무는 그대로예요.', home: thread }].slice(-KEEP));
   };
 
   const short = (t: string) => (t.length > 30 ? `${t.slice(0, 29)}…` : t);
 
   /** 업무 접수 확인 카드를 띄운다(v0.4.58). 카드는 대화가 이어져도 남고, 카드마다 따로 접수한다. */
   const offerTask = (text: string, candidates: Project[], context?: PriorChat, extra: { whole?: string; ask?: string } = {}) => {
+    if (muted.current) return;
     // 프로젝트 대화창에서 한 요청은 그 프로젝트로 바로(v0.4.66, 소유자)
     const list = candidates.length ? candidates : currentProject ? [currentProject] : [];
     const project = list.length === 1 ? list[0] : null;
@@ -774,6 +794,10 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   const submit = (raw: string, opts: { again?: boolean } = {}) => {
     const text = raw.trim();
     if (!text) return;
+    if (muted.current && runs.current) {
+      setLog((l) => [...l, { id: mid(), from: 'office' as From, text: '앞 요청을 멈추는 중이에요. 잠깐 뒤에 다시 보내 주세요.', home: thread }].slice(-KEEP));
+      return;
+    }
     if (opts.again) {
       // "새 질문이에요"를 고른 경우: 이미 화면에 있는 말을 확인 질문 답으로 보지 않고 다시 분류한다.
       setPending(null);
@@ -1044,7 +1068,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       `'${project.name}'에 접수했어요: ${task.title}\n${
         onAutoDraft ? 'Gemini(무료)가 기획서 초안을 써요. 다 되면 여기서 알려 드릴게요.' : '아래 업무 카드의 진행 단계에서 기획부터 하세요.'
       }${thread === project.id ? '' : `\n'${project.name}' 프로젝트 대화창에도 올렸어요.`}`,
-      { projectId: project.id, taskId: task.id },
+      { projectId: project.id, taskId: task.id, created: true },
     );
     onAutoDraft?.(task);
     if (images.length) say('office', `첨부 ${images.length}개를 이 업무의 요청 자료로 올렸어요(이미지 역할은 '기타 참고', 업무 카드에서 바꿀 수 있어요).`);
@@ -1104,7 +1128,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         // 보내자마자 빈 Gemini 말(입력 중 …)을 두고, 답 조각이 오면 그 자리에 글을 채운다.
         const id = mid();
         setLog((l) => [...l, { id, from: 'gemini' as From, text: '', home: thread }].slice(-KEEP));
-        const set = (t: string) => setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
+        const set = (t: string) => !muted.current && setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
         // 판단을 맡겼으면 첫 줄(판단 머리)은 숨기고, 질문 답일 때만 본문을 바로 보여 준다.
         // v0.4.58: 여러 개로 나눴으면 질문 답만 모아 보여 준다(업무·애매는 끝난 뒤 카드로).
         const answersOf = (items: RoutedItem[]) =>
@@ -1139,6 +1163,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             got = await onAskGemini(ask, history.slice(-6), encoded, put, { ...opts, research: false });
             say('office', `웹 검색은 안 돼서 Gemini가 아는 범위로만 답했어요(${(e as Error).message})`);
           }
+          if (muted.current) return;
           const raw = got.answer;
           const sources = got.sources ?? [];
           const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', 'Gemini 검색 ·') : VIA_OF_SLOT[got.keySlot]) : undefined;
@@ -1399,15 +1424,36 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                     >
                       {o.ask ? '질문이에요' : '질문이었어요'}
                     </button>
-                    {o.whole && (
-                      <button type="button" className="btn btn-small btn-ghost" onClick={() => settleOffer(m.id, 'dropped')}>
-                        빼기
-                      </button>
-                    )}
+                    <button type="button" className="btn btn-small btn-ghost" onClick={() => settleOffer(m.id, 'dropped')}>
+                      {o.whole ? '빼기' : '취소'}
+                    </button>
                   </span>
                 );
               })()}
               {m.offer && m.offer.state !== 'open' && <span className="muted small inbox-offer-done">{m.offer.state === 'done' ? '접수함' : '접수 안 함'}</span>}
+              {m.created && m.taskId && onCancelTask && (() => {
+                const t = snap.tasks.find((x) => x.id === m.taskId);
+                if (!t) return null;
+                if (t.stage === 'cancelled') return <span className="muted small inbox-offer-done">접수 취소함</span>;
+                if (t.status === 'done') return null;
+                return confirmCancel === m.id ? (
+                  <span className="inbox-choices" role="group" aria-label="접수 취소 확인">
+                    <span className="small">이 업무를 취소할까요? 남은 AI 작업을 멈추고 기록은 남겨요.</span>
+                    <button type="button" className="btn btn-small btn-danger" onClick={() => { setConfirmCancel(null); onCancelTask(t); }}>
+                      업무 취소
+                    </button>
+                    <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirmCancel(null)}>
+                      아니요
+                    </button>
+                  </span>
+                ) : (
+                  <span className="inbox-choices">
+                    <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirmCancel(m.id)}>
+                      접수 취소
+                    </button>
+                  </span>
+                );
+              })()}
               {m.actions && !busy && (() => {
                 // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
                 const task = snap.tasks.find((t) => t.id === m.taskId);
@@ -1576,7 +1622,14 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           )}
         </div>
       )}
-      {busy && !log.some((m) => m.from === 'gemini' && !m.text) && <p className="muted small inbox-note">처리 중…</p>}
+      {busy && (
+        <p className="muted small inbox-note inbox-busy">
+          {!log.some((m) => m.from === 'gemini' && !m.text) && '처리 중… '}
+          <button type="button" className="btn btn-small btn-ghost" onClick={stop}>
+            멈추기
+          </button>
+        </p>
+      )}
       {queue.length > 0 && <p className="muted small inbox-note">앞 일이 끝나면 기다리는 말 {queue.length}개를 한 번에 읽고 답할게요.</p>}
       <div ref={endRef} />
 
