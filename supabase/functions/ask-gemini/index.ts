@@ -3,6 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
+import { EXA_RULE, exaContext, exaSearch } from './exa.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
@@ -229,9 +230,27 @@ Deno.serve(async (req) => {
     return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   }
 
+  // 웹 조사 = Exa 검색 + Gemini 정리(v0.7.1): Exa 키가 있으면 먼저 찾아 질문 뒤에 자료로 붙이고, Gemini는 검색 연결 없이 정리만 한다.
+  // Exa가 안 되면 예전 길(Gemini 검색 연결)로 간다.
+  const exaFound = new Map<string, string>();
+  let webContext = '';
+  const exaKey = env('EXA_API_KEY');
+  if (research && exaKey) {
+    const r = await exaSearch(exaKey, question);
+    if (r.ok && r.results.length) {
+      webContext = exaContext(r.results);
+      for (const x of r.results) exaFound.set(x.url, x.title);
+    } else {
+      console.log(JSON.stringify({ fn: 'ask-gemini', exa: 'fail', status: r.status, error: r.error }));
+      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'research', key_slot: null, ok: false, http_status: r.status || null, model: 'exa-search', prompt_chars: question.length, error: (r.error || '결과 없음').slice(0, 300) });
+    }
+  }
+  const viaExa = webContext !== '';
+  const google = research && !viaExa;
+
   // 웹 조사 차단기(v0.6.53, 토큰·시간 아끼기): 최근 3시간 안에 모든 모델·키가 한도(429)로 실패했고 그 뒤 성공이 없으면
   // 다시 부르지 않고 바로 알린다(2주간 조사 52번이 모두 한도 실패였고, 한 번 물을 때마다 모델·키를 바꿔 6번씩 불렀다).
-  if (research) {
+  if (google) {
     const since = new Date(Date.now() - 3 * 3600_000).toISOString();
     const { data: lastFail } = await admin.from('ai_calls').select('created_at').eq('owner_id', user.id).eq('purpose', 'research').eq('ok', false).eq('http_status', 429).is('key_slot', null).gte('created_at', since).order('created_at', { ascending: false }).limit(1);
     if (lastFail?.length) {
@@ -244,7 +263,7 @@ Deno.serve(async (req) => {
   // 조사(v0.5.5): 기본 모델은 Google 검색 연결 무료 한도가 없어 늘 429였다(일반 질문은 같은 키로 바로 됨, 2026-11-03 기록).
   // 검색은 무료 검색 한도가 있는 모델(GEMINI_RESEARCH_MODEL, 기본 gemini-2.5-flash)로 먼저 묻고, 안 되면 기본 모델로 한 번 더.
   // v0.6.3: 검색 무료 한도가 남아 있을 만한 모델을 차례로(실패한 시도마다 research·ok=false 한 줄)
-  const models = research ? [...new Set([env('GEMINI_RESEARCH_MODEL') || RESEARCH_MODEL, ...RESEARCH_FALLBACKS, baseModel])] : [baseModel];
+  const models = google ? [...new Set([env('GEMINI_RESEARCH_MODEL') || RESEARCH_MODEL, ...RESEARCH_FALLBACKS, baseModel])] : [baseModel];
   let model = baseModel;
   const stream = body.stream === true;
   const routeProjects = Array.isArray(body.route?.projects) ? body.route!.projects!.filter((p) => typeof p === 'string').slice(0, 50).map((p) => p.slice(0, 60)) : null;
@@ -254,6 +273,7 @@ Deno.serve(async (req) => {
     routeProjects ? SYSTEM.replace('\n개발·수정 작업이 필요해 보이면, AI Office에 업무로 접수하라고 한 줄로 안내한다.', '') : SYSTEM,
     project ? projectRules(project) : '',
     routeProjects ? routeRules(routeProjects) : '',
+    viaExa ? EXA_RULE : '',
   ].join('');
   const started = Date.now();
   let last = { status: 0, message: '' };
@@ -275,7 +295,7 @@ Deno.serve(async (req) => {
       let mode: ThinkingMode;
       let headMs = 0;
       try {
-        ({ res, mode } = await openGemini(key, model, question, history, images, stream, system, research));
+        ({ res, mode } = await openGemini(key, model, viaExa ? question + webContext : question, history, images, stream, system, google));
         headMs = Date.now() - started;
       } catch (e) {
         last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
@@ -291,7 +311,7 @@ Deno.serve(async (req) => {
             let total = 0;
             let first = 0;
             let tokens: GeminiTokens = NO_TOKENS;
-            const found = new Map<string, string>();
+            const found = new Map<string, string>(exaFound);
             try {
               for (;;) {
                 const { value, done } = await reader.read();
@@ -317,7 +337,7 @@ Deno.serve(async (req) => {
               controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
             } finally {
               controller.close();
-              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
+              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, exa: viaExa, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
               await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total, ...tokens });
             }
           },
@@ -329,7 +349,7 @@ Deno.serve(async (req) => {
       if (text) {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
-        const found = new Map<string, string>();
+        const found = new Map<string, string>(exaFound);
         if (research) sourcesOf(data, found);
         return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
       }

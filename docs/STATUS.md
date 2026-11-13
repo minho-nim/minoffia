@@ -1,6 +1,6 @@
 # 현재 상태 · 2026-11-13
 
-소스 버전은 package.json(지금 v0.7.0). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.0까지 배포. 운영 Supabase에는 마이그레이션 0055까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
+소스 버전은 package.json(지금 v0.7.1). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.0까지 배포(v0.7.1은 서버 함수만). 운영 Supabase에는 마이그레이션 0055까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
 
 ## 소유자 결정(현재 기준)
 
@@ -16,7 +16,7 @@
 
 ## 미해결
 
-- Gemini 웹 검색: 무료 키로 쓸 수 있는 24개 모델 모두 검색 연결 실패(2.x는 404, 나머지 429, Actions 'Gemini 검색 모델 시험' 2026-11-12). 다음: 무료 검색 API(Exa·Tavily, 카드 없음) + Gemini 정리. 소유자가 키를 Supabase 비밀값 `EXA_API_KEY`·`TAVILY_API_KEY`로 넣기로 함(2026-11-13 예정).
+- 웹 조사(v0.7.1): Exa 검색(EXA_API_KEY, 소유자가 2026-11-13 넣음) + Gemini 정리. Gemini 검색 연결은 무료 키로 안 된다(24개 모델 실패, 2026-11-12). Tavily(TAVILY_API_KEY)는 소유자가 나중에. 실제 앱 질문으로 아직 확인 안 함.
 - Claude 루틴(보조 개발)에는 add_repo가 없다: 새 저장소는 claude.ai/code 루틴 설정의 저장소 목록에 소유자가 추가해야 한다(MinLab 제외).
 - 새 저장소는 Codex 레거시 클라우드 환경에 손으로 추가한다(생성 API 없음, 프로젝트 '준비'에 안내).
 
