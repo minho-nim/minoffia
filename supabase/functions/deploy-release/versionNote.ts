@@ -16,6 +16,13 @@ export function usedSkills(summary: string, testLog = ''): string[] {
   return [...out];
 }
 
+/** 결과 요약의 '쓴 MCP:' 줄(v0.6.98) */
+export function usedMcp(summary: string): string[] {
+  const out = new Set<string>();
+  for (const m of summary.matchAll(/^쓴 MCP\s*[:：]\s*(.+)$/gim)) for (const n of m[1].split(/[,，、\s]+/)) { const k = n.trim().replace(/[`'".]/g, '').toLowerCase(); if (/^[a-z0-9][a-z0-9_-]{0,40}$/.test(k)) out.add(k); }
+  return [...out];
+}
+
 /** 결과 출처 → 만든 AI 이름(옵시디언 공용 노트 이름) */
 export function agentOf(source: string): string {
   const s = source.toLowerCase();
@@ -39,6 +46,7 @@ export function versionInputs(v: { project: string; repo: string; sha: string; t
     pr: /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(v.pr) ? v.pr : '',
     agent: agentOf(v.source),
     skills: usedSkills(v.summary, v.testLog).slice(0, 12).join(','),
+    mcp: usedMcp(v.summary).slice(0, 8).join(','),
     date: v.at.slice(0, 10),
   };
 }

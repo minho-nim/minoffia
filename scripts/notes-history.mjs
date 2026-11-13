@@ -42,9 +42,10 @@ export function parseChangelog(text) {
 /** 커밋 작성자·본문으로 만든 AI */
 export function agentOfCommit(author, body) {
   const t = `${author}\n${body}`.toLowerCase();
-  if (/codex|chatgpt/.test(t)) return 'Codex';
-  if (/co-authored-by:\s*claude|claude\[bot\]|noreply@anthropic\.com|^claude/m.test(t)) return 'Claude';
-  if (/gemini/.test(t)) return 'Gemini';
+  // Claude 표시를 먼저(v0.6.98: 제목에 'Codex'라는 글자만 있어도 Codex로 보던 것)
+  if (/co-authored-by:\s*claude|claude-session:|claude\.ai\/code|generated with \[claude code\]|claude\[bot\]|noreply@anthropic\.com/.test(t) || /^claude\b/.test(author.toLowerCase())) return 'Claude';
+  if (/chatgpt-codex|codex\[bot\]|\bcodex\//.test(t) || /codex|chatgpt/.test(author.toLowerCase())) return 'Codex';
+  if (/gemini\[bot\]|gemini-dev/.test(t) || /gemini/.test(author.toLowerCase())) return 'Gemini';
   // Claude 대화로 하지 않은 것은 모두 Codex(소유자 2026-11-13)
   return 'Codex';
 }
@@ -54,6 +55,13 @@ export function skillsOfCommit(body) {
   const out = new Set();
   for (const m of String(body ?? '').matchAll(/^(?:쓴 스킬|스킬 확인)\s*[:：]\s*(.+)$/gm)) for (const n of m[1].split(/[,，、\s]+/)) { const k = n.trim().replace(/[`'".]/g, '').toLowerCase(); if (SKILL.test(k)) out.add(k); }
   for (const m of String(body ?? '').matchAll(/\b([a-z0-9]+(?:-[a-z0-9]+)+)\s*(?:절차|스킬)\s*(?:로|대로|을 따라|를 따라)/g)) out.add(m[1]);
+  return [...out];
+}
+
+/** 커밋 본문의 '쓴 MCP:' 줄(v0.6.98) */
+export function mcpOfCommit(body) {
+  const out = new Set();
+  for (const m of String(body ?? '').matchAll(/^쓴 MCP\s*[:：]\s*(.+)$/gim)) for (const n of m[1].split(/[,，、\s]+/)) { const k = n.trim().replace(/[`'".]/g, '').toLowerCase(); if (/^[a-z0-9][a-z0-9_-]{0,40}$/.test(k)) out.add(k); }
   return [...out];
 }
 
@@ -105,11 +113,11 @@ export function projectVersions(dir) {
   if (log.length >= 3) {
     return log.reverse().map((e) => {
       const b = byVer.get(e.version);
-      return { version: e.version, date: e.date || b?.date || '', task: e.task, agent: b ? agentOfCommit(b.author, b.body) : 'Codex', skills: b ? skillsOfCommit(b.body) : [] };
+      return { version: e.version, date: e.date || b?.date || '', task: e.task, agent: b ? agentOfCommit(b.author, b.body) : 'Codex', skills: b ? skillsOfCommit(b.body) : [], mcp: b ? mcpOfCommit(b.body) : [] };
     });
   }
   // 버전을 거의 안 올린 저장소(3번 미만)는 날짜별 커밋이 더 자세하다
-  if (bumps.length >= 3) return bumps.map((b) => ({ version: b.version, date: b.date, task: b.subject.slice(0, 120), agent: agentOfCommit(b.author, b.body), skills: skillsOfCommit(b.body) }));
+  if (bumps.length >= 3) return bumps.map((b) => ({ version: b.version, date: b.date, task: b.subject.slice(0, 120), agent: agentOfCommit(b.author, b.body), skills: skillsOfCommit(b.body), mcp: mcpOfCommit(b.body) }));
   // 3) 버전 번호가 없거나 거의 안 바뀌면 커밋을 날짜별로(최근 MAX_DAYS일)
   const days = new Map();
   for (const c of commits(dir)) days.set(c.date, [...(days.get(c.date) ?? []), c]);
@@ -121,6 +129,7 @@ export function projectVersions(dir) {
       task: `${list[list.length - 1].subject.slice(0, 100)}${list.length > 1 ? ` 외 ${list.length - 1}개` : ''}`,
       agent: agents.includes('Claude') ? 'Claude' : agents[0] ?? 'Codex',
       skills: [...new Set(list.flatMap((c) => skillsOfCommit(c.body)))],
+      mcp: [...new Set(list.flatMap((c) => mcpOfCommit(c.body)))],
     };
   });
 }
