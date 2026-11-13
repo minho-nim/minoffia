@@ -934,9 +934,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
       }
     }
     else if (t.kind === 'request') {
-      let candidates = t.candidates.length || !prior ? t.candidates : matchProjects(prior.question, snap.projects);
-      // 이름이 없으면 위에서 고른 프로젝트로 묻는다(그래도 "맞아요?" 확인은 받는다).
-      if (!candidates.length && currentProject) candidates = [currentProject];
+      // 프로젝트 대화창이면 그 프로젝트 먼저(v0.6.96: AI 판단 길(taskCandidates)과 같게. 점검 '고치기 요청'의 파일 이름이 다른 프로젝트 이름과 겹쳐도 안 바뀌게)
+      let candidates = currentProject ? [currentProject] : t.candidates.length || !prior ? t.candidates : matchProjects(prior.question, snap.projects);
       handleRequest(text, candidates, prior);
     }
     else if (t.kind === 'question') {
