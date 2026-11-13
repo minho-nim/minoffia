@@ -1,3 +1,4 @@
+import { useDrawing } from './drawing';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AGENT_BY_ID, AGENTS } from '../domain/agents';
 import type { AgentId, Task } from '../domain/types';
@@ -6,7 +7,7 @@ import { drawOffice } from './draw';
 import { EXIT, H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
 import { ACTIVITY_LABEL, buildScene } from './scene';
 import { badgeFor } from './marks';
-import { speechFor } from './speech';
+import { speechFor, type Speech } from './speech';
 import { spriteFor } from './sprites';
 import { BACKGROUND_URL } from './assets';
 import type { Lamp } from '../domain/serviceLamps';
@@ -57,7 +58,13 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
   );
   const leaveRef = useRef(leave);
   leaveRef.current = leave;
-  const speech = useMemo(() => (workflow ? speechFor(tasks, workflow, leaveKey ? (leaveKey.split(',') as AgentId[]) : []) : new Map()), [tasks, workflow, leaveKey]);
+  const drawing = useDrawing();
+  const speech = useMemo(() => {
+    const m: Map<AgentId, Speech> = workflow ? speechFor(tasks, workflow, leaveKey ? (leaveKey.split(',') as AgentId[]) : []) : new Map();
+    // 미노가 그림을 그리는 중(v0.7.4): PR·배포 말풍선이 없을 때만
+    if (drawing && !m.has('ci')) m.set('ci', { text: '그림[…]', label: `${drawing}을(를) 그리는 중`, kind: 'busy', taskId: '' });
+    return m;
+  }, [tasks, workflow, leaveKey, drawing]);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
@@ -301,7 +308,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
             }}
             onClick={() => {
               onSelect(a.id);
-              if (talking) onOpenTask?.(say.taskId);
+              if (talking && say.taskId) onOpenTask?.(say.taskId);
             }}
             aria-label={label}
             aria-pressed={isSel}

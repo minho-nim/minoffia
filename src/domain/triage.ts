@@ -5,10 +5,8 @@
  * - 일반 질문 → 사용자가 고르면 Gemini(무료)에게 묻거나 ChatGPT로 복사한다.
  * 개발 요청의 최종 의도 판단과 기획서는 지금처럼 ChatGPT가 한다(이 분류는 접수 전 1차 분류일 뿐).
  */
-import { AGENT_BY_ID, AGENTS } from './agents';
-import type { AgentId, Project, Snapshot, Task } from './types';
+import type { Project, Snapshot, Task } from './types';
 import { STATUS_LABEL } from './types';
-import { remainingToday, runsToday } from './usage';
 import { deriveWorkflow } from './workflow';
 import { STAGE_LABEL, type Stage } from './workflow-types';
 
@@ -56,30 +54,17 @@ const listTasks = (tasks: Task[], max = 5) =>
     .map((t) => `· ${t.title} (${STATUS_LABEL[t.status]})`)
     .join('\n') + (tasks.length > max ? `\n· 외 ${tasks.length - max}건` : '');
 
-function agentInText(text: string): AgentId | null {
-  const lower = text.toLowerCase();
-  const hit = AGENTS.find((a) => a.dailyCap !== null && (lower.includes(a.name.toLowerCase()) || lower.includes(a.id.toLowerCase())));
-  return hit?.id ?? null;
-}
-
 /** 업무 기록으로 답할 수 있는 질문이면 답, 아니면 null */
 /** 웹에서 찾아 달라는 말 */
 const ASKS_WEB = /찾아\s?(봐|줘|주세요)|검색해|조사해|알아\s?봐|출처|요즘|최신|최근\s?(소식|뉴스|가격|버전)|@(exa|엑사)(?![a-z])/i;
 
-export function answerStatus(text: string, snap: Snapshot, now: Date = new Date()): string | null {
+export function answerStatus(text: string, snap: Snapshot, _now: Date = new Date()): string | null {
   if (!STATUS_WORDS.test(text)) return null;
   // 웹에서 찾아 달라는 말이 있으면 기록 답이 아니라 웹 조사로(v0.7.2: '요즘 Gemini 무료 한도 얼마야? 찾아줘'가 사용량 안내로 가던 것)
   if (ASKS_WEB.test(text)) return null;
   const open = snap.tasks.filter((t) => t.status !== 'done');
 
-  if (/(남은|남았|몇\s?번|사용량|한도)/.test(text)) {
-    const one = agentInText(text);
-    const agents = one ? [AGENT_BY_ID[one]] : AGENTS.filter((a) => a.dailyCap !== null);
-    return (
-      '오늘 실행 기록(KST) 기준입니다. 공급자의 실제 잔여 토큰은 알 수 없습니다.\n' +
-      agents.map((a) => `· ${a.name}: ${runsToday(snap.usage, a.id, now)}/${a.dailyCap}회 사용, ${remainingToday(snap.usage, a.id, now)}회 남음`).join('\n')
-    );
-  }
+  // 남은 횟수·사용량은 대화로 답하지 않는다(v0.7.4 소유자 "버튼이나 내가 보는 걸로"): 위쪽 사용량 막대·에이전트 탭
 
   const projects = matchProjects(text, snap.projects);
   if (projects.length && /(어디까지|상태|진행\s?상황)/.test(text)) {
