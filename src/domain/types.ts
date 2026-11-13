@@ -1,6 +1,7 @@
 import type { Stage, WorkflowData } from './workflow-types';
 
-export type AgentId = 'mina' | 'claude' | 'codex' | 'grok' | 'studioA' | 'studioB' | 'ci';
+/** grok은 미배정(2026-11-13, 예전 기록 표시용으로만 남김). exa = 웹 조사(서버 자동, 업무는 맡지 않음) */
+export type AgentId = 'mina' | 'claude' | 'codex' | 'grok' | 'exa' | 'studioA' | 'studioB' | 'ci';
 export type RoomId = 'research' | 'dev' | 'terminal' | 'planning' | 'lounge';
 export type WorkType = 'planning' | 'dev' | 'design' | 'prototype' | 'research' | 'qa';
 export type RequestedType = WorkType | 'auto';
@@ -109,7 +110,7 @@ export interface AiCall {
   ok: boolean;
   keySlot: 1 | 2 | null;
   /** 일반 질문 / 이미지 분석 */
-  purpose: 'question' | 'image';
+  purpose: 'question' | 'image' | 'research' | string;
   /** 공급자 응답 코드(429 = 한도) */
   httpStatus: number | null;
   /** Gemini가 알려 준 실제 토큰(질문+답+생각, v0.5.50). 예전 기록은 null */
@@ -133,7 +134,7 @@ export interface Snapshot {
 }
 
 /** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */
-export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'grok', 'studioA', 'studioB'];
+export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'studioA', 'studioB'];
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 

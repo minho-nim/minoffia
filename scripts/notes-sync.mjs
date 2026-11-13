@@ -195,10 +195,11 @@ export const OFFICE_CLOUD = {
     ['linear', 'Linear', 'Codex에게 업무를 넘기는 통로', -510, 420, '3'],
     ['codexc', 'Codex 클라우드', '주 개발 AI가 일하는 곳', -255, 420, '5'],
     ['routine', 'Claude 루틴', '보조 개발 AI가 일하는 곳', 0, 420, '5'],
-    ['gem', 'Gemini API', '채점·초안(무료 키)', 255, 420, '3'],
+    ['gem', 'Gemini API', '채점·초안·질문 답(무료 키)', 255, 420, '3'],
+    ['exa', 'Exa 검색', '웹 조사: 찾은 글을 Gemini가 정리', 255, 540, '3'],
     ['notes', '노트 보관함', '앱 지도·버전 노트(이 Obsidian)', 510, 420, '3'],
   ],
-  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
+  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['sb', 'exa', '웹 조사'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
 };
 export const OFFICE_FLOW = [['s-req', '요청'], ['s-plan', '기획'], ['g-a', '기획 승인'], ['s-dev', '개발'], ['s-rev', '채점'], ['g-b', '올리기 승인'], ['s-pr', 'PR'], ['g-c', '배포 승인'], ['s-dep', '배포']];
 export const OFFICE_WHO = [['owner', '나(소유자)', ['s-req', 'g-a', 'g-b', 'g-c']], ['pm', 'Claude PM', ['s-plan']], ['codex', 'Codex', ['s-dev']], ['claude', 'Claude', ['s-dev']], ['gemini', 'Gemini', ['s-rev']], ['server', '서버(자동)', ['g-a', 's-pr', 's-dep']]];
@@ -207,11 +208,11 @@ export function officeCanvas(projects) {
   const edges = [];
   const W = 220, H = 90;
   // 1) 클라우드
-  nodes.push({ id: 'grp-cloud', type: 'group', label: '클라우드 — 서비스끼리 무엇이 오가나', x: -660, y: -80, width: 1400, height: 640 });
+  nodes.push({ id: 'grp-cloud', type: 'group', label: '클라우드 — 서비스끼리 무엇이 오가나', x: -660, y: -80, width: 1400, height: 720 });
   for (const [id, label, desc, x, y, color] of OFFICE_CLOUD.nodes) nodes.push({ id: `c-${id}`, type: 'text', text: `**${label}**\n${desc}`, x: x - W / 2, y, width: W, height: H, color });
   OFFICE_CLOUD.links.forEach(([a, b, label], i) => edges.push({ id: `ce${i}`, fromNode: `c-${a}`, toNode: `c-${b}`, label }));
   // 2) 업무 흐름과 역할
-  const fy = 700, wy = 920, step = 170;
+  const fy = 780, wy = 1000, step = 170;
   nodes.push({ id: 'grp-role', type: 'group', label: '역할 — 누가 업무의 어디를 맡나 (주황 = 소유자 승인)', x: -660, y: fy - 80, width: Math.max(1400, OFFICE_FLOW.length * step + 80), height: 420 });
   OFFICE_FLOW.forEach(([id, label], i) => nodes.push({ id: `f-${id}`, type: 'text', text: `**${label}**`, x: -620 + i * step, y: fy, width: 140, height: 60, color: id.startsWith('g-') ? '2' : undefined }));
   for (let i = 1; i < OFFICE_FLOW.length; i++) edges.push({ id: `fe${i}`, fromNode: `f-${OFFICE_FLOW[i - 1][0]}`, toNode: `f-${OFFICE_FLOW[i][0]}`, fromSide: 'right', toSide: 'left' });
