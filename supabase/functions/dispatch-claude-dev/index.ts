@@ -3,6 +3,7 @@
 // 비밀값(CLAUDE_SUPPORT_FIRE_URL, CLAUDE_SUPPORT_TOKEN)은 이 함수의 secrets에만 둔다. 하루 상한은 PM 전송과 함께 센다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildDevPayload, claudeBranch } from './payload.ts';
+import { skillPickRule } from './skillPick.ts';
 import { loadRules, previewUrl } from './projectRules.ts';
 import { SLIM_MARKER_SKILL } from './devHabits.ts';
 import { appMapSection } from './appMap.ts';
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
   const { data: a } = await userClient.from('agent_assignments').select('*').eq('id', body.assignmentId ?? '').eq('owner_id', user.id).maybeSingle();
   if (!a) return reply(404, { ok: false, error: '배정된 작업을 찾을 수 없습니다.' });
   if (a.assignee !== 'claude') return reply(400, { ok: false, error: 'Claude에 배정된 작업만 시작합니다.' });
-  const { data: task } = await userClient.from('tasks').select('id, project_id, projects(name, repo, preview_host)').eq('id', a.task_id).maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('id, project_id, skills, projects(name, repo, preview_host)').eq('id', a.task_id).maybeSingle();
   const project = task?.projects as unknown as { name: string; repo: string | null; preview_host: string | null } | null;
   const { data: spec } = await userClient
     .from('task_specs')
@@ -180,7 +181,7 @@ Deno.serve(async (req) => {
     prototypes: pApproval?.length ? (files ?? []).filter((f) => f.kind === 'prototype' && f.plan_revision === a.plan_revision).map(line) : [],
     submit: ticketError ? undefined : { url: `${env('SUPABASE_URL')}/functions/v1/submit-result`, token: ticket },
     // v0.4.57: 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것, 브랜치 미리보기 주소
-    projectRules: await loadRules(userClient, task.project_id),
+    projectRules: [...(await loadRules(userClient, task.project_id)), ...skillPickRule((task as { skills?: string[] | null }).skills)],
     // v0.6.82: 규칙 칸·개발 스킬이 들어 있는 저장소면 지시서를 짧게(스킬 상태는 skill_cache, 없으면 예전처럼 전부)
     slim: await userClient.from('skill_cache').select('map').maybeSingle().then(({ data }) => !!(data?.map as Record<string, Record<string, string>> | null)?.[String(task.project_id)]?.[SLIM_MARKER_SKILL], () => false),
     previewUrl: previewUrl(project.preview_host, claudeBranch(a.task_id, String(item.id))),

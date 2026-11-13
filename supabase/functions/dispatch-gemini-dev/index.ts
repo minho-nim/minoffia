@@ -4,6 +4,7 @@
 // 비밀값: GITHUB_ACTIONS_TOKEN(이 저장소 Actions 실행 권한만)은 secrets에만. Gemini 키는 GitHub 저장소 secrets에 있다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildGeminiTask, geminiBranch } from './payload.ts';
+import { skillPickRule } from './skillPick.ts';
 import { loadRules } from './projectRules.ts';
 import { appMapSection } from './appMap.ts';
 
@@ -66,7 +67,7 @@ Deno.serve(async (req) => {
   const { data: a } = await userClient.from('agent_assignments').select('*').eq('id', body.assignmentId ?? '').maybeSingle();
   if (!a) return reply(404, { ok: false, error: '배정된 작업을 찾을 수 없습니다.' });
   if (a.assignee !== 'gemini' || a.execution_mode !== 'gemini_actions') return reply(400, { ok: false, error: 'Gemini 개발에 배정된 작업만 시작합니다.' });
-  const { data: task } = await userClient.from('tasks').select('id, project_id, projects(name, repo)').eq('id', a.task_id).maybeSingle();
+  const { data: task } = await userClient.from('tasks').select('id, project_id, skills, projects(name, repo)').eq('id', a.task_id).maybeSingle();
   const project = task?.projects as unknown as { name: string; repo: string | null } | null;
   const { data: spec } = await userClient
     .from('task_specs')
@@ -151,7 +152,7 @@ Deno.serve(async (req) => {
     changeScope: String(spec.change_scope ?? ''),
     preserve: [String(spec.preserve_constraints ?? ''), ...strings(item.preserve_constraints)].filter(Boolean),
     acceptance: [...strings(item.acceptance_tests), String(spec.test_criteria ?? '')].filter(Boolean),
-    projectRules: await loadRules(userClient, task.project_id),
+    projectRules: [...(await loadRules(userClient, task.project_id)), ...skillPickRule((task as { skills?: string[] | null }).skills)],
     bug: (spec.size_hint as { bug?: boolean } | null)?.bug,
   });
   const instructions = appMap ? `${instructionsBase}\n\n${appMap}` : instructionsBase;

@@ -7,6 +7,7 @@ import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
 import type { Project, Snapshot, Task } from '../domain/types';
+import { SkillPick } from './SkillPick';
 import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
@@ -135,6 +136,8 @@ interface Props {
   onArchive?: (entries: NewChatEntry[]) => Promise<void>;
   /** 접수된 업무 취소(v0.6.97, 업무 카드의 '업무 취소'와 같다) */
   onCancelTask?: (task: Task) => void;
+  /** 개발 스킬 고르기(v0.7.0): 프로젝트에 들어 있는 스킬·이름·저장 */
+  skillPick?: { installed: (projectId: string) => string[]; titleOf?: (name: string) => string; save: (task: Task, skills: string[]) => Promise<boolean> };
   /** 접수 직후 Gemini 기획서 초안을 자동으로 시작한다(Supabase 모드). 없으면 ChatGPT 기획을 안내한다. */
   onAutoDraft?: (task: Task) => void;
   /** Gemini 초안의 확인 질문에 입력창으로 답했을 때: 답을 기록하면 Gemini가 다시 쓴다 */
@@ -256,7 +259,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -1431,6 +1434,10 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                 );
               })()}
               {m.offer && m.offer.state !== 'open' && <span className="muted small inbox-offer-done">{m.offer.state === 'done' ? '접수함' : '접수 안 함'}</span>}
+              {m.created && m.taskId && skillPick && (() => {
+                const t = snap.tasks.find((x) => x.id === m.taskId);
+                return t ? <SkillPick task={t} installed={skillPick.installed(t.projectId)} titleOf={skillPick.titleOf} onSave={skillPick.save} /> : null;
+              })()}
               {m.created && m.taskId && onCancelTask && (() => {
                 const t = snap.tasks.find((x) => x.id === m.taskId);
                 if (!t) return null;

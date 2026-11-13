@@ -19,7 +19,8 @@ import { TaskBoard } from './components/TaskBoard';
 import { SkillsPanel } from './components/SkillsPanel';
 import { forgetMaps, StructureMaps } from './components/StructureMaps';
 import { freshReport, savedReport } from './data/mapCache';
-import { isSlimProject, setSlimProjects } from './data/slimRepos';
+import { installedSkillsOf, isSlimProject, setSkillTitles, setSlimProjects, skillTitleOf } from './data/slimRepos';
+import { skillPickRule } from './domain/skillPick';
 import { RelationLoader } from './components/RelationMap';
 import { OfficeMap } from './components/OfficeMap';
 import { FormPopup } from './components/FormPopup';
@@ -392,6 +393,7 @@ export function App() {
           if (!c || !c.files.length) return fetchSkills(true);
           if (!(Date.now() - Date.parse(c.updatedAt) < 600_000)) void fetchSkills(true).catch(() => null);
           setSlimProjects(c.map);
+          setSkillTitles(c.files.map(toSkillView));
           return { files: c.files, map: c.map, mcp: c.mcp };
         });
       skillsData.current = { at: Date.now(), p };
@@ -409,6 +411,7 @@ export function App() {
       (d) => {
         skillsData.current = { at: Date.now(), p: Promise.resolve(d) };
         setSlimProjects(d.map);
+        setSkillTitles(d.files.map(toSkillView));
       },
       () => {
         if (skillsData.current?.p === p2) skillsData.current = null;
@@ -1658,7 +1661,7 @@ export function App() {
       else if (a.assignee === 'gemini' && a.executionMode === 'gemini_actions') void workflowActions.startGeminiDev?.(a, false);
       else if (a.assignee === 'codex' && view.spec) {
         const project = projectById.get(task.projectId);
-        const rules = withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === task.projectId).map((r) => r.rule));
+        const rules = [...withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === task.projectId).map((r) => r.rule)), ...skillPickRule(task.skills)];
         const text = buildCodexHandoff(task, view.spec, item, project, view.plan.targetBaseRevision, attachmentsOf(snap.workflow.attachments, task.id, 'request'), linksOf(snap.workflow.links, task.id), view.pApproved ? attachmentsOf(snap.workflow.attachments, task.id, 'prototype', view.plan.planRevision) : [], rules, isSlimProject(task.projectId));
         void workflowActions.startCodexLinear?.(a, false, text);
       }
@@ -2150,6 +2153,7 @@ export function App() {
                 sync={inboxSync}
                 onArchive={(entries) => store.appendChat(entries)}
                 onCancelTask={cancelTask}
+                skillPick={{ installed: installedSkillsOf, titleOf: skillTitleOf, save: (task, skills) => mutate(() => store.saveTask({ ...task, skills }), skills.length ? `개발에 쓸 스킬을 저장했어요: ${skills.join(', ')}` : '개발 스킬은 AI가 알아서 고르게 했어요.') }}
                 onAutoDraft={store.mode === 'supabase' ? (t) => void draftSpec(t.id) : undefined}
                 onClarify={store.mode === 'supabase' ? (t, q, a) => workflowActions.addClarification(t, q, a) : undefined}
                 onShowTask={showTask}
@@ -2282,7 +2286,7 @@ export function App() {
                         agentLimits={snap.agentLimits}
                         links={snap.workflow.links}
                         clarifications={snap.workflow.clarifications}
-                        projectRules={withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule))}
+                        projectRules={[...withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule)), ...skillPickRule(t.skills)]}
                         reviews={(snap.workflow.reviews ?? []).filter((r) => r.taskId === t.id)}
                         followups={(snap.workflow.followups ?? []).filter((f) => f.taskId === t.id)}
                         timeline={taskTimeline(t.id, snap.workflow)}
