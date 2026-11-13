@@ -122,7 +122,7 @@ describe('구조·사무실 그림판(v0.6.94)', () => {
     const ids = new Set(c.nodes.map((n) => n.id));
     expect(ids.size).toBe(c.nodes.length);
     for (const e of c.edges) expect(ids.has(e.fromNode) && ids.has(e.toNode)).toBe(true);
-    expect(c.nodes.filter((n) => n.type === 'file').map((n) => n.file)).toEqual(['미노피아/미노피아.md', 'MINOVA/앱 지도.md']);
+    expect(c.nodes.filter((n) => n.type === 'file').map((n) => n.file)).toEqual(['미노피아/미노피아.md', 'MINOVA/MINOVA(앱 지도).md']);
     const app = fs.readFileSync(new URL('../src/components/OfficeMap.tsx', import.meta.url), 'utf8');
     for (const [, label] of OFFICE_CLOUD.nodes) expect(app).toContain(`'${label}'`);
     for (const [, label] of [...OFFICE_FLOW, ...OFFICE_WHO]) expect(app).toContain(`'${label}'`);
@@ -136,7 +136,30 @@ describe('앱 지도 고치기(v0.6.94)', () => {
     const once = upgradeAppMap(note, ['src/components/A.tsx', 'f.ts']);
     const twice = upgradeAppMap(once, ['src/components/A.tsx', 'f.ts']);
     expect(twice).toBe(once);
-    expect(once.indexOf('## 흐름')).toBeLessThan(once.indexOf('![[P/앱 지도.png]]'));
+    expect(once.indexOf('## 흐름')).toBeLessThan(once.indexOf('![[P/P(앱 지도).png]]'));
+    expect(upgradeAppMap('# old\n\n![[P/앱 지도.png]]\n', ['a/b.ts']).indexOf('## 폴더 구조')).toBeLessThan(upgradeAppMap('# old\n\n![[P/앱 지도.png]]\n', ['a/b.ts']).indexOf('![[P/앱 지도.png]]'));
     expect(once).toMatch(/components\/\s+대화 \(1\)/);
+  });
+});
+
+describe('Claude 찾기·MCP·예전 폴더(v0.6.98)', () => {
+  it('제목에 Codex라는 글자가 있어도 Claude 표시가 있으면 Claude', async () => {
+    const { agentOfCommit, mcpOfCommit } = await import('./notes-history.mjs');
+    expect(agentOfCommit('minho-nim <x>', 'Codex 환경 경고\n\nClaude-Session: https://claude.ai/code/session_1\n\nCo-authored-by: Claude <noreply@anthropic.com>')).toBe('Claude');
+    expect(agentOfCommit('minho-nim <x>', 'Codex 환경 경고')).toBe('Codex');
+    expect(agentOfCommit('chatgpt-codex-connector[bot] <x>', '')).toBe('Codex');
+    expect(mcpOfCommit('x\n쓴 MCP: supabase, Playwright')).toEqual(['supabase', 'playwright']);
+  });
+  it('버전 노트 맨 위에 쓴 MCP 링크', async () => {
+    const { addEntry, versionNote } = await import('./notes-sync.mjs');
+    const note = versionNote('P', 'v1.0', addEntry([], { version: '1.0.1', task: 't', mcp: ['supabase', 'Bad Name'] }));
+    expect(note).toContain('쓴 MCP: [[supabase (MCP)]]');
+    expect(note).not.toContain('Bad');
+  });
+  it('홈은 프로젝트 노트로만(앱 지도 직접 링크 없음)', async () => {
+    const { homeNote } = await import('./notes-sync.mjs');
+    const h = homeNote([{ name: '테스트', map: true, note: false }, { name: 'P', map: true, note: true }]);
+    expect(h).not.toContain('앱 지도|');
+    expect(h).toContain('- 테스트');
   });
 });

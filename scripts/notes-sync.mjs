@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 
 export const APP_URL = 'https://minlab-ai-office.pages.dev/';
 export const MY_NOTES = '내 메모';
+/** 앱 지도 노트 이름(v0.6.98 소유자 "프로젝트(앱 지도)처럼 해야 분류가"): '<프로젝트>(앱 지도)' */
+export const mapName = (project) => `${project}(앱 지도)`;
 
 /** 폴더·파일 이름으로 쓸 수 있게(옵시디언·윈도·휴대폰에서 문제 되는 글자 빼기) */
 export function safeName(s) {
@@ -98,7 +100,7 @@ export function upgradeAppMap(text, files) {
   // 예전에 넣은 흐름·폴더 구조 칸은 빼고 다시
   const base = t.replace(/## 흐름\n```mermaid[\s\S]*?```\n+/g, '').replace(/## 폴더 구조\n[\s\S]*?```\n[\s\S]*?```\n+/g, '');
   if (!add) return base;
-  const at = base.search(/^!\[\[.*앱 지도\.png\]\]/m);
+  const at = base.search(/^!\[\[.*앱 지도\)?\.png\]\]/m);
   return at >= 0 ? `${base.slice(0, at)}${add}\n${base.slice(at)}` : `${base.trimEnd()}\n\n${add}\n`;
 }
 
@@ -122,7 +124,7 @@ export function appMapNote(project, report) {
     ...body,
     ...flowMermaid(map),
     ...folderTree(report.tree, map),
-    `![[${project}/앱 지도.png]]`, '',
+    `![[${project}/${mapName(project)}.png]]`, '',
     `${date} 점검 기준 · [미노피아 열기](${APP_URL})`, '',
   ].join('\n').replace(/\n{3,}/g, '\n\n');
 }
@@ -153,7 +155,7 @@ export function homeNote(projects) {
     '# minoffia', '',
     '> [!info] 프로젝트마다 앱 지도와 버전 노트를 자동으로 만들어요. 직접 쓰는 메모는 **내 메모** 폴더에 두세요(자동으로 건드리지 않아요).', '',
     // 홈 → 프로젝트만(앱 지도는 프로젝트 노트에서 이어진다)
-    ...projects.map((p) => (p.note ? `- [[${p.name}]]` : p.map ? `- [[${p.name}/앱 지도|${p.name}]]` : `- ${p.name}`)),
+    ...projects.map((p) => (p.note ? `- [[${p.name}]]` : `- ${p.name}`)),
     '', '사무실 그림: [[미노피아 사무실.canvas|미노피아 사무실]]', '', `[미노피아 열기](${APP_URL})`, '',
   ].join('\n');
 }
@@ -161,13 +163,23 @@ export function homeNote(projects) {
 /** 앱 지도 말고 예전에 자동으로 만든 것(점검·업무 구조도·코드 그래프·원본 지도)을 지운다(v0.5.94). 내 메모는 건드리지 않는다 */
 export const OLD_AUTO = ['점검.md', '업무', '코드 그래프', '앱 지도.html'];
 
+/** 예전 이름 '앱 지도.md·png'는 '<프로젝트>(앱 지도)'로 바꾼다(그림 링크도) */
+function migrateMap(dir, project) {
+  const md = path.join(dir, `${mapName(project)}.md`);
+  const oldMd = path.join(dir, '앱 지도.md');
+  if (fs.existsSync(oldMd) && !fs.existsSync(md)) fs.writeFileSync(md, read(oldMd).replaceAll(`![[${project}/앱 지도.png]]`, `![[${project}/${mapName(project)}.png]]`));
+  fs.rmSync(oldMd, { force: true });
+  const oldPng = path.join(dir, '앱 지도.png');
+  if (fs.existsSync(oldPng)) fs.renameSync(oldPng, path.join(dir, `${mapName(project)}.png`));
+}
 function scanProjects(notes) {
   return fs.readdirSync(notes, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== MY_NOTES && !SHARED.includes(d.name))
     .map((d) => {
       const dir = path.join(notes, d.name);
       for (const old of OLD_AUTO) fs.rmSync(path.join(dir, old), { recursive: true, force: true });
-      return { name: d.name, map: fs.existsSync(path.join(dir, '앱 지도.md')), note: fs.existsSync(path.join(dir, `${d.name}.md`)) };
+      migrateMap(dir, d.name);
+      return { name: d.name, map: fs.existsSync(path.join(dir, `${mapName(d.name)}.md`)), note: fs.existsSync(path.join(dir, `${d.name}.md`)) };
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 }
@@ -210,7 +222,7 @@ export function officeCanvas(projects) {
   // 3) 프로젝트(노트로 바로 열림)
   const px = 1040;
   nodes.push({ id: 'grp-proj', type: 'group', label: '프로젝트 — 누르면 프로젝트 노트', x: px - 40, y: -80, width: 560, height: Math.max(300, Math.ceil(projects.length / 2) * 110 + 80) });
-  projects.forEach((p, i) => nodes.push({ id: `p-${i}`, type: 'file', file: p.note ? `${p.name}/${p.name}.md` : `${p.name}/앱 지도.md`, x: px + (i % 2) * 250, y: (Math.floor(i / 2)) * 110, width: 230, height: 90 }));
+  projects.forEach((p, i) => nodes.push({ id: `p-${i}`, type: 'file', file: p.note ? `${p.name}/${p.name}.md` : `${p.name}/${mapName(p.name)}.md`, x: px + (i % 2) * 250, y: (Math.floor(i / 2)) * 110, width: 230, height: 90 }));
   return JSON.stringify({ nodes: nodes.map((n) => Object.fromEntries(Object.entries(n).filter(([, v]) => v !== undefined))), edges }, null, 1);
 }
 
@@ -235,7 +247,10 @@ function finish(notes) {
 // ── 버전 노트(v0.6.89, 소유자 "버전마다 쓴 스킬·만든 AI로 이어지게, 너무 복잡하지 않게") ──
 // 선은 버전 → 스킬, 버전 → AI, 버전 → '<프로젝트> 버전' 묶음만. '쓴 스킬'·'개발' 묶음은 숫자 목록(링크 없음)이라 선을 늘리지 않는다.
 // 스킬·AI 노트는 모든 프로젝트가 같이 쓰는 공용 폴더 하나씩.
-export const SHARED = ['스킬', 'AI'];
+export const SHARED = ['스킬', 'AI', 'MCP'];
+/** MCP 노트 이름: '<이름> (MCP)'(스킬 이름과 섞이지 않게) */
+export const mcpNote = (n) => `${n} (MCP)`;
+const MCP_RE = /^[a-z0-9][a-z0-9_-]{0,40}$/;
 const ENTRY_MARK = /<!-- minoffia:entries (.*?) -->/s;
 const SKILL_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const AGENTS = ['Codex', 'Claude', 'Gemini'];
@@ -269,6 +284,7 @@ export function addEntry(list, entry) {
     // Claude 대화로 하지 않은 것은 모두 Codex(소유자 2026-11-13)
     agent: AGENTS.includes(entry.agent) ? entry.agent : 'Codex',
     skills: [...new Set((entry.skills ?? []).filter((n) => SKILL_RE.test(n)))].slice(0, 12),
+    mcp: [...new Set((entry.mcp ?? []).filter((n) => MCP_RE.test(n)))].slice(0, 8),
   };
   return [...list.filter((x) => !(x.task === e.task && (x.v ?? e.v) === e.v)), e];
 }
@@ -278,16 +294,18 @@ export function versionNote(project, group, list) {
   const sorted = [...list].sort((a, b) => cmp(a.v, b.v));
   const agents = [...new Set(sorted.map((e) => e.agent))];
   const skills = [...new Set(sorted.flatMap((e) => e.skills))].sort();
+  const mcps = [...new Set(sorted.flatMap((e) => e.mcp ?? []))].sort();
   const body = sorted.flatMap((e) => [
     `## ${e.v} · ${e.task}`,
-    `- ${[e.date, e.score != null ? `점수 ${e.score}` : '', e.pr ? `[PR #${e.pr.split('/').pop()}](${e.pr})` : '', e.agent, e.skills.length ? `스킬 ${e.skills.join(', ')}` : ''].filter(Boolean).join(' · ')}`,
+    `- ${[e.date, e.score != null ? `점수 ${e.score}` : '', e.pr ? `[PR #${e.pr.split('/').pop()}](${e.pr})` : '', e.agent, e.skills.length ? `스킬 ${e.skills.join(', ')}` : '', e.mcp?.length ? `MCP ${e.mcp.join(', ')}` : ''].filter(Boolean).join(' · ')}`,
     '',
   ]);
   return [
     '---', 'tags: [minoffia/버전]', `프로젝트: "${project}"`, `버전: ${group}`, `작은 버전: ${sorted.length}`, '---',
     `# ${project} ${group}`, '',
     `만든 AI: ${agents.map((a) => `[[${a}]]`).join(' ') || '없음'}`,
-    `쓴 스킬: ${skills.length ? skills.map((n) => `[[${n}]]`).join(' ') : '없음'}`, '',
+    `쓴 스킬: ${skills.length ? skills.map((n) => `[[${n}]]`).join(' ') : '없음'}`,
+    `쓴 MCP: ${mcps.length ? mcps.map((n) => `[[${mcpNote(n)}]]`).join(' ') : '없음'}`, '',
     ...body,
     `← [[${project} 버전]]`, '',
     `<!-- minoffia:entries ${JSON.stringify(sorted)} -->`, '',
@@ -298,7 +316,7 @@ export function hubNotes(project, groups) {
   const total = names.reduce((n, g) => n + groups[g].length, 0);
   return {
     // 프로젝트 → 프로젝트 버전 · 앱 지도만(소유자 "프로젝트 > 프로젝트 버전으로만 묶고, 앱 지도는 프로젝트에서")
-    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 큰 버전 ${names.length}개 · 작은 버전 ${total}개`, `- [[${project}/앱 지도|앱 지도]] · 기능 표 · 흐름 그림 · 폴더 구조`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
+    [`${project}.md`]: ['---', 'tags: [minoffia/프로젝트]', '---', `# ${project}`, '', `- [[${project} 버전]] · 큰 버전 ${names.length}개 · 작은 버전 ${total}개`, `- [[${mapName(project)}]] · 기능 표 · 흐름 그림 · 폴더 구조`, '', `[미노피아 열기](${APP_URL})`, ''].join('\n'),
     [`${project} 버전.md`]: ['---', 'tags: [minoffia/묶음]', '---', `# ${project} 버전`, '', '> [!info] 큰 버전마다 노트 하나예요. 누르면 그 안의 작은 버전들과 만든 AI·쓴 스킬이 보여요. 배포할 때마다 자동으로 더해져요.', '',
       ...names.map((g) => {
         const latest = [...groups[g]].sort((a, b) => cmp(a.v, b.v))[0];
@@ -307,6 +325,7 @@ export function hubNotes(project, groups) {
       '', `← [[${project}]]`, ''].join('\n'),
   };
 }
+export const mcpStub = (n) => `---\ntags: [minoffia/MCP]\n---\n# ${n} (MCP)\n\nAI가 쓰는 외부 연결(MCP, 공용 노트). 이 MCP를 쓴 버전은 아래 백링크에 모여요.\n`;
 export const skillStub = (n) => `---\ntags: [minoffia/스킬]\n---\n# ${n}\n\n스킬(공용 노트). 이 스킬을 쓴 버전은 아래 백링크에 모여요.\n`;
 export const aiStub = (n) => `---\ntags: [minoffia/AI]\n---\n# ${n}\n\n개발 AI(공용 노트). 이 AI가 만든 버전은 아래 백링크에 모여요.\n`;
 
@@ -344,7 +363,22 @@ export function skillNote(s, projects) {
   ].join('\n');
 }
 /** 지난 기록 한 번에 채우기(notes-history.mjs가 만든 JSON). 이미 있는 버전 노트(배포 때 만든 것)는 건드리지 않는다 */
+const AUTO_FILES = /^(앱 지도|.*\(앱 지도\))\.(md|png|html)$|^점검\.md$/;
+/** 지금 프로젝트 목록에 없는 예전 폴더(이름이 바뀐 프로젝트 등)는 자동 파일만 있을 때 지운다(직접 쓴 파일이 있으면 그대로) */
+function removeOrphans(notes, names) {
+  for (const d of fs.readdirSync(notes, { withFileTypes: true })) {
+    if (!d.isDirectory() || d.name.startsWith('.') || d.name === MY_NOTES || SHARED.includes(d.name) || names.has(d.name)) continue;
+    const dir = path.join(notes, d.name);
+    const files = fs.readdirSync(dir, { recursive: true, withFileTypes: true }).filter((f) => f.isFile());
+    const own = files.filter((f) => {
+      const rel = path.relative(dir, path.join(f.parentPath ?? f.path, f.name));
+      return !(AUTO_FILES.test(rel) || rel === `${d.name}.md` || rel === `${d.name} 버전.md` || rel.startsWith(`버전${path.sep}`) || rel.startsWith(`업무${path.sep}`) || rel.startsWith(`코드 그래프${path.sep}`));
+    });
+    if (!own.length) fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
 function writeBackfill(notes, data) {
+  removeOrphans(notes, new Set((data.projects ?? []).map((p) => safeName(p.name))));
   for (const p of data.projects ?? []) {
     const project = safeName(p.name);
     const dir = path.join(notes, project);
@@ -366,7 +400,8 @@ function writeBackfill(notes, data) {
       fs.writeFileSync(file, versionNote(project, g, list.reduce((acc, e) => (acc.some((k) => k.v === e.v && k.task === e.task) ? acc : [...acc, e]), kept)));
     }
     writeHubs(dir, project, vdir);
-    const am = path.join(dir, '앱 지도.md');
+    const am = path.join(dir, `${mapName(project)}.md`);
+    migrateMap(dir, project);
     // 모든 프로젝트에 구조를(v0.6.95 소유자 "전체적으로"): 앱 지도가 아직 없으면 폴더 구조만 있는 앱 지도를 만든다(기능 표는 점검 때)
     const base = fs.existsSync(am) ? read(am) : ['---', `프로젝트: "${project}"`, 'tags: [minoffia/앱지도]', '---', `# ${project} 앱 지도`, '', '> [!info] 기능 표와 흐름 그림은 미노피아 앱에서 이 프로젝트를 점검하면 생겨요.', ''].join('\n');
     if (Array.isArray(p.files) && p.files.length) fs.writeFileSync(am, upgradeAppMap(base, p.files));
@@ -377,6 +412,11 @@ function writeBackfill(notes, data) {
     if (!SKILL_RE.test(s.name)) continue;
     const users = (data.projects ?? []).filter((p) => (p.skills ?? []).includes(s.name)).map((p) => safeName(p.name));
     fs.writeFileSync(path.join(SKILLS, `${s.name}.md`), skillNote(s, users));
+  }
+  for (const n of new Set((data.projects ?? []).flatMap((p) => (p.versions ?? []).flatMap((v) => v.mcp ?? [])))) {
+    if (!MCP_RE.test(n)) continue;
+    const f = path.join(notes, 'MCP', `${mcpNote(n)}.md`);
+    if (!fs.existsSync(f)) (fs.mkdirSync(path.dirname(f), { recursive: true }), fs.writeFileSync(f, mcpStub(n)));
   }
   fs.mkdirSync(path.join(notes, 'AI'), { recursive: true });
   for (const n of AGENTS) fs.writeFileSync(path.join(notes, 'AI', `${n}.md`), aiNote(n));
@@ -398,6 +438,10 @@ function writeVersion(notes, project, entry) {
     const f = path.join(notes, '스킬', `${n}.md`);
     if (!fs.existsSync(f)) (fs.mkdirSync(path.dirname(f), { recursive: true }), fs.writeFileSync(f, skillStub(n)));
   }
+  for (const n of last.mcp ?? []) {
+    const f = path.join(notes, 'MCP', `${mcpNote(n)}.md`);
+    if (!fs.existsSync(f)) (fs.mkdirSync(path.dirname(f), { recursive: true }), fs.writeFileSync(f, mcpStub(n)));
+  }
   const a = path.join(notes, 'AI', `${last.agent}.md`);
   if (!fs.existsSync(a)) (fs.mkdirSync(path.dirname(a), { recursive: true }), fs.writeFileSync(a, aiNote(last.agent)));
 }
@@ -413,8 +457,9 @@ function main([cmd, notes, projectRaw, ...rest]) {
     const [reportFile, png, html] = rest;
     fs.mkdirSync(dir, { recursive: true });
     void html; // 원본 지도(HTML)는 옵시디언에 올리지 않는다(v0.5.94)
-    fs.writeFileSync(path.join(dir, '앱 지도.md'), appMapNote(project, JSON.parse(fs.readFileSync(reportFile, 'utf8'))));
-    copyIf(png, path.join(dir, '앱 지도.png'));
+    fs.writeFileSync(path.join(dir, `${mapName(project)}.md`), appMapNote(project, JSON.parse(fs.readFileSync(reportFile, 'utf8'))));
+    copyIf(png, path.join(dir, `${mapName(project)}.png`));
+    fs.rmSync(path.join(dir, '앱 지도.md'), { force: true });
   } else if (cmd === 'archify') {
     const [taskRaw, revision, png, html, summaryFile] = rest;
     const task = safeName(taskRaw);
