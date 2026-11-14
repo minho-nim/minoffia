@@ -15,6 +15,7 @@ export function uncovered(leave: AgentId[]): string[] {
     const able = AGENTS.filter((a) => a.skills.includes(type) && LEAVE_AGENTS.includes(a.id));
     if (able.length && able.every((a) => leave.includes(a.id))) out.push(`${WORK_TYPE_LABEL[type]}: ${able.map((a) => a.name).join('·')} 모두 휴가라 새 업무는 복귀 뒤에 시작해요.`);
   }
+  if (leave.includes('exa')) out.push('웹 조사: Exa가 휴가라 Gemini 검색 연결로 찾아요(무료 한도가 자주 막혀요).');
   if (leave.includes('studioA') && leave.includes('studioB')) out.push('대화 답·기획서 초안·견본·사진 분석: Studio A·B(Gemini)가 모두 휴가라 미니엉이 앱 상태 질문만 답해요.');
 
   return out;

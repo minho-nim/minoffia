@@ -134,7 +134,7 @@ export interface Snapshot {
 }
 
 /** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */
-export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'studioA', 'studioB'];
+export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'exa', 'studioA', 'studioB'];
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
