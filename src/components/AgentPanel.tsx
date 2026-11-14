@@ -366,7 +366,7 @@ export function ReviewLog({ reviews, tasks, onOpenTask }: { reviews: ResultRevie
         )}
       </h3>
       {!list.length ? (
-        <p className="muted small">{reviews.length ? '최근 하루 동안 새 평가가 없어요. 지난 평가는 업무 카드 기록에 있어요.' : '아직 평가한 결과가 없어요.'} 개발 결과가 오면 규칙 검사와 Claude 채점(안 되면 Gemini)이 자동으로 돌아요.</p>
+        <p className="muted small">{reviews.length ? '최근 하루 동안 새 평가가 없어요. 지난 평가는 업무 카드 기록에 있어요.' : '아직 평가한 결과가 없어요.'} 개발 결과가 오면 규칙 검사 뒤 3중 평가(Gemini A·B + 동료 AI)가 자동으로 돌아요.</p>
       ) : (
         <ul>
           {rows.map((r) => {
