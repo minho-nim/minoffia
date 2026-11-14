@@ -89,6 +89,12 @@ Deno.serve(async (req) => {
   }
   if (!material) return reply(502, { ok: false, error: '스타일 파일 내용을 읽지 못했습니다.' });
 
+  // 팀 관리 휴가(v0.7.9): 휴가인 Studio의 키는 쓰지 않는다(다른 Gemini 함수들과 같게)
+  const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
+  const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
+  if (away.has('studioA')) keys[0] = '';
+  if (away.has('studioB')) keys[1] = '';
+  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   const prompt = `프로젝트: ${String(project.name ?? '').slice(0, 80)} (${repo})\n아래 스타일 파일을 보고 DESIGN.md를 써라.\n${material}`;
   let last = { status: 0, message: '' };

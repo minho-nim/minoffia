@@ -234,7 +234,11 @@ Deno.serve(async (req) => {
   // Exa가 안 되면 예전 길(Gemini 검색 연결)로 간다.
   const exaFound = new Map<string, string>();
   let webContext = '';
-  const exaKey = env('EXA_API_KEY');
+  // 팀 관리 휴가(v0.4.44, Exa는 v0.7.9): 키 A = Studio A, 키 B = Studio B, Exa = 웹 검색. 휴가인 쪽은 부르지 않는다(표가 없거나 못 읽으면 모두 근무).
+  const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
+  const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
+  // Exa가 휴가면 Exa를 부르지 않고 예전 길(Gemini 검색 연결)로 간다
+  const exaKey = away.has('exa') ? '' : env('EXA_API_KEY');
   if (research && exaKey) {
     const r = await exaSearch(exaKey, question);
     if (r.ok && r.results.length) {
@@ -277,9 +281,6 @@ Deno.serve(async (req) => {
   ].join('');
   const started = Date.now();
   let last = { status: 0, message: '' };
-  // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
-  const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
-  const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (away.has('studioA')) keys[0] = '';
   if (away.has('studioB')) keys[1] = '';
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
