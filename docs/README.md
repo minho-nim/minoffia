@@ -9,7 +9,8 @@
 | [STATUS.md](STATUS.md) | 현재 미완료·미검증·소유자 취향 |
 | [FLOW.md](FLOW.md) | 현재 승인·업무 흐름 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 구조·관련 소스 위치 |
-| [README.md](../README.md) | 설치·실행·연결 |
+| [README.md](../README.md) | 저장소 소개(포트폴리오) |
+| [SETUP.md](SETUP.md) | 설치·실행·연결 |
 | [CLAUDE_ROUTINE.md](CLAUDE_ROUTINE.md) | 루틴 설정 작업 때만 읽는 운영 지침 |
 | [CHANGELOG.md](../CHANGELOG.md) | 버전별 변경 이력 |
 | [DEVLOG](DEVLOG_MinLab-AI-Office.md) | 날짜별 목적·이유·검증 기록 |

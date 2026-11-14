@@ -10,6 +10,7 @@ import type { Project, Snapshot, Task } from '../domain/types';
 import { SkillPick } from './SkillPick';
 import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
+import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction, staleNotices } from '../domain/stageNotice';
 import { canApprove, deriveWorkflow } from '../domain/workflow';
@@ -90,7 +91,7 @@ type Pending =
   | { kind: 'pick'; text: string; context?: PriorChat }
   | { kind: 'question'; text: string; projectName?: string }
   /** Gemini가 답한 뒤: GPT에게 이어서 묻기 */
-  | { kind: 'followup'; text: string; answer: string; projectName?: string }
+  | { kind: 'followup'; text: string; answer: string; projectName?: string; webFailed?: boolean }
   | { kind: 'unclear'; text: string }
   /** 확인 질문 뒤에 질문처럼 보이는 말이 왔을 때: 그 답인지 새 질문인지 묻는다(v0.4.20) */
   | { kind: 'clarifyOrAsk'; text: string; taskId: string }
@@ -125,6 +126,8 @@ interface Props {
   ) => Promise<{ answer: string; keySlot: number; sources?: Source[] }>;
   /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
   geminiAway?: boolean;
+  /** Claude 웹 조사(v0.7.11): Exa 웹 검색이 안 됐을 때 'Claude에게 찾아보기'. Supabase 모드·Claude 근무일 때만 */
+  onAskClaude?: (question: string) => Promise<{ already?: boolean }>;
   /** Codex(OpenAI·ChatGPT 계정)가 휴가면 GPT로 넘기는 링크를 숨긴다(v0.4.44) */
   gptAway?: boolean;
   onCopy: (text: string) => Promise<boolean>;
@@ -189,6 +192,8 @@ function writeOutbox(list: NewChatEntry[]) {
 /** 이 기기 대화를 마지막으로 바꾼(또는 서버에서 받은) 시각 */
 const STAMP_KEY = 'minlab-ai-office:inbox-updated:v1';
 const KEEP = 150;
+/** 이 기기에서 이미 띄운 Claude 웹 조사 id(v0.7.11) */
+const RESEARCH_KEY = 'minlab-ai-office:research-shown';
 /** 다른 기기에서 바꾼 대화를 확인하는 간격 */
 const SYNC_POLL_MS = 15_000;
 
@@ -259,7 +264,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -641,6 +646,33 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
     }));
     setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
   }, [snap.tasks, snap.workflow, syncReady, minute]);
+
+  // Claude 웹 조사 답(v0.7.11): 끝난 조사를 기본 대화창에 한 번씩 띄운다(다른 기기가 이미 넣었으면 같은 id라 다시 안 넣음).
+  useEffect(() => {
+    if (!syncReady || !snap.research?.length) return;
+    let shownIds: string[] = [];
+    try {
+      shownIds = JSON.parse(localStorage.getItem(RESEARCH_KEY) ?? '[]') as string[];
+    } catch {
+      shownIds = [];
+    }
+    const have = new Set([...shownIds, ...logRef.current.filter((m) => m.id.startsWith('research-')).map((m) => m.id.slice(9))]);
+    const add = unannounced(snap.research, have);
+    if (!add.length) return;
+    try {
+      localStorage.setItem(RESEARCH_KEY, JSON.stringify([...shownIds, ...add.map((r) => r.id)].slice(-100)));
+    } catch {
+      // 저장이 막힌 브라우저: 대화 기록의 id로만 막는다.
+    }
+    const msgs: Msg[] = add.map((r) => ({
+      id: `research-${r.id}`,
+      from: r.status === 'done' ? 'gemini' : 'office',
+      text: researchMessage(r),
+      home: '',
+      ...(r.status === 'done' ? { via: 'Claude가 웹에서 찾아 답함', ...(r.sources.length ? { sources: r.sources } : {}) } : {}),
+    }));
+    setLog((l) => [...l, ...msgs].slice(-KEEP));
+  }, [snap.research, syncReady]);
 
   // 업무 카드에서 답한 확인 질문 답을 대화창(기본·그 프로젝트)에도 남긴다(v0.4.90).
   useEffect(() => {
@@ -1157,6 +1189,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
         const focusedTask = focus && text.trim().startsWith(focus.prefix) ? snap.tasks.find((t) => t.id === focus.taskId) : undefined;
         if (focus) focusTask.current = null;
         const ask = focusedTask ? `${text}\n\n${taskContext(focusedTask, snap.workflow)}` : text;
+        let webFailed = false;
         try {
           let got: Awaited<ReturnType<typeof onAskGemini>>;
           try {
@@ -1166,7 +1199,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             // Exa 웹 검색이 안 되면(휴가·무료 사용량 끝 등) 검색 없이 한 번 더 묻는다.
             set('');
             got = await onAskGemini(ask, history.slice(-6), encoded, put, { ...opts, research: false });
-            say('office', `웹 검색은 안 돼서 Gemini가 아는 범위로만 답했어요(${(e as Error).message})`);
+            webFailed = true;
+            say('office', `웹 검색은 안 돼서 Gemini가 아는 범위로만 답했어요(${(e as Error).message})${onAskClaude ? ' 아래 [Claude에게 찾아보기]를 누르면 Claude가 웹에서 찾아 몇 분 뒤 답해요.' : ''}`);
           }
           if (muted.current) return;
           const raw = got.answer;
@@ -1208,7 +1242,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           const answer = r ? r.body : raw;
           set(answer);
           photoStore.held = [];
-          setPending({ kind: 'followup', text, answer, projectName });
+          setPending({ kind: 'followup', text, answer, projectName, ...(webFailed ? { webFailed: true } : {}) });
         } catch (e) {
           setLog((l) => l.filter((m) => m.id !== id || m.text));
           throw e;
@@ -1555,6 +1589,31 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                     }}
                   >
                     웹에서 찾아보기
+                  </button>
+                </>
+              )}
+              {pending.webFailed && onAskClaude && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="link-btn"
+                    title="Exa 웹 검색이 안 될 때 Claude가 웹에서 찾아 답합니다(Claude 하루 사용량 1회, 몇 분 걸림)."
+                    onClick={() => {
+                      const q = pending.text;
+                      setPending(null);
+                      say('me', `Claude에게 찾아봐 줘: ${q.length > 40 ? `${q.slice(0, 39)}…` : q}`);
+                      void run(async () => {
+                        try {
+                          const r = await onAskClaude(q);
+                          say('office', r.already ? '같은 질문을 Claude가 이미 찾는 중이에요. 답이 오면 여기 띄워요.' : 'Claude에게 웹 조사를 맡겼어요(몇 분). 답이 오면 여기 띄워요.');
+                        } catch (e) {
+                          say('office', `Claude에게 맡기지 못했어요: ${(e as Error).message}`);
+                        }
+                      });
+                    }}
+                  >
+                    Claude에게 찾아보기
                   </button>
                 </>
               )}

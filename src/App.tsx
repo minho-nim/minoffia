@@ -2195,6 +2195,15 @@ export function App() {
                 canAskGemini={store.mode === 'supabase' && !geminiAway}
                 geminiAway={geminiAway}
                 gptAway={(snap.leave ?? []).includes('codex')}
+                onAskClaude={
+                  store.mode === 'supabase' && store.askClaudeResearch && !(snap.leave ?? []).includes('claude')
+                    ? async (q) => {
+                        const r = await store.askClaudeResearch!(q);
+                        void store.load().then(setSnap, () => undefined);
+                        return r;
+                      }
+                    : undefined
+                }
                 onWarmGemini={() => store.warmGemini?.()}
                 onLinkProject={(id) => setChatProject(id)}
                 onCreateTask={(d, images) => addTask(d, images)}

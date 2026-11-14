@@ -194,7 +194,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews', 'task_followups',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews', 'task_followups', 'claude_research',
 ];
 
 const toReview = (r: Row): ResultReview => ({
@@ -331,7 +331,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules, reviews, followups] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules, reviews, followups, research] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -354,6 +354,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('project_rules').select('*').order('created_at'),
         client.from('result_reviews').select('*').order('created_at'),
         client.from('task_followups').select('*').order('created_at'),
+        client.from('claude_research').select('id, question, status, answer, sources, session_url, expires_at, created_at').gte('created_at', since).order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -377,6 +378,19 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           followups: followups.error ? [] : (followups.data ?? []).map((r: Row) => ({ id: r.id as string, taskId: r.task_id as string, text: r.text as string, usedAt: (r.used_at as string | null) ?? null, createdAt: r.created_at as string })),
         },
         leave: leave.error ? [] : (leave.data ?? []).map((r: Row) => r.agent as AgentId),
+        // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
+        research: research.error
+          ? []
+          : (research.data ?? []).map((r: Row) => ({
+              id: r.id as string,
+              question: r.question as string,
+              status: r.status as 'pending' | 'done' | 'failed',
+              answer: (r.answer as string) ?? '',
+              sources: Array.isArray(r.sources) ? (r.sources as { uri: string; title: string }[]) : [],
+              sessionUrl: (r.session_url as string | null) ?? null,
+              expiresAt: r.expires_at as string,
+              createdAt: r.created_at as string,
+            })),
         projectRules: projectRules.error
           ? []
           : (projectRules.data ?? []).map((r: Row) => ({
@@ -847,6 +861,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async setLeave(agent, onLeave) {
       if (onLeave) check(await client.from('agent_leave').upsert({ agent }));
       else check(await client.from('agent_leave').delete().eq('agent', agent));
+    },
+    async askClaudeResearch(question) {
+      const data = await invoke('ask-claude-research', { question });
+      return { id: data.id as string, sessionUrl: (data.sessionUrl as string | null) ?? null, already: Boolean(data.already) };
     },
     async finishReview(taskId, resultRevision) {
       const data = await invoke('review-result', { taskId, resultRevision, action: 'finalize' });

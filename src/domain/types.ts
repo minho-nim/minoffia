@@ -131,6 +131,8 @@ export interface Snapshot {
   leave?: AgentId[];
   /** 프로젝트에서 지켜야 할 것(v0.4.57) */
   projectRules?: ProjectRule[];
+  /** Claude 웹 조사(v0.7.11, Supabase 모드만, 최근 7일) */
+  research?: import('./claudeResearch').ClaudeResearch[];
 }
 
 /** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */
