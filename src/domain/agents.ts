@@ -83,7 +83,7 @@ export const AGENTS: Agent[] = [
     home: 'research',
     skills: [],
     dailyCap: null,
-    note: '대화에서 찾아봐야 하는 질문이 오면 서버가 Exa로 웹 글 5개를 찾고 Gemini(Studio A·B)가 정리한다. 업무는 맡지 않는다(v0.7.2, 소유자 "리서치 자리는 Exa"). 휴가면 Gemini 검색 연결로 대신 찾는다.',
+    note: '대화에서 찾아봐야 하는 질문이 오면 서버가 Exa로 웹 글 5개를 찾고 Gemini(Studio A·B)가 정리한다. 업무는 맡지 않는다(v0.7.2, 소유자 "리서치 자리는 Exa"). 휴가면 웹 검색을 하지 않는다(Gemini가 아는 범위로만 답함).',
     sprite: 'person',
     palette: { hair: '#3a3a3a', skin: '#efc8a6', shirt: '#4a7bd0', pants: '#2f3442', accent: '#e8eef8' },
   },
