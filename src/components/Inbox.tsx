@@ -1114,7 +1114,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
   }, [busy, queue]);
 
   const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }, extra: { research?: boolean } = {}) => {
-    // 조사(v0.4.61): 웹에서 찾아야 하는 질문은 Gemini Google 검색 연결로 답하고 출처를 붙인다(규칙으로 고름, 실패하면 검색 없이 다시).
+    // 조사(v0.4.61, v0.7.10부터 Exa만): 웹에서 찾아야 하는 질문은 Exa가 찾고 Gemini가 정리해 출처를 붙인다(규칙으로 고름, Exa 휴가·실패면 검색 없이 다시).
     const research = extra.research ?? (needsResearch(text) || asksExa(text));
     setPending(null);
     void run(async () => {
@@ -1163,7 +1163,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
             got = await onAskGemini(ask, history.slice(-6), encoded, put, opts);
           } catch (e) {
             if (!research) throw e;
-            // 검색 연결이 안 되면(무료 검색 한도 등) 검색 없이 한 번 더 묻는다.
+            // Exa 웹 검색이 안 되면(휴가·무료 사용량 끝 등) 검색 없이 한 번 더 묻는다.
             set('');
             got = await onAskGemini(ask, history.slice(-6), encoded, put, { ...opts, research: false });
             say('office', `웹 검색은 안 돼서 Gemini가 아는 범위로만 답했어요(${(e as Error).message})`);
@@ -1171,7 +1171,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
           if (muted.current) return;
           const raw = got.answer;
           const sources = got.sources ?? [];
-          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', 'Gemini 검색 ·') : VIA_OF_SLOT[got.keySlot]) : undefined;
+          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', 'Exa 검색 + Gemini ·') : VIA_OF_SLOT[got.keySlot]) : undefined;
           if (via || sources.length) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {
@@ -1548,7 +1548,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onWarmGemini, o
                   <button
                     type="button"
                     className="link-btn"
-                    title="Gemini가 Google 검색으로 찾아보고 출처를 붙여 답합니다(무료 검색 한도 안)."
+                    title="Exa가 웹에서 찾고 Gemini가 정리해 출처를 붙여 답합니다(Exa 무료 사용량 안)."
                     onClick={() => {
                       say('me', `웹에서 찾아봐 줘: ${pending.text.length > 40 ? `${pending.text.slice(0, 39)}…` : pending.text}`);
                       askGemini(pending.text, pending.projectName, undefined, { research: true });
