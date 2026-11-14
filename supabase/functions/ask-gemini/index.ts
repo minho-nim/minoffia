@@ -18,24 +18,9 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const TIMEOUT_MS = 25_000;
-/** 조사(Google 검색 연결, v0.4.61) 하루 상한: 기본 20, 코드 최대 50(GEMINI_RESEARCH_DAILY_CAP). 질문과 따로 센다. */
+/** 웹 조사(Exa 검색 + Gemini 정리) 하루 상한: 기본 20, 코드 최대 50(GEMINI_RESEARCH_DAILY_CAP). 질문과 따로 센다. */
 const RESEARCH_HARD_CAP = 50;
 const RESEARCH_DEFAULT_CAP = 20;
-/** 검색 연결 무료 한도가 있는 모델(GEMINI_RESEARCH_MODEL로 바꿈) */
-// v0.6.14: 2.x 모델은 Google에서 없어짐(404, 2026-11-09 기록). 오류 안내가 권한 새 모델을 먼저 시도한다
-// v0.6.84 모든 모델 시험(Actions 'Gemini 검색 모델 시험', 2026-11-12): 무료 키 2개로 쓸 수 있는 24개 모델 모두 검색 연결 실패.
-// 2.x는 새 사용자에게 막힘(404), 나머지는 검색 무료 한도 없음(429). 그래서 예전 순서로 두고, 차단기가 3시간 동안 다시 부르지 않게 한다.
-const RESEARCH_MODEL = 'gemini-3.8-flash';
-const RESEARCH_FALLBACKS = ['gemini-3.5-flash'];
-
-/** 검색 연결 답의 출처(groundingMetadata.groundingChunks[].web) */
-function sourcesOf(data: unknown, into: Map<string, string>) {
-  const chunks = (data as { candidates?: { groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[] }).candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-  for (const c of chunks) {
-    const uri = c.web?.uri;
-    if (uri && /^https?:\/\//.test(uri) && !into.has(uri) && into.size < 5) into.set(uri, String(c.web?.title ?? '').slice(0, 120));
-  }
-}
 const sourceList = (m: Map<string, string>) => [...m].map(([uri, title]) => ({ uri, title }));
 
 const SYSTEM = [
@@ -132,11 +117,10 @@ const THINKING: Record<ThinkingMode, Record<string, unknown> | null> = {
   none: null,
 };
 
-function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode, system: string, research = false) {
+// v0.7.10(소유자 2026-11-14 "Gemini 검색 연결은 삭제"): Google 검색 연결(google_search 도구)은 쓰지 않는다. 웹 조사는 Exa만.
+function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode, system: string) {
   const thinking = THINKING[mode];
   return JSON.stringify({
-    // 조사(v0.4.61): Google 검색 연결. 웹에서 찾은 내용으로 답하고 출처를 groundingMetadata로 돌려준다.
-    ...(research ? { tools: [{ google_search: {} }] } : {}),
     systemInstruction: { parts: [{ text: system }] },
     contents: [
       ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
@@ -153,13 +137,13 @@ export function thinkingOrder(model: string): ThinkingMode[] {
 }
 
 /** Gemini에 묻는다. stream이면 SSE 응답(Response)을 그대로 돌려주고, 아니면 글을 모아 돌려준다. */
-async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string, research = false) {
+async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
   const call = (mode: ThinkingMode) =>
     fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(question, history, images, mode, system, research),
+      body: requestBody(question, history, images, mode, system),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   const order = thinkingOrder(model);
@@ -230,44 +214,30 @@ Deno.serve(async (req) => {
     return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   }
 
-  // 웹 조사 = Exa 검색 + Gemini 정리(v0.7.1): Exa 키가 있으면 먼저 찾아 질문 뒤에 자료로 붙이고, Gemini는 검색 연결 없이 정리만 한다.
-  // Exa가 안 되면 예전 길(Gemini 검색 연결)로 간다.
+  // 웹 조사 = Exa 검색 + Gemini 정리(v0.7.1). Exa가 찾은 글을 질문 뒤에 자료로 붙이고 Gemini는 정리만 한다.
+  // v0.7.10: Gemini 검색 연결 길은 지웠다. Exa가 휴가·키 없음·실패면 여기서 알리고, 앱은 검색 없이 Gemini가 아는 범위로 다시 묻는다.
   const exaFound = new Map<string, string>();
   let webContext = '';
   // 팀 관리 휴가(v0.4.44, Exa는 v0.7.9): 키 A = Studio A, 키 B = Studio B, Exa = 웹 검색. 휴가인 쪽은 부르지 않는다(표가 없거나 못 읽으면 모두 근무).
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
-  // Exa가 휴가면 Exa를 부르지 않고 예전 길(Gemini 검색 연결)로 간다
-  const exaKey = away.has('exa') ? '' : env('EXA_API_KEY');
-  if (research && exaKey) {
+  if (research) {
+    if (away.has('exa')) return reply(503, { ok: false, leave: true, error: 'Exa가 휴가라 웹 검색을 하지 않았어요.' });
+    const exaKey = env('EXA_API_KEY');
+    if (!exaKey) return reply(503, { ok: false, error: 'Exa 키(EXA_API_KEY)가 없어 웹 검색을 못 해요.' });
     const r = await exaSearch(exaKey, question);
-    if (r.ok && r.results.length) {
-      webContext = exaContext(r.results);
-      for (const x of r.results) exaFound.set(x.url, x.title);
-    } else {
+    if (!r.ok || !r.results.length) {
       console.log(JSON.stringify({ fn: 'ask-gemini', exa: 'fail', status: r.status, error: r.error }));
       await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'research', key_slot: null, ok: false, http_status: r.status || null, model: 'exa-search', prompt_chars: question.length, error: (r.error || '결과 없음').slice(0, 300) });
+      return reply(502, { ok: false, status: r.status, error: r.status === 402 ? 'Exa 무료 사용량이 끝났어요(dashboard.exa.ai 확인).' : `Exa 웹 검색이 안 됐어요(${r.error || '결과 없음'}).` });
     }
+    webContext = exaContext(r.results);
+    for (const x of r.results) exaFound.set(x.url, x.title);
   }
   const viaExa = webContext !== '';
-  const google = research && !viaExa;
-
-  // 웹 조사 차단기(v0.6.53, 토큰·시간 아끼기): 최근 3시간 안에 모든 모델·키가 한도(429)로 실패했고 그 뒤 성공이 없으면
-  // 다시 부르지 않고 바로 알린다(2주간 조사 52번이 모두 한도 실패였고, 한 번 물을 때마다 모델·키를 바꿔 6번씩 불렀다).
-  if (google) {
-    const since = new Date(Date.now() - 3 * 3600_000).toISOString();
-    const { data: lastFail } = await admin.from('ai_calls').select('created_at').eq('owner_id', user.id).eq('purpose', 'research').eq('ok', false).eq('http_status', 429).is('key_slot', null).gte('created_at', since).order('created_at', { ascending: false }).limit(1);
-    if (lastFail?.length) {
-      const { count: okAfter } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'research').eq('ok', true).gte('created_at', lastFail[0].created_at);
-      if (!okAfter) return reply(429, { ok: false, error: 'Gemini 웹 검색 무료 한도가 끝났어요(조금 전에 확인). 3시간 뒤 다시 되는지 봐요. 그동안은 ChatGPT로 복사해 물어보세요.', status: 429, skipped: true });
-    }
-  }
 
   const baseModel = env('GEMINI_MODEL') || DEFAULT_MODEL;
-  // 조사(v0.5.5): 기본 모델은 Google 검색 연결 무료 한도가 없어 늘 429였다(일반 질문은 같은 키로 바로 됨, 2026-11-03 기록).
-  // 검색은 무료 검색 한도가 있는 모델(GEMINI_RESEARCH_MODEL, 기본 gemini-2.5-flash)로 먼저 묻고, 안 되면 기본 모델로 한 번 더.
-  // v0.6.3: 검색 무료 한도가 남아 있을 만한 모델을 차례로(실패한 시도마다 research·ok=false 한 줄)
-  const models = google ? [...new Set([env('GEMINI_RESEARCH_MODEL') || RESEARCH_MODEL, ...RESEARCH_FALLBACKS, baseModel])] : [baseModel];
+  const models = [baseModel];
   let model = baseModel;
   const stream = body.stream === true;
   const routeProjects = Array.isArray(body.route?.projects) ? body.route!.projects!.filter((p) => typeof p === 'string').slice(0, 50).map((p) => p.slice(0, 60)) : null;
@@ -296,7 +266,7 @@ Deno.serve(async (req) => {
       let mode: ThinkingMode;
       let headMs = 0;
       try {
-        ({ res, mode } = await openGemini(key, model, viaExa ? question + webContext : question, history, images, stream, system, google));
+        ({ res, mode } = await openGemini(key, model, viaExa ? question + webContext : question, history, images, stream, system));
         headMs = Date.now() - started;
       } catch (e) {
         last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
@@ -324,7 +294,6 @@ Deno.serve(async (req) => {
                   buf = buf.slice(nl + 1);
                   if (!line.startsWith('data:')) continue;
                   const chunk = JSON.parse(line.slice(5).trim() || '{}');
-                  if (research) sourcesOf(chunk, found);
                   tokens = latestTokens(tokens, chunk);
                   const text = partsText(chunk);
                   if (!text) continue;
@@ -351,7 +320,6 @@ Deno.serve(async (req) => {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
         const found = new Map<string, string>(exaFound);
-        if (research) sourcesOf(data, found);
         return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
       }
       last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
@@ -364,9 +332,7 @@ Deno.serve(async (req) => {
   await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
   const hint =
     last.status === 429
-      ? research
-        ? 'Gemini 웹 검색 무료 한도에 걸렸습니다.'
-        : 'Gemini 무료 한도에 걸렸습니다.'
+      ? 'Gemini 무료 한도에 걸렸습니다.'
       : last.status === 401 || last.status === 403
         ? 'Gemini 키가 틀렸거나 권한이 없습니다.'
         : last.status === 404
