@@ -12,7 +12,7 @@ import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
 import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
-import { stageNotices, type NoticeAction, staleNotices } from '../domain/stageNotice';
+import { stageNotices, type NoticeAction, actionNotices, staleNotices } from '../domain/stageNotice';
 import { canApprove, deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
@@ -629,7 +629,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     }
     const have = new Set(logRef.current.map((m) => m.id));
     // 오래 걸리는 개발(v0.6.80)도 같은 방식으로 한 번씩(1분마다 다시 본다)
-    const add = [...(before ? notices : []), ...staleNotices(snap.tasks, snap.workflow)].filter((n) => !have.has(n.id));
+    // v0.7.15: 사장님이 누른 승인·수정 요청·시안 고르기도 먼저 남긴다
+    const add = [...actionNotices(snap.tasks, snap.workflow), ...(before ? notices : []), ...staleNotices(snap.tasks, snap.workflow)].filter((n) => !have.has(n.id));
     if (!add.length) return;
     add.forEach((n) => archive({ role: 'office', text: n.text, projectId: n.projectId, taskId: n.taskId }));
     // 기본 대화창과 그 프로젝트 대화창 둘 다에 보이고, 어느 프로젝트 일인지 앞에 적는다(v0.4.89 소유자)
