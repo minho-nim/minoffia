@@ -1,3 +1,5 @@
+import { pickedDraft, type DesignDraft, type DesignPick } from '../domain/designDraft';
+import { DesignDrafts } from './DesignDrafts';
 import { timelineTime } from '../domain/timeline';
 import { PART_LABEL, PASS_SCORE, VERDICT_LABEL, WEIGHTS, type PanelEntry, type Part } from '../domain/review';
 import { ArchifyView } from './ArchifyView';
@@ -81,6 +83,9 @@ export interface WorkflowActions {
   openPr?: (task: Task) => Promise<void>;
   /** 3중 평가(v0.7.8): 동료 평가를 기다리지 않고 판정 */
   finishReview?: (task: Task, resultRevision: number) => Promise<void>;
+  /** Gemini 시안(v0.7.13): 그리기·고르기 */
+  drawDesign?: (task: Task) => Promise<void>;
+  pickDesign?: (task: Task, draft: DesignDraft) => Promise<void>;
   /** Codex 앱에 붙여 넣을 지시서에 결과 자동 제출 절을 붙인다(실패하면 빈 문자열, v0.6.21) */
   codexManualSection?: (assignment: AgentAssignment) => Promise<string>;
   /** Codex 소식 손으로 다시 읽기(웹훅이 안 올 때, v0.5.3) */
@@ -153,6 +158,9 @@ interface Props {
   actions: WorkflowActions;
   /** 이 업무의 개발 중 추가 요청(v0.6.13) */
   followups?: import('../domain/workflow-types').Followup[];
+  /** Gemini 시안과 고른 기록(이 업무 것만) */
+  designDrafts?: DesignDraft[];
+  designPicks?: DesignPick[];
   /** 이 업무 기록 타임라인(v0.6.54) */
   timeline?: import('../domain/timeline').TimelineEvent[];
   /** 이 업무의 모든 결과(두 AI 비교, v0.6.54) */
@@ -291,7 +299,7 @@ function FollowupBox({ followups, busy, canRedo, onAdd, onRedo }: { followups: i
 /** 같은 AI로 다시(담당 그대로 새 계획 버전) */
 const samePref = (assignee: string): AssigneePreference => (assignee === 'claude' ? 'claude_support' : 'codex_primary');
 
-export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], canReadLinks, dispatchBlocker, actions, timeline, results = [] }: Props) {
+export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], designDrafts = [], designPicks = [], canReadLinks, dispatchBlocker, actions, timeline, results = [] }: Props) {
   const current = stepIndex(view);
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
@@ -365,6 +373,8 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   // 견본 먼저 계획의 견본(최신 계획 버전)
   const prototypeFiles = view.plan ? attachmentsOf(attachments, task.id, 'prototype', view.plan.planRevision) : [];
   const taskQa = clarificationsOf(clarifications, task.id);
+  // 기획서 버전마다 소유자가 고른 Gemini 시안(v0.7.13). 개발 지시서에 붙는다
+  const pickedDesign = view.spec ? pickedDraft(designDrafts, designPicks, task.id, view.spec.revision) : null;
   const resultShots = view.result ? attachmentsOf(attachments, task.id, 'result', view.result.revision) : [];
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -512,6 +522,15 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           </div>
         );
       })()}
+      {view.spec && !view.bApproved && (designDrafts.some((d) => d.specRevision === view.spec!.revision) || (!view.aApproved && actions.drawDesign)) && (
+        <DesignDrafts
+          drafts={designDrafts.filter((d) => d.specRevision === view.spec!.revision)}
+          pickedId={pickedDesign?.id ?? null}
+          busy={busy}
+          onDraw={!view.aApproved && actions.drawDesign ? () => void run(() => actions.drawDesign!(task)) : undefined}
+          onPick={!view.aApproved && actions.pickDesign ? (d) => void run(() => actions.pickDesign!(task, d)) : undefined}
+        />
+      )}
       <details className="wf-more" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
         <summary>단계별 자세히</summary>
       <div className="wf-head">
@@ -958,7 +977,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                   : a.assignee === 'codex' && actions.startCodexLinear && item
                       ? {
                           start: (x: AgentAssignment, ack: boolean) =>
-                            actions.startCodexLinear!(x, ack, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules, isSlimProject(task.projectId))),
+                            actions.startCodexLinear!(x, ack, buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules, isSlimProject(task.projectId), pickedDesign)),
                           label: 'Codex에 맡기기(Linear, 자동)',
                           ack: 'Linear 이슈에서 Codex가 실제로 시작하지 않았음을 확인했습니다',
                           note: '실행 승인하면 Linear 이슈를 만들어 Codex에게 맡깁니다(ChatGPT 구독 한도 안). 한도에 걸리면 여기에 알려요.',
@@ -1159,7 +1178,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
                               void copy(a.id, buildPrototypeHandoff(task, view.spec!, item, project, view.plan!.plan.mode_reason ?? '', requestImages, taskLinks));
                               return;
                             }
-                            const text = buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules, isSlimProject(task.projectId));
+                            const text = buildCodexHandoff(task, view.spec!, item, project, view.plan!.targetBaseRevision, requestImages, taskLinks, view.pApproved ? prototypeFiles : [], projectRules, isSlimProject(task.projectId), pickedDesign);
                             // v0.6.21: Codex는 결과 자동 제출 절을 붙인다(Codex 앱에 붙여 넣으면 결과가 앱으로 바로 옴)
                             const section = a.assignee === 'codex' && actions.codexManualSection ? await actions.codexManualSection(a) : '';
                             void copy(a.id, text + section);

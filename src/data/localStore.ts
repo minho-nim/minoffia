@@ -93,7 +93,7 @@ export function createLocalStore(): OfficeStore {
     const keep = <T extends { taskId: string }>(list: T[]) => list.filter((x) => alive.has(x.taskId));
     commit({
       ...state,
-      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), imageAnalyses: keep(w.imageAnalyses), links: keep(w.links), prChecks: keep(w.prChecks), deployments: keep(w.deployments), clarifications: keep(w.clarifications) },
+      workflow: { specs: keep(w.specs), approvals: keep(w.approvals), plans: keep(w.plans), assignments: keep(w.assignments), results: keep(w.results), revisionRequests: keep(w.revisionRequests), attachments: keep(w.attachments), imageAnalyses: keep(w.imageAnalyses), links: keep(w.links), prChecks: keep(w.prChecks), deployments: keep(w.deployments), clarifications: keep(w.clarifications), designDrafts: keep(w.designDrafts ?? []), designPicks: keep(w.designPicks ?? []) },
     });
     dropUnusedFiles();
   };
@@ -237,6 +237,18 @@ export function createLocalStore(): OfficeStore {
       };
       commit({ ...state, workflow: { ...state.workflow, reviews: [...(state.workflow.reviews ?? []), review] } });
       return review;
+    },
+    async drawDesign() {
+      throw new Error('로컬 데모에서는 Gemini 시안을 그릴 수 없습니다(Supabase에 연결된 사이트에서 씁니다).');
+    },
+    async pickDesign(taskId, specRevision, draftId) {
+      if (!(state.workflow.designDrafts ?? []).some((d) => d.id === draftId && d.taskId === taskId && d.specRevision === specRevision)) throw new Error('design draft not found');
+      commit({ ...state, workflow: { ...state.workflow, designPicks: [...(state.workflow.designPicks ?? []), { id: newId(), taskId, specRevision, draftId, createdAt: new Date().toISOString() }] } });
+    },
+    async putDemoDrafts(drafts) {
+      const have = new Set((state.workflow.designDrafts ?? []).map((d) => `${d.taskId}:${d.specRevision}:${d.who}`));
+      const add = drafts.filter((d) => !have.has(`${d.taskId}:${d.specRevision}:${d.who}`));
+      if (add.length) commit({ ...state, workflow: { ...state.workflow, designDrafts: [...(state.workflow.designDrafts ?? []), ...add] } });
     },
     async putDemoAssignment(next) {
       if (!state.workflow.assignments.some((a) => a.id === next.id)) throw new Error('assignment not found');

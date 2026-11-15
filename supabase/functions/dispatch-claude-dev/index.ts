@@ -3,6 +3,7 @@
 // 비밀값(CLAUDE_SUPPORT_FIRE_URL, CLAUDE_SUPPORT_TOKEN)은 이 함수의 secrets에만 둔다. 하루 상한은 PM 전송과 함께 센다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildDevPayload, claudeBranch } from './payload.ts';
+import { loadPickedDesignSection } from './designDraft.ts';
 import { skillPickRule } from './skillPick.ts';
 import { loadRules, previewUrl } from './projectRules.ts';
 import { SLIM_MARKER_SKILL } from './devHabits.ts';
@@ -159,6 +160,8 @@ Deno.serve(async (req) => {
   });
 
   const appMap = await loadAppMap(admin, user.id, String(task.project_id));
+  // v0.7.13: 소유자가 고른 Gemini 시안이 있으면 기획서 뒤에 붙인다
+  const design = await loadPickedDesignSection(admin, a.task_id, spec.revision);
   const textBase = buildDevPayload({
     bug: (spec.size_hint as { bug?: boolean } | null)?.bug,
     taskId: a.task_id,
@@ -166,7 +169,7 @@ Deno.serve(async (req) => {
     projectName: project.name,
     specRevision: spec.revision,
     planRevision: a.plan_revision,
-    finalPrompt: spec.final_prompt,
+    finalPrompt: `${spec.final_prompt}${design}`,
     changeScope: spec.change_scope ?? '',
     preserveConstraints: spec.preserve_constraints ?? '',
     testCriteria: spec.test_criteria ?? '',
