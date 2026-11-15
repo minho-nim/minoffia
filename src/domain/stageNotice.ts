@@ -3,11 +3,14 @@
  * 기획서·계획·결과 버전이 바뀌어도 알린다. 처음 보는 업무는 기억만 하고 알리지 않는다(접수 때 이미 말함).
  * v0.4.12(소유자 2026-10-31): 승인 차례는 "내 차례"와 사무실 말풍선이 보여 주므로, 입력창에는
  * 확인 질문과 막힘만 알린다(기억은 모든 업무에 대해 계속 한다).
+ * v0.7.14(소유자 "단계 진행상황을 대화에서 알려줘야 해"): 시안 도착·평가 점수(동료 점수 포함)·PR 열림·검사도 알리고, 지금 흐름(실행 승인 자동)에 맞게 문구를 고쳤다.
  */
 import type { Task } from './types';
 import { canApprove, deriveWorkflow } from './workflow';
 import { STAGE_LABEL, type Stage, type WorkflowData } from './workflow-types';
 import { staleStart } from './reassign';
+import { DRAW_STYLE_LABEL } from './designDraft';
+import { VERDICT_LABEL } from './review';
 
 /** 알림 아래에 둘 버튼. open = 업무 카드 보기, A·B = 그 자리에서 승인 */
 export type NoticeAction = 'open' | 'A' | 'B';
@@ -23,23 +26,23 @@ export interface StageNotice {
 }
 
 const NEXT: Partial<Record<Stage, string>> = {
-  received: '업무 카드에서 "Gemini 기획서 초안"을 눌러 기획을 시작하세요.',
+  received: 'Gemini가 기획서 초안을 쓸 차례예요.',
   planner_handoff: 'Gemini가 기획서 초안을 쓰고 있어요.',
   needs_clarification: 'GPT의 확인 질문에 답해 주세요.',
   spec_ready: '기획서를 보고 기획 승인하거나 수정 요청하세요.',
   development_approval_pending: '기획서를 보고 기획 승인하거나 수정 요청하세요.',
   pm_queued: '업무 카드에서 Claude PM에 보내세요.',
-  dispatching: 'Claude PM이 계획을 만들고 있어요. 계획이 오면 알려 드릴게요.',
-  agent_handoff_pending: '작업 계획이 정해졌어요. 업무 카드에서 계획을 보고 작업별로 실행 승인하세요.',
+  dispatching: 'Claude PM이 작업으로 나누고 있어요. 계획이 오면 알려 드릴게요.',
+  agent_handoff_pending: '작업 계획이 정해졌어요. 실행 승인은 기획 승인에 포함돼 AI가 곧 개발을 시작해요.',
   executing: 'AI가 개발 중이에요. 결과가 오면 알려 드릴게요.',
   validation: '검증 중이에요.',
   result_review: '결과를 보고 결과 승인(PR 열림)하거나 수정 요청하세요.',
   github_approval_pending: '결과를 보고 결과 승인하세요(승인하면 PR이 열려요).',
-  github_uploading: '업무 카드의 "PR 요청 복사"로 PR을 올리고 PR 주소를 넣으세요.',
-  pr_review: 'PR의 CI와 병합을 확인하세요.',
+  github_uploading: 'PR을 여는 중이에요(1~2분).',
+  pr_review: 'PR을 열었어요. 검사(CI)가 끝나면 알려 드릴게요.',
   deployment_approval_pending: 'CI 통과를 확인했어요. 배포 승인하세요(병합은 서버가 해요).',
   deploying: '배포하고 있어요.',
-  completed: '이 업무는 끝났어요.',
+  completed: '배포까지 끝났어요.',
   paused: '보류 중이에요.',
   rate_limited: '오늘 한도에 걸렸어요. 내일 다시 하거나 상한을 확인하세요.',
   integration_blocked: '연동이 막혔어요. 업무 카드에서 이유를 확인하세요.',
@@ -57,10 +60,13 @@ export const NOTICE_STAGES: ReadonlySet<Stage> = new Set<Stage>([
   'rate_limited',
   'spec_ready',
   'development_approval_pending',
+  'dispatching',
   'agent_handoff_pending',
   'executing',
   'result_review',
   'github_approval_pending',
+  'github_uploading',
+  'pr_review',
   'deployment_approval_pending',
   'completed',
 ]);
@@ -68,7 +74,12 @@ export const NOTICE_STAGES: ReadonlySet<Stage> = new Set<Stage>([
 /** 단계와 버전을 묶은 표식. 이것이 바뀌면 알린다. */
 export function stageSignature(task: Task, all: WorkflowData): string {
   const v = deriveWorkflow(task, all);
-  return [v.stage, v.spec?.revision ?? 0, v.plan?.planRevision ?? 0, v.result?.revision ?? 0].join(':');
+  // v0.7.14: 시안 수·평가(판정과 점수 온 채점자 수)·PR 검사 상태가 바뀌어도 알린다
+  const drafts = v.spec ? (all.designDrafts ?? []).filter((d) => d.taskId === task.id && d.specRevision === v.spec!.revision).length : 0;
+  const rv = v.result ? (all.reviews ?? []).find((r) => r.taskId === task.id && r.resultRevision === v.result!.revision) : undefined;
+  const review = rv ? `${rv.verdict}${(rv.panel ?? []).filter((p) => p.status === 'done').length}` : '';
+  const pr = [...(all.prChecks ?? [])].filter((c) => c.taskId === task.id).pop()?.ciState ?? '';
+  return [v.stage, v.spec?.revision ?? 0, v.plan?.planRevision ?? 0, v.result?.revision ?? 0, drafts, review, pr].join(':');
 }
 
 const clip = (s: string, n: number) => {
@@ -87,7 +98,30 @@ export function noticeFor(task: Task, all: WorkflowData): StageNotice {
     lines.push(`결과 v${v.result.revision}: ${clip(v.result.summary, 160)}`);
     actions.unshift('B');
   }
-  if (v.stage === 'needs_clarification' && v.spec?.answer) {
+  // 시안(v0.7.13): 기획 승인 전, 이 기획서 버전의 시안 점수
+  if (v.spec && !v.aApproved) {
+    const drafts = (all.designDrafts ?? []).filter((d) => d.taskId === task.id && d.specRevision === v.spec!.revision).sort((a, b) => a.who.localeCompare(b.who));
+    if (drafts.length) lines.push(`시안 ${drafts.length}장: ${drafts.map((d) => `${d.who}(${DRAW_STYLE_LABEL[d.who]}) ${d.review ? `${d.review.total}점` : '점수 없음'}`).join(' · ')} — 업무 카드에서 하나를 고를 수 있어요.`);
+  }
+  // 3중 평가(v0.7.8): 채점자별 점수와 평균, 판정
+  const rv = v.result ? (all.reviews ?? []).find((r) => r.taskId === task.id && r.resultRevision === v.result!.revision) : undefined;
+  if (rv && !v.bApproved) {
+    const panel = rv.panel ?? [];
+    const each = panel.map((p) => `${p.who === 'peer' ? p.judge : `Gemini ${p.who}`} ${p.status === 'done' ? `${p.total}점` : p.status === 'pending' ? '기다리는 중' : '빠짐'}`).join(' · ');
+    const waiting = panel.some((p) => p.status === 'pending');
+    lines.push(`평가${rv.total === null ? '' : ` 평균 ${rv.total}점`}${each ? `(${each})` : ''} → ${waiting ? '점수 모으는 중' : VERDICT_LABEL[rv.verdict]}${rv.verdict === 'redo' && !waiting ? '(자동으로 다시 보냈어요)' : ''}`);
+  }
+  // PR 검사(v0.6.31): 배포 승인 차례여도 검사가 끝나기 전에는 '통과'라고 하지 않는다
+  const pr = [...(all.prChecks ?? [])].filter((c) => c.taskId === task.id).pop();
+  if (v.stage === 'deployment_approval_pending') {
+    lines.push(
+      pr?.ciState === 'success'
+        ? 'PR 검사(CI)를 통과했어요. 배포 승인하세요(병합은 서버가 해요).'
+        : pr?.ciState === 'failure'
+          ? 'PR 검사(CI)가 실패했어요. 업무 카드에서 이유를 보고 고치기를 맡기세요.'
+          : 'PR을 열고 검사(CI)하는 중이에요. 통과하면 알려 드릴게요.',
+    );
+  } else if (v.stage === 'needs_clarification' && v.spec?.answer) {
     const q = v.spec.answer.trim();
     lines.push(`확인 질문:\n${q.length > 600 ? `${q.slice(0, 599)}…` : q}`);
     lines.push('아래 입력창에 답을 쓰면 Gemini가 기획서를 다시 써요.');
