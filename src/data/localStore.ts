@@ -238,6 +238,10 @@ export function createLocalStore(): OfficeStore {
       commit({ ...state, workflow: { ...state.workflow, reviews: [...(state.workflow.reviews ?? []), review] } });
       return review;
     },
+    async putDemoAssignment(next) {
+      if (!state.workflow.assignments.some((a) => a.id === next.id)) throw new Error('assignment not found');
+      commit({ ...state, workflow: { ...state.workflow, assignments: state.workflow.assignments.map((a) => (a.id === next.id ? next : a)) } });
+    },
     async putDemoReview(review) {
       if ((state.workflow.reviews ?? []).some((r) => r.taskId === review.taskId && r.resultRevision === review.resultRevision)) return;
       commit({ ...state, workflow: { ...state.workflow, reviews: [...(state.workflow.reviews ?? []), review] } });
@@ -281,7 +285,8 @@ export function createLocalStore(): OfficeStore {
       if (!task) throw new Error('task not found');
       const now = new Date().toISOString();
       const prUrl = task.prUrl || 'https://github.com/minho-nim/minoffia/pulls';
-      const check = { id: newId(), taskId, prUrl, prState: 'open' as const, merged: false, headSha: 'demo001', ciState: 'success' as const, checks: [{ name: 'verify (체험)', status: 'completed', conclusion: 'success' }], checkedAt: now };
+      // 체험(v0.7.12): 운영과 같은 모양의 검사 결과(정해진 값, GitHub는 부르지 않음)
+      const check = { id: newId(), taskId, prUrl, prState: 'open' as const, merged: false, headSha: 'a3f9c2e', ciState: 'success' as const, checks: [{ name: 'verify', status: 'completed', conclusion: 'success' }, { name: 'verify-db', status: 'completed', conclusion: 'success' }], checkedAt: now };
       commit({ ...state, tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, prUrl } : t)), workflow: { ...state.workflow, prChecks: [...state.workflow.prChecks, check] } });
       return check;
     },
@@ -320,8 +325,8 @@ export function createLocalStore(): OfficeStore {
     // 체험(v0.7.7): 실제 배포 대신 '배포 완료'를 이 기기에 기록한다
     async deployRelease(taskId) {
       const now = new Date().toISOString();
-      commit({ ...state, workflow: { ...state.workflow, deployments: [...state.workflow.deployments, { id: newId(), taskId, repo: '체험(실제 배포 아님)', fromSha: 'demo000', toSha: 'demo001', ok: true, error: '', createdAt: now }] } });
-      return { updated: true, to: 'demo001' };
+      commit({ ...state, workflow: { ...state.workflow, deployments: [...state.workflow.deployments, { id: newId(), taskId, repo: 'minho-nim/minoffia', fromSha: '5d1b07f', toSha: 'a3f9c2e', ok: true, error: '', createdAt: now }] } });
+      return { updated: true, to: 'a3f9c2e' };
     },
     async appendChat(entries) {
       try {

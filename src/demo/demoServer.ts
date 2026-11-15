@@ -1,6 +1,8 @@
 // 체험 업무(v0.7.7, 소유자 "데모에서 1회성으로 정해진 작업을 수행해서 흐름을 직접 확인하게, 단 내 클라우드 안 쓰게"):
 // 로컬 데모(체험 모드)에서만 돈다. AI·서버가 할 일(기획서 초안 → 계획·실행 → 결과·채점 → PR 검사)을 이 기기 안에서 정해진 내용으로 채우고,
 // 소유자 몫(기획 승인 → 올리기 승인 → 배포 승인)은 진짜 버튼을 누르게 둔다. Supabase·GitHub·AI는 부르지 않는다.
+// v0.7.12(소유자 "실제로는 돌지 않지만 보여지는 것만 실행된 것처럼"): 실행 기록·Codex 소식·바뀐 파일·결과 스크린샷·PR 검사·배포 완료를
+// 운영과 같은 모양으로 채운다(모두 이 기기 안의 정해진 내용, 데모판 띠에 '실제 서버·AI 안 씀'이 늘 보인다).
 import type { OfficeStore } from '../data/store';
 import type { Snapshot, Task } from '../domain/types';
 import { deriveWorkflow } from '../domain/workflow';
@@ -15,6 +17,40 @@ const DEMO_TEXT = '로그인 화면의 로그인 버튼 색을 앱 주황색으�
 const WORK_MS = 4000;
 
 const nid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `demo-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+/** 결과 패키지 지문(그럴듯한 64자, 체험 고정값) */
+const DEMO_SHA = '7c2e9a41f0b38d65e1a4c97b2d0f8e3a56c1b9d47e2f0a83c6d5b1e9f4a27c08';
+
+/** 바뀐 뒤 로그인 화면 그림(체험 결과 스크린샷). 캔버스가 없으면 null */
+async function loginShot(): Promise<Blob | null> {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = 400;
+  c.height = 300;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  g.fillStyle = '#fff8ec';
+  g.fillRect(0, 0, 400, 300);
+  g.fillStyle = '#3b2a1e';
+  g.font = 'bold 22px sans-serif';
+  g.fillText('로그인', 32, 56);
+  const box = (y: number, label: string) => {
+    g.strokeStyle = '#d9c7a8';
+    g.lineWidth = 2;
+    g.strokeRect(32, y, 336, 40);
+    g.fillStyle = '#9a8670';
+    g.font = '15px sans-serif';
+    g.fillText(label, 44, y + 26);
+  };
+  box(84, '이메일');
+  box(136, '비밀번호');
+  g.fillStyle = '#e07a3a';
+  g.fillRect(32, 200, 336, 46);
+  g.fillStyle = '#ffffff';
+  g.font = 'bold 17px sans-serif';
+  g.fillText('로그인', 172, 229);
+  return await new Promise((ok) => c.toBlob((b) => ok(b), 'image/png'));
+}
 
 /** 체험 업무 만들기(같은 업무가 진행 중이면 그것을 돌려준다) */
 export function demoTask(snap: Snapshot): Task | null {
@@ -74,7 +110,7 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
     };
     await store.addPlan(plan, [a]);
     await store.addApproval({ id: nid(), taskId: task.id, gate: 'E', decision: 'approved', approvedRevision: 1, previousRevision: null, workItemId: 'W1', scope: { auto: true, note: '기획 승인에 포함(체험)' }, actor: '체험', createdAt: iso });
-    await store.updateAssignment({ ...a, dispatchStatus: 'started', statusSource: 'user_reported', actualProviderStatus: '체험: 개발 중', startedAt: iso, updatedAt: iso });
+    await (store.putDemoAssignment ?? store.updateAssignment)({ ...a, dispatchStatus: 'started', statusSource: 'server_verified', actualProviderStatus: 'linear: 개발 중 — 브랜치를 만들고 시험을 돌리는 중', startedAt: iso, updatedAt: iso });
     return '체험: Claude(PM)가 작업 1개로 나눴고, 실행 승인은 기획 승인에 포함해 자동으로 기록했어요. Codex가 개발을 시작했어요(몇 초 걸려요).';
   }
   if (step === 'result') {
@@ -82,12 +118,22 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
     const result: ResultPackage = {
       id: nid(), taskId: task.id, revision: 1, planRevision: a.planRevision, workItemId: a.workItemId, source: 'codex_linear_auto',
       summary: '로그인 버튼 색을 앱 주황색으로 바꿨어요. 다른 화면은 그대로예요.\n쓴 스킬: ui-check',
-      diff: "--- a/src/components/Login.tsx\n+++ b/src/components/Login.tsx\n@@ -52 +52 @@\n-          <button type=\"submit\" className=\"btn\">\n+          <button type=\"submit\" className=\"btn btn-primary\">",
+      diff: "diff --git a/src/components/Login.tsx b/src/components/Login.tsx\n--- a/src/components/Login.tsx\n+++ b/src/components/Login.tsx\n@@ -52 +52 @@\n-          <button type=\"submit\" className=\"btn\">\n+          <button type=\"submit\" className=\"btn btn-primary\">",
       testLog: 'npm test  → Tests 500 passed (500)\nnpm run build → ✓ built\n휴대폰 400px·데스크톱 1400px: 콘솔 오류·가로 넘침 없음',
-      remainingIssues: '', sha256: 'demo'.padEnd(64, '0'), createdAt: iso,
+      remainingIssues: '', sha256: DEMO_SHA, createdAt: iso,
     };
     await store.addResult(result);
-    await store.updateAssignment({ ...a, dispatchStatus: 'completed', actualProviderStatus: '체험: 끝남', updatedAt: iso });
+    await (store.putDemoAssignment ?? store.updateAssignment)({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'linear: 끝남 — 결과를 보냄', lastVerifiedAt: iso, updatedAt: iso });
+    // 결과 스크린샷(바뀐 뒤 로그인 화면). 그림을 못 만드는 브라우저면 건너뛴다
+    try {
+      const shot = await loginShot();
+      if (shot) {
+        const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await shot.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('');
+        await store.addAttachment({ id: nid(), taskId: task.id, kind: 'result', resultRevision: 1, position: 0, role: 'after', note: '바뀐 뒤 로그인 화면(휴대폰 400px)', fileName: 'login-after.png', mime: 'image/png', sizeBytes: shot.size, sha256: sha, createdAt: iso }, new File([shot], 'login-after.png', { type: 'image/png' }));
+      }
+    } catch {
+      // 스크린샷은 덤
+    }
     // 3중 평가(v0.7.8): 정해진 점수로 Gemini A·B·동료(Claude) 채점을 보여 준다. 판정은 진짜 규칙(panelOutcome)으로.
     const s = (acceptance: number, spec: number, quality: number, summary: string, fixes: string[] = []): Score => ({
       parts: { acceptance, spec, constraints: 15, scope: 10, quality },
