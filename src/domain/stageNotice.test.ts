@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noticeFor, stageNotices, stageSignature, staleNotices } from './stageNotice';
+import { actionNotices, noticeFor, stageNotices, stageSignature, staleNotices } from './stageNotice';
 import type { Task } from './types';
 import type { Approval, WorkflowData } from './workflow-types';
 import { EMPTY_WORKFLOW } from './workflow-types';
@@ -62,6 +62,32 @@ describe('단계 알림(v0.3.9)', () => {
     expect(stageSignature(task, before)).not.toBe(stageSignature(task, after));
     expect(noticeFor(task, before).text).toContain('평가 평균 85점(Gemini A 90점 · Gemini B 80점 · Claude 기다리는 중) → 점수 모으는 중');
     expect(noticeFor(task, after).text).toContain('Claude 94점) → 검토 통과');
+  });
+
+  it('사장님이 누른 승인·수정 요청·시안 고르기를 남긴다(최근 것만, E 자동은 빼고)', () => {
+    const now = Date.parse('2026-11-15T10:00:00Z');
+    const at = (min: number) => new Date(now - min * 60_000).toISOString();
+    const ap = (id: string, gate: Approval['gate'], min: number, decision: Approval['decision'] = 'approved'): Approval => ({ ...approvalA, id, gate, decision, createdAt: at(min) });
+    const n = actionNotices([task], data({
+      specs: [spec(1)],
+      approvals: [ap('a1', 'A', 5), ap('e1', 'E', 5), ap('old', 'B', 90)],
+      revisionRequests: [{ id: 'r1', taskId: 't1', specRevision: 1, resultRevision: 1, feedback: '버튼을 더 크게', createdAt: at(3) }, { id: 'r2', taskId: 't1', specRevision: 1, resultRevision: 1, feedback: '[자동 평가] 아래만 고쳐 주세요', createdAt: at(2) }],
+      designDrafts: [{ id: 'd1', taskId: 't1', specRevision: 1, who: 'B', judge: '', svg: '<svg/>', flow: '', note: '', review: null, createdAt: at(10) }],
+      designPicks: [{ id: 'p1', taskId: 't1', specRevision: 1, draftId: 'd1', createdAt: at(7) }],
+    }), now);
+    expect(n.map((x) => x.id)).toEqual(['act-p1', 'act-a1', 'act-r1', 'act-r2']);
+    expect(n[0].text).toContain('Gemini B 시안을 골랐어요');
+    expect(n[1].text).toContain('✓ 기획 승인을 눌렀어요(기획서 v1)');
+    expect(n[2].text).toContain('수정 요청을 보냈어요: 버튼을 더 크게');
+    expect(n[3].text).toContain('자동 평가가');
+  });
+
+  it('개발 중이면 누가 개발하는지 밝힌다', () => {
+    const plan = { id: 'pl', taskId: 't1', planRevision: 1, approvedSpecRevision: 1, targetBaseRevision: '', source: 'routine_session_auto' as const, plan: { work_items: [{ id: 'W1' }] } as never, createdAt: '' };
+    const a = { id: 'as', taskId: 't1', planRevision: 1, workItemId: 'W1', title: '', assignee: 'claude' as const, executionMode: 'manual_handoff' as const, dispatchStatus: 'started' as const, statusSource: 'server_verified' as const, providerExecutionId: null, providerTaskUrl: null, actualProviderStatus: '', startedAt: '', lastVerifiedAt: null, updatedAt: '' };
+    const e = { ...approvalA, id: 'e', gate: 'E' as const, workItemId: 'W1' };
+    const n = noticeFor(task, data({ specs: [spec(1)], approvals: [approvalA, e], plans: [plan], assignments: [a] }));
+    if (n.stage === 'executing') expect(n.text).toContain('Claude(W1)가 개발 중이에요');
   });
 
   it('지운 업무는 기억에서 뺀다', () => {

@@ -34,7 +34,7 @@ const NEXT: Partial<Record<Stage, string>> = {
   pm_queued: '업무 카드에서 Claude PM에 보내세요.',
   dispatching: 'Claude PM이 작업으로 나누고 있어요. 계획이 오면 알려 드릴게요.',
   agent_handoff_pending: '작업 계획이 정해졌어요. 실행 승인은 기획 승인에 포함돼 AI가 곧 개발을 시작해요.',
-  executing: 'AI가 개발 중이에요. 결과가 오면 알려 드릴게요.',
+  executing: '개발 중이에요. 결과가 오면 알려 드릴게요.',
   validation: '검증 중이에요.',
   result_review: '결과를 보고 결과 승인(PR 열림)하거나 수정 요청하세요.',
   github_approval_pending: '결과를 보고 결과 승인하세요(승인하면 PR이 열려요).',
@@ -82,6 +82,8 @@ export function stageSignature(task: Task, all: WorkflowData): string {
   return [v.stage, v.spec?.revision ?? 0, v.plan?.planRevision ?? 0, v.result?.revision ?? 0, drafts, review, pr].join(':');
 }
 
+const AGENT: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' };
+
 const clip = (s: string, n: number) => {
   const t = s.replace(/\s+/g, ' ').trim();
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
@@ -125,6 +127,10 @@ export function noticeFor(task: Task, all: WorkflowData): StageNotice {
     const q = v.spec.answer.trim();
     lines.push(`확인 질문:\n${q.length > 600 ? `${q.slice(0, 599)}…` : q}`);
     lines.push('아래 입력창에 답을 쓰면 Gemini가 기획서를 다시 써요.');
+  } else if (v.stage === 'executing' && v.plan) {
+    // 누가 개발하는지(v0.7.15 소유자 "지금 클로드가 개발함")
+    const running = all.assignments.filter((a) => a.taskId === task.id && a.planRevision === v.plan!.planRevision && (a.dispatchStatus === 'started' || a.dispatchStatus === 'starting'));
+    lines.push(running.length ? `${running.map((a) => `${AGENT[a.assignee] ?? a.assignee}(${a.workItemId})`).join(' · ')}가 개발 중이에요. 결과가 오면 알려 드릴게요.` : NEXT.executing!);
   } else lines.push(NEXT[v.stage] ?? '');
   return {
     id: `stage-${task.id}-${stageSignature(task, all)}`,
@@ -153,7 +159,6 @@ export function stageNotices(tasks: Task[], all: WorkflowData, seen: Record<stri
   return { notices, seen: next };
 }
 
-const AGENT: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' };
 /**
  * 개발이 오래 걸릴 때 대화창 알림(v0.6.80 소유자 "너무 오래 걸리면 대화창이나 알림으로 알려줘"): 지금 계획의 작업 중
  * 시작했는데 소식이 없는 것(staleStart, 업무 카드 경고와 같은 기준)을 한 번씩. id는 작업+시작 시각이라 다시 시작하면 다시 알린다.
@@ -178,4 +183,38 @@ export function staleNotices(tasks: Task[], all: WorkflowData, now = Date.now())
     }
   }
   return out;
+}
+
+const GATE_DONE: Record<string, string> = { A: '기획 승인', B: '결과 승인(올리기)', C: '배포 승인', P: '견본 승인' };
+/** 최근에 한 일만 알린다(처음 열 때 지난 기록이 쏟아지지 않게) */
+const ACTION_WINDOW_MS = 30 * 60_000;
+
+/**
+ * 사장님이 누른 것도 대화에 남긴다(v0.7.15 소유자 "채팅에서 내가 눌러 승인한 것도"): 기획·결과·배포 승인과 되돌리기,
+ * 수정 요청(자동 평가가 보낸 다시 개발은 따로), 시안 고르기. id는 기록 id라 여러 기기에서도 한 번씩.
+ * 실행 승인(E)은 기획 승인에 포함된 자동 기록이라 알리지 않는다.
+ */
+export function actionNotices(tasks: Task[], all: WorkflowData, now = Date.now()): StageNotice[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const recent = (at: string) => now - Date.parse(at) < ACTION_WINDOW_MS;
+  const out: { at: string; n: StageNotice }[] = [];
+  const push = (id: string, taskId: string, at: string, text: string) => {
+    const t = byId.get(taskId);
+    if (!t || !recent(at)) return;
+    out.push({ at, n: { id, taskId, projectId: t.projectId, stage: deriveWorkflow(t, all).stage, text: `'${clip(t.title, 40)}' — ${text}`, actions: ['open'] } });
+  };
+  for (const a of all.approvals) {
+    if (a.gate === 'E' || !GATE_DONE[a.gate]) continue;
+    const what = a.gate === 'A' ? `기획서 v${a.approvedRevision}` : a.gate === 'P' ? `견본` : `결과 v${a.approvedRevision}`;
+    push(`act-${a.id}`, a.taskId, a.createdAt, a.decision === 'approved' ? `✓ ${GATE_DONE[a.gate]}을 눌렀어요(${what}).` : `${GATE_DONE[a.gate]}을 되돌렸어요(${what}).`);
+  }
+  for (const r of all.revisionRequests) {
+    const auto = r.feedback.startsWith('[자동 평가]');
+    push(`act-${r.id}`, r.taskId, r.createdAt, auto ? '자동 평가가 기준 미달이라 다시 개발을 보냈어요.' : `수정 요청을 보냈어요: ${clip(r.feedback, 80)}`);
+  }
+  for (const p of all.designPicks ?? []) {
+    const d = (all.designDrafts ?? []).find((x) => x.id === p.draftId);
+    push(`act-${p.id}`, p.taskId, p.createdAt, `Gemini ${d?.who ?? ''} 시안을 골랐어요. 개발 AI에게 같이 넘어가요.`);
+  }
+  return out.sort((a, b) => a.at.localeCompare(b.at)).map((x) => x.n);
 }
