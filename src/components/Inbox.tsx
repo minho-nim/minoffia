@@ -12,7 +12,7 @@ import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
 import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
-import { stageNotices, type NoticeAction, actionNotices, staleNotices } from '../domain/stageNotice';
+import { stageNotices, type NoticeAction, actionNotices, mergeNotices, staleNotices } from '../domain/stageNotice';
 import { canApprove, deriveWorkflow } from '../domain/workflow';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
@@ -35,6 +35,8 @@ interface Msg {
   via?: string;
   /** 단계 알림: 그 업무가 아직 이 단계일 때만 버튼을 보인다 */
   taskId?: string;
+  /** 이 메시지에 묶인 다른 알림 id(v0.7.16) */
+  ids?: string[];
   /** 업무를 접수한 메시지(v0.6.97): '접수 취소' 버튼을 붙인다 */
   created?: boolean;
   stage?: string;
@@ -616,6 +618,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     return () => window.clearInterval(id);
   }, []);
 
+  const announced = useRef(new Set<string>());
   // 단계 알림: 확인 질문·막힘이 생기면 미니엉이 알리고, 아래에 버튼을 둔다(규칙만, 토큰 0, v0.4.12부터 승인 차례는 내 차례가 보여 줌).
   // 다른 기기가 이미 넣은 알림(같은 id)은 다시 넣지 않는다. 처음 쓰는 기기는 지금 상태를 기억만 한다.
   useEffect(() => {
@@ -627,11 +630,14 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     } catch {
       // 저장이 막힌 브라우저: 이번 화면에서만 알린다.
     }
-    const have = new Set(logRef.current.map((m) => m.id));
+    const have = new Set([...logRef.current.flatMap((m) => [m.id, ...(m.ids ?? [])]), ...announced.current]);
     // 오래 걸리는 개발(v0.6.80)도 같은 방식으로 한 번씩(1분마다 다시 본다)
     // v0.7.15: 사장님이 누른 승인·수정 요청·시안 고르기도 먼저 남긴다
-    const add = [...actionNotices(snap.tasks, snap.workflow), ...(before ? notices : []), ...staleNotices(snap.tasks, snap.workflow)].filter((n) => !have.has(n.id));
+    // v0.7.16: 같은 업무에서 한꺼번에 일어난 것(누른 것 + 그 결과 단계)은 한 메시지로
+    const add = mergeNotices([...actionNotices(snap.tasks, snap.workflow), ...(before ? notices : []), ...staleNotices(snap.tasks, snap.workflow)].filter((n) => !have.has(n.id)));
     if (!add.length) return;
+    // 화면이 다시 그려지기 전에 또 불려도 같은 알림을 두 번 넣지 않게(v0.7.16)
+    add.forEach((n) => [n.id, ...(n.ids ?? [])].forEach((id) => announced.current.add(id)));
     add.forEach((n) => archive({ role: 'office', text: n.text, projectId: n.projectId, taskId: n.taskId }));
     // 기본 대화창과 그 프로젝트 대화창 둘 다에 보이고, 어느 프로젝트 일인지 앞에 적는다(v0.4.89 소유자)
     const pname = (id: string) => snap.projects.find((p) => p.id === id)?.name;
@@ -644,6 +650,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       actions: n.actions,
       home: '',
       projects: [n.projectId],
+      ...(n.ids?.length ? { ids: n.ids } : {}),
     }));
     setLog((l) => [...l.filter((m) => !add.some((n) => n.id === m.id)), ...msgs].slice(-KEEP));
   }, [snap.tasks, snap.workflow, syncReady, minute]);

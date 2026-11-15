@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionNotices, noticeFor, stageNotices, stageSignature, staleNotices } from './stageNotice';
+import { actionNotices, mergeNotices, noticeFor, stageNotices, stageSignature, staleNotices } from './stageNotice';
 import type { Task } from './types';
 import type { Approval, WorkflowData } from './workflow-types';
 import { EMPTY_WORKFLOW } from './workflow-types';
@@ -88,6 +88,14 @@ describe('단계 알림(v0.3.9)', () => {
     const e = { ...approvalA, id: 'e', gate: 'E' as const, workItemId: 'W1' };
     const n = noticeFor(task, data({ specs: [spec(1)], approvals: [approvalA, e], plans: [plan], assignments: [a] }));
     if (n.stage === 'executing') expect(n.text).toContain('Claude(W1)가 개발 중이에요');
+  });
+
+  it('누른 것과 그 결과 단계가 같이 오면 한 메시지로 묶는다', () => {
+    const n = (id: string, taskId: string, text: string) => ({ id, taskId, projectId: 'p', stage: 'completed' as const, text, actions: ['open' as const] });
+    const out = mergeNotices([n('act-c', 't1', "'로그인' — ✓ 배포 승인을 눌렀어요(결과 v1)."), n('stage-t1-x', 't1', "'로그인' → 완료\n배포까지 끝났어요."), n('act-z', 't2', "'다른 일' — 수정 요청을 보냈어요: x")]);
+    expect(out.map((x) => x.id)).toEqual(['stage-t1-x', 'act-z']);
+    expect(out[0].text).toBe("'로그인' — ✓ 배포 승인을 눌렀어요(결과 v1). → 완료\n배포까지 끝났어요.");
+    expect(out[0].ids).toEqual(['act-c']);
   });
 
   it('지운 업무는 기억에서 뺀다', () => {
