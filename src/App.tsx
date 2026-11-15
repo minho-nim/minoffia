@@ -22,7 +22,7 @@ import { freshReport, savedReport } from './data/mapCache';
 import { installedSkillsOf, isSlimProject, setSkillTitles, setSlimProjects, skillTitleOf } from './data/slimRepos';
 import { skillPickRule } from './domain/skillPick';
 import { endDrawing, startDrawing } from './office/drawing';
-import { advanceDemo, demoTask, newDemoTask } from './demo/demoServer';
+import { advanceDemo, DEMO_TAG, demoTask, newDemoTask } from './demo/demoServer';
 
 /** 점검(앱 지도 그리기)을 시작한 시각, 프로젝트별(v0.7.4 미노 말풍선) */
 const drawStarted = new Map<string, number>();
@@ -829,6 +829,7 @@ export function App() {
   };
 
   const dispatchBlocker = (task: Task): string | null => {
+    if (trying && task.title.startsWith(DEMO_TAG)) return '체험: Claude PM이 계획을 만드는 중이에요(몇 초).';
     if (store.mode === 'local' || !client) return '로컬 데모에서는 실행할 수 없습니다. Supabase와 Edge Function을 연결해야 합니다.';
     const project = projectById.get(task.projectId);
     if (!project?.repo) return '프로젝트에 GitHub 저장소(owner/repo)를 먼저 입력하세요.';
@@ -1504,7 +1505,7 @@ export function App() {
       }),
     setPrUrl: (task, url) => step(task.id, () => store.saveTask({ ...task, prUrl: url.trim().replace(/\/$/, '') }), 'PR 주소를 기록했습니다.'),
     checkPr:
-      store.mode === 'supabase'
+      store.mode === 'supabase' || trying
         ? async (task) => {
             try {
               const c = await store.checkPr(task.id);
@@ -1549,8 +1550,14 @@ export function App() {
             }
           }
         : undefined,
+    // 체험(v0.7.12): 데모판은 Codex 자동 길 모양으로 보이게 한다(실제로 맡기지는 않음, 체험 서버가 진행)
     startCodexLinear:
-      store.mode === 'supabase'
+      trying
+        ? async () => {
+            say('ok', '체험에서는 Codex가 자동으로 시작해요(실제로 맡기지는 않아요).');
+            return true;
+          }
+        : store.mode === 'supabase'
         ? async (a, ack, text) => {
             try {
               const r = await store.startCodexLinear(a.id, ack, text);
@@ -1606,7 +1613,7 @@ export function App() {
           }
         : undefined,
     deploy:
-      store.mode === 'supabase'
+      store.mode === 'supabase' || trying
         ? async (task, allowExtra = false, quiet = false) => {
             try {
               const r = await store.deployRelease(task.id, allowExtra);

@@ -44,6 +44,8 @@ export interface OfficeStore {
   reviewResult(taskId: string, resultRevision: number): Promise<ResultReview | 'started' | 'waiting'>;
   /** 체험 모드(로컬)만: 정해진 평가 기록 넣기(v0.7.8, AI를 부르지 않음) */
   putDemoReview?(review: ResultReview): Promise<void>;
+  /** 체험 모드(로컬)만: 실행 기록을 서버가 확인한 모양으로 바꾸기(v0.7.12, 실제 실행 없음) */
+  putDemoAssignment?(assignment: AgentAssignment): Promise<void>;
   /** Claude 웹 조사(v0.7.11): Exa가 안 될 때 Claude에게 맡긴다. 답은 나중에 snapshot.research로 온다 */
   askClaudeResearch?(question: string): Promise<{ id: string; sessionUrl: string | null; already?: boolean }>;
   /** 3중 평가(v0.7.8): 동료 평가를 기다리지 않고 지금 모인 점수로 판정 */
