@@ -23,6 +23,8 @@ export interface StageNotice {
   stage: Stage;
   text: string;
   actions: NoticeAction[];
+  /** 한 메시지로 묶은 다른 알림 id(v0.7.16, 다시 넣지 않게) */
+  ids?: string[];
 }
 
 const NEXT: Partial<Record<Stage, string>> = {
@@ -217,4 +219,29 @@ export function actionNotices(tasks: Task[], all: WorkflowData, now = Date.now()
     push(`act-${p.id}`, p.taskId, p.createdAt, `Gemini ${d?.who ?? ''} 시안을 골랐어요. 개발 AI에게 같이 넘어가요.`);
   }
   return out.sort((a, b) => a.at.localeCompare(b.at)).map((x) => x.n);
+}
+
+/**
+ * 같은 업무에서 한꺼번에 일어난 것은 한 메시지로(v0.7.16 소유자 "한 번에 끝나면 한 번에 했다고"):
+ * 사장님이 누른 것(act-)과 그 결과 단계 알림(stage-)이 같이 오면 "✓ 배포 승인을 눌렀어요 → 완료"처럼 묶는다.
+ */
+export function mergeNotices(list: StageNotice[]): StageNotice[] {
+  const out: StageNotice[] = [];
+  const done = new Set<StageNotice>();
+  for (const n of list) {
+    if (done.has(n)) continue;
+    const acts = list.filter((x) => x.taskId === n.taskId && x.id.startsWith('act-') && !done.has(x));
+    const stage = list.find((x) => x.taskId === n.taskId && x.id.startsWith('stage-') && !done.has(x));
+    if (!/^(act|stage)-/.test(n.id) || !acts.length || !stage) {
+      done.add(n);
+      out.push(n);
+      continue;
+    }
+    [...acts, stage].forEach((x) => done.add(x));
+    const [head, ...rest] = stage.text.split('\n');
+    const [title, ...label] = head.split(' → ');
+    const did = acts.map((x) => x.text.split(' — ').slice(1).join(' — ')).join(' ');
+    out.push({ ...stage, text: [`${title} — ${did} → ${label.join(' → ')}`, ...rest].join('\n'), ids: acts.map((x) => x.id) });
+  }
+  return out;
 }
