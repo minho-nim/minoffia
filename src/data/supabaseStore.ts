@@ -3,6 +3,7 @@ import { SUPABASE_KEY, SUPABASE_URL } from '../lib/supabase';
 import { MIME_EXT, storageContentType, type Attachment, type ImageAnalysis } from '../domain/attachments';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { AgentId, Project, ProjectRule, Task, UsageRun } from '../domain/types';
+import type { DesignDraft } from '../domain/designDraft';
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, ResultReview, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
@@ -194,7 +195,7 @@ const toPrCheck = (r: Row): PrCheck => ({
 const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
-  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews', 'task_followups', 'claude_research',
+  'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews', 'task_followups', 'claude_research', 'design_drafts', 'design_picks',
 ];
 
 const toReview = (r: Row): ResultReview => ({
@@ -215,6 +216,19 @@ const toReview = (r: Row): ResultReview => ({
   crossJudge: (r.cross_judge as string | null) ?? null,
   crossReasons: (r.cross_reasons as string[] | null) ?? [],
   panel: Array.isArray(r.panel) ? (r.panel as ResultReview['panel']) : [],
+  createdAt: r.created_at as string,
+});
+
+const toDraft = (r: Row): DesignDraft => ({
+  id: r.id as string,
+  taskId: r.task_id as string,
+  specRevision: r.spec_revision as number,
+  who: r.who as DesignDraft['who'],
+  judge: (r.judge as string) ?? '',
+  svg: r.svg as string,
+  flow: (r.flow as string) ?? '',
+  note: (r.note as string) ?? '',
+  review: (r.review as DesignDraft['review']) ?? null,
   createdAt: r.created_at as string,
 });
 
@@ -331,7 +345,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     mode: 'supabase',
     async load() {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules, reviews, followups, research] = await Promise.all([
+      const [projects, tasks, usage, specs, approvals, plans, assignments, results, revisionRequests, attachments, links, clarifications, aiCalls, imageAnalyses, agentLimits, prChecks, deployments, leave, projectRules, reviews, followups, research, designDrafts, designPicks] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('tasks').select('*').order('created_at', { ascending: false }),
         client.from('usage_runs').select('*').gte('created_at', since),
@@ -355,6 +369,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('result_reviews').select('*').order('created_at'),
         client.from('task_followups').select('*').order('created_at'),
         client.from('claude_research').select('id, question, status, answer, sources, session_url, expires_at, created_at').gte('created_at', since).order('created_at'),
+        client.from('design_drafts').select('*').order('created_at'),
+        client.from('design_picks').select('*').order('created_at'),
       ]);
       return {
         projects: (check(projects) ?? []).map(toProject),
@@ -375,6 +391,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           prChecks: prChecks.error ? [] : (prChecks.data ?? []).map(toPrCheck),
           deployments: deployments.error ? [] : (deployments.data ?? []).map(toDeployment),
           reviews: reviews.error ? [] : (reviews.data ?? []).map(toReview),
+          designDrafts: designDrafts.error ? [] : (designDrafts.data ?? []).map(toDraft),
+          designPicks: designPicks.error ? [] : (designPicks.data ?? []).map((r: Row) => ({ id: r.id as string, taskId: r.task_id as string, specRevision: r.spec_revision as number, draftId: r.draft_id as string, createdAt: r.created_at as string })),
           followups: followups.error ? [] : (followups.data ?? []).map((r: Row) => ({ id: r.id as string, taskId: r.task_id as string, text: r.text as string, usedAt: (r.used_at as string | null) ?? null, createdAt: r.created_at as string })),
         },
         leave: leave.error ? [] : (leave.data ?? []).map((r: Row) => r.agent as AgentId),
@@ -861,6 +879,13 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async setLeave(agent, onLeave) {
       if (onLeave) check(await client.from('agent_leave').upsert({ agent }));
       else check(await client.from('agent_leave').delete().eq('agent', agent));
+    },
+    async drawDesign(taskId) {
+      const data = await invoke('draw-design', { taskId });
+      return ((data.drafts as Row[]) ?? []).map(toDraft);
+    },
+    async pickDesign(taskId, specRevision, draftId) {
+      check(await client.from('design_picks').insert({ task_id: taskId, spec_revision: specRevision, draft_id: draftId }));
     },
     async askClaudeResearch(question) {
       const data = await invoke('ask-claude-research', { question });

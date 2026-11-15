@@ -209,6 +209,10 @@ export interface WorkflowData {
   reviews?: ResultReview[];
   /** 개발 중 추가 요청(v0.6.13). 표가 없는 DB면 undefined */
   followups?: Followup[];
+  /** Gemini 시안(v0.7.13): 기획서 버전마다 A·B 시안과 서로 평가 */
+  designDrafts?: import('./designDraft').DesignDraft[];
+  /** 소유자가 고른 시안(추가만, 마지막 것) */
+  designPicks?: import('./designDraft').DesignPick[];
 }
 
 /** 결과 점수 평가 기록(서버 review-result가 결과 버전마다 한 번, v0.4.64) */

@@ -5,6 +5,7 @@ import type { Attachment, ImageAnalysis } from '../domain/attachments';
 import type { ChatEntry } from '../domain/devlog';
 import type { Clarification, LinkRef } from '../domain/requestContext';
 import type { Project, Snapshot, Task, UsageRun } from '../domain/types';
+import type { DesignDraft } from '../domain/designDraft';
 import type { AgentAssignment, Approval, PmPlan, PrCheck, ResultPackage, RevisionRequest, TaskSpec, ResultReview } from '../domain/workflow-types';
 
 export type StoreMode = 'local' | 'supabase';
@@ -44,6 +45,12 @@ export interface OfficeStore {
   reviewResult(taskId: string, resultRevision: number): Promise<ResultReview | 'started' | 'waiting'>;
   /** 체험 모드(로컬)만: 정해진 평가 기록 넣기(v0.7.8, AI를 부르지 않음) */
   putDemoReview?(review: ResultReview): Promise<void>;
+  /** Gemini 시안(v0.7.13): 최신 기획서로 A·B가 그리고 서로 평가(서버). 이미 있으면 그대로 */
+  drawDesign?(taskId: string): Promise<DesignDraft[]>;
+  /** 시안 고르기(추가만, 승인 아님) */
+  pickDesign?(taskId: string, specRevision: number, draftId: string): Promise<void>;
+  /** 체험 모드(로컬)만: 정해진 시안 넣기 */
+  putDemoDrafts?(drafts: DesignDraft[]): Promise<void>;
   /** 체험 모드(로컬)만: 실행 기록을 서버가 확인한 모양으로 바꾸기(v0.7.12, 실제 실행 없음) */
   putDemoAssignment?(assignment: AgentAssignment): Promise<void>;
   /** Claude 웹 조사(v0.7.11): Exa가 안 될 때 Claude에게 맡긴다. 답은 나중에 snapshot.research로 온다 */

@@ -7071,3 +7071,87 @@ html.popup-open .project-sections > details[open] * {
   display: flex;
   gap: 6px;
 }
+
+/* Gemini 시안(v0.7.13): A·B 시안 두 장과 서로 평가, 고르기 */
+.design-drafts {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.design-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0 0 8px;
+}
+
+.design-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.design-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.design-card.is-picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.design-who {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+}
+
+.design-score {
+  margin-left: auto;
+  font-weight: 700;
+}
+
+.design-svg {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.design-note {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.design-parts,
+.design-flow {
+  margin: 4px 0;
+  padding-left: 1.2em;
+}
+
+.design-card details p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.design-card .btn {
+  align-self: flex-start;
+}

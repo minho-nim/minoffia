@@ -52,6 +52,17 @@ async function loginShot(): Promise<Blob | null> {
   return await new Promise((ok) => c.toBlob((b) => ok(b), 'image/png'));
 }
 
+/** 체험 시안 그림(로그인 화면 와이어프레임, 400×800) */
+function demoSvg(who: 'A' | 'B'): string {
+  const t = (x: number, y: number, s: string, size = 16, fill = '#3b2a1e', weight = 'normal') => `<text x="${x}" y="${y}" font-family="sans-serif" font-size="${size}" font-weight="${weight}" fill="${fill}">${s}</text>`;
+  const box = (y: number, label: string) => `<rect x="32" y="${y}" width="336" height="48" rx="6" fill="#fff" stroke="#c9b89c" stroke-width="2"/>${t(48, y + 30, label, 15, '#9a8670')}`;
+  const body =
+    who === 'A'
+      ? [t(32, 120, '로그인', 28, '#3b2a1e', 'bold'), t(32, 152, '미노피아에 다시 오신 걸 환영해요', 14, '#7a6a58'), box(200, '이메일'), box(264, '비밀번호'), t(32, 340, '오류가 나면 여기에 안내', 13, '#c0392b'), '<rect x="32" y="372" width="336" height="56" rx="8" fill="#e07a3a"/>', t(172, 407, '로그인', 18, '#fff', 'bold'), t(32, 468, '비밀번호 찾기', 13, '#7a6a58'), t(290, 468, '회원가입', 14, '#e07a3a', 'bold')]
+      : [t(32, 140, '로그인', 28, '#3b2a1e', 'bold'), box(220, '이메일'), box(284, '비밀번호'), '<rect x="32" y="680" width="336" height="60" rx="10" fill="#e07a3a"/>', t(172, 717, '로그인', 18, '#fff', 'bold')];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 800"><rect width="400" height="800" fill="#fff8ec"/><rect width="400" height="56" fill="#3b2a1e"/>${t(20, 36, 'minoffia', 18, '#f6d6a8', 'bold')}${body.join('')}</svg>`;
+}
+
 /** 체험 업무 만들기(같은 업무가 진행 중이면 그것을 돌려준다) */
 export function demoTask(snap: Snapshot): Task | null {
   return snap.tasks.find((t) => t.title.startsWith(DEMO_TAG) && t.status !== 'done' && t.stage !== 'cancelled') ?? null;
@@ -91,7 +102,12 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
       answer: '', sizeHint: { difficulty: 2, single_task: true, needs_design: false }, createdAt: iso,
     };
     await store.addSpec(spec);
-    return '체험: Gemini(Studio A)가 기획서 초안을 썼어요. 업무 탭의 체험 업무에서 기획서를 보고 [기획 승인]을 눌러 보세요.';
+    // Gemini 시안(v0.7.13): A·B가 그린 시안 두 장과 서로 평가(정해진 그림). 하나를 골라 볼 수 있다
+    await store.putDemoDrafts?.([
+      { id: nid(), taskId: task.id, specRevision: 1, who: 'A', judge: 'Gemini · Studio A', svg: demoSvg('A'), flow: 'flowchart TD\nA[로그인 화면] --> B[이메일·비밀번호 입력]\nB --> C[주황 로그인 버튼]\nC --> D{맞음?}\nD -->|예| E[홈]\nD -->|아니오| F[오류 안내]\nF --> B', note: '로그인 버튼을 앱 주황색으로 가장 눈에 띄게\n다른 버튼(회원가입)은 글자 버튼으로 낮춤\n오류 안내는 입력칸 바로 아래', review: { by: 'B', parts: { request: 38, ease: 22, mobile: 18, simple: 12 }, total: 90, good: ['주황 버튼이 바로 보임'], fix: ['비밀번호 찾기 글자가 작음'] }, createdAt: iso },
+      { id: nid(), taskId: task.id, specRevision: 1, who: 'B', judge: 'Gemini · Studio B', svg: demoSvg('B'), flow: 'flowchart TD\nA[로그인 화면] --> B[입력]\nB --> C[주황 로그인 버튼]\nC --> D[홈]', note: '입력칸 두 개와 주황 버튼만 남김\n버튼을 화면 아래 엄지 닿는 곳에\n회원가입은 다음 화면으로 뺌', review: { by: 'A', parts: { request: 34, ease: 23, mobile: 19, simple: 15 }, total: 91, good: ['단계가 가장 짧음'], fix: ['오류 안내 자리가 없음'] }, createdAt: iso },
+    ]);
+    return '체험: Gemini(Studio A)가 기획서 초안을 쓰고, Gemini A·B가 화면 시안을 하나씩 그려 서로 평가했어요. 업무 탭의 체험 업무에서 시안을 하나 고르고 [기획 승인]을 눌러 보세요.';
   }
   if (step === 'plan') {
     const v = deriveWorkflow(task, snap.workflow);

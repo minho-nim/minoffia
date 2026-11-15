@@ -610,6 +610,24 @@ export function App() {
   }, [tab, repoProjectKey, store]);
   const ciFixTried = useRef(new Set<string>());
   const handoffTried = useRef(new Set<string>());
+  // Gemini 시안 자동 그리기(v0.7.13): 기획서가 '새 디자인 필요'라고 하면 기획 승인 전에 한 번만 그린다(기획서 버전마다, 실패해도 다시 안 부름)
+  const drewDesign = useRef(new Set<string>());
+  useEffect(() => {
+    if (!store || store.mode !== 'supabase' || !store.drawDesign) return;
+    for (const t of snap.tasks) {
+      if (t.status === 'done' || t.stage === 'cancelled') continue;
+      const v = deriveWorkflow(t, snap.workflow);
+      if (!v.spec?.sizeHint?.needs_design || v.aApproved) continue;
+      const key = `${t.id}:${v.spec.revision}`;
+      if (drewDesign.current.has(key) || (snap.workflow.designDrafts ?? []).some((d) => d.taskId === t.id && d.specRevision === v.spec!.revision)) continue;
+      drewDesign.current.add(key);
+      void store
+        .drawDesign(t.id)
+        .then(() => store.load())
+        .then(setSnap)
+        .catch(() => undefined);
+    }
+  }, [store, snap.tasks, snap.workflow]);
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session && !trying) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
@@ -1612,6 +1630,32 @@ export function App() {
             }
           }
         : undefined,
+    // Gemini 시안(v0.7.13): 그리기는 서버(Gemini A·B), 고르기는 기록 한 줄(승인 아님)
+    drawDesign:
+      store.mode === 'supabase' && store.drawDesign
+        ? async (task) => {
+            try {
+              const drafts = await store.drawDesign!(task.id);
+              say('ok', `Gemini가 시안 ${drafts.length}장을 그리고 서로 평가했어요. 업무 카드에서 보고 하나를 고르세요.`);
+            } catch (e) {
+              say('error', `시안을 그리지 못했어요: ${(e as Error).message}`);
+            } finally {
+              setSnap(await store.load());
+            }
+          }
+        : undefined,
+    pickDesign: store.pickDesign
+      ? async (task, draft) => {
+          try {
+            await store.pickDesign!(task.id, draft.specRevision, draft.id);
+            say('ok', `Gemini ${draft.who} 시안을 골랐어요. 기획 승인하면 개발 AI에게 이 시안이 같이 넘어가요.`);
+          } catch (e) {
+            say('error', `시안을 고르지 못했어요: ${(e as Error).message}`);
+          } finally {
+            setSnap(await store.load());
+          }
+        }
+      : undefined,
     deploy:
       store.mode === 'supabase' || trying
         ? async (task, allowExtra = false, quiet = false) => {
@@ -2364,6 +2408,8 @@ export function App() {
                         projectRules={[...withBaseRules((snap.projectRules ?? []).filter((r) => r.projectId === t.projectId).map((r) => r.rule)), ...skillPickRule(t.skills)]}
                         reviews={(snap.workflow.reviews ?? []).filter((r) => r.taskId === t.id)}
                         followups={(snap.workflow.followups ?? []).filter((f) => f.taskId === t.id)}
+                        designDrafts={(snap.workflow.designDrafts ?? []).filter((d) => d.taskId === t.id)}
+                        designPicks={(snap.workflow.designPicks ?? []).filter((d) => d.taskId === t.id)}
                         timeline={taskTimeline(t.id, snap.workflow)}
                         results={snap.workflow.results.filter((r) => r.taskId === t.id)}
                         canReadLinks={store.mode === 'supabase'}

@@ -3,6 +3,7 @@
 //   기본은 위임(delegateId, Linear 공식 에이전트 방식). CODEX_LINEAR_TRIGGER=mention이면 대신 @codex 멘션 댓글로 시작한다.
 // action 'status': 그 이슈의 Codex 댓글만 읽어 진행 소식·작업 주소·시작 실패(한도·환경 없음)를 배정 기록에 남긴다(완료 판정은 사람이).
 // 비밀값: LINEAR_API_KEY(소유자 계정 개인 키)는 secrets에만. 이슈 생성은 소유자 이름으로 된다.
+import { loadPickedDesignSection } from './designDraft.ts';
 import { skillPickRule } from './skillPick.ts';
 import { BASE_RULES } from './projectRules.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
@@ -71,10 +72,12 @@ async function serverText(admin: any, a: { task_id: string; plan_revision: numbe
   // v0.6.82: 규칙 칸·개발 스킬(repo-map)이 들어 있는 저장소면 기본 규칙은 저장소 AGENTS.md에 있으므로 빼고 가리키기만
   const { data: sc } = await admin.from('skill_cache').select('map').eq('owner_id', t.owner_id).maybeSingle();
   const slim = !!(sc?.map as Record<string, Record<string, string>> | null)?.[String(t.project_id)]?.['repo-map'];
+  // v0.7.13: 소유자가 고른 Gemini 시안이 있으면 기획서 뒤에 붙인다
+  const design = await loadPickedDesignSection(admin, a.task_id, spec.revision);
   return buildServerHandoff({
     taskId: a.task_id,
     repo: String((t.projects as { repo?: string } | null)?.repo ?? ''),
-    spec: { revision: spec.revision, final_prompt: spec.final_prompt ?? '', change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '' },
+    spec: { revision: spec.revision, final_prompt: `${spec.final_prompt ?? ''}${design}`, change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '' },
     item: { id: String(item.id), title: String(item.title ?? ''), goal: String(item.goal ?? ''), acceptance_tests: item.acceptance_tests as string[] | undefined, preserve_constraints: item.preserve_constraints as string[] | undefined },
     baseRevision: String(plan?.target_base_revision ?? ''),
     // 기본 규칙(모든 프로젝트)도 함께(v0.6.59: 서버가 시작한 Codex에는 프로젝트 규칙만 가고 기본 규칙이 빠져 있었다)
