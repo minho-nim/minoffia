@@ -1,0 +1,28 @@
+# 닫힌 PR 브랜치 지우기(2026-11-15, 소유자 "이메일 기록 지우기"): 공개 저장소에 남은 옛 커밋(옛 작성자 이메일)을 없애려고,
+# PR이 닫힌(병합 포함) 브랜치만 지운다. main·release·열린 PR 브랜치·PR이 없는 브랜치는 그대로 둔다.
+# 손으로만 실행한다. 지운 브랜치는 각 PR 화면의 'Restore branch'로 되살릴 수 있다.
+name: 닫힌 PR 브랜치 지우기
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: read
+concurrency: clean-branches
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 닫힌 PR 브랜치 지우기
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$REPO/pulls?state=closed&per_page=100" --jq '.[] | select(.head.repo.full_name == env.REPO) | .head.ref' | sort -u > closed.txt
+          gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" --jq '.[].head.ref' | sort -u > open.txt
+          gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | sort -u > heads.txt
+          comm -12 heads.txt closed.txt | grep -vxF -f open.txt | grep -vxE 'main|release' > del.txt || true
+          echo "지울 브랜치: $(wc -l < del.txt)개"
+          while read -r b; do
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$b" > /dev/null && echo "지움: $b"
+          done < del.txt
+          echo "남은 브랜치: $(gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | wc -l)개"
