@@ -1,20 +1,38 @@
-# 미노피아 (minoffia)
+<p align="center">
+  <img src="public/icons/icon-192.png" width="88" alt="미노피아 아이콘">
+</p>
 
-> 휴대폰으로 AI 개발팀을 지휘하는 1인 사무실. 사람은 요청하고 승인 세 번만 누르고, 기획·개발·채점·검사·배포는 역할을 나눈 AI들이 합니다.
+<h1 align="center">미노피아</h1>
 
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
-![Cloudflare Pages](https://img.shields.io/badge/Cloudflare_Pages-F38020?logo=cloudflarepages&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=githubactions&logoColor=white)
-![추가 비용](https://img.shields.io/badge/추가_비용-0원-orange)
+<p align="center"><b>사람은 승인 세 번, 나머지는 AI 팀.</b><br>휴대폰으로 AI 개발팀을 지휘하는 1인 사무실</p>
 
-**[포트폴리오 페이지](https://minlab-ai-office.pages.dev/portfolio)** · **[데모 직접 써 보기(로그인 없음)](https://minlab-ai-office.pages.dev/demo)**
+<p align="center"><code>미노피아 = 규칙(토큰 0) + 역할을 나눈 AI 팀 + 사람의 승인 3번</code></p>
 
-![미노피아 사무실 — 체험 업무가 진행되는 동안 말풍선(조사 → 기획 → 계획 → 개발)이 실제 업무 상태를 따라 바뀝니다](docs/screenshots/office.gif)
+<p align="center">
+  <img src="https://img.shields.io/badge/추가_비용-0원-e07a3a?style=flat-square" alt="추가 비용 0원">
+  <img src="https://img.shields.io/badge/사람_승인-3번-3b2a1e?style=flat-square" alt="사람 승인 3번">
+  <img src="https://img.shields.io/badge/AI_팀원-7명-4a7bd0?style=flat-square" alt="AI 팀원 7명">
+  <img src="https://img.shields.io/badge/코딩_경험-없음-6e5a48?style=flat-square" alt="코딩 경험 없음">
+</p>
 
-<sub>데모판에서 녹화한 실제 화면입니다. 캐릭터 위치와 말풍선은 꾸며낸 움직임 없이 업무 상태만 따릅니다.</sub>
+<p align="center">
+  <a href="https://minlab-ai-office.pages.dev/demo"><b>▶ 30초 체험(로그인 없음)</b></a> ·
+  <a href="https://minlab-ai-office.pages.dev/portfolio">포트폴리오</a> ·
+  <a href="#자주-묻는-것">자주 묻는 것</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/office.gif" width="720" alt="미노피아 사무실 — 체험 업무가 진행되는 동안 말풍선(조사 → 기획 → 계획 → 개발)이 실제 업무 상태를 따라 바뀝니다">
+  <br><sub>데모판에서 녹화한 실제 화면. 캐릭터 위치와 말풍선은 꾸며낸 움직임 없이 업무 상태만 따릅니다.</sub>
+</p>
+
+## 한눈에
+
+- **요청은 대화로** — 대화창에 한 줄 쓰면 미니엉이 프로젝트와 담당 AI를 정해 업무로 접수합니다(모델 호출 없음).
+- **사람은 결정만** — 기획 승인 → 올리기 승인 → 배포 승인, 휴대폰에서 세 번 누르면 끝까지 갑니다.
+- **AI가 AI를 검증** — 결과 하나를 AI 셋이 같은 항목, 다른 관점으로 채점하고, 기준 미달이면 사람에게 오기 전에 다시 개발합니다.
+- **확인한 것만 표시** — "배정됨"과 "실행됨"을 나누고, 승인·기획서·결과는 고칠 수 없는 기록으로 남깁니다.
+- **0원으로 운영** — 이미 쓰는 구독(Claude, ChatGPT)과 무료 API(Gemini, Exa)만 씁니다.
 
 ## 왜 만들었나
 
@@ -23,6 +41,16 @@
 AI가 여럿인데 사람이 그 사이를 오가며 글을 옮기고, 같은 설명을 몇 번씩 다시 하고, 결과가 맞는지 혼자 확인했습니다. 코딩을 몰라도 AI에게 일을 맡길 수는 있지만, **맡기는 방식**이 비효율이었습니다.
 
 그래서 사람은 결정만 하고, 나머지는 AI끼리 나눠 하는 사무실을 만들었습니다. 코딩 지식 없이 16일 동안 만들었고, 추가 비용은 0원입니다.
+
+### AI 하나에 다 맡길 때와 무엇이 다른가
+
+| | AI 하나에 다 맡기기 | 미노피아 |
+| --- | --- | --- |
+| 사람이 하는 일 | AI 사이를 오가며 글 옮기기, 결과 직접 확인 | 요청과 승인 세 번 |
+| 접수·배정·알림 | 매번 AI에게 물어봄(토큰) | 규칙으로 처리(토큰 0) |
+| 결과 확인 | 만든 AI가 스스로 "됐어요" | 다른 AI 셋이 같은 기준으로 채점 |
+| 기록 | 대화창에 흩어짐 | 승인·기획서·결과를 고칠 수 없는 기록으로 |
+| 비용 | 쓸수록 늘어남 | 추가 0원 |
 
 ## AI 팀원 소개
 
@@ -109,17 +137,34 @@ sequenceDiagram
 
 숫자는 저장소와 운영 DB 기록에서 센 값입니다(2026-11-13, [포트폴리오](https://minlab-ai-office.pages.dev/portfolio)와 같음). 앱 대부분은 Claude와 대화하며 만들었습니다. 앱 안에서 요청부터 배포까지 끝까지 돈 업무는 아직 3건이고, 지금도 실제로 쓰면서 검증하고 있습니다.
 
-## 지켜 온 원칙
-
-- **추가 결제 0원**: 이미 쓰는 구독과 무료 API만 씁니다. 유료 API·크레딧은 쓰지 않습니다.
-- **비밀값은 서버에만**: 키는 서버 secrets에만 두고, 화면·로그·커밋에는 남기지 않습니다.
-- **사람은 결정만**: 확인한 상태와 출처만 보여 주고, 승인과 결과는 고칠 수 없는 기록으로 남깁니다.
-
 ## 데모 직접 써 보기
 
 [데모판](https://minlab-ai-office.pages.dev/demo)은 실제 앱 주소의 체험 모드입니다. 로그인 없이, 예시 데이터로 보는 기기 안에서만 돌아갑니다.
 
 '체험 업무 시작'을 누르면 정해진 업무 하나가 생기고, AI·서버 몫(기획서 초안 → 개발 → 3중 평가 → PR 검사)은 브라우저 안에서 채워집니다. 소유자 몫인 승인 세 번만 직접 누르면 끝까지 갑니다. 실제 서버·AI는 부르지 않습니다.
+
+## 새 소식
+
+- **v0.7.11** — Exa 웹 검색이 안 될 때 누르면 Claude가 대신 찾아 주는 [Claude에게 찾아보기]
+- **v0.7.10** — 웹 조사는 Exa만(무료 키로 안 되던 Gemini 검색 연결은 지움)
+- **v0.7.9** — 팀 관리에서 Exa에게도 휴가를 줄 수 있음
+- **v0.7.8** — 코드 3중 평가: Gemini A·B + 동료 개발 AI, 각 점수와 평균
+
+전체 기록은 [변경 기록](CHANGELOG.md)에 있습니다.
+
+## 자주 묻는 것
+
+**코딩을 몰라도 만들 수 있었나요?**
+네. 앱 대부분은 Claude와 대화하며 만들었습니다. 저는 무엇을 만들지 정하고, 결과를 보고, 승인하고, 안 되면 방향을 바꿨습니다.
+
+**정말 추가 비용이 0원인가요?**
+네. 유료 API와 크레딧은 쓰지 않는 것이 규칙입니다. Claude·ChatGPT는 원래 쓰던 구독 안에서, Gemini·Exa는 무료 사용량 안에서만 씁니다.
+
+**AI가 멋대로 배포하지는 않나요?**
+아닙니다. 운영 배포는 사람의 배포 승인 뒤에만 됩니다. 승인 순서는 화면뿐 아니라 DB가 막고, 시험(CI)을 통과해야 배포 승인 버튼이 켜집니다.
+
+**데모는 진짜로 AI가 도나요?**
+아닙니다. 데모판은 보는 기기 안에서 정해진 내용으로 흐름만 보여 줍니다. 실제 서버와 AI는 부르지 않습니다.
 
 ## 앞으로
 
