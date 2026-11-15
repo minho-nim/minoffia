@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noticeFor, stageNotices, staleNotices } from './stageNotice';
+import { noticeFor, stageNotices, stageSignature, staleNotices } from './stageNotice';
 import type { Task } from './types';
 import type { Approval, WorkflowData } from './workflow-types';
 import { EMPTY_WORKFLOW } from './workflow-types';
@@ -42,6 +42,26 @@ describe('단계 알림(v0.3.9)', () => {
     const n = noticeFor(task, data({ specs: [spec(1)] }));
     expect(n.actions).toEqual(['A', 'open']);
     expect(n.text).toContain('비밀번호 보기');
+  });
+
+  it('시안이 오면 다시 알리고 A·B 점수를 붙인다(v0.7.14)', () => {
+    const draft = (who: 'A' | 'B', total: number) => ({ id: who, taskId: 't1', specRevision: 1, who, judge: '', svg: '<svg/>', flow: '', note: '', review: { by: (who === 'A' ? 'B' : 'A') as 'A' | 'B', parts: { request: 0, ease: 0, mobile: 0, simple: 0 }, total, good: [], fix: [] }, createdAt: '' });
+    const { seen } = stageNotices([task], data({ specs: [spec(1)] }), {});
+    const r = stageNotices([task], data({ specs: [spec(1)], designDrafts: [draft('A', 90), draft('B', 91)] }), seen);
+    expect(r.notices).toHaveLength(1);
+    expect(r.notices[0].text).toContain('시안 2장: A(요청을 빠짐없이) 90점 · B(단계를 줄여 단순하게) 91점');
+  });
+
+  it('동료 점수가 오면 평가를 다시 알린다(평균·채점자별 점수)', () => {
+    const result = { id: 'r', taskId: 't1', revision: 1, planRevision: 1, workItemId: 'W1', source: 'codex_linear_auto' as const, summary: '버튼 추가', diff: 'x', testLog: 'ok', remainingIssues: '', sha256: 'h', createdAt: '' };
+    const entry = (who: 'A' | 'B' | 'peer', judge: string, status: 'done' | 'pending', total: number | null) => ({ who, judge, perspective: '', status, total, summary: '', points: [], note: '', score: null });
+    const review = (peer: 'done' | 'pending', total: number) => ({ id: 'v', taskId: 't1', resultRevision: 1, workItemId: 'W1', assignee: 'codex', gates: [], score: null, total, verdict: peer === 'done' ? ('pass' as const) : ('owner' as const), reasons: [], feedback: '', autoRedo: 0, judge: '', panel: [entry('A', 'Gemini · Studio A', 'done', 90), entry('B', 'Gemini · Studio B', 'done', 80), entry('peer', 'Claude', peer, peer === 'done' ? 94 : null)], createdAt: '' });
+    const base = { specs: [spec(1)], approvals: [approvalA], results: [result] };
+    const before = data({ ...base, reviews: [review('pending', 85)] });
+    const after = data({ ...base, reviews: [review('done', 88)] });
+    expect(stageSignature(task, before)).not.toBe(stageSignature(task, after));
+    expect(noticeFor(task, before).text).toContain('평가 평균 85점(Gemini A 90점 · Gemini B 80점 · Claude 기다리는 중) → 점수 모으는 중');
+    expect(noticeFor(task, after).text).toContain('Claude 94점) → 검토 통과');
   });
 
   it('지운 업무는 기억에서 뺀다', () => {
