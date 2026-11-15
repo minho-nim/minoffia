@@ -13,7 +13,7 @@
 1. main에서 feat/·fix/·chore/ 브랜치로 작업한다. 요청을 해결하는 가장 작은 변경만 하고 기존 구현을 재사용한다.
 2. `npm run typecheck`, `npm test`, `npm run build`를 모두 통과시킨다. DB 변경은 `scripts/test-db.sh`도 실행한다. 버그는 재현 시험과 원인 수정. 화면 변경은 데스크톱 1400px·휴대폰 400px에서 콘솔 오류·가로 넘침 확인.
 3. 이 저장소(minho-nim/minoffia, 옛 이름 MinLab-AI-Office)만 시험과 PR verify 통과 후 푸시·PR·병합까지 허용된다. 실패·미확인은 보고한다. 다른 저장소 반영은 소유자 승인 뒤에만 한다. minho-nim/MinLab은 건드리지 않는다.
-4. 운영 배포·Supabase 마이그레이션 적용·함수 배포는 소유자 요청/승인 뒤에만 한다. 함수 배포는 GitHub Actions '서버 함수 배포'(저장소 파일 그대로, verify_jwt 끄는 함수는 워크플로 목록만)를 쓴다. main 병합은 배포가 아니다. release에는 직접 커밋하지 않고 CI가 통과한 main으로 fast-forward만 한다(main에서 verify 성공, 또는 병합한 PR이 verify를 통과했고 코드가 main과 똑같을 때. 2026-11-11 소유자 결정, Actions 분량 아끼기). 휴대폰 배포는 GitHub Actions ‘운영 배포(release)’.
+4. 운영 배포·Supabase 마이그레이션 적용·함수 배포는 소유자 요청/승인 뒤에만 한다. 기능을 만들라는 요청은 배포 요청이 아니다: 병합까지만 하고, 배포(release·함수·마이그레이션)는 소유자가 말할 때 모아서 한 번에 한다(2026-11-15 소유자 결정, Actions 분량 아끼기). 함수 배포는 GitHub Actions '서버 함수 배포'(저장소 파일 그대로, verify_jwt 끄는 함수는 워크플로 목록만)를 쓴다. main 병합은 배포가 아니다. release에는 직접 커밋하지 않고 CI가 통과한 main으로 fast-forward만 한다(main에서 verify 성공, 또는 병합한 PR이 verify를 통과했고 코드가 main과 똑같을 때. 2026-11-11 소유자 결정, Actions 분량 아끼기). 휴대폰 배포는 GitHub Actions ‘운영 배포(release)’.
 5. 화면 변경 시 기존 Artifact 데모도 갱신한다: https://claude.ai/artifact/KymYCpMcfjW7Cskyjyf7Ph . `npm run build:artifact`는 로컬 데모 단일 HTML을 만든다.
 
 ## 반드시 유지
