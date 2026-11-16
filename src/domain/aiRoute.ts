@@ -9,7 +9,7 @@ export type RouteKind = 'question' | 'task' | 'ambiguous';
 /** 질문과 함께 Gemini에 보내는 것: 판단에 쓸 프로젝트 이름들, 고른 프로젝트의 정보 */
 export interface AskOptions {
   route?: { projects: string[] };
-  project?: { name: string; description: string; repo: string | null; openTasks: string[] };
+  project?: { id?: string; name: string; description: string; repo: string | null; openTasks: string[] };
   /** 조사: Exa가 찾고 Gemini가 정리해 출처를 붙인다(v0.7.10) */
   research?: boolean;
   /** 먼저 쓸 Gemini 키(1=Studio A, 2=Studio B, @StudioA·@StudioB, v0.6.24). 안 되면 다른 쪽이 대신 */
@@ -104,6 +104,7 @@ export function matchRoutedProject(name: string | null, projects: Project[]): Pr
 /** 고른 프로젝트의 정보(이름·설명·저장소·열린 업무 제목 10개까지)를 Gemini에 보낼 모양으로 */
 export function projectContext(project: Project, tasks: Task[]): NonNullable<AskOptions['project']> {
   return {
+    id: project.id,
     name: project.name,
     description: project.description.slice(0, 500),
     repo: project.repo,

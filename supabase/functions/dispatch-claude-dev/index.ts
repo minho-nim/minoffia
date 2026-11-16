@@ -189,7 +189,11 @@ Deno.serve(async (req) => {
     slim: await userClient.from('skill_cache').select('map').maybeSingle().then(({ data }) => !!(data?.map as Record<string, Record<string, string>> | null)?.[String(task.project_id)]?.[SLIM_MARKER_SKILL], () => false),
     previewUrl: previewUrl(project.preview_host, claudeBranch(a.task_id, String(item.id))),
   });
-  const text = appMap ? `${textBase}\n\n${appMap}` : textBase;
+  // v0.7.41 LLM 위키: 이 프로젝트의 지난 업무를 AI가 정리한 한 장(참고 자료)
+  const { data: wikiRow } = await userClient.from('project_wiki').select('body').eq('project_id', task.project_id).maybeSingle();
+  const wikiBody = String(wikiRow?.body ?? '').trim();
+  const wiki = wikiBody ? `\n\n## 프로젝트 위키(참고 자료, 지난 업무를 AI가 정리한 것 — 저장소를 뒤지기 전에 먼저 본다)\n${wikiBody.slice(0, 4000)}` : '';
+  const text = `${appMap ? `${textBase}\n\n${appMap}` : textBase}${wiki}`;
 
   const fail = async (message: string, status: number) => {
     await admin.from('agent_assignments').update({ dispatch_status: 'failed', actual_provider_status: message.slice(0, 300) }).eq('id', a.id);

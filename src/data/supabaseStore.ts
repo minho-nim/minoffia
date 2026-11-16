@@ -723,6 +723,20 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         await invoke('design-check', { taskId, revision });
       },
     },
+    wiki: {
+      async get(projectId) {
+        const { data } = await client.from('project_wiki').select('body, updated_at, judge, task_ids').eq('project_id', projectId).maybeSingle();
+        return data ? { body: String(data.body ?? ''), updatedAt: String(data.updated_at ?? ''), judge: String(data.judge ?? ''), tasks: Array.isArray(data.task_ids) ? data.task_ids.length : 0 } : null;
+      },
+      async rebuild(projectId) {
+        const data = await invoke('wiki-update', { action: 'project', projectId });
+        return String(data.result ?? '');
+      },
+      async fillAll() {
+        const data = await invoke('wiki-update', { action: 'all' });
+        return Number(data.started ?? 0);
+      },
+    },
     siteCheck: {
       async load(taskId) {
         const data = await invoke('site-check', { action: 'load', taskId });
