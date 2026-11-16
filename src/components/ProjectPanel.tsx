@@ -7,7 +7,7 @@ import { BASE_RULES } from '../domain/baseRules';
 import { useState } from 'react';
 import type { Project, ProjectRule, Task } from '../domain/types';
 import { RepoCreate } from './RepoCreate';
-import { CODEX_ENV_URL, ROUTINES_URL, SUBMIT_HOST, type SetupIssues } from '../domain/projectSetup';
+import { CODEX_ENV_URL, ROUTINES_URL, SUBMIT_HOST, type SetupIssues, openIssue } from '../domain/projectSetup';
 import { normalizeDemoUrl, PREVIEW_HOST_PATTERN, REPO_PATTERN, RULE_SOURCE_LABEL, siteUrl } from '../domain/types';
 
 interface Props {
@@ -492,31 +492,47 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
     }
   };
   const [done, setDone] = useState(() => ({ codex: read('codex'), claude: read('claude') }));
+  // 체크한 시각(v0.7.20): 이보다 오래된 실패 기록은 경고하지 않는다
+  const at = (k: string) => {
+    try {
+      // 이 기능 전에 체크해 둔 것은 지금 체크한 것으로 본다
+      const v = localStorage.getItem(key(`${k}-at`));
+      if (v) return v;
+      const now = new Date().toISOString();
+      localStorage.setItem(key(`${k}-at`), now);
+      return now;
+    } catch {
+      return null;
+    }
+  };
+  const codexIssue = openIssue(issues.codex, issues.codexAt, done.codex ? at('codex') : null);
+  const claudeIssue = openIssue(issues.claude, issues.claudeAt, done.claude ? at('claude') : null);
   const [copied, setCopied] = useState(false);
   const flip = (k: 'codex' | 'claude') => {
     const v = !done[k];
     setDone((d) => ({ ...d, [k]: v }));
     try {
       localStorage.setItem(key(k), v ? '1' : '0');
+      if (v) localStorage.setItem(key(`${k}-at`), new Date().toISOString());
     } catch {
       // 저장 못 해도 화면은 그대로
     }
   };
-  const codexOk = done.codex && !issues.codex;
-  const claudeOk = done.claude && !issues.claude;
+  const codexOk = done.codex && !codexIssue;
+  const claudeOk = done.claude && !claudeIssue;
   const count = 1 + Number(codexOk) + Number(claudeOk);
   return (
     <details className="project-rules project-setup">
       <summary>
-        준비 {count}/3{issues.codex || issues.claude ? ' ⚠' : ''}
+        준비 {count}/3{codexIssue || claudeIssue ? ' ⚠' : ''}
       </summary>
       <ul className="setup-list small">
         <li className="is-ok">✓ 저장소 연결: {project.repo}</li>
-        <li className={codexOk ? 'is-ok' : issues.codex ? 'is-bad' : ''}>
+        <li className={codexOk ? 'is-ok' : codexIssue ? 'is-bad' : ''}>
           <label className="check">
             <input type="checkbox" checked={done.codex} onChange={() => flip('codex')} /> Codex <b>레거시</b> 환경에 이 저장소 넣기(프로젝트마다 한 번)
           </label>
-          {issues.codex && <b className="warn-text"> — {issues.codex}</b>}
+          {codexIssue && <b className="warn-text"> — {codexIssue} (넣었으면 왼쪽을 체크하세요)</b>}
           <span className="setup-actions">
             <a href={CODEX_ENV_URL} target="_blank" rel="noreferrer">
               Codex 환경 열기 ↗
@@ -538,11 +554,11 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
             {' '}Codex 설정 → <b>레거시 Codex 클라우드</b> → 환경(이미 있으면 그 환경에 저장소 추가, 없으면 + 환경 만들기) → 저장소 {project.repo} → 추가 허용 도메인 붙여 넣기 → 저장. Linear·GitHub로 맡길 때는 레거시 환경만 써요(새 Codex Cloud 환경은 못 봐요, 2026-11-11 확인).
           </span>
         </li>
-        <li className={claudeOk ? 'is-ok' : issues.claude ? 'is-bad' : ''}>
+        <li className={claudeOk ? 'is-ok' : claudeIssue ? 'is-bad' : ''}>
           <label className="check">
             <input type="checkbox" checked={done.claude} onChange={() => flip('claude')} /> Claude 루틴에 이 저장소 추가
           </label>
-          {issues.claude && <b className="warn-text"> — {issues.claude}</b>}
+          {claudeIssue && <b className="warn-text"> — {claudeIssue} (넣었으면 왼쪽을 체크하세요)</b>}
           <span className="setup-actions">
             <a href={ROUTINES_URL} target="_blank" rel="noreferrer">
               Claude 루틴 열기 ↗
