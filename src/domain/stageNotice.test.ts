@@ -98,6 +98,22 @@ describe('단계 알림(v0.3.9)', () => {
     expect(out[0].ids).toEqual(['act-c']);
   });
 
+  it('PR 검사 상태만 여러 번 바뀌고 알림 글이 같으면 다시 알리지 않는다(v0.7.30)', () => {
+    const result = { id: 'r', taskId: 't1', revision: 1, planRevision: 1, workItemId: 'W1', source: 'codex_linear_auto' as const, summary: '버튼 추가', diff: 'x', testLog: 'ok', remainingIssues: '', sha256: 'h', createdAt: '' };
+    const approvalB = { ...approvalA, id: 'b', gate: 'B' as const };
+    const t = { ...task, prUrl: 'https://github.com/o/r/pull/1' };
+    const pr = (ciState: 'pending' | 'none' | 'success', at: string) => ({ id: at, taskId: 't1', prUrl: 'https://github.com/o/r/pull/1', prState: 'open' as const, merged: false, headSha: 's', ciState, checks: [], checkedAt: at });
+    const base = { specs: [spec(1)], approvals: [approvalA, approvalB], results: [result] };
+    let { seen } = stageNotices([t], data(base), {});
+    const counts: number[] = [];
+    for (const checks of [[pr('pending', '1')], [pr('pending', '1'), pr('none', '2')], [pr('pending', '1'), pr('none', '2'), pr('pending', '3')]]) {
+      const r = stageNotices([t], data({ ...base, prChecks: checks }), seen);
+      counts.push(r.notices.length);
+      seen = r.seen;
+    }
+    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1);
+  });
+
   it('지운 업무는 기억에서 뺀다', () => {
     expect(stageNotices([], data({}), { t1: 'x' }).seen).toEqual({});
   });
