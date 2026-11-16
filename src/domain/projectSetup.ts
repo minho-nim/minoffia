@@ -16,6 +16,9 @@ export interface SetupIssues {
   /** 그 실패 기록 시각(소유자가 '넣었어요'를 체크한 뒤의 실패만 다시 알리려고, v0.7.20) */
   codexAt?: string;
   claudeAt?: string;
+  /** 업무 기록으로 이미 잘 된 것이 확인됨(v0.7.22 소유자 "다 넣었는데 n/4"): 체크하지 않아도 ✓ */
+  codexWorked?: boolean;
+  claudeWorked?: boolean;
 }
 
 /** 소유자가 설정을 마쳤다고 체크한 시각보다 오래된 실패는 알리지 않는다(v0.7.20 소유자 "다 넣었음") */
@@ -32,9 +35,13 @@ export function setupIssues(projectId: string, tasks: Task[], wf: WorkflowData):
   const codexOk = mine.find((a) => a.assignee === 'codex' && (a.dispatchStatus === 'completed' || /Working|작업 중/i.test(a.actualProviderStatus ?? '')));
   const claudeA = mine.find((a) => a.assignee === 'claude' && /저장소 없음/.test(a.actualProviderStatus ?? ''));
   const claudeOk = mine.find((a) => a.assignee === 'claude' && a.dispatchStatus === 'completed' && !/저장소 없음/.test(a.actualProviderStatus ?? ''));
+  const codexBad = !!codexA && (!codexOk || codexOk.updatedAt < codexA.updatedAt);
+  const claudeBad = !!claudeA && (!claudeOk || claudeOk.updatedAt < claudeA.updatedAt);
   return {
-    codex: codexA && (!codexOk || codexOk.updatedAt < codexA.updatedAt) ? 'Codex가 이 저장소 환경을 찾지 못했어요' : null,
-    claude: claudeA && (!claudeOk || claudeOk.updatedAt < claudeA.updatedAt) ? 'Claude 루틴에 이 저장소가 없어요' : null,
+    codex: codexBad ? 'Codex가 이 저장소 환경을 찾지 못했어요' : null,
+    claude: claudeBad ? 'Claude 루틴에 이 저장소가 없어요' : null,
+    codexWorked: !!codexOk && !codexBad,
+    claudeWorked: !!claudeOk && !claudeBad,
     ...(codexA ? { codexAt: codexA.updatedAt } : {}),
     ...(claudeA ? { claudeAt: claudeA.updatedAt } : {}),
   };
