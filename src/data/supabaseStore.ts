@@ -216,6 +216,7 @@ const toReview = (r: Row): ResultReview => ({
   crossJudge: (r.cross_judge as string | null) ?? null,
   crossReasons: (r.cross_reasons as string[] | null) ?? [],
   panel: Array.isArray(r.panel) ? (r.panel as ResultReview['panel']) : [],
+  screen: r.screen && typeof r.screen === 'object' && Number.isFinite((r.screen as { score?: number }).score) ? (r.screen as ResultReview['screen']) : null,
   createdAt: r.created_at as string,
 });
 

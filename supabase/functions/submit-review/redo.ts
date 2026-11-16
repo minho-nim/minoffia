@@ -1,7 +1,7 @@
 // 서버에서 '다시 개발' 보내기(v0.6.12, 소유자 "앱이 닫혀 있어도 진행"): 채점이 redo면 서버가 바로 수정 요청을 기록하고
 // Claude PM에 재계획을 보낸다(앱의 requestRevision과 같은 순서). 한 결과 버전에 한 번만. 실패해도 채점 저장은 그대로이고,
 // PM 전송이 실패하면 앱이 열릴 때 기존 대체 경로(Gemini 분배 등)로 다시 보낸다.
-// 복사본: review-result/redo.ts·submit-review/redo.ts(같은지 시험이 확인)
+// 복사본: review-result/redo.ts·submit-review/redo.ts·review-screen/redo.ts(같은지 시험이 확인)
 
 // deno-lint-ignore no-explicit-any
 type Admin = any;

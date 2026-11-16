@@ -240,6 +240,8 @@ export interface ResultReview {
   crossReasons?: string[];
   /** 3중 평가(v0.7.8): 채점자별 점수·관점·지적. 옛 기록은 빈 배열 */
   panel?: import('./review').PanelEntry[];
+  /** 화면 평가(v0.7.40): 미노가 찍은 결과 화면을 기획서와 견준 점수·문제. 없으면 아직 안 봄 */
+  screen?: { score: number; problems: string[]; judge: string; errors: number; overflow: boolean } | null;
   createdAt: string;
 }
 

@@ -7701,3 +7701,10 @@ html.popup-open .project-sections > details[open] * {
   object-fit: contain;
   background: #fff;
 }
+
+/* 화면 평가에서 나온 고칠 곳(v0.7.40) */
+.appr-screen {
+  margin: 4px 0 6px;
+  padding-left: 18px;
+  color: var(--ink);
+}

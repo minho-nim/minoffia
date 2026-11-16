@@ -163,6 +163,13 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
     return (
       <div className="appr">
         <Chips chips={resultChips(view.result, review)} />
+        {review?.screen && review.screen.problems.length > 0 && (
+          <ul className="appr-screen small" aria-label="화면에서 고칠 곳">
+            {review.screen.problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
         {loadShots && <ResultShots key={view.result.revision} load={loadShots} onPoint={onPoint} draft={draft} />}
         <p className="appr-after">{afterApprove('B')}</p>
         {showFiles && <FileBars diff={view.result.diff} />}
