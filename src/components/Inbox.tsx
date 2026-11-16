@@ -320,6 +320,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
   const [fixText, setFixText] = useState('');
   /** 결과 카드의 바뀐 파일 막대를 편 메시지 */
   const [filesFor, setFilesFor] = useState<string | null>(null);
+  /** 배포 승인 확인 칸을 연 카드 */
+  const [deployAsk, setDeployAsk] = useState<string | null>(null);
   /** 짚어서 수정 중인 그림과 그 카드(v0.7.25) */
   const [pointImg, setPointImg] = useState<(ShotImage & { what: string; msgId: string }) | null>(null);
   /** 밀어서 답장(v0.7.25 소유자 "대화엔 모든 프로젝트·업무가 다 보이니 옆으로 밀어서 답장"): 답할 업무 */
@@ -418,14 +420,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             <button
               type="button"
               className="btn btn-small btn-deploy"
-              onClick={() => {
-                // 되돌리기 어려운 일이라 한 번 더 묻는다
-                if (!window.confirm(`'${task.title}'을(를) 운영에 반영할까요?\nPR을 합치고 배포해요.`)) return;
-                say('me', '배포 승인', { projectId: task.projectId, taskId: task.id });
-                void run(async () => {
-                  if (!(await onDeployApprove!(task))) say('office', '배포 승인하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
-                });
-              }}
+              aria-expanded={deployAsk === m.id}
+              // 되돌리기 어려운 일이라 카드 안에서 한 번 더 묻는다(v0.7.32 소유자 "팝업이 안 어울려": 브라우저 확인 창 대신)
+              onClick={() => setDeployAsk(deployAsk === m.id ? null : m.id)}
             >
               배포 승인
             </button>
@@ -454,6 +451,31 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             {ACTION_LABEL.open}
           </button>
         </span>
+        {canDeploy && deployAsk === m.id && (
+          <div className="inbox-confirm" role="group" aria-label="배포 확인">
+            <p>
+              <b>운영에 반영할까요?</b> PR을 합치고 배포해요. 되돌리려면 새 업무가 필요해요.
+            </p>
+            <span className="inbox-choices">
+              <button
+                type="button"
+                className="btn btn-small btn-deploy"
+                onClick={() => {
+                  setDeployAsk(null);
+                  say('me', '배포 승인', { projectId: task.projectId, taskId: task.id });
+                  void run(async () => {
+                    if (!(await onDeployApprove!(task))) say('office', '배포 승인하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
+                  });
+                }}
+              >
+                배포하기
+              </button>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => setDeployAsk(null)}>
+                아니요
+              </button>
+            </span>
+          </div>
+        )}
         {gate === 'C' && !canDeploy && onDeployApprove && <p className="small muted">{!task.prUrl ? 'PR이 열리면 배포 승인 버튼이 생겨요.' : !prOk ? 'PR 자동검사가 통과하면 배포 승인 버튼이 생겨요.' : ''}</p>}
         {fixKind && fixFor === m.id && (
           <form
