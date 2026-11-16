@@ -111,5 +111,7 @@ jobs:
           url=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$head" --jq '.[0].html_url // empty')
           [ -n "$url" ] || url=$(gh api -X POST "repos/$REPO/pulls" -f title="$verb: $(echo $SKILLS | tr ' ' ',')" -f head="$head" -f base="$base" -f body="미노피아 스킬 탭에서 한 일($verb). 원본: $SOURCE@$src_sha. .agents/skills(Codex·Gemini 등)와 .claude/skills(Claude) 둘 다." --jq .html_url)
           num=${url##*/}
-          gh api -X PUT "repos/$REPO/pulls/$num/merge" -f merge_method=squash >/dev/null && echo "병합함: $url" || { echo "::error::PR은 열었지만 병합하지 못했습니다: $url"; exit 1; }
+          # 막 연 PR은 GitHub가 병합 가능 여부를 계산하기 전이라 거절될 수 있다(v0.7.39 TestRepo): 6초 간격 5번까지
+          merged=0; for try_ in 1 2 3 4 5; do if gh api -X PUT "repos/$REPO/pulls/$num/merge" -f merge_method=squash >/dev/null 2>&1; then merged=1; break; fi; sleep 6; done
+          [ "$merged" = 1 ] && echo "병합함: $url" || { echo "::error::PR은 열었지만 병합하지 못했습니다: $url"; exit 1; }
           gh api -X DELETE "repos/$REPO/git/refs/heads/$head" >/dev/null 2>&1 || true

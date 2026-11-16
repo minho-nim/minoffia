@@ -7690,3 +7690,14 @@ html.popup-open .project-sections > details[open] * {
 .form-pop-body .maps-cloud .maps-body {
   padding: 0 12px;
 }
+
+/* 고른 시안 ↔ 결과 화면 나란히(v0.7.39): 두 칸을 같은 폭·같은 높이로 */
+.appr-shots.is-compare {
+  grid-template-columns: 1fr 1fr;
+}
+
+.appr-shots.is-compare img {
+  height: 190px;
+  object-fit: contain;
+  background: #fff;
+}

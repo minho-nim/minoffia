@@ -84,7 +84,7 @@ export interface ShotImage {
 }
 
 /** 결과 화면 사진 한 줄(불러오는 동안은 비워 둔다) */
-function ResultShots({ load, onPoint }: { load: () => Promise<ShotImage[]>; onPoint?: Props['onPoint'] }) {
+function ResultShots({ load, onPoint, draft }: { load: () => Promise<ShotImage[]>; onPoint?: Props['onPoint']; draft?: DesignDraft | null }) {
   const [shots, setShots] = useState<ShotImage[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -94,12 +94,19 @@ function ResultShots({ load, onPoint }: { load: () => Promise<ShotImage[]>; onPo
     };
   }, []);
   if (!shots?.length) return null;
+  // v0.7.39 소유자 "결과 화면 비교": 기획 때 고른 시안이 있으면 결과 화면 왼쪽에 나란히(시안 ↔ 실제 결과)
   return (
-    <ul className="appr-drafts appr-shots" aria-label="결과 화면">
-      {shots.slice(0, 2).map((s) => (
+    <ul className={`appr-drafts appr-shots${draft ? ' is-compare' : ''}`} aria-label={draft ? '고른 시안과 결과 화면' : '결과 화면'}>
+      {draft && (
+        <li className="is-picked">
+          <img src={svgSrc(draft.svg)} alt={`고른 시안 ${draft.who}`} loading="lazy" />
+          <span className="small">고른 시안 {draft.who} · {DRAW_STYLE_LABEL[draft.who]}</span>
+        </li>
+      )}
+      {shots.slice(0, draft ? 1 : 2).map((s) => (
         <li key={s.src}>
           <img src={s.src} alt={s.name} loading="lazy" />
-          <span className="small">{s.name}</span>
+          <span className="small">{draft ? `실제 결과 · ${s.name}` : s.name}</span>
           {onPoint && (
             <button type="button" className="btn btn-small btn-ghost" onClick={() => onPoint({ ...s, what: '결과 화면' })}>
               짚어서 수정
@@ -151,10 +158,12 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
   }
   if (gate === 'B' && view.result) {
     const review = (data.reviews ?? []).find((r) => r.taskId === task.id && r.resultRevision === view.result!.revision) ?? null;
+    const rev = view.spec?.revision ?? 0;
+    const draft = pickedDraft((data.designDrafts ?? []).filter((d) => d.taskId === task.id && d.specRevision === rev), data.designPicks ?? [], task.id, rev);
     return (
       <div className="appr">
         <Chips chips={resultChips(view.result, review)} />
-        {loadShots && <ResultShots key={view.result.revision} load={loadShots} onPoint={onPoint} />}
+        {loadShots && <ResultShots key={view.result.revision} load={loadShots} onPoint={onPoint} draft={draft} />}
         <p className="appr-after">{afterApprove('B')}</p>
         {showFiles && <FileBars diff={view.result.diff} />}
       </div>
