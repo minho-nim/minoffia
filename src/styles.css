@@ -7663,3 +7663,30 @@ html.popup-open .project-sections > details[open] * {
 .deploy-ask .inbox-choices {
   margin-top: 10px;
 }
+
+/* 업무 카드의 '구조 보기'·'점검'(v0.7.38): 버튼만 두고 화면 맨 위 팝업으로 연다 */
+.task-view-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.task-view-foot {
+  margin: 8px 0 0;
+  text-align: right;
+}
+
+/* 업무 카드 팝업 안의 지도(v0.7.38): 관계·역할·클라우드 글이 왼쪽 끝에 붙어 잘리지 않게 안쪽 여백 */
+.form-pop-body .maps-relation .maps-body,
+.form-pop-body .maps-role .maps-body,
+.form-pop-body .maps-cloud .maps-body {
+  padding: 0 12px;
+}
