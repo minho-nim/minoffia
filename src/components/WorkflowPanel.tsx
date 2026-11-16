@@ -179,6 +179,9 @@ const STEPS = [
   { key: 'C', label: '배포' },
 ] as const;
 
+/** 맨 위 단계 칩의 짧은 이름(v0.7.19) */
+const CHIP_LABEL: Record<(typeof STEPS)[number]['key'], string> = { plan: '기획', A: '승인', pm: '계획', E: '개발', B: '결과', C: '배포' };
+
 function stepIndex(view: WorkflowView): number {
   if (!view.spec || view.spec.intent === 'question' || view.spec.intent === 'ambiguous') return 0;
   if (!view.aApproved) return 1;
@@ -301,6 +304,8 @@ const samePref = (assignee: string): AssigneePreference => (assignee === 'claude
 
 export function WorkflowPanel({ jump, task, project, view, attachments, analyses, allAssignments, agentLimits, prCheck, deployment, links, clarifications, projectRules = [], reviews = [], followups = [], designDrafts = [], designPicks = [], canReadLinks, dispatchBlocker, actions, timeline, results = [] }: Props) {
   const current = stepIndex(view);
+  // 지금 결과의 3중 평가 채점자(점수 칸, v0.7.19). 결과 승인 전까지만
+  const nowPanel = view.result && !view.bApproved ? (reviews.find((r) => r.resultRevision === view.result!.revision)?.panel ?? []) : [];
   // 지나간 진행 단계는 제목만 남기고 접는다(v0.4.76, 소유자). 제목이나 위 단계 버튼을 누르면 펼친다.
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
   const [qaReply, setQaReply] = useState('');
@@ -452,10 +457,33 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
 
   return (
     <div className="wf">
+      {/* v0.7.19(소유자 "3번이 기존 업무 카드보다 좋다"): 맨 위에 진행 단계 칩 */}
+      <ol className="wf-chips" aria-label="진행 단계">
+        {STEPS.map((s, i) => {
+          const finished = view.stage === 'completed' || i < current;
+          return (
+            <li key={s.key} className={finished ? 'is-done' : i === current ? 'is-now' : ''}>
+              {CHIP_LABEL[s.key]}
+              {finished ? ' ✓' : ''}
+            </li>
+          );
+        })}
+      </ol>
       <div className={`wf-now is-${now.tone}`} role="status">
         <p>
-          <span className={`wf-now-tag is-${now.tone}`}>{SIMPLE_LABEL[now.tone]}</span> {now.text}
+          <span className={`wf-now-tag is-${now.tone}`}>{SIMPLE_LABEL[now.tone]}</span> {nowPanel.length > 1 ? now.text.replace(/(평가 (?:평균 )?\d+점)\([^)]*\)/, '$1') : now.text}
         </p>
+        {nowPanel.length > 1 && (
+          // 3중 평가 점수 칸(v0.7.19)
+          <dl className="wf-now-scores">
+            {nowPanel.map((p) => (
+              <div key={p.who}>
+                <dt>{p.who === 'peer' ? p.judge : `Gemini ${p.who}`}</dt>
+                <dd>{p.status === 'done' ? `${p.total}점` : p.status === 'pending' ? '기다리는 중' : '빠짐'}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         {(now.primary || now.secondary) && (
           <p className="wf-now-actions">
             {now.primary && (
@@ -475,14 +503,17 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
         // 기록(v0.6.54, 실행 추적): 누가 언제 무엇을 했는지 시간순. 넘겨주기·실패 이유도 여기서 보인다
         <details className="wf-timeline">
           <summary>
-            기록 {timeline.length}
+            지난 기록 {timeline.length}개
             {timeline.some((e) => e.tone === 'bad') ? ' ⚠' : ''}
           </summary>
           <ol>
             {timeline.map((e, i) => (
               <li key={i} className={`tl-${e.tone}`}>
                 <time dateTime={e.at}>{timelineTime(e.at)}</time>
-                <span>{e.text}</span>
+                <span>
+                  {e.who && !e.text.startsWith(e.who) && <b className="tl-who">{e.who} · </b>}
+                  {e.text}
+                </span>
               </li>
             ))}
           </ol>
@@ -529,6 +560,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           busy={busy}
           onDraw={!view.aApproved && actions.drawDesign ? () => void run(() => actions.drawDesign!(task)) : undefined}
           onPick={!view.aApproved && actions.pickDesign ? (d) => void run(() => actions.pickDesign!(task, d)) : undefined}
+          compact={view.aApproved}
         />
       )}
       <details className="wf-more" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>

@@ -1,5 +1,6 @@
 // Gemini 시안(v0.7.13): 기획 승인 전에 A·B 시안 두 장과 서로 평가를 나란히 보여 주고, 소유자가 하나를 고른다(승인 아님).
 // SVG는 규칙대로 img로만 보여 준다(스크립트가 돌지 않음). 흐름은 그림 라이브러리 없이 단계 목록으로.
+import { useState } from 'react';
 import { DESIGN_PART_LABEL, DESIGN_WEIGHTS, DRAW_STYLE_LABEL, flowSteps, type DesignDraft, type DesignPart } from '../domain/designDraft';
 
 interface Props {
@@ -10,17 +11,47 @@ interface Props {
   onDraw?: () => void;
   /** 고르기(없으면 보기만) */
   onPick?: (draft: DesignDraft) => void;
+  /** 기획 승인 뒤: 고른 시안 한 줄로 접어 두고 누르면 두 장을 편다(v0.7.19) */
+  compact?: boolean;
 }
 
 const svgSrc = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-export function DesignDrafts({ drafts, pickedId, busy, onDraw, onPick }: Props) {
+export function DesignDrafts({ drafts, pickedId, busy, onDraw, onPick, compact }: Props) {
+  const [open, setOpen] = useState(false);
   if (!drafts.length && !onDraw) return null;
   const sorted = [...drafts].sort((a, b) => a.who.localeCompare(b.who));
+  const picked = sorted.find((d) => d.id === pickedId) ?? null;
+  if (compact && drafts.length && !open) {
+    return (
+      <section className="design-drafts design-compact" aria-label="Gemini 시안">
+        {picked && <img className="design-thumb" src={svgSrc(picked.svg)} alt={`고른 시안 Gemini ${picked.who}`} />}
+        <p className="small">
+          {picked ? (
+            <>
+              고른 시안: <b>Gemini {picked.who}</b> · {DRAW_STYLE_LABEL[picked.who]}
+              {picked.review ? ` · ${picked.review.total}점` : ''}
+            </>
+          ) : (
+            `시안 ${drafts.length}장(고르지 않음)`
+          )}
+          <br />
+          <button type="button" className="link-btn" onClick={() => setOpen(true)}>
+            ▸ 시안 {drafts.length}장 다시 보기
+          </button>
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="design-drafts" aria-label="Gemini 시안">
       <p className="design-head">
         <b>화면 시안</b>
+        {compact && (
+          <button type="button" className="link-btn small" onClick={() => setOpen(false)}>
+            접기
+          </button>
+        )}
         <span className="muted small">
           {drafts.length ? 'Gemini A·B가 그리고 서로 평가했어요. 하나를 고르면 개발 AI에게 같이 넘어가요(고르지 않아도 개발은 돼요).' : 'Gemini A·B가 같은 기획서로 시안을 하나씩 그리고 서로 평가해요(1분 안팎, 무료).'}
         </span>
