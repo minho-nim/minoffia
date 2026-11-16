@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockLabel, continues, dayLabel, noticeCard, speakerOf, timeOf, toneOf } from './chatView';
+import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from './chatView';
 
 describe('디스코드식 대화창', () => {
   it('말한 쪽을 실제 AI로', () => {
@@ -50,5 +50,13 @@ describe('디스코드식 대화창', () => {
     expect(dayLabel(t, t + 3600_000)).toBe('오늘');
     expect(dayLabel(t, t + 86400_000)).toBe('어제');
     expect(dayLabel(t, t + 5 * 86400_000)).toBe('11월 16일');
+  });
+  it('버튼과 같은 안내 줄은 숨기고 기획서 줄은 짧게', () => {
+    expect(isGuideLine('기획서를 보고 기획 승인하거나 수정 요청하세요.')).toBe(true);
+    expect(isGuideLine('결과를 보고 결과 승인하세요(승인하면 PR이 열려요).')).toBe(true);
+    expect(isGuideLine('업무 카드에서 하나를 고를 수 있어요.')).toBe(true);
+    expect(isGuideLine('PR 검사(CI)를 통과했어요. 배포 승인하세요(병합은 서버가 해요).')).toBe(false);
+    expect(shortSpecLine('기획서 v1: 로그인 버튼을 주황색으로')).toBe('로그인 버튼을 주황색으로');
+    expect(shortSpecLine(`기획서 v2: ${'가'.repeat(100)}`).length).toBe(90);
   });
 });

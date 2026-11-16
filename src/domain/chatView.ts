@@ -180,3 +180,18 @@ export function clockLabel(t: number): string {
   const h = k.getUTCHours();
   return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${String(k.getUTCMinutes()).padStart(2, '0')}`;
 }
+
+/** 버튼과 같은 말을 하는 안내 줄(v0.7.18 소유자 "카드 안 안내 줄 빼기"): 버튼이 보일 때만 숨긴다 */
+const GUIDE = [
+  /^기획서를 보고 기획 승인하거나 수정 요청하세요\.?$/,
+  /^결과를 보고 결과 승인/,
+  /^업무 카드에서 하나를 고를 수 있어요\.?$/,
+  /^업무 카드에서 /,
+];
+export const isGuideLine = (line: string) => GUIDE.some((r) => r.test(line.trim()));
+
+/** 카드의 기획서 줄을 짧게: 'v1: ' 머리를 떼고 한 줄 길이로 */
+export function shortSpecLine(line: string, max = 90): string {
+  const t = line.replace(/^기획서 v\d+:\s*/, '').trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}

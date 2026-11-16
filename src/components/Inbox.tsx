@@ -1,5 +1,5 @@
 import { characterUrl } from '../office/assets';
-import { clockLabel, continues, dayLabel, noticeCard, speakerOf, timeOf, toneOf } from '../domain/chatView';
+import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
 import { answerSlot, asksExa, insertMention, mentionOptions, mentionQuery } from '../domain/mention';
@@ -267,7 +267,7 @@ function readSeen(): Record<string, string> | null {
   }
 }
 
-const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 카드 보기', A: '기획 승인', B: '결과 승인' };
+const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 보기', A: '기획 승인', B: '결과 승인' };
 
 export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
@@ -1424,10 +1424,19 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                       ))}
                     </dl>
                   )}
-                  {card.lines.map((l, k) => (
-                    <p key={k}>{l}</p>
-                  ))}
-                  {noticeButtons(m)}
+                  {(() => {
+                    // v0.7.18: 버튼이 보이면 버튼과 같은 말인 안내 줄은 빼고, 기획서 줄은 한 줄로 줄인다(자세한 건 업무 보기·기획서 보기)
+                    const btns = noticeButtons(m);
+                    const lines = btns ? card.lines.filter((l) => !isGuideLine(l)).map((l) => (l.startsWith('기획서 v') ? shortSpecLine(l) : l)) : card.lines;
+                    return (
+                      <>
+                        {lines.map((l, k) => (
+                          <p key={k}>{l}</p>
+                        ))}
+                        {btns}
+                      </>
+                    );
+                  })()}
                 </div>
               ) : m.text ? (
                 <p>{m.text}</p>
