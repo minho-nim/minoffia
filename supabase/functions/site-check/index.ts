@@ -6,6 +6,7 @@
 //   result-shot.yml이 프로젝트 저장소에 적용·빌드해 이 러너 안에서 열어 찍는다(바뀐 결과 + 지금 운영).
 // action "load"는 kind별 결과 JSON과 사진의 1시간짜리 보기 주소를 돌려준다. AI 호출 없음.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { signNotify } from './notifySig.ts';
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 const cors = {
@@ -100,11 +101,13 @@ Deno.serve(async (req) => {
   const live = productionUrl(project);
   const targets: { key: string; url: string }[] = [];
   let diffUrl = '';
+  let resultRevision = 0;
   if (kind === 'build') {
     const repo = String(project?.repo ?? '');
     if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repo)) return reply(409, { ok: false, error: '프로젝트에 저장소가 없어요.' });
     const { data: result } = await admin.from('result_packages').select('revision, diff').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
     const diff = String(result?.diff ?? '');
+    resultRevision = Number(result?.revision ?? 0);
     if (!/^diff --git /m.test(diff)) return reply(409, { ok: false, error: '찍을 결과 변경(diff)이 없어요.' });
     const path = `${base}/build/change.diff`;
     const up = await bucket.upload(path, new Blob([diff], { type: 'text/plain' }), { upsert: true, contentType: 'text/plain' });
@@ -123,7 +126,8 @@ Deno.serve(async (req) => {
     targets.push({ key: 'after', url: `http://127.0.0.1:4173${screen || '/'}` });
     if (live) targets.push({ key: 'before', url: live });
   } else if (kind === 'preview') {
-    const { data: result } = await admin.from('result_packages').select('preview_url').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
+    const { data: result } = await admin.from('result_packages').select('revision, preview_url').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
+    resultRevision = Number(result?.revision ?? 0);
     const after = String(result?.preview_url ?? '');
     if (!/^https:\/\//.test(after)) return reply(409, { ok: false, error: '이 결과에는 미리보기 주소가 없어요(Cloudflare 주소가 있는 프로젝트만 돼요).' });
     targets.push({ key: 'after', url: after });
@@ -149,6 +153,12 @@ Deno.serve(async (req) => {
   const workflow = kind === 'build' ? 'result-shot.yml' : 'site-check.yml';
   const inputs: Record<string, string> = { targets: JSON.stringify(targets), uploads: JSON.stringify(uploads) };
   if (kind === 'build') Object.assign(inputs, { repo: String(project?.repo), diff_url: diffUrl });
+  // v0.7.40: 찍은 뒤 화면 평가(review-screen)를 부를 6시간짜리 서명 표. 승인 전 결과 화면(build·preview)만
+  if ((kind === 'build' || kind === 'preview') && resultRevision > 0) {
+    const n = { taskId, revision: resultRevision, kind, exp: Date.now() + 6 * 3600_000 };
+    const sig = await signNotify(serviceKey, n);
+    inputs.notify = JSON.stringify({ url: `${env('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/review-screen`, ...n, sig });
+  }
   const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/${workflow}/dispatches`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${ghToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },

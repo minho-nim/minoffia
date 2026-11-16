@@ -63,6 +63,9 @@ export function resultChips(r: ResultPackage, review?: ResultReview | null): Chi
   if (b !== null) chips.push({ label: b ? '빌드 ✓' : '빌드 실패', tone: b ? 'ok' : 'bad' });
   const score = review?.total ?? null;
   if (score !== null) chips.push({ label: `평가 ${review?.panel && review.panel.length > 1 ? '평균 ' : ''}${score}점`, tone: score >= 80 ? 'ok' : 'warn' });
+  // 화면 평가(v0.7.40): 미노가 찍은 결과 화면을 기획서와 견준 점수
+  const sc = review?.screen;
+  if (sc) chips.push({ label: sc.problems.length ? `화면 ${sc.score}점 · 고칠 곳 ${sc.problems.length}` : `화면 ${sc.score}점 ✓`, tone: sc.score >= 80 && !sc.problems.length ? 'ok' : sc.score >= 60 ? 'warn' : 'bad' });
   const risk = riskChip(r.diff);
   if (risk) chips.push(risk);
   return chips;

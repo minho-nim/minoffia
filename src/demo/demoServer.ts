@@ -172,6 +172,8 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
     await store.putDemoReview?.({
       id: nid(), taskId: task.id, resultRevision: 1, workItemId: a.workItemId, assignee: 'codex', gates, score: out.score, total: out.total, verdict: out.verdict,
       reasons: out.reasons, feedback: '', autoRedo: 0, judge: panelJudge(panel), panel, createdAt: iso,
+      // 화면 평가(v0.7.40): 미노가 찍은 결과 화면을 기획서와 견준 점수(체험은 정해진 값)
+      screen: { score: 88, problems: [], judge: 'Gemini · Studio A', errors: 0, overflow: false },
     });
     return '체험: Codex 결과가 왔고 AI 셋(Gemini A·B, Claude)이 같은 항목을 다른 관점으로 채점했어요. 업무 카드에서 점수와 평균을 보고 [결과 승인](올리기 승인)을 눌러 보세요.';
   }

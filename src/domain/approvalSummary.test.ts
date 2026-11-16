@@ -28,6 +28,11 @@ describe('승인 카드 요약(v0.7.23)', () => {
     const review = { total: 91, panel: [{}, {}, {}] } as never;
     expect(resultChips(r, review).map((c) => c.label)).toEqual(['시험 42/42 ✓', '빌드 ✓', '평가 평균 91점', '화면만 바뀜']);
     expect(resultChips({ diff: '', testLog: '' } as never)[0]).toEqual({ label: '시험 기록 없음', tone: 'warn' });
+    // 화면 평가(v0.7.40)
+    const withScreen = (score: number, problems: string[]) => resultChips({ diff: '', testLog: 'Tests 1 passed (1)' } as never, { total: 90, screen: { score, problems, judge: '', errors: 0, overflow: false } } as never);
+    expect(withScreen(92, [])).toContainEqual({ label: '화면 92점 ✓', tone: 'ok' });
+    expect(withScreen(70, ['여백'])).toContainEqual({ label: '화면 70점 · 고칠 곳 1', tone: 'warn' });
+    expect(withScreen(40, ['빈 화면'])).toContainEqual({ label: '화면 40점 · 고칠 곳 1', tone: 'bad' });
   });
   it('파일 막대: 많이 바뀐 순, 가장 큰 파일 기준 길이', () => {
     const f = fileBars([diff('a.ts', 10, 2), diff('b.ts', 2), diff('c.ts', 1)].join('\n'), 2);

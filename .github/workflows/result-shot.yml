@@ -19,6 +19,10 @@ on:
       uploads:
         description: '파일별 1회용 업로드 주소 JSON'
         required: true
+      notify:
+        description: '찍은 뒤 화면 평가를 부를 서명 표 JSON(없으면 생략)'
+        required: false
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -110,3 +114,13 @@ jobs:
             (async()=>{for(const [f,u] of Object.entries(m)){ if(!/^[a-z]+(-[a-z]+)?\.(jpg|json)$/.test(f)||!fs.existsSync(f)) continue;
               const r=await fetch(u,{method:'PUT',headers:{'Content-Type':f.endsWith('.json')?'application/json':'image/jpeg','x-upsert':'true'},body:fs.readFileSync(f)});
               console.log(f, r.status);}})();"
+      # v0.7.40 화면 평가: 사진을 올린 뒤 review-screen을 부른다(서명 표만 보냄, 로그에 안 찍힘)
+      - name: 화면 평가 부르기
+        if: always()
+        run: |
+          node -e "
+            const n=String(require(process.env.GITHUB_EVENT_PATH).inputs.notify||'');
+            if(!n){console.log('화면 평가 표 없음');process.exit(0)}
+            const j=JSON.parse(n);const {url,...body}=j;
+            if(!/^https:\/\/[a-z0-9]+\.supabase\.co\/functions\/v1\/review-screen$/.test(url)){console.log('주소가 이상해서 건너뜀');process.exit(0)}
+            fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.text().then(t=>console.log('화면 평가',r.status,t.slice(0,200)))).catch(e=>console.log('화면 평가 실패',String(e).slice(0,120)));"
