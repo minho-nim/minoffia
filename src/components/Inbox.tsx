@@ -337,7 +337,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     const task = snap.tasks.find((t) => t.id === to.taskId);
     setLog((l) => [...l, { id: mid(), from: 'me' as From, text, home: thread, reply: to.label, ...(task ? { taskId: task.id } : {}) }].slice(-KEEP));
     if (!task) return say('office', '이 업무는 지워졌어요.');
-    archive({ role: 'me', text: `↩ ${to.label}\n${text}`, projectId: task.projectId, taskId: task.id });
+    archive({ role: 'me', text: `\u21A9\uFE0E ${to.label}\n${text}`, projectId: task.projectId, taskId: task.id });
     const v = deriveWorkflow(task, snap.workflow);
     const done = (ok: boolean, what: string) => say('office', ok ? `'${short(task.title)}'에 ${what}(으)로 넣었어요.` : `'${short(task.title)}'에 넣지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.`);
     void run(async () => {
@@ -1598,12 +1598,16 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             >
               {swipe?.id === m.id && (
                 <span className={`inbox-swipe-icon${swipe.dx >= 56 ? ' is-ready' : ''}`} aria-hidden="true">
-                  ↩
+                  {/* v0.7.26 소유자 "아이콘 안 어울림": 아이폰은 ↩ 글자를 이모지로 그려서, 앱 색 선 화살표로 */}
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 14 4 9l5-5" />
+                    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+                  </svg>
                 </span>
               )}
               {canReply && (
                 <button type="button" className="inbox-reply-btn" onClick={() => startReply(m)} aria-label={`이 업무에 답장: ${card?.title ?? ''}`}>
-                  ↩ 답장
+                  {'\u21A9\uFE0E'} 답장
                 </button>
               )}
               {!cont && (
@@ -1619,7 +1623,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                   {t !== null && <time className="inbox-time">{clockLabel(t)}</time>}
                 </p>
               )}
-              {m.reply && <p className="inbox-reply-quote">↩ {m.reply}</p>}
+              {m.reply && <p className="inbox-reply-quote">{'\u21A9\uFE0E'} {m.reply}</p>}
               {actLine ? (
                 <p className="inbox-act">
                   {actLine.did}
@@ -2019,7 +2023,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
         {replyTo && (
           <p className="inbox-reply-bar">
             <span>
-              <b>↩ 답장</b> {replyTo.label}
+              <b>{'\u21A9\uFE0E'} 답장</b> {replyTo.label}
             </span>
             <button type="button" className="link-btn" aria-label="답장 취소" onClick={() => setReplyTo(null)}>
               ✕
