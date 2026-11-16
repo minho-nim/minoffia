@@ -25,7 +25,7 @@ describe('업무 기록 타임라인(v0.6.54)', () => {
     }));
     expect(t.map((e) => e.text)).toEqual([
       '기획서 v1 (Gemini 초안)',
-      '기획 승인',
+      '✓ 기획 승인',
       '계획 v1: 작업 1개 (Codex) · 작은 일 규칙',
       '실행 승인(기획 승인에 포함, 자동) · w1',
       'Codex w1 시작',
@@ -34,6 +34,8 @@ describe('업무 기록 타임라인(v0.6.54)', () => {
       '채점 v1: 90점 (Gemini) · 교차 80점(Claude)',
     ]);
     expect(t.find((e) => e.text.startsWith('넘겨주기'))?.tone).toBe('turn');
+    // v0.7.19: 누가 했는지
+    expect(t.map((e) => e.who)).toEqual(['Gemini A', '나', '규칙', '자동', 'Codex', 'Codex', '자동', '평가']);
     expect(t.find((e) => e.text.includes('실패'))?.tone).toBe('bad');
   });
   it('PR 확인은 마지막 것 하나만', () => {

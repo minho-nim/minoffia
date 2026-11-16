@@ -8,6 +8,8 @@ export interface TimelineEvent {
   at: string;
   text: string;
   tone: TimelineTone;
+  /** 누가 했는지(v0.7.19: 나·Gemini A·Claude·Codex·평가·미노·자동). 글이 그 이름으로 시작하면 화면에서 다시 붙이지 않는다 */
+  who?: string;
 }
 
 const WHO: Record<string, string> = { codex: 'Codex', claude: 'Claude', gemini: 'Gemini' };
@@ -28,25 +30,36 @@ const PLAN_SOURCE: Record<string, string> = {
   gemini_fallback: 'Gemini 분배',
   manual: '수동',
 };
+const PLAN_WHO: Record<string, string> = { routine_session_auto: 'Claude', routine_session_manual_import: 'Claude', rule_small: '규칙', gemini_fallback: 'Gemini', manual: '나' };
 const HANDOFF_MARK = '담당 바꿈';
 const cut = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
 /** 이 업무의 기록을 시간순으로(오래된 것 먼저). 같은 시각이면 들어온 순서 그대로 */
 export function taskTimeline(taskId: string, wf: WorkflowData): TimelineEvent[] {
   const out: TimelineEvent[] = [];
-  const push = (at: string | null | undefined, text: string, tone: TimelineTone = 'info') => {
-    if (at) out.push({ at, text, tone });
+  const push = (at: string | null | undefined, text: string, tone: TimelineTone = 'info', by = '') => {
+    if (at) out.push({ at, text, tone, ...(by ? { who: by } : {}) });
   };
 
   for (const s of wf.specs.filter((x) => x.taskId === taskId)) {
-    push(s.createdAt, `기획서 v${s.revision}${s.planner === 'gemini_draft' ? ' (Gemini 초안)' : ''}`);
+    push(s.createdAt, `기획서 v${s.revision}${s.planner === 'gemini_draft' ? ' (Gemini 초안)' : ''}`, 'info', s.planner === 'gemini_draft' ? 'Gemini A' : '나');
+  }
+  // Gemini 시안(v0.7.13): 기획서 버전마다 도착 한 줄, 고른 것 한 줄
+  const drafts = (wf.designDrafts ?? []).filter((x) => x.taskId === taskId);
+  for (const rev of [...new Set(drafts.map((d) => d.specRevision))]) {
+    const ds = drafts.filter((d) => d.specRevision === rev).sort((a, b) => a.who.localeCompare(b.who));
+    push(ds[0].createdAt, `시안 ${ds.length}장: ${ds.map((d) => `${d.who} ${d.review ? `${d.review.total}점` : '점수 없음'}`).join(' · ')}`, 'info', 'Gemini A·B');
+  }
+  for (const p of (wf.designPicks ?? []).filter((x) => x.taskId === taskId)) {
+    const d = drafts.find((x) => x.id === p.draftId);
+    push(p.createdAt, `Gemini ${d?.who ?? ''} 시안을 고름`, 'turn', '나');
   }
   for (const a of wf.approvals.filter((x) => x.taskId === taskId)) {
     const auto = a.gate === 'E' && (a.scope as { auto?: boolean }).auto === true;
     const label = GATE[a.gate] ?? a.gate;
     const what = a.workItemId ? ` · ${a.workItemId}` : '';
-    if (a.decision === 'approved') push(a.createdAt, auto ? `${label}(기획 승인에 포함, 자동)${what}` : `${label}${what}`, auto ? 'info' : 'turn');
-    else push(a.createdAt, `${label} 반려${what}`, 'bad');
+    if (a.decision === 'approved') push(a.createdAt, auto ? `${label}(기획 승인에 포함, 자동)${what}` : `✓ ${label}${what}`, auto ? 'info' : 'turn', auto ? '자동' : '나');
+    else push(a.createdAt, `${label} 반려${what}`, 'bad', '나');
   }
 
   const plans = wf.plans.filter((x) => x.taskId === taskId).sort((a, b) => a.planRevision - b.planRevision);
@@ -58,40 +71,42 @@ export function taskTimeline(taskId: string, wf: WorkflowData): TimelineEvent[] 
     if (handoff) {
       // 넘겨주기(Agents SDK의 handoff): 왜 담당이 바뀌었는지 한 줄로
       const m = reason.match(new RegExp(`${HANDOFF_MARK}: ([^ ]+) → (\\S+)\\((.*)\\)`));
-      if (m && m[3].startsWith('비교')) push(p.createdAt, `비교: ${m[1]}을 ${m[2]}에게도 따로 맡김`, 'info');
-      else push(p.createdAt, m ? `넘겨주기: ${m[1]} → ${m[2]} (${cut(m[3], 60)})` : `넘겨주기: ${cut(reason, 80)}`, 'turn');
+      if (m && m[3].startsWith('비교')) push(p.createdAt, `비교: ${m[1]}을 ${m[2]}에게도 따로 맡김`, 'info', '나');
+      else push(p.createdAt, m ? `넘겨주기: ${m[1]} → ${m[2]} (${cut(m[3], 60)})` : `넘겨주기: ${cut(reason, 80)}`, 'turn', '자동');
     } else {
       const names = [...new Set(assigns.filter((a) => a.planRevision === p.planRevision).map((a) => who(a.assignee)))];
-      push(p.createdAt, `계획 v${p.planRevision}: 작업 ${items.length}개${names.length ? ` (${names.join('·')})` : ''} · ${PLAN_SOURCE[p.source] ?? p.source}`);
+      push(p.createdAt, `계획 v${p.planRevision}: 작업 ${items.length}개${names.length ? ` (${names.join('·')})` : ''} · ${PLAN_SOURCE[p.source] ?? p.source}`, 'info', PLAN_WHO[p.source] ?? '');
     }
   }
 
   for (const a of assigns) {
     const name = `${who(a.assignee)} ${a.workItemId}`;
-    if (a.startedAt) push(a.startedAt, `${name} 시작`);
-    if (a.dispatchStatus === 'failed') push(a.updatedAt, `${name} 실패: ${cut(a.actualProviderStatus || '이유 없음')}`, 'bad');
-    else if (a.dispatchStatus === 'blocked_quota') push(a.updatedAt, `${name} 한도 대기`, 'bad');
-    else if (a.dispatchStatus === 'completed') push(a.updatedAt, `${name} 끝냄`, 'ok');
+    const by = who(a.assignee);
+    if (a.startedAt) push(a.startedAt, `${name} 시작`, 'info', by);
+    if (a.dispatchStatus === 'failed') push(a.updatedAt, `${name} 실패: ${cut(a.actualProviderStatus || '이유 없음')}`, 'bad', by);
+    else if (a.dispatchStatus === 'blocked_quota') push(a.updatedAt, `${name} 한도 대기`, 'bad', by);
+    else if (a.dispatchStatus === 'completed') push(a.updatedAt, `${name} 끝냄`, 'ok', by);
   }
 
   for (const r of wf.results.filter((x) => x.taskId === taskId)) {
     const used = usedSkills(r.summary ?? '', r.testLog ?? '');
-    push(r.createdAt, `결과 v${r.revision} 도착 (${RESULT_SOURCE[r.source] ?? r.source})${used.length ? ` · 쓴 스킬: ${used.join(', ')}` : ''}`, 'ok');
+    push(r.createdAt, `결과 v${r.revision} 도착 (${RESULT_SOURCE[r.source] ?? r.source})${used.length ? ` · 쓴 스킬: ${used.join(', ')}` : ''}`, 'ok', r.source.startsWith('codex') ? 'Codex' : r.source.startsWith('claude') ? 'Claude' : r.source.startsWith('gemini') ? 'Gemini' : '나');
   }
   for (const v of (wf.reviews ?? []).filter((x) => x.taskId === taskId)) {
     const score = v.total == null ? '점수 없음' : `${v.total}점`;
     const cross = v.crossTotal != null ? ` · 교차 ${v.crossTotal}점(${v.crossJudge ?? ''})` : '';
     const tone: TimelineTone = v.verdict === 'pass' ? 'ok' : v.verdict === 'redo' ? 'bad' : 'turn';
-    push(v.createdAt, `채점 v${v.resultRevision}: ${score} (${v.judge})${cross}${v.verdict === 'redo' ? ' → 다시 개발' : ''}`, tone);
+    push(v.createdAt, `채점 v${v.resultRevision}: ${score} (${v.judge})${cross}${v.verdict === 'redo' ? ' → 다시 개발' : ''}`, tone, '평가');
   }
   for (const q of wf.revisionRequests.filter((x) => x.taskId === taskId)) {
-    push(q.createdAt, `수정 요청: ${cut(q.feedback, 60)}`, 'turn');
+    const autoRedo = q.feedback.startsWith('[자동 평가]');
+    push(q.createdAt, autoRedo ? '기준 미달이라 다시 개발' : `수정 요청: ${cut(q.feedback, 60)}`, 'turn', autoRedo ? '자동 평가' : '나');
   }
   // PR은 마지막 확인만(1분마다 확인 기록이 쌓여 다 보이면 길다)
   const pr = wf.prChecks.filter((x) => x.taskId === taskId).sort((a, b) => b.checkedAt.localeCompare(a.checkedAt))[0];
-  if (pr) push(pr.checkedAt, `PR ${pr.merged ? '병합됨' : pr.prState === 'open' ? '열림' : '닫힘'} · 검사 ${pr.ciState === 'success' ? '통과' : pr.ciState === 'failure' ? '실패' : pr.ciState === 'pending' ? '진행 중' : '없음'}`, pr.ciState === 'failure' ? 'bad' : pr.merged ? 'ok' : 'info');
+  if (pr) push(pr.checkedAt, `PR ${pr.merged ? '병합됨' : pr.prState === 'open' ? '열림' : '닫힘'} · 검사 ${pr.ciState === 'success' ? '통과' : pr.ciState === 'failure' ? '실패' : pr.ciState === 'pending' ? '진행 중' : '없음'}`, pr.ciState === 'failure' ? 'bad' : pr.merged ? 'ok' : 'info', '미노');
   for (const d of wf.deployments.filter((x) => x.taskId === taskId)) {
-    push(d.createdAt, d.ok ? `배포 ${d.repo} ${d.fromSha.slice(0, 7)} → ${d.toSha.slice(0, 7)}` : `배포 실패: ${cut(d.error)}`, d.ok ? 'ok' : 'bad');
+    push(d.createdAt, d.ok ? `배포 ${d.repo} ${d.fromSha.slice(0, 7)} → ${d.toSha.slice(0, 7)}` : `배포 실패: ${cut(d.error)}`, d.ok ? 'ok' : 'bad', '미노');
   }
 
   return out.map((e, i) => ({ e, i })).sort((a, b) => a.e.at.localeCompare(b.e.at) || a.i - b.i).map((x) => x.e);

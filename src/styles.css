@@ -7260,3 +7260,82 @@ html.popup-open .project-sections > details[open] * {
 .design-card .btn {
   align-self: flex-start;
 }
+
+/* 업무 카드 맨 위 진행 단계 칩(v0.7.19) */
+.wf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.wf-chips li {
+  padding: 1px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wf-chips li.is-done {
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--line));
+  background: color-mix(in srgb, var(--ok) 12%, var(--surface));
+  color: var(--ok);
+}
+
+.wf-chips li.is-now {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.wf-now-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 2px 12px;
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.wf-now-scores dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.wf-now-scores dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.tl-who {
+  font-weight: 600;
+}
+
+/* 기획 승인 뒤 시안 한 줄(v0.7.19) */
+.design-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.design-compact p {
+  margin: 0;
+}
+
+.design-thumb {
+  flex: none;
+  width: 44px;
+  height: 66px;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
