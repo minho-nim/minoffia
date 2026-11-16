@@ -2291,6 +2291,21 @@ export function App() {
                 onShowTask={showTask}
                 onAddFollowup={store.addFollowup ? (taskId, text) => { const t = snap.tasks.find((x) => x.id === taskId); return t && workflowActions.addFollowup ? workflowActions.addFollowup(t, text) : Promise.resolve(false); } : undefined}
                 onApprove={quickApprove}
+                onReviseSpec={async (t, feedback) => {
+                  const v = deriveWorkflow(t, snap.workflow);
+                  return v.spec && !v.aApproved ? workflowActions.decide(t, 'A', v.spec.revision, 'rejected', '', { feedback }) : false;
+                }}
+                onRedo={(t, feedback) => workflowActions.requestRevision(t, feedback)}
+                onDeployApprove={async (t) => {
+                  const v = deriveWorkflow(t, snap.workflow);
+                  if (!v.result || !canApprove(v, 'C').ok) return false;
+                  if (store.mode === 'local') return quickApprove(t, 'C');
+                  const pc = latestPrCheck(t, snap.workflow);
+                  if (!t.prUrl || !pc || !prCheckPasses(pc)) return false;
+                  // 업무 카드의 [배포 승인 + 배포]와 같은 기록(decide가 승인 뒤 배포까지 한다)
+                  return workflowActions.decide(t, 'C', v.result.revision, 'approved', '', { pr_url: t.prUrl, ci: { state: pc.ciState, merged: pc.merged, sha: pc.headSha } });
+                }}
+                onPickDraft={workflowActions.pickDesign}
                 currentProject={chatProjectId ? (snap.projects.find((p) => p.id === chatProjectId) ?? null) : null}
                 draft={draft}
                 echo={chatEcho}
