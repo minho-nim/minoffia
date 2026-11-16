@@ -2288,6 +2288,7 @@ export function App() {
                   return workflowActions.decide(t, 'C', v.result.revision, 'approved', '', { pr_url: t.prUrl, ci: { state: pc.ciState, merged: pc.merged, sha: pc.headSha } });
                 }}
                 onPickDraft={workflowActions.pickDesign}
+                active={tab === 'chat'}
                 onResultImages={async (t, revision) => {
                   // v0.7.25: 결과 스크린샷(AI가 보낸 것)과 미노가 찍은 결과 화면(빌드·미리보기, 이 결과 뒤에 찍은 것만)
                   const out: { src: string; name: string }[] = [];
