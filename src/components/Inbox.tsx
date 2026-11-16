@@ -1,8 +1,10 @@
+import { characterUrl } from '../office/assets';
+import { clockLabel, continues, dayLabel, noticeCard, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
 import { answerSlot, asksExa, insertMention, mentionOptions, mentionQuery } from '../domain/mention';
 import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
@@ -35,6 +37,8 @@ interface Msg {
   via?: string;
   /** 단계 알림: 그 업무가 아직 이 단계일 때만 버튼을 보인다 */
   taskId?: string;
+  /** 만든 시각(알림처럼 id에 시각이 없는 메시지, v0.7.17) */
+  at?: string;
   /** 이 메시지에 묶인 다른 알림 id(v0.7.16) */
   ids?: string[];
   /** 업무를 접수한 메시지(v0.6.97): '접수 취소' 버튼을 붙인다 */
@@ -234,8 +238,7 @@ function readPending(): Pending | null {
   }
 }
 
-// 대화창의 얼굴은 늘 미니엉(v0.4.44, 소유자). Gemini가 쓴 답도 미니엉이 넘겨주고, 아래에 작게 누가 답했는지 붙인다.
-const FROM_LABEL: Record<From, string> = { me: '나', office: '미니엉', gemini: '미니엉' };
+// v0.7.17(소유자 "디스코드처럼"): 대화창의 말한 쪽은 실제 AI(Gemini·Claude·Codex·미노)로 보여 준다(예전 v0.4.44는 늘 미니엉). 받기·넘기기는 그대로 미니엉 규칙.
 const VIA_OF_SLOT: Record<number, string> = { 1: 'Gemini · Studio A가 답함', 2: 'Gemini · Studio B가 답함' };
 
 /** Gemini 질문에 함께 보낼 수 있는 사진 수(무료 한도·요청 크기 때문) */
@@ -297,6 +300,27 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
   /** 답을 기다리는 동안 보낸 말(v0.4.58): 앞 일이 끝나면 차례로 처리한다 */
   const [queue, setQueue] = useState<{ text: string; files: File[] }[]>([]);
   const runs = useRef(0);
+  /** 업무 알림 아래 버튼(지금도 그 단계일 때만). 카드면 카드 안에 둔다(v0.7.17) */
+  const noticeButtons = (m: Msg) => {
+    if (!m.actions || busy) return null;
+                // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
+                const task = snap.tasks.find((t) => t.id === m.taskId);
+                if (!task || deriveWorkflow(task, snap.workflow).stage !== m.stage) return null;
+                return (
+                  <span className="inbox-choices" role="group" aria-label="이 업무에 답하기">
+                    {m.actions.filter((a) => a === 'open' || onApprove).map((a) => (
+                      <button key={a} type="button" className={`btn btn-small ${a === 'open' ? 'btn-ghost' : 'btn-primary'}`} onClick={() => noticeAct(m, a)}>
+                        {ACTION_LABEL[a]}
+                      </button>
+                    ))}
+                    {deriveWorkflow(task, snap.workflow).spec && (
+                      <button type="button" className="btn btn-small btn-ghost" onClick={() => setSpecFor(task.id)}>
+                        기획서 보기
+                      </button>
+                    )}
+                  </span>
+                );
+                };
   /** 처리 중 '멈추기'(v0.6.97): 켜져 있는 동안 늦게 온 답·접수 카드는 버린다. 하던 일이 다 끝나면 저절로 꺼진다 */
   const muted = useRef(false);
   const [photos, setPhotosState] = useState<File[]>(photoStore.draft);
@@ -644,6 +668,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     const msgs: Msg[] = add.map((n) => ({
       id: n.id,
       from: 'office',
+      at: new Date().toISOString(),
       text: pname(n.projectId) ? `[${pname(n.projectId)}] ${n.text}` : n.text,
       taskId: n.taskId,
       stage: n.stage,
@@ -675,6 +700,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     const msgs: Msg[] = add.map((r) => ({
       id: `research-${r.id}`,
       from: r.status === 'done' ? 'gemini' : 'office',
+      at: new Date().toISOString(),
       text: researchMessage(r),
       home: '',
       ...(r.status === 'done' ? { via: 'Claude가 웹에서 찾아 답함', ...(r.sources.length ? { sources: r.sources } : {}) } : {}),
@@ -1344,13 +1370,66 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       )}
       {shown.length > 0 && (
         <ol ref={listRef} className="inbox-log" aria-live="polite">
-          {shown.map((m) => (
-            <li key={m.id} className={`inbox-msg from-${m.from}`}>
-              <span className="inbox-who">
-                {FROM_LABEL[m.from]}
-                {m.via && <span className="inbox-via">{m.via}</span>}
-              </span>
-              {m.text ? (
+          {shown.map((m, i) => {
+            // 디스코드식(v0.7.17): 얼굴·이름·역할·시각, 같은 쪽이 5분 안에 이어 말하면 묶고, 날짜가 바뀌면 구분선
+            const sp = speakerOf(m);
+            const t = timeOf(m);
+            const prevT = i > 0 ? timeOf(shown[i - 1]) : null;
+            const newDay = t !== null && (prevT === null || dayLabel(prevT) !== dayLabel(t));
+            const cont = !newDay && continues(shown[i - 1], m);
+            const parsed = m.stage ? noticeCard(m.text) : null;
+            // 사장님이 누른 기록(act-)은 카드 대신 한 줄로(무겁지 않게)
+            const actLine = parsed && m.id.startsWith('act-') ? parsed : null;
+            const card = actLine ? null : parsed;
+            const face = sp.id === 'me' ? null : characterUrl(sp.id, 'stand');
+            return (
+            <Fragment key={m.id}>
+            {newDay && (
+              <li className="inbox-day" aria-hidden="true">
+                <span>{dayLabel(t!)}</span>
+              </li>
+            )}
+            <li className={`inbox-msg from-${m.from}${cont ? ' is-cont' : ''}`}>
+              {!cont && (
+                <span className={`inbox-av av-${sp.id}`} aria-hidden="true">
+                  {face ? <img src={face} alt="" /> : '나'}
+                </span>
+              )}
+              <div className="inbox-body">
+              {!cont && (
+                <p className="inbox-head">
+                  <b className="inbox-name">{sp.name}</b>
+                  {sp.role && <span className="inbox-role">{sp.role}</span>}
+                  {t !== null && <time className="inbox-time">{clockLabel(t)}</time>}
+                </p>
+              )}
+              {actLine ? (
+                <p className="inbox-act">
+                  {actLine.did}
+                  <span className="inbox-act-task"> · {actLine.title}</span>
+                </p>
+              ) : card ? (
+                <div className={`inbox-card tone-${toneOf(m.stage, m.text)}`}>
+                  <p className="card-proj">{[card.project, card.label].filter(Boolean).join(' · ')}</p>
+                  <p className="card-title">{card.title}</p>
+                  {card.did && <p>{card.did}</p>}
+                  {card.headline && <p className="card-headline">{card.headline}</p>}
+                  {card.fields.length > 0 && (
+                    <dl className="card-fields">
+                      {card.fields.map((f) => (
+                        <div key={f.label}>
+                          <dt>{f.label}</dt>
+                          <dd>{f.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  {card.lines.map((l, k) => (
+                    <p key={k}>{l}</p>
+                  ))}
+                  {noticeButtons(m)}
+                </div>
+              ) : m.text ? (
                 <p>{m.text}</p>
               ) : (
                 <p className="inbox-typing" aria-label="답을 쓰는 중">
@@ -1505,27 +1584,12 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                   </span>
                 );
               })()}
-              {m.actions && !busy && (() => {
-                // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
-                const task = snap.tasks.find((t) => t.id === m.taskId);
-                if (!task || deriveWorkflow(task, snap.workflow).stage !== m.stage) return null;
-                return (
-                  <span className="inbox-choices" role="group" aria-label="이 업무에 답하기">
-                    {m.actions.filter((a) => a === 'open' || onApprove).map((a) => (
-                      <button key={a} type="button" className={`btn btn-small ${a === 'open' ? 'btn-ghost' : 'btn-primary'}`} onClick={() => noticeAct(m, a)}>
-                        {ACTION_LABEL[a]}
-                      </button>
-                    ))}
-                    {deriveWorkflow(task, snap.workflow).spec && (
-                      <button type="button" className="btn btn-small btn-ghost" onClick={() => setSpecFor(task.id)}>
-                        기획서 보기
-                      </button>
-                    )}
-                  </span>
-                );
-              })()}
+              {!card && !actLine && noticeButtons(m)}
+              </div>
             </li>
-          ))}
+            </Fragment>
+            );
+          })}
         </ol>
       )}
 
