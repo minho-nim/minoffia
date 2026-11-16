@@ -1,0 +1,59 @@
+# UI 코드 검사 넣기(2026-11-16 소유자 "UI에 쓰는 거라 웬만하면 모두"): .github/templates/ui-check.yml을 프로젝트 저장소의
+# .github/workflows/ui-check.yml로 넣고(이미 같으면 건너뜀) 작업 브랜치 → PR → 병합한다. 손으로만 실행. 쓰기 토큰은 Actions secret(TARGET_REPO_TOKEN)에만.
+# 워크플로 파일을 쓰려면 토큰에 workflow 권한이 있어야 한다(없으면 그 저장소만 실패로 적고 다음으로). minho-nim/MinLab은 받지 않는다.
+name: UI 코드 검사 넣기
+
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: '대상 저장소(owner/repo, 여러 개면 쉼표로)'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency: ui-check-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 넣기·PR·병합
+        env:
+          REPOS: ${{ inputs.repos }}
+          GH_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "::error::Actions secrets에 TARGET_REPO_TOKEN이 없습니다"; exit 1; }
+          tpl="$PWD/.github/templates/ui-check.yml"
+          ok=0; fail=0
+          for REPO in $(echo "$REPOS" | tr ',' ' '); do
+            echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::warning::이름이 이상해 건너뜀: $REPO"; fail=$((fail+1)); continue; }
+            [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "건너뜀: $REPO(받지 않는 저장소)"; continue; }
+            (
+              set -e
+              base=$(gh api "repos/$REPO" --jq .default_branch)
+              rm -rf /tmp/repo && git clone -q --depth 1 --branch "$base" "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" /tmp/repo
+              cd /tmp/repo
+              mkdir -p .github/workflows
+              if cmp -s "$tpl" .github/workflows/ui-check.yml; then echo "$REPO: 이미 같음"; exit 0; fi
+              cp "$tpl" .github/workflows/ui-check.yml
+              git config user.name "minoffia"
+              git config user.email "minoffia@users.noreply.github.com"
+              head="ai/ui-check"
+              git checkout -q -b "$head"
+              git add .github/workflows/ui-check.yml
+              git commit -q -m "UI 코드 검사 넣기(uxkin/ui-check v1.0.1, 알림만)"
+              git push -q --force origin "$head"
+              owner=${REPO%%/*}
+              url=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$head" --jq '.[0].html_url // empty')
+              [ -n "$url" ] || url=$(gh api -X POST "repos/$REPO/pulls" -f title="UI 코드 검사 넣기" -f head="$head" -f base="$base" -f body="미노피아가 넣는 PR 검사입니다. PR이 새로 추가한 화면 코드만 보고 문제를 PR에 표시합니다(알림만, 병합을 막지 않음). uxkin/ui-check v1.0.1(MIT)을 확인한 커밋으로 고정." --jq .html_url)
+              gh api -X PUT "repos/$REPO/pulls/${url##*/}/merge" -f merge_method=squash >/dev/null
+              gh api -X DELETE "repos/$REPO/git/refs/heads/$head" >/dev/null 2>&1 || true
+              echo "$REPO: 넣음 $url"
+            ) && ok=$((ok+1)) || { echo "::warning::$REPO: 넣지 못함(토큰 workflow 권한·저장소 접근 확인)"; fail=$((fail+1)); }
+          done
+          echo "끝: 성공 $ok · 실패 $fail"
+          [ "$fail" -eq 0 ]
