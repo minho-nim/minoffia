@@ -33,7 +33,8 @@ async function loadKeys(create: boolean): Promise<VapidKeys | null> {
   return loadKeys(false);
 }
 
-const TAG: Record<string, string> = { question: 'ask', spec: 'ask', plan: 'ask', prototype: 'ask', result: 'ask', blocked: 'alert', test: 'test', briefing: 'brief' };
+// v0.7.35: 평가·PR 검사·배포·시안·Claude 답도(0061). 같은 업무의 같은 묶음은 휴대폰에서 한 알림으로 바뀐다
+const TAG: Record<string, string> = { question: 'ask', spec: 'ask', plan: 'ask', prototype: 'ask', result: 'ask', review: 'ask', pr: 'ask', draft: 'ask', deploy: 'done', answer: 'answer', blocked: 'alert', stale: 'alert', test: 'test', briefing: 'brief' };
 
 /** 보낼 알림 줄을 가져가(보냄 표시를 먼저 해서 두 번 보내지 않음) 주인의 모든 기기에 보낸다. */
 async function flush(): Promise<{ sent: number; removed: number }> {

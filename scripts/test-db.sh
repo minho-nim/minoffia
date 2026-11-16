@@ -31,6 +31,7 @@ run supabase/tests/99_auto_pr_merge.sql
 run supabase/tests/99_skill_cache.sql
 run supabase/tests/99_push.sql
 run supabase/tests/99_push_stale.sql
+run supabase/tests/99_push_steps.sql
 run supabase/tests/99_b_waits.sql
 run supabase/tests/99_agent_leave.sql
 run supabase/tests/99_project_rules.sql
