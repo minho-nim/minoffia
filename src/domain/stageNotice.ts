@@ -148,15 +148,22 @@ export function noticeFor(task: Task, all: WorkflowData): StageNotice {
  * seen(업무 id → 표식)과 지금을 비교해 새 알림을 만든다. 지운 업무는 seen에서 뺀다.
  * 처음 보는 업무는 알리지 않고 기억만 한다.
  */
+const SEEN_SEP = '\u0001';
+
 export function stageNotices(tasks: Task[], all: WorkflowData, seen: Record<string, string>): { notices: StageNotice[]; seen: Record<string, string> } {
   const next: Record<string, string> = {};
   const notices: StageNotice[] = [];
   for (const t of tasks) {
     const sig = stageSignature(t, all);
-    next[t.id] = sig;
-    if (seen[t.id] === undefined || seen[t.id] === sig) continue;
+    // 기억 = 신호 + 마지막으로 알린 글(v0.7.30 소유자 "왤케 많음?": PR 검사 상태가 여러 번 바뀌어도 알림 글이 같으면 다시 알리지 않는다)
+    const [prevSig, prevText] = (seen[t.id] ?? '').split(SEEN_SEP);
+    if (seen[t.id] === undefined || prevSig === sig) {
+      next[t.id] = seen[t.id] === undefined ? sig : (seen[t.id] as string);
+      continue;
+    }
     const n = noticeFor(t, all);
-    if (NOTICE_STAGES.has(n.stage)) notices.push(n);
+    next[t.id] = `${sig}${SEEN_SEP}${n.text}`;
+    if (NOTICE_STAGES.has(n.stage) && n.text !== prevText) notices.push(n);
   }
   return { notices, seen: next };
 }
