@@ -9,7 +9,14 @@ export function PushToggle({ store }: { store: OfficeStore }) {
   const [note, setNote] = useState('');
 
   useEffect(() => {
-    pushState().then(setState, () => setState('unsupported'));
+    pushState().then(
+      (s) => {
+        setState(s);
+        // v0.7.35: 이 기기에서 알림이 켜져 있으면 열 때마다 서버에 다시 등록한다(서버가 구독을 잃으면 켜진 것처럼 보여도 알림이 안 왔다)
+        if (s === 'on') void enablePush(store).catch(() => undefined);
+      },
+      () => setState('unsupported'),
+    );
   }, []);
   // 안내 글은 잠깐만 보이고 사라진다(아이콘만 남게)
   useEffect(() => {
