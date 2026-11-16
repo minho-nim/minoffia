@@ -7648,20 +7648,18 @@ html.popup-open .project-sections > details[open] * {
   white-space: nowrap;
 }
 
-/* 배포 승인 확인 칸(v0.7.32): 브라우저 확인 창 대신 카드 안에서 */
-.inbox-confirm {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border: 1px dashed var(--ok);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font-size: 13.5px;
-}
-
-.inbox-confirm p {
+/* 배포 승인 팝업(v0.7.33) */
+.deploy-ask .card-proj {
   margin: 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
-.inbox-confirm .inbox-choices {
-  margin-top: 6px;
+.deploy-ask .card-title {
+  margin: 2px 0 8px;
+  font-weight: 700;
+}
+
+.deploy-ask .inbox-choices {
+  margin-top: 10px;
 }

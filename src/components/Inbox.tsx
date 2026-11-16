@@ -1,4 +1,6 @@
 import { characterUrl } from '../office/assets';
+import { createPortal } from 'react-dom';
+import { FormPopup } from './FormPopup';
 import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
@@ -420,9 +422,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             <button
               type="button"
               className="btn btn-small btn-deploy"
-              aria-expanded={deployAsk === m.id}
-              // 되돌리기 어려운 일이라 카드 안에서 한 번 더 묻는다(v0.7.32 소유자 "팝업이 안 어울려": 브라우저 확인 창 대신)
-              onClick={() => setDeployAsk(deployAsk === m.id ? null : m.id)}
+              aria-haspopup="dialog"
+              // 되돌리기 어려운 일이라 앱 팝업으로 한 번 더 묻는다
+              onClick={() => setDeployAsk(m.id)}
             >
               배포 승인
             </button>
@@ -451,31 +453,37 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             {ACTION_LABEL.open}
           </button>
         </span>
-        {canDeploy && deployAsk === m.id && (
-          <div className="inbox-confirm" role="group" aria-label="배포 확인">
-            <p>
-              <b>운영에 반영할까요?</b> PR을 합치고 배포해요. 되돌리려면 새 업무가 필요해요.
-            </p>
-            <span className="inbox-choices">
-              <button
-                type="button"
-                className="btn btn-small btn-deploy"
-                onClick={() => {
-                  setDeployAsk(null);
-                  say('me', '배포 승인', { projectId: task.projectId, taskId: task.id });
-                  void run(async () => {
-                    if (!(await onDeployApprove!(task))) say('office', '배포 승인하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
-                  });
-                }}
-              >
-                배포하기
-              </button>
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => setDeployAsk(null)}>
-                아니요
-              </button>
-            </span>
-          </div>
-        )}
+        {canDeploy &&
+          deployAsk === m.id &&
+          // v0.7.33 소유자 "팝업으로": 브라우저 확인 창 대신 앱 팝업(바깥·Esc·닫기로 취소)
+          createPortal(
+            <FormPopup title="배포 승인" onClose={() => setDeployAsk(null)}>
+              <div className="deploy-ask">
+                <p className="card-proj">{snap.projects.find((p) => p.id === task.projectId)?.name ?? ''}</p>
+                <p className="card-title">{task.title}</p>
+                <p className="appr-after">운영에 반영할까요? PR을 합치고 배포해요. 되돌리려면 새 업무가 필요해요.</p>
+                <span className="inbox-choices">
+                  <button
+                    type="button"
+                    className="btn btn-deploy"
+                    onClick={() => {
+                      setDeployAsk(null);
+                      say('me', '배포 승인', { projectId: task.projectId, taskId: task.id });
+                      void run(async () => {
+                        if (!(await onDeployApprove!(task))) say('office', '배포 승인하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
+                      });
+                    }}
+                  >
+                    배포하기
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setDeployAsk(null)}>
+                    아니요
+                  </button>
+                </span>
+              </div>
+            </FormPopup>,
+            document.body,
+          )}
         {gate === 'C' && !canDeploy && onDeployApprove && <p className="small muted">{!task.prUrl ? 'PR이 열리면 배포 승인 버튼이 생겨요.' : !prOk ? 'PR 자동검사가 통과하면 배포 승인 버튼이 생겨요.' : ''}</p>}
         {fixKind && fixFor === m.id && (
           <form
