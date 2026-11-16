@@ -41,7 +41,10 @@ async function flush(): Promise<{ sent: number; removed: number }> {
   const db = admin();
   const keys = await loadKeys(false);
   if (!keys) return { sent: 0, removed: 0 };
-  const since = new Date(Date.now() - 86400_000).toISOString();
+  // v0.7.39 소유자 "어제 9시에 알림이 모두 옴": 구독이 없던 동안 쌓인 알림을 다음 알림(저녁 브리핑) 때 한꺼번에 보냈다.
+  // 30분 넘게 못 보낸 알림은 늦게 보내지 않고 보낸 것으로만 표시한다(지난 일은 앱 대화·업무 카드에 남아 있다).
+  const since = new Date(Date.now() - 30 * 60_000).toISOString();
+  await db.from('push_outbox').update({ sent_at: new Date().toISOString() }).is('sent_at', null).lte('created_at', since);
   const { data: pending } = await db.from('push_outbox').select('id').is('sent_at', null).gt('created_at', since).order('id').limit(20);
   if (!pending?.length) return { sent: 0, removed: 0 };
   const { data: rows } = await db
