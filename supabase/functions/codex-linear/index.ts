@@ -52,7 +52,7 @@ export function submitSection(taskId: string, token: string, url = `${env('SUPAB
   return [
     '',
     '## 결과 보내기(자동 저장, 필수)',
-    `시험까지 끝나면 저장소 밖 /tmp/result-submit.json 에 {"task_id":"${taskId}","token":"${token}","result":{"summary":"<요약>","changed_files":["<경로>"],"diff":"<git diff 전체(기본 브랜치 대비)>","test_log":"<시험 명령과 결과 그대로>","remaining_issues":"<남은 문제, 없으면 빈 문자열>"}} 를 JSON으로 저장하고(문자열은 JSON 이스케이프) 아래를 한 번 실행한다.`,
+    `시험까지 끝나면 저장소 밖 /tmp/result-submit.json 에 {"task_id":"${taskId}","token":"${token}","result":{"summary":"<요약>","changed_files":["<경로>"],"diff":"<git diff 전체(기본 브랜치 대비)>","test_log":"<시험 명령과 결과 그대로>","remaining_issues":"<남은 문제, 없으면 빈 문자열>","screen":"<바뀐 화면을 여는 주소 경로(예: /stats, #/stats). 첫 화면이면 /, 화면 변경이 없으면 빈 문자열>"}} 를 JSON으로 저장하고(문자열은 JSON 이스케이프) 아래를 한 번 실행한다.`,
     `curl -sS -X POST '${url}' -H 'content-type: application/json' --data-binary @/tmp/result-submit.json`,
     '- 이 token은 이 작업의 결과 제출 전용(24시간, 3번까지)이다. 다른 곳에 쓰거나 파일·커밋에 남기지 않는다.',
     '- 응답이 {"ok":true,...}가 아니거나 접속이 막히면 응답(또는 오류)을 한 줄로 보고하고, 위 JSON의 result 부분을 마지막 메시지에 그대로 남긴다(사용자가 직접 옮길 수 있게).',

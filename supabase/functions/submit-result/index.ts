@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
       const shots = fetch(`${env('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/site-check`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: ticket.task_id, kind: saved.preview_url ? 'preview' : 'build', ownerId: ticket.owner_id }),
+        body: JSON.stringify({ taskId: ticket.task_id, kind: saved.preview_url ? 'preview' : 'build', ownerId: ticket.owner_id, screen: text(r.screen, 200) }),
         signal: AbortSignal.timeout(30_000),
       }).catch(() => undefined);
       // v0.6.28: 이 작업이 끝났으니 기다리던 다음 작업을 서버가 바로 시작한다(앱이 닫혀 있어도)

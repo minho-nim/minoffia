@@ -1,7 +1,8 @@
 # 결과 화면 찍기(v0.7.25, 소유자 "결과 화면 자동 캡처"): 서버 함수 site-check(kind build)가 시작한다.
 # 미리보기 주소가 없는 결과도, 프로젝트 저장소에 결과 변경(diff)을 적용하고 빌드해 이 러너 안에서 열어 PC·휴대폰으로 찍는다.
 # AI 호출 없음. 저장소 토큰은 받아 오기(checkout)에만 쓰고 남기지 않는다(빌드 단계에는 비밀값 없음). 1회용 주소는 로그에 가린다.
-# shortcut: 첫 화면(/)만 찍고, base 경로가 있는 빌드(GitHub Pages용 등)는 그림이 깨질 수 있다. 바뀐 화면 경로를 찍을 때 고친다.
+# 찍는 화면은 개발 AI가 결과에 적은 바뀐 화면 경로(screen), 없으면 첫 화면(/).
+# shortcut: base 경로가 있는 빌드(GitHub Pages용 등)는 그림이 깨질 수 있다. 실제로 깨지는 프로젝트가 나오면 vite base를 읽어 맞춘다.
 name: 결과 화면 찍기
 on:
   workflow_dispatch:
@@ -25,14 +26,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      # 1회용 주소(diff_url·uploads)는 단계 env에 넣지 않는다(공개 저장소라 로그 머리에 env가 그대로 찍힘, v0.7.34). 이벤트 파일에서 읽는다
       - name: 주소 가리기·저장소 확인
         env:
-          UPLOADS: ${{ inputs.uploads }}
-          DIFF_URL: ${{ inputs.diff_url }}
           REPO: ${{ inputs.repo }}
         run: |
-          echo "::add-mask::$DIFF_URL"
-          echo "$UPLOADS" | node -e "const m=JSON.parse(require('fs').readFileSync(0,'utf8'));for(const v of Object.values(m))console.log('::add-mask::'+v)"
+          echo "::add-mask::$(node -e "process.stdout.write(String(require(process.env.GITHUB_EVENT_PATH).inputs.diff_url||''))")"
+          node -e "process.stdout.write(String(require(process.env.GITHUB_EVENT_PATH).inputs.uploads||''))" | node -e "const m=JSON.parse(require('fs').readFileSync(0,'utf8'));for(const v of Object.values(m))console.log('::add-mask::'+v)"
           echo "$REPO" | grep -Eq '^minho-nim/[A-Za-z0-9._-]+$' || { echo "허용하지 않는 저장소"; exit 1; }
           [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "이 저장소는 찍지 않습니다."; exit 1; }
       - uses: actions/checkout@v4
@@ -51,10 +51,8 @@ jobs:
           node-version: 22
       - name: 결과 변경 적용
         id: apply
-        env:
-          DIFF_URL: ${{ inputs.diff_url }}
         run: |
-          curl -fsS "$DIFF_URL" -o /tmp/change.diff
+          curl -fsS "$(node -e "process.stdout.write(String(require(process.env.GITHUB_EVENT_PATH).inputs.diff_url||''))")" -o /tmp/change.diff
           cd app
           if git apply --whitespace=nowarn /tmp/change.diff || git apply --3way --whitespace=nowarn /tmp/change.diff; then
             echo "ok=1" >> "$GITHUB_OUTPUT"
@@ -79,7 +77,8 @@ jobs:
           fi
           [ -f "$dir/index.html" ] || { echo "note=열 화면(index.html)을 찾지 못했어요. 웹 화면이 없는 저장소일 수 있어요." >> "$GITHUB_OUTPUT"; exit 0; }
           echo "화면 폴더: $dir"
-          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory "$dir" >/tmp/serve.log 2>&1 &
+          # 없는 화면 주소(/stats 등)는 index.html로 돌려주는 작은 서버(v0.7.34)
+          nohup node "$GITHUB_WORKSPACE/office/scripts/static-serve.mjs" "$dir" 4173 >/tmp/serve.log 2>&1 &
           sleep 2
           echo "ok=1" >> "$GITHUB_OUTPUT"
       - name: 찍기
@@ -104,11 +103,9 @@ jobs:
           fi
       - name: 올리기
         if: always()
-        env:
-          UPLOADS: ${{ inputs.uploads }}
         run: |
           cd /tmp/site 2>/dev/null || { echo "올릴 것이 없습니다."; exit 0; }
-          echo "$UPLOADS" | node -e "
+          node -e "process.stdout.write(String(require(process.env.GITHUB_EVENT_PATH).inputs.uploads||''))" | node -e "
             const fs=require('fs');const m=JSON.parse(fs.readFileSync(0,'utf8'));
             (async()=>{for(const [f,u] of Object.entries(m)){ if(!/^[a-z]+(-[a-z]+)?\.(jpg|json)$/.test(f)||!fs.existsSync(f)) continue;
               const r=await fetch(u,{method:'PUT',headers:{'Content-Type':f.endsWith('.json')?'application/json':'image/jpeg','x-upsert':'true'},body:fs.readFileSync(f)});

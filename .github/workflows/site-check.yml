@@ -17,11 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # 1회용 주소는 단계 env에 넣지 않는다(공개 저장소라 로그 머리에 env가 그대로 찍힘, v0.7.34). 이벤트 파일에서 읽는다
       - name: 업로드 주소 가리기
-        env:
-          UPLOADS: ${{ inputs.uploads }}
         run: |
-          echo "$UPLOADS" | node -e "const m=JSON.parse(require('fs').readFileSync(0,'utf8'));for(const v of Object.values(m))console.log('::add-mask::'+v)"
+          node -e "process.stdout.write(String(require(process.env.GITHUB_EVENT_PATH).inputs.uploads||''))" | node -e "const m=JSON.parse(require('fs').readFileSync(0,'utf8'));for(const v of Object.values(m))console.log('::add-mask::'+v)"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -38,11 +37,9 @@ jobs:
           cp "$GITHUB_WORKSPACE/scripts/site-check.mjs" /tmp/pw/ && node /tmp/pw/site-check.mjs "$TARGETS" /tmp/site
       - name: 올리기
         if: always()
-        env:
-          UPLOADS: ${{ inputs.uploads }}
         run: |
           cd /tmp/site 2>/dev/null || { echo "올릴 것이 없습니다."; exit 0; }
-          echo "$UPLOADS" | node -e "
+          node -e "process.stdout.write(String(require(process.env.GITHUB_EVENT_PATH).inputs.uploads||''))" | node -e "
             const fs=require('fs');const m=JSON.parse(fs.readFileSync(0,'utf8'));
             (async()=>{for(const [f,u] of Object.entries(m)){ if(!/^[a-z]+(-[a-z]+)?\.(jpg|json)$/.test(f)||!fs.existsSync(f)) continue;
               const r=await fetch(u,{method:'PUT',headers:{'Content-Type':f.endsWith('.json')?'application/json':'image/jpeg','x-upsert':'true'},body:fs.readFileSync(f)});

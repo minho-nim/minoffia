@@ -92,7 +92,7 @@ export function buildDevPayload(p: DevPayloadInput): string {
       ? [
           '',
           '## 결과 보내기(자동 저장, 필수)',
-          `시험과 미리보기 push까지 끝나면 저장소 밖 /tmp/result-submit.json 에 {"task_id":"${p.taskId}","token":"${p.submit.token}","result":{"summary":"<요약>","changed_files":["<경로>"],"diff":"<git diff main...HEAD 전체>","test_log":"<시험 명령과 결과 그대로>","remaining_issues":"<남은 문제, 없으면 빈 문자열>","branch":"${branch}","preview_pushed":<push가 성공했으면 true, 아니면 false>,"project_rules":[]}} 를 JSON으로 저장하고(문자열은 JSON 이스케이프) 아래를 한 번 실행한다.`,
+          `시험과 미리보기 push까지 끝나면 저장소 밖 /tmp/result-submit.json 에 {"task_id":"${p.taskId}","token":"${p.submit.token}","result":{"summary":"<요약>","changed_files":["<경로>"],"diff":"<git diff main...HEAD 전체>","test_log":"<시험 명령과 결과 그대로>","remaining_issues":"<남은 문제, 없으면 빈 문자열>","branch":"${branch}","preview_pushed":<push가 성공했으면 true, 아니면 false>,"screen":"<바뀐 화면을 여는 주소 경로(예: /stats, #/stats). 첫 화면이면 /, 화면 변경이 없으면 빈 문자열>","project_rules":[]}} 를 JSON으로 저장하고(문자열은 JSON 이스케이프) 아래를 한 번 실행한다.`,
           rulesAsk('project_rules'),
           `curl -sS -X POST '${p.submit.url}' -H 'content-type: application/json' --data-binary @/tmp/result-submit.json`,
           '- 이 token은 이 작업의 결과 제출 전용(24시간, 3번까지)이다. 다른 곳에 쓰거나 파일·커밋에 남기지 않는다.',
