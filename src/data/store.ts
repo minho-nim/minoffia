@@ -145,6 +145,12 @@ export interface OfficeStore {
   skills?(): Promise<import('../domain/skills').SkillFile[]>;
   /** 프로젝트마다 이 스킬이 들어 있는지(v0.6.58) */
   skillStatus?(skill: string): Promise<Record<string, import('../domain/skills').SkillInstallState>>;
+  /** 모든 프로젝트 스킬 최신으로(2026-11-16): Actions 한 번으로 프로젝트마다 원본과 다른 스킬만 맞춘다 */
+  refreshSkills?(): Promise<{ repos: string[] }>;
+  /** UI 코드 검사(PR 알림)가 들어 있는 프로젝트(프로젝트 id → 있음) */
+  uiCheckStatus?(): Promise<Record<string, boolean>>;
+  /** UI 코드 검사 넣기(Actions) */
+  installUiCheck?(projectIds: string[]): Promise<{ repos: string[] }>;
   /** 그림 지도: 프로젝트마다 들어 있는 스킬(v0.6.62) */
   skillMap?(): Promise<import('../domain/skills').SkillMapData>;
   /** 서버에 저장해 둔 스킬 목록·상태(v0.6.70). 없으면 null */

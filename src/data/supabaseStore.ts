@@ -771,6 +771,18 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('repo-tree', { action: 'mcpMap' });
       return parseMcpMap(data.mcp);
     },
+    async refreshSkills() {
+      const data = await invoke('repo-tree', { action: 'skillRefresh' });
+      return { repos: (data.repos as string[]) ?? [] };
+    },
+    async uiCheckStatus() {
+      const data = await invoke('repo-tree', { action: 'uiCheckStatus' });
+      return (data.has as Record<string, boolean>) ?? {};
+    },
+    async installUiCheck(projectIds) {
+      const data = await invoke('repo-tree', { action: 'uiCheckInstall', projectIds });
+      return { repos: (data.repos as string[]) ?? [] };
+    },
     async skillStatus(skill) {
       const data = await invoke('repo-tree', { action: 'skillStatus', skill });
       const out: Record<string, 'same' | 'old' | 'none'> = {};

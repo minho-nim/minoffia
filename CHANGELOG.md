@@ -1,5 +1,11 @@
 # 변경 기록
 
+## 모든 프로젝트 스킬 최신으로·UI 코드 검사 준비 칸(v0.7.21) — 2026-11-16
+
+- 스킬 탭에 [모든 프로젝트 최신으로](소유자 "매번 한 번씩 돌아야 돼?"): Actions 한 번으로 프로젝트 저장소마다 이미 들어 있는 스킬 중 원본과 다른 것만 맞추고 PR·병합(새 스킬은 넣지 않음). 새 Actions '모든 프로젝트 스킬 최신으로'(skills-refresh.yml).
+- 프로젝트 준비 칸에 'UI 코드 검사(PR 알림)': 저장소에 들어 있는지 실제로 확인해 체크하고, 없으면 [넣기]. 앱에서 새로 만든 저장소에는 기본 스킬과 함께 자동으로 넣는다. 준비 3 → 4칸.
+- 서버 함수 repo-tree에 skillRefresh·uiCheckStatus·uiCheckInstall(배포 필요).
+
 ## 화면 스킬 최신·UI 코드 검사(2026-11-16)
 
 - 화면 스킬 4개(impeccable 4.9.2·ui-ux-pro-max·unslop·frontend-ui-engineering)를 원본 최신으로(스킬 원본 minoffia-skills#11과 같게). 한국어 요약·LICENSE 그대로.
