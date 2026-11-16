@@ -172,6 +172,8 @@ interface Props {
   onPickDraft?: (task: Task, draft: DesignDraft) => Promise<void>;
   /** 결과 화면 사진(결과 스크린샷·미노가 찍은 화면, v0.7.25) */
   onResultImages?: (task: Task, revision: number) => Promise<ShotImage[]>;
+  /** 시안이 없을 때 그리기(v0.7.42) */
+  onDrawDesign?: (task: Task) => Promise<void>;
   /** 대화 탭이 보이는 중(v0.7.29): 다른 탭에서 돌아오면 맨 아래(새 말)를 보여 준다 */
   active?: boolean;
 }
@@ -286,7 +288,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onResultImages, active, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onResultImages, onDrawDesign, active, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -400,6 +402,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             onPick={onPickDraft ? (d) => void run(() => onPickDraft(task, d)) : undefined}
             loadShots={gate === 'B' && onResultImages && view.result ? () => onResultImages(task, view.result!.revision) : undefined}
             onPoint={fixKind ? (img) => setPointImg({ ...img, msgId: m.id }) : undefined}
+            onDraw={onDrawDesign ? () => void run(() => onDrawDesign(task)) : undefined}
           />
         )}
         {pointImg?.msgId === m.id && (

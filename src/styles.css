@@ -7732,3 +7732,10 @@ html.popup-open .project-sections > details[open] * {
   align-items: center;
   margin-top: 8px;
 }
+
+/* 건너뛴 칸(v0.7.42): 왜 없는지 한 줄씩 */
+.appr-skipped {
+  margin: 4px 0;
+  padding-left: 18px;
+  color: var(--muted);
+}

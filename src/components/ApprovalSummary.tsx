@@ -2,7 +2,7 @@
 // 규칙만(모델 호출 없음). SVG 시안은 규칙대로 img로만 보여 준다.
 import { svgSrc } from './DesignDrafts';
 import { useEffect, useState } from 'react';
-import { afterApprove, fileBars, prChips, resultChips, type Chip } from '../domain/approvalSummary';
+import { afterApprove, fileBars, prChips, resultChips, skippedNotes, type Chip } from '../domain/approvalSummary';
 import { DRAW_STYLE_LABEL, pickedDraft, type DesignDraft } from '../domain/designDraft';
 import type { WorkflowView } from '../domain/workflow';
 import type { Task } from '../domain/types';
@@ -74,6 +74,10 @@ interface Props {
   busy?: boolean;
   /** 결과 화면 사진(결과 스크린샷·미노가 찍은 화면). 없으면 안 보임(v0.7.25) */
   loadShots?: () => Promise<ShotImage[]>;
+  /** 시안이 없을 때 그리기(v0.7.42) */
+  onDraw?: () => void;
+  /** 시안 그림은 다른 곳(업무 카드의 시안 칸)이 보여 줄 때 */
+  hideDrafts?: boolean;
   /** 그림을 짚어서 수정(시안·결과 화면) */
   onPoint?: (img: ShotImage & { what: string }) => void;
 }
@@ -118,7 +122,18 @@ function ResultShots({ load, onPoint, draft }: { load: () => Promise<ShotImage[]
   );
 }
 
-export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPick, busy, loadShots, onPoint }: Props) {
+function Skipped({ notes }: { notes: string[] }) {
+  if (!notes.length) return null;
+  return (
+    <ul className="appr-skipped small" aria-label="건너뛴 칸">
+      {notes.map((n) => (
+        <li key={n}>{n}</li>
+      ))}
+    </ul>
+  );
+}
+
+export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPick, busy, loadShots, onPoint, onDraw, hideDrafts }: Props) {
   if (gate === 'A') {
     const rev = view.spec?.revision ?? 0;
     const drafts = (data.designDrafts ?? []).filter((d) => d.taskId === task.id && d.specRevision === rev).sort((a, b) => a.who.localeCompare(b.who));
@@ -126,7 +141,13 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
     return (
       <div className="appr">
         <p className="appr-after">{afterApprove('A', { repo, picked: picked ? picked.who : null })}</p>
-        {drafts.length > 0 && (
+        <Skipped notes={skippedNotes('A', { needsDesign: view.spec?.sizeHint?.needs_design ?? null, drafts: drafts.length })} />
+        {!drafts.length && onDraw && (
+          <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={onDraw}>
+            시안 그리기(Gemini A·B, 1분 안팎)
+          </button>
+        )}
+        {drafts.length > 0 && !hideDrafts && (
           <ul className="appr-drafts" aria-label="시안">
             {drafts.map((d) => {
               const on = d.id === picked?.id;
@@ -163,6 +184,7 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
     return (
       <div className="appr">
         <Chips chips={resultChips(view.result, review)} />
+        <Skipped notes={skippedNotes('B', { drafts: 0, review, resultAt: view.result.createdAt })} />
         {review?.screen && review.screen.problems.length > 0 && (
           <ul className="appr-screen small" aria-label="화면에서 고칠 곳">
             {review.screen.problems.map((p) => (

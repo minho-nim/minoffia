@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afterApprove, buildOk, fileBars, prChips, resultChips, riskChip, testCount } from './approvalSummary';
+import { afterApprove, buildOk, fileBars, prChips, resultChips, riskChip, skippedNotes, testCount } from './approvalSummary';
 
 const diff = (path: string, add: number, del = 0) => [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, ...Array(add).fill('+x'), ...Array(del).fill('-y')].join('\n');
 
@@ -49,5 +49,13 @@ describe('승인 카드 요약(v0.7.23)', () => {
     expect(afterApprove('A', { picked: 'B' })).toContain('고른 시안 B');
     expect(afterApprove('B')).toContain('PR');
     expect(afterApprove('C')).toContain('운영');
+  });
+  it('건너뛴 칸(v0.7.42)', () => {
+    expect(skippedNotes('A', { needsDesign: false, drafts: 0 })[0]).toContain('기존 화면을 고치는 일');
+    expect(skippedNotes('A', { needsDesign: true, drafts: 0 })[0]).toContain('아직 없어요');
+    expect(skippedNotes('A', { needsDesign: true, drafts: 2 })).toEqual([]);
+    const review = { panel: [{ who: 'A', judge: 'Gemini · Studio A', status: 'done' }, { who: 'B', judge: 'Gemini · Studio A', status: 'done' }, { who: 'peer', judge: 'Claude', status: 'skipped' }], screen: null } as never;
+    const notes = skippedNotes('B', { drafts: 0, review, resultAt: '2026-11-16T10:00:00Z', now: Date.parse('2026-11-16T11:00:00Z') });
+    expect(notes).toEqual(['평가: Gemini B 자리를 Studio A가 대신 채점(Studio B 답을 못 받음)', '평가: Claude 빠짐', '화면 평가: 아직 없어요(결과 화면을 못 찍었거나 실패, 업무 카드의 결과 화면에서 이유 확인)']);
   });
 });

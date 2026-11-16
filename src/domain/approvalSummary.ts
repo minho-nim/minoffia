@@ -112,3 +112,33 @@ export function prChips(check: PrCheck | null): Chip[] {
   if (check.merged) chips.push({ label: '병합됨', tone: 'plain' });
   return chips;
 }
+
+/**
+ * 조용히 건너뛴 칸(v0.7.42 소유자 "그래프 엔지니어링: 건너뛴 칸 표시"): 시험 업무에서 시안이 0장이었는데 아무도 몰랐다.
+ * 승인 카드에 "왜 없는지" 한 줄씩. 규칙만(기록에서 읽음).
+ */
+export function skippedNotes(
+  gate: 'A' | 'B' | 'C',
+  o: {
+    needsDesign?: boolean | null;
+    drafts: number;
+    review?: ResultReview | null;
+    resultAt?: string;
+    now?: number;
+  },
+): string[] {
+  const out: string[] = [];
+  if (gate === 'A' && o.drafts === 0) {
+    out.push(o.needsDesign ? '시안: 아직 없어요(그리는 중이거나 실패). 아래에서 다시 그릴 수 있어요.' : '시안: 기존 화면을 고치는 일로 봐서 안 그렸어요. 필요하면 아래에서 그릴 수 있어요.');
+  }
+  if (gate === 'B' && o.review) {
+    for (const p of o.review.panel ?? []) {
+      if (p.status === 'skipped') out.push(`평가: ${p.who === 'peer' ? p.judge || '동료 AI' : `Gemini ${p.who}`} 빠짐`);
+      if (p.who === 'B' && p.status === 'done' && /Studio A/.test(p.judge)) out.push('평가: Gemini B 자리를 Studio A가 대신 채점(Studio B 답을 못 받음)');
+      if (p.who === 'A' && p.status === 'done' && /Studio B/.test(p.judge)) out.push('평가: Gemini A 자리를 Studio B가 대신 채점(Studio A 답을 못 받음)');
+    }
+    const age = o.resultAt ? (o.now ?? Date.now()) - Date.parse(o.resultAt) : 0;
+    if (!o.review.screen && age > 20 * 60_000) out.push('화면 평가: 아직 없어요(결과 화면을 못 찍었거나 실패, 업무 카드의 결과 화면에서 이유 확인)');
+  }
+  return out;
+}
