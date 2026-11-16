@@ -7620,3 +7620,16 @@ html.popup-open .project-sections > details[open] * {
 .appr-shots img {
   height: 150px;
 }
+
+/* 답장 줄의 취소(✕)는 왼쪽에 크게(v0.7.27 소유자 "…에 가려짐") */
+.inbox-reply-bar .link-btn {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+@media (max-width: 1039px) {
+  /* 글 끝이 '…' 버튼 밑으로 들어가지 않게 */
+  .inbox-reply-bar {
+    padding-right: 48px;
+  }
+}

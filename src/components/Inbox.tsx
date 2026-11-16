@@ -2022,12 +2022,13 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       >
         {replyTo && (
           <p className="inbox-reply-bar">
-            <span>
-              <b>{'\u21A9\uFE0E'} 답장</b> {replyTo.label}
-            </span>
+            {/* 취소는 왼쪽(v0.7.27): 오른쪽은 휴대폰 '…' 버튼에 가린다 */}
             <button type="button" className="link-btn" aria-label="답장 취소" onClick={() => setReplyTo(null)}>
               ✕
             </button>
+            <span>
+              <b>{'\u21A9\uFE0E'} 답장</b> {replyTo.label}
+            </span>
           </p>
         )}
         {/* 보낼 첨부는 입력창 안 위쪽에 붙는다(v0.4.88 소유자: 따로 떨어져 보였음) */}
