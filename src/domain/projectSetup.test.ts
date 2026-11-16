@@ -13,6 +13,13 @@ describe('프로젝트 준비 체크리스트(v0.6.32)', () => {
   it('그 뒤에 잘 된 기록이 있으면 알리지 않는다', () => {
     const wf = { ...EMPTY_WORKFLOW, assignments: [a('codex', 'failed', 'Codex 환경 없음', '2026-11-10T01'), a('codex', 'completed', 'session_reported_result', '2026-11-10T03')] };
     expect(setupIssues('p1', [task], wf).codex).toBeNull();
+    expect(setupIssues('p1', [task], wf).codexWorked).toBe(true);
+  });
+  it('잘 된 기록이 없거나 그 뒤에 다시 막혔으면 기록으로 확인한 것이 아니다', () => {
+    const none = { ...EMPTY_WORKFLOW, assignments: [] };
+    expect(setupIssues('p1', [task], none)).toMatchObject({ codexWorked: false, claudeWorked: false });
+    const again = { ...EMPTY_WORKFLOW, assignments: [a('claude', 'completed', 'session_reported_result', '2026-11-10T01'), a('claude', 'failed', '저장소 없음', '2026-11-10T03')] };
+    expect(setupIssues('p1', [task], again)).toMatchObject({ claudeWorked: false, claude: 'Claude 루틴에 이 저장소가 없어요' });
   });
   it('다른 프로젝트 기록은 보지 않는다', () => {
     const wf = { ...EMPTY_WORKFLOW, assignments: [a('codex', 'failed', 'Codex 환경 없음', '2026-11-10T01')] };

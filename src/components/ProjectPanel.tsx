@@ -522,8 +522,9 @@ function ProjectSetup({ project, issues, uiCheck, onInstallUiCheck }: { project:
       // 저장 못 해도 화면은 그대로
     }
   };
-  const codexOk = done.codex && !codexIssue;
-  const claudeOk = done.claude && !claudeIssue;
+  // 업무 기록으로 확인되면 체크하지 않아도 ✓(v0.7.22: 체크는 기기마다 따로라 다른 기기에선 n/4로 보였음)
+  const codexOk = !codexIssue && (done.codex || !!issues.codexWorked);
+  const claudeOk = !claudeIssue && (done.claude || !!issues.claudeWorked);
   const count = 1 + Number(codexOk) + Number(claudeOk) + Number(uiCheck === true);
   return (
     <details className="project-rules project-setup">
@@ -533,6 +534,10 @@ function ProjectSetup({ project, issues, uiCheck, onInstallUiCheck }: { project:
       <ul className="setup-list small">
         <li className="is-ok">✓ 저장소 연결: {project.repo}</li>
         <li className={codexOk ? 'is-ok' : codexIssue ? 'is-bad' : ''}>
+          {codexOk ? (
+            <>✓ Codex 레거시 환경에 저장소 넣음{issues.codexWorked ? <span className="muted"> (Codex가 이 저장소 업무를 해서 확인)</span> : <span className="muted"> (내가 체크함)</span>}</>
+          ) : (
+          <>
           <label className="check">
             <input type="checkbox" checked={done.codex} onChange={() => flip('codex')} /> Codex <b>레거시</b> 환경에 이 저장소 넣기(프로젝트마다 한 번)
           </label>
@@ -557,9 +562,11 @@ function ProjectSetup({ project, issues, uiCheck, onInstallUiCheck }: { project:
           <span className="muted">
             {' '}Codex 설정 → <b>레거시 Codex 클라우드</b> → 환경(이미 있으면 그 환경에 저장소 추가, 없으면 + 환경 만들기) → 저장소 {project.repo} → 추가 허용 도메인 붙여 넣기 → 저장. Linear·GitHub로 맡길 때는 레거시 환경만 써요(새 Codex Cloud 환경은 못 봐요, 2026-11-11 확인).
           </span>
+          </>
+          )}
         </li>
         <li className={uiCheck ? 'is-ok' : ''}>
-          {uiCheck ? '✓ ' : ''}UI 코드 검사(PR 알림)
+          {uiCheck ? '✓ ' : ''}UI 코드 검사(PR 알림){uiCheck === undefined ? <span className="muted"> (아직 확인 안 됨)</span> : null}
           {uiCheck === false && onInstallUiCheck && (
             <span className="setup-actions">
               <button
@@ -582,6 +589,10 @@ function ProjectSetup({ project, issues, uiCheck, onInstallUiCheck }: { project:
           <span className="muted"> PR이 새로 추가한 화면 코드에서 빠진 상태·아무 일 안 하는 버튼·접근성 기본을 PR에 표시해요(알림만, 병합은 안 막음).</span>
         </li>
         <li className={claudeOk ? 'is-ok' : claudeIssue ? 'is-bad' : ''}>
+          {claudeOk ? (
+            <>✓ Claude 루틴에 저장소 추가함{issues.claudeWorked ? <span className="muted"> (Claude가 이 저장소 업무를 해서 확인)</span> : <span className="muted"> (내가 체크함)</span>}</>
+          ) : (
+          <>
           <label className="check">
             <input type="checkbox" checked={done.claude} onChange={() => flip('claude')} /> Claude 루틴에 이 저장소 추가
           </label>
@@ -592,9 +603,11 @@ function ProjectSetup({ project, issues, uiCheck, onInstallUiCheck }: { project:
             </a>
           </span>
           <span className="muted"> 루틴 "MinLab AI Office 보조 개발" → 저장소에 {project.repo} 추가 → 저장</span>
+          </>
+          )}
         </li>
       </ul>
-      <p className="muted small">처음 한 번만: GitHub 설정 → Applications → ChatGPT Codex Connector → 저장소 접근을 All repositories로(새 저장소도 자동). 없어도 업무는 멈추지 않아요: Codex 환경이 없으면 Claude가 이어받아요.</p>
+      {count < 4 && <p className="muted small">처음 한 번만: GitHub 설정 → Applications → ChatGPT Codex Connector → 저장소 접근을 All repositories로(새 저장소도 자동). 없어도 업무는 멈추지 않아요: Codex 환경이 없으면 Claude가 이어받아요.</p>}
     </details>
   );
 }
