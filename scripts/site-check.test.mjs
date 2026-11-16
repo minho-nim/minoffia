@@ -21,5 +21,11 @@ describe('화면 확인 주소 검사(v0.6.9)', () => {
     ]);
     expect(safeTargets(raw)).toEqual([]);
     expect(safeTargets(raw, true).map((x) => `${x.key} ${x.url}`)).toEqual(['after http://127.0.0.1:4173/']);
+    // 바뀐 화면 경로(v0.7.34)
+    const paths = (u) => safeTargets(JSON.stringify([{ key: 'after', url: u }]), true).length;
+    expect(paths('http://127.0.0.1:4173/stats')).toBe(1);
+    expect(paths('http://127.0.0.1:4173/#/stats?tab=1')).toBe(1);
+    expect(paths('http://127.0.0.1:4173/../etc')).toBe(0);
+    expect(paths('http://127.0.0.1:4173/a b')).toBe(0);
   });
 });

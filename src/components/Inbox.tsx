@@ -383,6 +383,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     };
     return (
       <>
+        {/* 개발 스킬 고르기(v0.7.34 소유자 "스킬하고 Gemini가 한 번에 올라와"): 접수 때가 아니라 기획 승인 카드에서 한 번에 */}
+        {gate === 'A' && skillPick && <SkillPick task={task} installed={skillPick.installed(task.projectId)} titleOf={skillPick.titleOf} onSave={skillPick.save} />}
         {gate && (
           <ApprovalSummary
             task={task}
@@ -574,26 +576,22 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
-  const toEnd = () => {
-    const end = endRef.current;
-    if (!end) return;
-    const vv = window.visualViewport;
-    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
-    const need = end.getBoundingClientRect().bottom + (formRef.current?.offsetHeight ?? 0) + 16 - viewBottom;
-    window.scrollBy({ top: need, behavior: 'smooth' });
+  /** 맨 아래까지(v0.7.34 소유자 "맨 아래는 끝까지"): 마지막 카드의 버튼까지 입력창 위에 보이게 페이지 끝으로.
+   *  머리·사무실이 접히며 높이가 바뀌므로 잠깐 뒤 한 번 더. 입력 중(휴대폰 키보드)일 때는 예전처럼 입력창 위만 맞춘다 */
+  const toBottom = (smooth = false) => {
+    if (document.activeElement === inputRef.current) return revealEnd();
+    const go = (b: ScrollBehavior) => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: b });
+    go(smooth ? 'smooth' : 'auto');
+    window.setTimeout(() => go('auto'), smooth ? 450 : 250);
   };
+  const toEnd = () => toBottom(true);
   // 다른 탭에서 대화 탭으로 오면 맨 아래로(v0.7.29 소유자 "다른 탭에서 들어갔을 때 맨 아래가 보여야")
   useEffect(() => {
     if (!active || !log.length) return;
     const id = window.requestAnimationFrame(() => {
       awayRef.current = false;
       setNewCount(0);
-      const end = endRef.current;
-      if (!end) return;
-      const vv = window.visualViewport;
-      const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
-      const need = end.getBoundingClientRect().bottom + (formRef.current?.offsetHeight ?? 0) + 16 - viewBottom;
-      if (need > 1) window.scrollBy({ top: need });
+      toBottom();
     });
     return () => window.cancelAnimationFrame(id);
   }, [active]);
@@ -604,7 +602,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     let h = list.offsetHeight;
     const ro = new ResizeObserver(() => {
       const nh = list.offsetHeight;
-      if (nh > h && !awayRef.current) revealEnd();
+      if (nh > h && !awayRef.current) toBottom();
       h = nh;
     });
     ro.observe(list);
@@ -787,7 +785,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     const box = listRef.current;
     if (box) box.scrollTop = box.scrollHeight;
     // 화면에 대화가 하나도 없으면 맨 위 그대로 둔다(첫 화면).
-    if (log.length) revealEnd();
+    if (log.length) toBottom();
   }, [log, pending, busy]);
 
   useEffect(() => {
@@ -1867,10 +1865,6 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                 );
               })()}
               {m.offer && m.offer.state !== 'open' && <span className="muted small inbox-offer-done">{m.offer.state === 'done' ? '접수함' : '접수 안 함'}</span>}
-              {m.created && m.taskId && skillPick && (() => {
-                const t = snap.tasks.find((x) => x.id === m.taskId);
-                return t ? <SkillPick task={t} installed={skillPick.installed(t.projectId)} titleOf={skillPick.titleOf} onSave={skillPick.save} /> : null;
-              })()}
               {m.created && m.taskId && onCancelTask && (() => {
                 const t = snap.tasks.find((x) => x.id === m.taskId);
                 if (!t) return null;

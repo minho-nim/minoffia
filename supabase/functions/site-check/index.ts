@@ -25,6 +25,14 @@ const FILES: Record<string, string[]> = {
   live: ['live-pc.jpg', 'live-mobile.jpg'],
 };
 
+/** 바뀐 화면 경로(/stats, /#/stats, #/stats). 이상하면 '' (러너 안 주소 뒤에 붙인다) */
+export function screenPath(raw: unknown): string {
+  const t = String(raw ?? '').trim();
+  if (!t) return '';
+  const p = t.startsWith('#') ? `/${t}` : t;
+  return /^\/[A-Za-z0-9/_\-#?=&.~%]{0,150}$/.test(p) && !p.includes('..') && !p.startsWith('//') ? p : '';
+}
+
 /** 프로젝트의 운영 주소: Cloudflare 주소가 있으면 그것, 없으면 데모 주소 */
 export function productionUrl(p: { preview_host?: string | null; demo_url?: string | null } | null): string {
   const host = (p?.preview_host ?? '').trim().toLowerCase();
@@ -36,7 +44,7 @@ export function productionUrl(p: { preview_host?: string | null; demo_url?: stri
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'POST만 받습니다.' });
-  let body: { action?: string; taskId?: string; kind?: string; ownerId?: string };
+  let body: { action?: string; taskId?: string; kind?: string; ownerId?: string; screen?: string };
   try {
     body = await req.json();
   } catch {
@@ -104,8 +112,15 @@ Deno.serve(async (req) => {
     const { data: signed } = await bucket.createSignedUrl(path, 3600);
     if (!signed?.signedUrl) return reply(500, { ok: false, error: '결과 변경 주소를 만들지 못했습니다.' });
     diffUrl = signed.signedUrl;
-    // 러너 안에서 연 결과 화면(바깥에서는 열리지 않는 주소, 적어 두기만)
-    targets.push({ key: 'after', url: 'http://127.0.0.1:4173/' });
+    // 러너 안에서 연 결과 화면(바깥에서는 열리지 않는 주소, 적어 두기만). v0.7.34: 개발 AI가 알려 준 바뀐 화면 경로(screen)를 연다.
+    // 다시 찍기(앱 버튼)처럼 경로가 안 오면 지난번 찍은 경로를 그대로 쓴다
+    let screen = screenPath(body.screen);
+    if (!screen && body.screen === undefined) {
+      const { data: prev } = await bucket.download(`${base}/build/result.json`);
+      const last = prev ? await prev.text().then((t) => JSON.parse(t) as { targets?: { key: string; url: string }[] }).catch(() => null) : null;
+      screen = screenPath(String(last?.targets?.find((t) => t.key === 'after')?.url ?? '').replace(/^http:\/\/127\.0\.0\.1:4173/, ''));
+    }
+    targets.push({ key: 'after', url: `http://127.0.0.1:4173${screen || '/'}` });
     if (live) targets.push({ key: 'before', url: live });
   } else if (kind === 'preview') {
     const { data: result } = await admin.from('result_packages').select('preview_url').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
