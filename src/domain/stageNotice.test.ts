@@ -114,6 +114,20 @@ describe('단계 알림(v0.3.9)', () => {
     expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1);
   });
 
+  it('배포 승인 뒤에는 실제 배포 기록으로 말한다(v0.7.37)', () => {
+    const result = { id: 'r', taskId: 't1', revision: 1, planRevision: 1, workItemId: 'W1', source: 'codex_linear_auto' as const, summary: '버튼', diff: 'x', testLog: 'ok', remainingIssues: '', sha256: 'h', createdAt: '' };
+    const b = { ...approvalA, id: 'b', gate: 'B' as const };
+    const c = { ...approvalA, id: 'c', gate: 'C' as const };
+    const base = { specs: [spec(1)], approvals: [approvalA, b, c], results: [result] };
+    const dep = (ok: boolean) => ({ id: ok ? 'd1' : 'd0', taskId: 't1', repo: 'o/r', branch: 'release', fromSha: '', toSha: '', ok, error: ok ? '' : 'GitHub가 응답하지 않았습니다(TimeoutError).', createdAt: '2026-11-16T10:21:00Z' });
+    expect(noticeFor(task, data(base)).text).toContain('배포하는 중이에요');
+    const failed = noticeFor(task, data({ ...base, deployments: [dep(false)] })).text;
+    expect(failed).toContain('배포하지 못했어요: GitHub가 응답하지 않았습니다');
+    expect(failed).not.toContain('배포까지 끝났어요');
+    expect(noticeFor(task, data({ ...base, deployments: [dep(false), { ...dep(true), createdAt: '2026-11-16T10:30:00Z' }] })).text).toContain('배포까지 끝났어요');
+    expect(stageSignature(task, data(base))).not.toBe(stageSignature(task, data({ ...base, deployments: [dep(false)] })));
+  });
+
   it('지운 업무는 기억에서 뺀다', () => {
     expect(stageNotices([], data({}), { t1: 'x' }).seen).toEqual({});
   });

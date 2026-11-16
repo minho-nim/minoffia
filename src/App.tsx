@@ -373,6 +373,8 @@ export function App() {
   /** 배포 승인 뒤 main 시험(CI)을 기다리는 업무(v0.4.20). 1분마다 다시 배포를 시도한다 */
   const deployWait = useRef(new Set<string>());
   const deployAt = useRef(new Map<string, number>());
+  /** 지금 배포 요청 중인 업무(v0.7.37: 배포 승인 직후 자동 재시도가 겹쳐 두 번 병합을 요청해 실패했다) */
+  const deploying = useRef(new Set<string>());
   /** 자동 저장 실패를 한 번만 알리기 위한 받은 계획·결과 id */
   const inboxReported = useRef(new Set<string>());
   /** 이 기기에서 Gemini 견본을 이미 시도한 계획(업무:계획 버전) */
@@ -1670,6 +1672,8 @@ export function App() {
     deploy:
       store.mode === 'supabase' || trying
         ? async (task, allowExtra = false, quiet = false) => {
+            if (deploying.current.has(task.id)) return true;
+            deploying.current.add(task.id);
             try {
               const r = await store.deployRelease(task.id, allowExtra);
               if (r.wait) {
@@ -1688,6 +1692,7 @@ export function App() {
               say('error', `운영 배포를 하지 못했습니다: ${(e as Error).message}`);
               return false;
             } finally {
+              deploying.current.delete(task.id);
               setSnap(await store.load());
             }
           }
