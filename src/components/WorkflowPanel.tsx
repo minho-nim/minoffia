@@ -491,7 +491,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
         {(() => {
           // v0.7.23: 승인 차례면 대화 카드와 같은 요약(승인하면 한 줄·칩·바뀐 파일)
           const gate = approvalGate(view);
-          return gate ? <ApprovalSummary task={task} view={view} data={{ designDrafts: [], designPicks, reviews, prCheck: prCheck ?? null }} gate={gate} repo={!!project?.repo || task.title.startsWith('[체험]')} showFiles={gate === 'B'} /> : null;
+          return gate ? <ApprovalSummary task={task} view={view} data={{ designDrafts, designPicks, reviews, prCheck: prCheck ?? null }} hideDrafts gate={gate} repo={!!project?.repo || task.title.startsWith('[체험]')} showFiles={gate === 'B'} /> : null;
         })()}
         {(now.primary || now.secondary) && (
           <p className="wf-now-actions">

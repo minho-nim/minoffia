@@ -2295,6 +2295,7 @@ export function App() {
                 }}
                 onPickDraft={workflowActions.pickDesign}
                 active={tab === 'chat'}
+                onDrawDesign={workflowActions.drawDesign ? (t) => workflowActions.drawDesign!(t).then(() => undefined) : undefined}
                 onResultImages={async (t, revision) => {
                   // v0.7.25: 결과 스크린샷(AI가 보낸 것)과 미노가 찍은 결과 화면(빌드·미리보기, 이 결과 뒤에 찍은 것만)
                   const out: { src: string; name: string }[] = [];
