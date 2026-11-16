@@ -73,7 +73,7 @@ export function speakerOf(m: ChatMsgLike): Speaker {
 export type CardTone = 'turn' | 'info' | 'ok' | 'bad';
 const TURN = new Set(['needs_clarification', 'spec_ready', 'development_approval_pending', 'result_review', 'github_approval_pending', 'deployment_approval_pending']);
 export function toneOf(stage: string | undefined, text = ''): CardTone {
-  if (stage === 'failed' || stage === 'integration_blocked' || stage === 'rate_limited' || /실패|막혔/.test(text.split('\n')[0] ?? '')) return 'bad';
+  if (stage === 'failed' || stage === 'integration_blocked' || stage === 'rate_limited' || /실패|막혔/.test(text.split('\n')[0] ?? '') || /배포하지 못했어요/.test(text)) return 'bad';
   if (stage === 'completed') return 'ok';
   if (stage && TURN.has(stage) && !/검사\(CI\)하는 중/.test(text)) return 'turn';
   return 'info';

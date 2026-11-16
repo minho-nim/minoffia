@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     fetch(`https://api.github.com/repos/${pr.owner}/${pr.repo}${path}`, {
       ...init,
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'MinLabAIOffice', 'content-type': 'application/json' },
-      signal: AbortSignal.timeout(10_000),
+      signal: init.signal ?? AbortSignal.timeout(10_000),
     });
   const json = async (path: string) => {
     const res = await gh(path);
@@ -121,14 +121,20 @@ Deno.serve(async (req) => {
       const headSha = String((prRes.data.head as { sha?: string })?.sha ?? '');
       if (prRes.data.state !== 'open') return refuse(409, 'PR이 병합되지 않은 채 닫혀 있습니다.');
       if (!headSha || headSha !== last.head_sha) return refuse(409, 'CI를 확인한 뒤 PR에 새 커밋이 올라왔습니다. PR·CI를 다시 확인한 뒤 배포하세요.');
-      const merge = await gh(`/pulls/${pr.number}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: 'squash', sha: headSha }) });
-      if (merge.status !== 200) {
-        const detail = ((await merge.json().catch(() => ({}))) as { message?: string }).message ?? '';
+      // v0.7.37(MinSnakey): 병합 응답이 10초를 넘거나 앞 요청의 병합이 진행 중(405 already in progress)이면 실패로 끝내지 않고 병합됐는지 다시 본다
+      const merge = await gh(`/pulls/${pr.number}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: 'squash', sha: headSha }), signal: AbortSignal.timeout(30_000) }).catch(() => null);
+      const detail = merge && merge.status !== 200 ? (((await merge.json().catch(() => ({}))) as { message?: string }).message ?? '') : '';
+      const pending = !merge || (merge.status === 405 && /in progress/i.test(detail));
+      if (merge && merge.status !== 200 && !pending) {
         const hint = merge.status === 403 || merge.status === 404 ? ' 토큰에 Contents·Pull requests(Read and write) 권한이 있는지 확인하세요.' : merge.status === 405 ? ' 병합할 수 없는 상태입니다(충돌·보호 규칙).' : '';
         return refuse(502, `PR을 병합하지 못했습니다(HTTP ${merge.status}). ${detail}${hint}`.trim());
       }
       prRes = await json(`/pulls/${pr.number}`);
-      if (!prRes.data.merged) return refuse(502, '병합 요청은 받았지만 PR이 아직 병합으로 보이지 않습니다. 잠시 뒤 다시 시도하세요.');
+      for (let i = 0; i < 6 && !prRes.data.merged; i++) {
+        await new Promise((r) => setTimeout(r, 4_000));
+        prRes = await json(`/pulls/${pr.number}`);
+      }
+      if (!prRes.data.merged) return refuse(502, '병합 요청은 받았지만 PR이 아직 병합으로 보이지 않습니다. 잠시 뒤 [운영 배포 다시 시도]를 누르세요.');
     }
     const mergeSha = String(prRes.data.merge_commit_sha ?? '');
 

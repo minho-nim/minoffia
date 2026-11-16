@@ -6,7 +6,7 @@
  * v0.7.14(소유자 "단계 진행상황을 대화에서 알려줘야 해"): 시안 도착·평가 점수(동료 점수 포함)·PR 열림·검사도 알리고, 지금 흐름(실행 승인 자동)에 맞게 문구를 고쳤다.
  */
 import type { Task } from './types';
-import { canApprove, deriveWorkflow } from './workflow';
+import { canApprove, deriveWorkflow, latestDeployment } from './workflow';
 import { STAGE_LABEL, type Stage, type WorkflowData } from './workflow-types';
 import { staleStart } from './reassign';
 import { DRAW_STYLE_LABEL } from './designDraft';
@@ -81,7 +81,9 @@ export function stageSignature(task: Task, all: WorkflowData): string {
   const rv = v.result ? (all.reviews ?? []).find((r) => r.taskId === task.id && r.resultRevision === v.result!.revision) : undefined;
   const review = rv ? `${rv.verdict}${(rv.panel ?? []).filter((p) => p.status === 'done').length}` : '';
   const pr = [...(all.prChecks ?? [])].filter((c) => c.taskId === task.id).pop()?.ciState ?? '';
-  return [v.stage, v.spec?.revision ?? 0, v.plan?.planRevision ?? 0, v.result?.revision ?? 0, drafts, review, pr].join(':');
+  // v0.7.37: 배포 승인 뒤 실제 배포 기록(성공·실패)이 오면 다시 알린다
+  const dep = v.cApproved ? (latestDeployment(task, all)?.ok === true ? 'ok' : latestDeployment(task, all) ? 'fail' : 'wait') : '';
+  return [v.stage, v.spec?.revision ?? 0, v.plan?.planRevision ?? 0, v.result?.revision ?? 0, drafts, review, pr, dep].join(':');
 }
 
 const AGENT: Record<string, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' };
@@ -124,6 +126,16 @@ export function noticeFor(task: Task, all: WorkflowData): StageNotice {
         : pr?.ciState === 'failure'
           ? 'PR 검사(CI)가 실패했어요. 업무 카드에서 이유를 보고 고치기를 맡기세요.'
           : 'PR을 열고 검사(CI)하는 중이에요. 통과하면 알려 드릴게요.',
+    );
+  } else if (v.stage === 'completed' && v.cApproved) {
+    // v0.7.37 소유자 "실패래 근데 대화는 배포 끝났대": 배포 승인 = 끝이 아니라, 실제 배포 기록으로 말한다
+    const d = latestDeployment(task, all);
+    lines.push(
+      !d
+        ? '배포하는 중이에요. 끝나면 알려 드릴게요.'
+        : d.ok
+          ? NEXT.completed!
+          : `배포하지 못했어요: ${clip(d.error || '이유 없음', 120)} 업무 카드에서 [운영 배포 다시 시도]를 누르세요.`,
     );
   } else if (v.stage === 'needs_clarification' && v.spec?.answer) {
     const q = v.spec.answer.trim();
