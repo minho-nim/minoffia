@@ -29,31 +29,37 @@ jobs:
           [ -n "$GH_TOKEN" ] || { echo "::error::Actions secrets에 TARGET_REPO_TOKEN이 없습니다"; exit 1; }
           tpl="$PWD/.github/templates/ui-check.yml"
           ok=0; fail=0
+          # 한 저장소 넣기. 단계마다 실패를 확인한다(set -e는 && || 안에서 꺼지므로 쓰지 않음)
+          one() {
+            REPO=$1
+            base=$(gh api "repos/$REPO" --jq .default_branch) || { echo "::warning::$REPO: 저장소를 읽지 못함"; return 1; }
+            rm -rf /tmp/repo
+            git clone -q --depth 1 --branch "$base" "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" /tmp/repo || { echo "::warning::$REPO: 받지 못함"; return 1; }
+            cd /tmp/repo || return 1
+            mkdir -p .github/workflows
+            if cmp -s "$tpl" .github/workflows/ui-check.yml; then echo "$REPO: 이미 같음"; cd - >/dev/null; return 0; fi
+            cp "$tpl" .github/workflows/ui-check.yml
+            git config user.name "minoffia"
+            git config user.email "minoffia@users.noreply.github.com"
+            head="ai/ui-check"
+            git checkout -q -b "$head" && git add .github/workflows/ui-check.yml && git commit -q -m "UI 코드 검사 넣기(uxkin/ui-check v1.0.1, 알림만)" || { echo "::warning::$REPO: 커밋 못 함"; cd - >/dev/null; return 1; }
+            if ! git push -q --force origin "$head" 2>/tmp/push.err; then
+              grep -q "workflow" /tmp/push.err && echo "::error::$REPO: 토큰(TARGET_REPO_TOKEN)에 workflow 권한이 없어 워크플로 파일을 올리지 못함" || { echo "::warning::$REPO: 올리지 못함"; cat /tmp/push.err; }
+              cd - >/dev/null; return 1
+            fi
+            owner=${REPO%%/*}
+            url=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$head" --jq '.[0].html_url // empty')
+            [ -n "$url" ] || url=$(gh api -X POST "repos/$REPO/pulls" -f title="UI 코드 검사 넣기" -f head="$head" -f base="$base" -f body="미노피아가 넣는 PR 검사입니다. PR이 새로 추가한 화면 코드만 보고 문제를 PR에 표시합니다(알림만, 병합을 막지 않음). uxkin/ui-check v1.0.1(MIT)을 확인한 커밋으로 고정." --jq .html_url) || { echo "::warning::$REPO: PR을 열지 못함"; cd - >/dev/null; return 1; }
+            case "$url" in https://github.com/*/pull/*) ;; *) echo "::warning::$REPO: PR 주소가 이상함: $url"; cd - >/dev/null; return 1;; esac
+            gh api -X PUT "repos/$REPO/pulls/${url##*/}/merge" -f merge_method=squash >/dev/null || { echo "::warning::$REPO: PR은 열었지만 병합 못 함 $url"; cd - >/dev/null; return 1; }
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$head" >/dev/null 2>&1 || true
+            echo "$REPO: 넣음 $url"
+            cd - >/dev/null
+          }
           for REPO in $(echo "$REPOS" | tr ',' ' '); do
             echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::warning::이름이 이상해 건너뜀: $REPO"; fail=$((fail+1)); continue; }
             [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "건너뜀: $REPO(받지 않는 저장소)"; continue; }
-            (
-              set -e
-              base=$(gh api "repos/$REPO" --jq .default_branch)
-              rm -rf /tmp/repo && git clone -q --depth 1 --branch "$base" "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" /tmp/repo
-              cd /tmp/repo
-              mkdir -p .github/workflows
-              if cmp -s "$tpl" .github/workflows/ui-check.yml; then echo "$REPO: 이미 같음"; exit 0; fi
-              cp "$tpl" .github/workflows/ui-check.yml
-              git config user.name "minoffia"
-              git config user.email "minoffia@users.noreply.github.com"
-              head="ai/ui-check"
-              git checkout -q -b "$head"
-              git add .github/workflows/ui-check.yml
-              git commit -q -m "UI 코드 검사 넣기(uxkin/ui-check v1.0.1, 알림만)"
-              git push -q --force origin "$head"
-              owner=${REPO%%/*}
-              url=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$head" --jq '.[0].html_url // empty')
-              [ -n "$url" ] || url=$(gh api -X POST "repos/$REPO/pulls" -f title="UI 코드 검사 넣기" -f head="$head" -f base="$base" -f body="미노피아가 넣는 PR 검사입니다. PR이 새로 추가한 화면 코드만 보고 문제를 PR에 표시합니다(알림만, 병합을 막지 않음). uxkin/ui-check v1.0.1(MIT)을 확인한 커밋으로 고정." --jq .html_url)
-              gh api -X PUT "repos/$REPO/pulls/${url##*/}/merge" -f merge_method=squash >/dev/null
-              gh api -X DELETE "repos/$REPO/git/refs/heads/$head" >/dev/null 2>&1 || true
-              echo "$REPO: 넣음 $url"
-            ) && ok=$((ok+1)) || { echo "::warning::$REPO: 넣지 못함(토큰 workflow 권한·저장소 접근 확인)"; fail=$((fail+1)); }
+            if one "$REPO"; then ok=$((ok+1)); else fail=$((fail+1)); fi
           done
           echo "끝: 성공 $ok · 실패 $fail"
           [ "$fail" -eq 0 ]
