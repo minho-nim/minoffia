@@ -76,10 +76,14 @@ async function serverText(admin: any, a: { task_id: string; plan_revision: numbe
   const slim = !!(sc?.map as Record<string, Record<string, string>> | null)?.[String(t.project_id)]?.['repo-map'];
   // v0.7.13: 소유자가 고른 Gemini 시안이 있으면 기획서 뒤에 붙인다
   const design = await loadPickedDesignSection(admin, a.task_id, spec.revision);
+  // v0.7.41 LLM 위키: 이 프로젝트의 지난 업무를 AI가 정리한 한 장(참고 자료)
+  const { data: wikiRow } = await admin.from('project_wiki').select('body').eq('project_id', t.project_id).maybeSingle();
+  const wikiBody = String(wikiRow?.body ?? '').trim();
+  const wiki = wikiBody ? `\n\n## 프로젝트 위키(참고 자료, 지난 업무를 AI가 정리한 것 — 저장소를 뒤지기 전에 먼저 본다)\n${wikiBody.slice(0, 4000)}` : '';
   return buildServerHandoff({
     taskId: a.task_id,
     repo: String((t.projects as { repo?: string } | null)?.repo ?? ''),
-    spec: { revision: spec.revision, final_prompt: `${spec.final_prompt ?? ''}${design}`, change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '' },
+    spec: { revision: spec.revision, final_prompt: `${spec.final_prompt ?? ''}${design}${wiki}`, change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '' },
     item: { id: String(item.id), title: String(item.title ?? ''), goal: String(item.goal ?? ''), acceptance_tests: item.acceptance_tests as string[] | undefined, preserve_constraints: item.preserve_constraints as string[] | undefined },
     baseRevision: String(plan?.target_base_revision ?? ''),
     // 기본 규칙(모든 프로젝트)도 함께(v0.6.59: 서버가 시작한 Codex에는 프로젝트 규칙만 가고 기본 규칙이 빠져 있었다)

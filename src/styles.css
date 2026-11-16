@@ -7708,3 +7708,27 @@ html.popup-open .project-sections > details[open] * {
   padding-left: 18px;
   color: var(--ink);
 }
+
+/* LLM 위키(v0.7.41) */
+.wiki-body h4 {
+  margin: 10px 0 4px;
+  font-size: 0.95rem;
+}
+
+.wiki-body p,
+.wiki-body ul {
+  margin: 2px 0;
+  font-size: 0.9rem;
+}
+
+.wiki-body ul {
+  padding-left: 18px;
+}
+
+.wiki-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}

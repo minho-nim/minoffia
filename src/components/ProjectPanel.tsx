@@ -55,6 +55,8 @@ interface Props {
   setupIssuesOf?: (project: Project) => SetupIssues;
   /** UI 코드 검사(PR 알림)가 들어 있는지(모르면 undefined) */
   uiCheckOf?: (project: Project) => boolean | undefined;
+  /** LLM 위키(v0.7.41) */
+  renderWiki?: (project: Project) => ReactNode;
   onInstallUiCheck?: (project: Project) => Promise<void>;
   /** 반복되는 문제를 스킬로 만들기(v0.6.59): 스킬 탭 만들기 창을 이 내용으로 연다 */
   onMakeSkill?: (project: Project, issue: string) => void;
@@ -64,7 +66,7 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderMaps, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, uiCheckOf, onInstallUiCheck, onMakeSkill }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderMaps, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, uiCheckOf, onInstallUiCheck, onMakeSkill, renderWiki }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   // 카드 아래 칸(배포·구조 보기·점검·스킬…)은 접어 둔다(v0.6.72 소유자 "버튼 줄까지만 보이고 아래는 접히게")
   const [moreOpen, setMoreOpen] = useState<Record<string, boolean>>({});
@@ -72,6 +74,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
   const [healthOpen, setHealthOpen] = useState<Record<string, boolean>>({});
   const [designOpen, setDesignOpen] = useState<Record<string, boolean>>({});
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
+  const [wikiOpen, setWikiOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
   const [description, setDescription] = useState('');
@@ -314,6 +317,12 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                 </details>
               )}
               {/* v0.6.70 소유자 "지도는 구조 보기 하나로": 간략·자세히·구조도는 '구조 보기' 탭으로, 점검은 따로 */}
+              {renderWiki && p.repo && !p.sample && (
+                <details className="project-rules project-wiki" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setWikiOpen((o) => ({ ...o, [p.id]: open })); }}>
+                  <summary>위키</summary>
+                  {wikiOpen[p.id] && renderWiki(p)}
+                </details>
+              )}
               {(renderMaps || renderStructure) && (
                 <details className="project-rules project-maps" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setStructureOpen((o) => ({ ...o, [p.id]: open })); }}>
                   <summary>구조 보기</summary>

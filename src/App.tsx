@@ -1,4 +1,5 @@
 import { projectShortcuts } from './domain/shortcuts';
+import { WikiView } from './components/WikiView';
 import { withBaseRules } from './domain/baseRules';
 import { TeamPanel } from './components/TeamPanel';
 import { TurnMenu } from './components/TurnMenu';
@@ -2525,6 +2526,7 @@ export function App() {
               onOpenTask={(id) => showTask(id)}
               demoUrlOf={(p) => demoUrls[p.id] ?? null}
               lastDeployOf={(p) => (p.repo ? snap.workflow.deployments.filter((d) => d.repo.toLowerCase() === p.repo!.toLowerCase()).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null : null)}
+              renderWiki={store.wiki ? (p) => <WikiView projectId={p.id} api={store.wiki!} /> : undefined}
               renderSkills={
                 store.skills && store.skillMap
                   ? (p) => (

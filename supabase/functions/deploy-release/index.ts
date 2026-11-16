@@ -52,6 +52,19 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const record = async (ok: boolean, fromSha: string, toSha: string, error: string) => {
     await admin.from('deployments').insert({ owner_id: user.id, task_id: task.id, repo, from_sha: fromSha, to_sha: toSha, ok, error: error.slice(0, 500) });
+    // v0.7.41 LLM 위키: 배포까지 끝난 업무를 프로젝트 위키에 더한다(뒤에서, 실패해도 배포는 그대로)
+    if (ok) {
+      const key = env('SUPABASE_SERVICE_ROLE_KEY');
+      const wiki = fetch(`${env('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/wiki-update`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'task', taskId: task.id, ownerId: user.id }),
+        signal: AbortSignal.timeout(90_000),
+      }).catch(() => undefined);
+      // deno-lint-ignore no-explicit-any
+      const er = (globalThis as any).EdgeRuntime;
+      if (er) er.waitUntil(wiki);
+    }
   };
   const refuse = async (status: number, error: string, fromSha = '', toSha = '') => {
     await record(false, fromSha, toSha, error);

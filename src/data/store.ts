@@ -166,6 +166,12 @@ export interface OfficeStore {
     load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>;
     start(taskId: string, revision: number): Promise<void>;
   };
+  /** LLM 위키(v0.7.41): 프로젝트 한 장짜리 위키 읽기·다시 정리·빈 프로젝트 채우기(Supabase 모드에서만) */
+  wiki?: {
+    get(projectId: string): Promise<{ body: string; updatedAt: string; judge: string; tasks: number } | null>;
+    rebuild(projectId: string): Promise<string>;
+    fillAll(): Promise<number>;
+  };
   /** 화면 확인(v0.6.9): 실제 미리보기·운영 사이트를 찍어 본다(Supabase 모드에서만) */
   siteCheck?: {
     load(taskId: string): Promise<import('../domain/siteCheck').SiteChecks>;
