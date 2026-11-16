@@ -13,6 +13,16 @@ export interface SetupIssues {
   codex: string | null;
   /** Claude가 이 프로젝트 저장소를 열지 못한 적이 있음 */
   claude: string | null;
+  /** 그 실패 기록 시각(소유자가 '넣었어요'를 체크한 뒤의 실패만 다시 알리려고, v0.7.20) */
+  codexAt?: string;
+  claudeAt?: string;
+}
+
+/** 소유자가 설정을 마쳤다고 체크한 시각보다 오래된 실패는 알리지 않는다(v0.7.20 소유자 "다 넣었음") */
+export function openIssue(issue: string | null, failedAt: string | undefined, checkedAt: string | null): string | null {
+  if (!issue) return null;
+  if (checkedAt && failedAt && failedAt <= checkedAt) return null;
+  return issue;
 }
 
 export function setupIssues(projectId: string, tasks: Task[], wf: WorkflowData): SetupIssues {
@@ -25,5 +35,7 @@ export function setupIssues(projectId: string, tasks: Task[], wf: WorkflowData):
   return {
     codex: codexA && (!codexOk || codexOk.updatedAt < codexA.updatedAt) ? 'Codex가 이 저장소 환경을 찾지 못했어요' : null,
     claude: claudeA && (!claudeOk || claudeOk.updatedAt < claudeA.updatedAt) ? 'Claude 루틴에 이 저장소가 없어요' : null,
+    ...(codexA ? { codexAt: codexA.updatedAt } : {}),
+    ...(claudeA ? { claudeAt: claudeA.updatedAt } : {}),
   };
 }
