@@ -7621,15 +7621,29 @@ html.popup-open .project-sections > details[open] * {
   height: 150px;
 }
 
-/* 답장 줄의 취소(✕)는 왼쪽에 크게(v0.7.27 소유자 "…에 가려짐") */
+/* 답장 줄의 취소(✕)는 오른쪽, 누르는 칸 크게(v0.7.27 소유자 "…에 가려짐") */
 .inbox-reply-bar .link-btn {
   min-width: 32px;
   min-height: 32px;
 }
 
 @media (max-width: 1039px) {
-  /* 글 끝이 '…' 버튼 밑으로 들어가지 않게 */
+  /* 오른쪽 ✕가 '…' 버튼 밑으로 들어가지 않게 그 자리만큼 비운다 */
   .inbox-reply-bar {
-    padding-right: 48px;
+    padding-right: 52px;
   }
+}
+
+/* 위를 보는 중에 새 말이 오면 '새 메시지 N ↓'(v0.7.27) */
+.inbox-to-end.has-new {
+  width: auto;
+  gap: 4px;
+  padding: 0 12px;
+  border-color: var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
 }

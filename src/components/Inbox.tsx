@@ -512,6 +512,10 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
   };
   // 맨 아래로 단추(v0.6.5 소유자 "Claude처럼 위로 스크롤하면 맨 아래로 내려가는 화살표"): 마지막 말이 입력창 위로 안 보이면 뜬다
   const [awayFromEnd, setAwayFromEnd] = useState(false);
+  /** 새 말이 오기 직전에 위를 보고 있었나(v0.7.27 소유자 "맨 아래 볼 땐 밀어 올리고, 위 볼 땐 새 대화 표시") */
+  const awayRef = useRef(false);
+  const [newCount, setNewCount] = useState(0);
+  const lastSeenId = useRef<string | null>(null);
   useEffect(() => {
     let frame = 0;
     const check = () => {
@@ -521,7 +525,10 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       const vv = window.visualViewport;
       const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
       const covered = (formRef.current?.offsetHeight ?? 0) + 24;
-      setAwayFromEnd(end.getBoundingClientRect().top > viewBottom - covered + 120);
+      const away = end.getBoundingClientRect().top > viewBottom - covered + 120;
+      awayRef.current = away;
+      setAwayFromEnd(away);
+      if (!away) setNewCount(0);
     };
     const onScroll = () => {
       if (!frame) frame = window.requestAnimationFrame(check);
@@ -543,6 +550,19 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     const need = end.getBoundingClientRect().bottom + (formRef.current?.offsetHeight ?? 0) + 16 - viewBottom;
     window.scrollBy({ top: need, behavior: 'smooth' });
   };
+  // 맨 아래를 보는 중에 카드가 늦게 커지면(사진·시안을 다 불러오면) 따라 내린다(v0.7.28). 위를 보고 있으면 그대로
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === 'undefined') return;
+    let h = list.offsetHeight;
+    const ro = new ResizeObserver(() => {
+      const nh = list.offsetHeight;
+      if (nh > h && !awayRef.current) revealEnd();
+      h = nh;
+    });
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [log.length > 0]);
   // 입력창 높이를 CSS 변수(--inbox-form-h)로: 빈 대화의 인사말을 입력창 바로 위에 붙이는 데 쓴다(v0.4.78).
   useEffect(() => {
     const form = formRef.current;
@@ -705,6 +725,17 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     } catch {
       // 저장이 막힌 브라우저에서는 이번 화면에서만 남는다.
     }
+    // 새로 붙은 말(이 대화창 것만). 마지막으로 본 말 뒤의 것
+    const i = lastSeenId.current ? log.findIndex((m) => m.id === lastSeenId.current) : -1;
+    const added = (i >= 0 ? log.slice(i + 1) : lastSeenId.current ? log : []).filter(inThread);
+    lastSeenId.current = log[log.length - 1]?.id ?? null;
+    // 위를 보고 있으면 끌어내리지 않고 '새 메시지' 표시만(내가 보낸 말이면 내린다)
+    if (awayRef.current && !added.some((m) => m.from === 'me')) {
+      const others = added.filter((m) => m.from !== 'me').length;
+      if (others) setNewCount((c) => c + others);
+      return;
+    }
+    setNewCount(0);
     // 대화 상자 안을 맨 아래(새 메시지)로 내리고, 화면도 입력창이 보이게 맞춘다.
     const box = listRef.current;
     if (box) box.scrollTop = box.scrollHeight;
@@ -2022,13 +2053,13 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       >
         {replyTo && (
           <p className="inbox-reply-bar">
-            {/* 취소는 왼쪽(v0.7.27): 오른쪽은 휴대폰 '…' 버튼에 가린다 */}
-            <button type="button" className="link-btn" aria-label="답장 취소" onClick={() => setReplyTo(null)}>
-              ✕
-            </button>
             <span>
               <b>{'\u21A9\uFE0E'} 답장</b> {replyTo.label}
             </span>
+            {/* 취소는 오른쪽(소유자), 휴대폰 '…' 버튼 자리만큼 비워 둔다(CSS) */}
+            <button type="button" className="link-btn" aria-label="답장 취소" onClick={() => setReplyTo(null)}>
+              ✕
+            </button>
           </p>
         )}
         {/* 보낼 첨부는 입력창 안 위쪽에 붙는다(v0.4.88 소유자: 따로 떨어져 보였음) */}
@@ -2071,7 +2102,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
           }}
         />
         {awayFromEnd && shown.length > 0 && (
-          <button type="button" className="inbox-to-end" aria-label="맨 아래로" title="맨 아래로" onMouseDown={(e) => e.preventDefault()} onClick={toEnd}>
+          <button type="button" className={`inbox-to-end${newCount ? ' has-new' : ''}`} aria-label={newCount ? `새 메시지 ${newCount}개, 맨 아래로` : '맨 아래로'} title="맨 아래로" onMouseDown={(e) => e.preventDefault()} onClick={toEnd}>
+            {newCount > 0 && <span>새 메시지 {newCount}</span>}
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 5v14M6 13l6 6 6-6" />
             </svg>
