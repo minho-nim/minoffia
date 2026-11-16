@@ -364,6 +364,9 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     if (!task) return null;
     const view = deriveWorkflow(task, snap.workflow);
     if (view.stage !== m.stage) return null;
+    // 같은 업무의 알림이 여럿이면(검사 중 → 통과처럼 같은 단계에서 글만 바뀐 것) 마지막 카드에만 버튼(v0.7.36 소유자 "왜 두 개?")
+    const latest = [...log].reverse().find((x) => x.taskId === task.id && x.actions && x.stage && x.id.startsWith('stage-'));
+    if (m.id.startsWith('stage-') && latest && latest.id !== m.id) return null;
     const gate = approvalGate(view);
     // 체험 업무('[체험]', demoServer의 DEMO_TAG)는 저장소 없이도 끝까지 돈다
     const repo = !!snap.projects.find((p) => p.id === task.projectId)?.repo || task.title.startsWith('[체험]');
