@@ -31,6 +31,7 @@
 - **요청은 대화로** — 대화창에 한 줄 쓰면 미니엉이 프로젝트와 담당 AI를 정해 업무로 접수합니다(모델 호출 없음).
 - **사람은 결정만** — 기획 승인 → 올리기 승인 → 배포 승인, 휴대폰에서 세 번 누르면 끝까지 갑니다.
 - **AI가 AI를 검증** — 결과 하나를 AI 셋이 같은 항목, 다른 관점으로 채점하고, 기준 미달이면 사람에게 오기 전에 다시 개발합니다.
+- **그림부터 고르기** — 기획서가 나오면 Gemini 둘이 화면 시안을 하나씩 그리고 서로 평가합니다. 사람은 하나를 고르기만 합니다.
 - **확인한 것만 표시** — "배정됨"과 "실행됨"을 나누고, 승인·기획서·결과는 고칠 수 없는 기록으로 남깁니다.
 - **0원으로 운영** — 이미 쓰는 구독(Claude, ChatGPT)과 무료 API(Gemini, Exa)만 씁니다.
 
@@ -40,7 +41,7 @@
 
 AI가 여럿인데 사람이 그 사이를 오가며 글을 옮기고, 같은 설명을 몇 번씩 다시 하고, 결과가 맞는지 혼자 확인했습니다. 코딩을 몰라도 AI에게 일을 맡길 수는 있지만, **맡기는 방식**이 비효율이었습니다.
 
-그래서 사람은 결정만 하고, 나머지는 AI끼리 나눠 하는 사무실을 만들었습니다. 코딩 지식 없이 16일 동안 만들었고, 추가 비용은 0원입니다.
+그래서 사람은 결정만 하고, 나머지는 AI끼리 나눠 하는 사무실을 만들었습니다. 코딩 지식 없이 19일 동안 만들었고, 추가 비용은 0원입니다.
 
 ### AI 하나에 다 맡길 때와 무엇이 다른가
 
@@ -59,8 +60,8 @@ AI가 여럿인데 사람이 그 사이를 오가며 글을 옮기고, 같은 �
 <td align="center" width="14%"><img src="src/assets/office/characters/mina-stand.png" height="72" alt="미니엉"><br><b>미니엉</b><br><sub>접수</sub></td>
 <td align="center" width="14%"><img src="src/assets/office/characters/claude-stand.png" height="72" alt="Claude"><br><b>Claude</b><br><sub>PM·기획 + 보조 개발</sub></td>
 <td align="center" width="14%"><img src="src/assets/office/characters/codex-stand.png" height="72" alt="Codex"><br><b>Codex</b><br><sub>주 개발</sub></td>
-<td align="center" width="14%"><img src="src/assets/office/characters/studioA-stand.png" height="72" alt="Studio A"><br><b>Studio A</b><br><sub>Gemini · 채점①</sub></td>
-<td align="center" width="14%"><img src="src/assets/office/characters/studioB-stand.png" height="72" alt="Studio B"><br><b>Studio B</b><br><sub>Gemini · 채점②</sub></td>
+<td align="center" width="14%"><img src="src/assets/office/characters/studioA-stand.png" height="72" alt="Studio A"><br><b>Studio A</b><br><sub>Gemini · 평가①·시안</sub></td>
+<td align="center" width="14%"><img src="src/assets/office/characters/studioB-stand.png" height="72" alt="Studio B"><br><b>Studio B</b><br><sub>Gemini · 평가②·시안</sub></td>
 <td align="center" width="14%"><img src="src/assets/office/characters/exa-stand.png" height="72" alt="Exa"><br><b>Exa</b><br><sub>웹 조사</sub></td>
 <td align="center" width="14%"><img src="src/assets/office/characters/ci-stand.png" height="72" alt="미노"><br><b>미노</b><br><sub>검수·배포</sub></td>
 </tr>
@@ -129,13 +130,13 @@ sequenceDiagram
 | 채점 | AI 하나 | **AI 셋**(관점이 다른 Gemini 둘 + 동료 개발 AI) |
 | 추가 비용 | — | **0원** |
 
-## 16일 동안 쌓은 것
+## 19일 동안 쌓은 것
 
-| 16일 | 397 | 224 | 3.1만 줄 | 500 | 29 | 56 | 14 | 0원 |
+| 19일 | 416 | 241 | 3.3만 줄 | 528 | 32 | 60 | 14 | 0원 |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| 2026.10.29 → 11.13 | 합친 변경(PR) | 버전 기록 | 코드 | 자동 시험 | 서버 함수 | DB 변경 기록 | 관리하는 프로젝트 | 추가 비용 |
+| 2026.10.29 → 11.16 | 합친 변경(PR) | 버전 기록 | 코드 | 자동 시험 | 서버 함수 | DB 변경 기록 | 관리하는 프로젝트 | 추가 비용 |
 
-숫자는 저장소와 운영 DB 기록에서 센 값입니다(2026-11-13, [포트폴리오](https://minlab-ai-office.pages.dev/portfolio)와 같음). 앱 대부분은 Claude와 대화하며 만들었습니다. 앱 안에서 요청부터 배포까지 끝까지 돈 업무는 아직 3건이고, 지금도 실제로 쓰면서 검증하고 있습니다.
+숫자는 저장소와 운영 DB 기록에서 센 값입니다(2026-11-16, [포트폴리오](https://minlab-ai-office.pages.dev/portfolio)와 같음). 앱 대부분은 Claude와 대화하며 만들었습니다. 앱 안에서 요청부터 배포까지 끝까지 돈 업무는 아직 3건이고, 지금도 실제로 쓰면서 검증하고 있습니다.
 
 ## 데모 직접 써 보기
 
@@ -145,9 +146,10 @@ sequenceDiagram
 
 ## 새 소식
 
-- **v0.7.11** — Exa 웹 검색이 안 될 때 누르면 Claude가 대신 찾아 주는 [Claude에게 찾아보기]
-- **v0.7.10** — 웹 조사는 Exa만(무료 키로 안 되던 Gemini 검색 연결은 지움)
-- **v0.7.9** — 팀 관리에서 Exa에게도 휴가를 줄 수 있음
+- **v0.7.21** — 스킬 원본을 고치면 버튼 한 번으로 모든 프로젝트 최신으로, 모든 프로젝트 PR에 UI 코드 검사(알림만)
+- **v0.7.17~19** — 디스코드식 대화창(말한 AI의 얼굴·이름·시각, 업무 알림 카드), 업무 카드 맨 위 진행 단계 칩
+- **v0.7.14~16** — 진행 단계와 사장님이 누른 승인을 대화창에 바로 알림
+- **v0.7.13** — Gemini 시안: 두 Gemini가 화면 시안을 그리고 서로 평가, 사람이 고름
 - **v0.7.8** — 코드 3중 평가: Gemini A·B + 동료 개발 AI, 각 점수와 평균
 
 전체 기록은 [변경 기록](CHANGELOG.md)에 있습니다.
@@ -168,8 +170,7 @@ sequenceDiagram
 
 ## 앞으로
 
-- 프로젝트별 채팅방(Discord처럼 AI가 직접 말하는 방)
-- Gemini 두 개가 각각 시안을 그리고 서로 평가한 뒤 사람이 고르기
+- 실제 업무로 새 기능(시안·동료 평가·UI 코드 검사)을 끝까지 돌려 검증하기
 - 다른 사람도 쓸 수 있는 버전
 
 ## 기술 스택
