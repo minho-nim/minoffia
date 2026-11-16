@@ -608,6 +608,17 @@ export function App() {
     void store.pagesUrls(repoProjectKey.split(',').map((x) => x.split(':')[0])).then((m) => alive && setDemoUrls(m)).catch(() => undefined);
     return () => { alive = false; };
   }, [tab, repoProjectKey, store]);
+  // UI 코드 검사가 들어 있는 프로젝트(2026-11-16): 프로젝트 탭을 열 때 한 번 묻는다(실패하면 준비 칸에 상태만 안 보임)
+  const [uiCheckHas, setUiCheckHas] = useState<Record<string, boolean> | null>(null);
+  const [uiCheckKick, setUiCheckKick] = useState(0);
+  useEffect(() => {
+    if (tab !== 'projects' || !repoProjectKey || !store?.uiCheckStatus) return;
+    let alive = true;
+    void store.uiCheckStatus().then((m) => alive && setUiCheckHas(m)).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [tab, repoProjectKey, store, uiCheckKick]);
   const ciFixTried = useRef(new Set<string>());
   const handoffTried = useRef(new Set<string>());
   // Gemini 시안 자동 그리기(v0.7.13): 기획서가 '새 디자인 필요'라고 하면 기획 승인 전에 한 번만 그린다(기획서 버전마다, 실패해도 다시 안 부름)
@@ -1839,6 +1850,8 @@ export function App() {
             const defaults = (await store.skills!()).map(toSkillView).filter((s) => s.isDefault);
             for (const s of defaults) await store.installSkill!(s.name, [project.id], 'add');
             if (defaults.length) say('ok', `새 저장소에 기본 스킬 ${defaults.length}개(${defaults.map((s) => s.title).join(', ')})를 넣기 시작했어요(1~2분).`);
+            // UI 코드 검사도 새 저장소에 넣는다(2026-11-16 소유자 "UI에 쓰는 거라 웬만하면 모두")
+            await store.installUiCheck?.([project.id]).catch(() => null);
           } catch {
             // 스킬 넣기 실패는 저장소 만들기와 별개(스킬 탭에서 다시 넣을 수 있다)
           }
@@ -2448,6 +2461,20 @@ export function App() {
                   : undefined
               }
               setupIssuesOf={(p) => setupIssues(p.id, snap.tasks, snap.workflow)}
+              uiCheckOf={uiCheckHas ? (p) => uiCheckHas[p.id] ?? false : undefined}
+              onInstallUiCheck={
+                store.installUiCheck
+                  ? async (p) => {
+                      try {
+                        await store.installUiCheck!([p.id]);
+                        say('ok', `${p.name}에 UI 코드 검사를 넣기 시작했어요(Actions, 1분 안팎). 끝나면 준비 칸이 체크돼요.`);
+                        window.setTimeout(() => setUiCheckKick((n) => n + 1), 90_000);
+                      } catch (e) {
+                        say('error', `UI 코드 검사를 넣지 못했어요: ${(e as Error).message}`);
+                      }
+                    }
+                  : undefined
+              }
               projects={ordered}
               tasks={snap.tasks}
               turnsByProject={turnsByProject}
@@ -2548,6 +2575,7 @@ export function App() {
                     }
                   : undefined
               }
+              refreshAll={store.refreshSkills ? () => store.refreshSkills!() : undefined}
               canRequest={!!officeProject}
               onSend={(text) => {
                 if (!officeProject) return;

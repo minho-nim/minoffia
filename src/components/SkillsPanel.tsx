@@ -12,7 +12,7 @@ export interface SkillProject {
   repo: string;
 }
 
-export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill, installRequest, renderMap }: {
+export function SkillsPanel({ load, onSend, canRequest, projects = [], status, install, usage = new Map(), prefill, installRequest, renderMap, refreshAll }: {
   /** force = '다시 읽기'(저장해 둔 것 말고 새로) */
   load: (force?: boolean) => Promise<SkillFile[]>;
   onSend: (text: string) => void;
@@ -29,6 +29,8 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   installRequest?: { name: string; n: number } | null;
   /** 스킬 지도: 스킬 모음 프로젝트의 앱 점검 화면(App이 만든다) */
   renderMap?: import('react').ReactNode;
+  /** 모든 프로젝트 스킬 최신으로(2026-11-16): 한 번 눌러 프로젝트마다 원본과 다른 스킬만 맞춘다 */
+  refreshAll?: () => Promise<{ repos: string[] }>;
 }) {
   // 스킬 지도(v0.6.63 소유자 "프로젝트의 지도 보기처럼"): 앱 지도와 같은 큰 팝업으로 연다. 열 때만 프로젝트 상태를 읽는다
   const view = 'list' as const;
@@ -38,6 +40,8 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [installMsg, setInstallMsg] = useState('');
   const [installing, setInstalling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState('');
   const openInstall = (skill: string) => {
     setInstallFor(skill);
     setStates(null);
@@ -173,8 +177,30 @@ export function SkillsPanel({ load, onSend, canRequest, projects = [], status, i
           <button type="button" className="btn btn-small btn-ghost" onClick={() => refresh(true)} aria-label="스킬 목록 다시 읽기">
             새로 읽기
           </button>
+          {refreshAll && (
+            <button
+              type="button"
+              className="btn btn-small btn-ghost"
+              disabled={refreshing}
+              title="각 프로젝트에 이미 들어 있는 스킬 중 원본과 다른 것만 최신으로 맞춰요(Actions 한 번)"
+              onClick={async () => {
+                setRefreshing(true);
+                try {
+                  const r = await refreshAll();
+                  setRefreshMsg(`프로젝트 ${r.repos.length}곳의 스킬을 최신으로 맞추기 시작했어요(Actions, 몇 분). 바뀐 곳만 PR로 들어가요.`);
+                } catch (e) {
+                  setRefreshMsg(`시작하지 못했어요: ${(e as Error).message}`);
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+            >
+              {refreshing ? '시작하는 중…' : '모든 프로젝트 최신으로'}
+            </button>
+          )}
         </span>
       </div>
+      {refreshMsg && <p className="small">{refreshMsg}</p>}
       <p className="muted small">
         AI가 개발할 때 꺼내 쓰는 작업 설명서예요(원본: minoffia-skills 저장소). 만들기·찾기에 짧게 적어 보내면 대화로 접수되고, Claude가 만든 스킬은 올리기 승인 뒤 PR로 들어와요.
       </p>

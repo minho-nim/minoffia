@@ -175,6 +175,43 @@ Deno.serve(async (req) => {
     }
     return reply(200, { ok: true, started, failed });
   }
+  // 모든 프로젝트 스킬 최신으로(2026-11-16 소유자 "매번 한 번씩 돌아야 돼?"): Actions '모든 프로젝트 스킬 최신으로'를 한 번 시작한다.
+  // 저장소 있는 내 프로젝트 전부(MinLab·스킬 원본 저장소 제외). 각 저장소에 이미 있는 스킬 중 원본과 다른 것만 맞춘다. 버튼을 누른 것이 소유자 승인이다
+  if (body.action === 'skillRefresh' || body.action === 'uiCheckInstall') {
+    const actionsToken = env('GITHUB_ACTIONS_TOKEN');
+    if (!actionsToken) return reply(503, { ok: false, error: 'Actions를 시작할 토큰(GITHUB_ACTIONS_TOKEN)이 없습니다.' });
+    const ids = (Array.isArray(body.projectIds) ? body.projectIds : []).filter((x) => typeof x === 'string').slice(0, 30);
+    let q = userClient.from('projects').select('id, repo').not('repo', 'is', null);
+    if (body.action === 'uiCheckInstall') q = q.in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
+    const { data: rows } = await q;
+    const repos = [...new Set(((rows ?? []) as { repo: string | null }[]).map((r) => (r.repo ?? '').trim()).filter((r) => /^[\w.-]+\/[\w.-]+$/.test(r) && r.toLowerCase() !== 'minho-nim/minlab' && r.toLowerCase() !== skillsRepo.toLowerCase()))];
+    if (!repos.length) return reply(409, { ok: false, error: '저장소가 연결된 프로젝트가 없어요.' });
+    const officeRepo = env('OFFICE_REPO') || 'minho-nim/minoffia';
+    const workflow = body.action === 'skillRefresh' ? 'skills-refresh.yml' : 'ui-check-sync.yml';
+    const inputs = body.action === 'skillRefresh' ? { repos: repos.join(','), source: skillsRepo } : { repos: repos.join(',') };
+    const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/${workflow}/dispatches`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${actionsToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: 'main', inputs }),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => null);
+    if (!res || !res.ok) return reply(502, { ok: false, error: `Actions를 시작하지 못했어요(${res?.status ?? '연결 실패'}).` });
+    return reply(200, { ok: true, repos });
+  }
+  // UI 코드 검사가 들어 있는지(2026-11-16): 프로젝트 저장소에 .github/workflows/ui-check.yml이 있는지만 본다(읽기 전용 토큰)
+  if (body.action === 'uiCheckStatus') {
+    const { data: rows } = await userClient.from('projects').select('id, repo').not('repo', 'is', null);
+    const has: Record<string, boolean> = {};
+    await Promise.all(
+      ((rows ?? []) as { id: string; repo: string | null }[]).map(async (r) => {
+        const repo = (r.repo ?? '').trim();
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.toLowerCase() === 'minho-nim/minlab') return;
+        const res = await fetch(`https://api.github.com/repos/${repo}/contents/.github/workflows/ui-check.yml`, { headers: gh, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+        has[r.id] = Boolean(res && res.ok);
+      }),
+    );
+    return reply(200, { ok: true, has });
+  }
   if (body.action === 'skills') {
     const repo = skillsRepo;
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'minlab-ai-office' };

@@ -53,6 +53,9 @@ interface Props {
   demoUrlOf?: (project: Project) => string | null;
   /** 준비 체크리스트의 막힌 흔적(v0.6.32) */
   setupIssuesOf?: (project: Project) => SetupIssues;
+  /** UI 코드 검사(PR 알림)가 들어 있는지(모르면 undefined) */
+  uiCheckOf?: (project: Project) => boolean | undefined;
+  onInstallUiCheck?: (project: Project) => Promise<void>;
   /** 반복되는 문제를 스킬로 만들기(v0.6.59): 스킬 탭 만들기 창을 이 내용으로 연다 */
   onMakeSkill?: (project: Project, issue: string) => void;
 }
@@ -61,7 +64,7 @@ interface Props {
  * 프로젝트 탭(v0.4.18, 소유자: "프로젝트가 뭐 있나 더 잘 보였으면"): 프로젝트를 큰 카드로 먼저 보이고,
  * 등록 칸은 "+ 새 프로젝트"를 눌렀을 때만, 삭제는 수정 안에 둔다.
  */
-export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderMaps, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, onMakeSkill }: Props) {
+export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, onSave, onDelete, onCreateRepo, onAddRepoRules, rules = [], reviews = [], onAddRule, onRemoveRule, renderHistory, renderStructure, renderHealth, renderMaps, renderDesign, renderSkills, shortcutsOf, onOpenTask, lastDeployOf, demoUrlOf, setupIssuesOf, uiCheckOf, onInstallUiCheck, onMakeSkill }: Props) {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   // 카드 아래 칸(배포·구조 보기·점검·스킬…)은 접어 둔다(v0.6.72 소유자 "버튼 줄까지만 보이고 아래는 접히게")
   const [moreOpen, setMoreOpen] = useState<Record<string, boolean>>({});
@@ -303,7 +306,7 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
               {/* 덜 복잡하게(v0.6.41 소유자 "구조도 열어 보기 힘들어, 읽을 게 너무 많아"): 칸들을 한 줄 버튼으로, 누르면 전체 화면으로 열린다 */}
               {moreOpen[p.id] && (
               <div className="project-sections">
-              {p.repo && !p.sample && <ProjectSetup project={p} issues={setupIssuesOf?.(p) ?? { codex: null, claude: null }} />}
+              {p.repo && !p.sample && <ProjectSetup project={p} issues={setupIssuesOf?.(p) ?? { codex: null, claude: null }} uiCheck={uiCheckOf?.(p)} onInstallUiCheck={onInstallUiCheck ? () => onInstallUiCheck(p) : undefined} />}
               {renderHistory && (
                 <details className="project-rules project-history-box" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setHistoryOpen((o) => ({ ...o, [p.id]: open })); }}>
                   <summary>한 일 기록</summary>
@@ -482,7 +485,8 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
 
 /** 준비 체크리스트(v0.6.32 소유자 "새로 만든 건 또 이 작업을 해야 하나"): 자동으로 못 하는 설정만 모아 링크·복사로 바로 하게.
  *  체크 표시는 이 기기에만 기억한다(화면 편의, 막힌 흔적은 업무 기록으로 따로 알린다). */
-function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssues }) {
+function ProjectSetup({ project, issues, uiCheck, onInstallUiCheck }: { project: Project; issues: SetupIssues; uiCheck?: boolean; onInstallUiCheck?: () => Promise<void> }) {
+  const [uiStarting, setUiStarting] = useState(false);
   const key = (k: string) => `setup:${project.id}:${k}`;
   const read = (k: string) => {
     try {
@@ -520,11 +524,11 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
   };
   const codexOk = done.codex && !codexIssue;
   const claudeOk = done.claude && !claudeIssue;
-  const count = 1 + Number(codexOk) + Number(claudeOk);
+  const count = 1 + Number(codexOk) + Number(claudeOk) + Number(uiCheck === true);
   return (
     <details className="project-rules project-setup">
       <summary>
-        준비 {count}/3{codexIssue || claudeIssue ? ' ⚠' : ''}
+        준비 {count}/4{codexIssue || claudeIssue ? ' ⚠' : ''}
       </summary>
       <ul className="setup-list small">
         <li className="is-ok">✓ 저장소 연결: {project.repo}</li>
@@ -553,6 +557,29 @@ function ProjectSetup({ project, issues }: { project: Project; issues: SetupIssu
           <span className="muted">
             {' '}Codex 설정 → <b>레거시 Codex 클라우드</b> → 환경(이미 있으면 그 환경에 저장소 추가, 없으면 + 환경 만들기) → 저장소 {project.repo} → 추가 허용 도메인 붙여 넣기 → 저장. Linear·GitHub로 맡길 때는 레거시 환경만 써요(새 Codex Cloud 환경은 못 봐요, 2026-11-11 확인).
           </span>
+        </li>
+        <li className={uiCheck ? 'is-ok' : ''}>
+          {uiCheck ? '✓ ' : ''}UI 코드 검사(PR 알림)
+          {uiCheck === false && onInstallUiCheck && (
+            <span className="setup-actions">
+              <button
+                type="button"
+                className="btn btn-small btn-ghost"
+                disabled={uiStarting}
+                onClick={async () => {
+                  setUiStarting(true);
+                  try {
+                    await onInstallUiCheck();
+                  } finally {
+                    setUiStarting(false);
+                  }
+                }}
+              >
+                {uiStarting ? '넣는 중…' : '넣기'}
+              </button>
+            </span>
+          )}
+          <span className="muted"> PR이 새로 추가한 화면 코드에서 빠진 상태·아무 일 안 하는 버튼·접근성 기본을 PR에 표시해요(알림만, 병합은 안 막음).</span>
         </li>
         <li className={claudeOk ? 'is-ok' : claudeIssue ? 'is-bad' : ''}>
           <label className="check">
