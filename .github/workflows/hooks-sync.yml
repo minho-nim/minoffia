@@ -1,0 +1,77 @@
+# 기본 훅 넣기(v0.7.43 소유자 "하네스 엔지니어링 ㄱ"): .github/templates/hooks를 프로젝트 저장소에 넣는다.
+# - .claude/hooks/guard.mjs + .claude/settings.json(PreToolUse 훅, 기존 설정은 그대로 두고 훅만 더함): Claude가 위험한 명령·.env 쓰기를 실행 전에 막는다.
+# - .githooks/pre-commit: 켜면(git config core.hooksPath .githooks) .env·비밀값·데이터 삭제 SQL 커밋을 막는다(Codex 지시서가 켜게 함).
+# 이미 같으면 건너뛰고, 다르면 작업 브랜치 → PR → 병합. 손으로만 실행. 쓰기 토큰은 Actions secret(TARGET_REPO_TOKEN)에만. minho-nim/MinLab은 받지 않는다.
+name: 기본 훅 넣기
+
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: '대상 저장소(owner/repo, 여러 개면 쉼표로)'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency: hooks-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 넣기·PR·병합
+        env:
+          REPOS: ${{ inputs.repos }}
+          GH_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "::error::Actions secrets에 TARGET_REPO_TOKEN이 없습니다"; exit 1; }
+          tpl="$PWD/.github/templates/hooks"
+          ok=0; fail=0
+          # 한 저장소 넣기. 단계마다 실패를 확인한다(set -e는 && || 안에서 꺼지므로 쓰지 않음)
+          one() {
+            REPO=$1
+            base=$(gh api "repos/$REPO" --jq .default_branch) || { echo "::warning::$REPO: 저장소를 읽지 못함"; return 1; }
+            rm -rf /tmp/repo
+            git clone -q --depth 1 --branch "$base" "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" /tmp/repo || { echo "::warning::$REPO: 받지 못함"; return 1; }
+            cd /tmp/repo || return 1
+            mkdir -p .claude/hooks .githooks
+            cp "$tpl/guard.mjs" .claude/hooks/guard.mjs
+            cp "$tpl/pre-commit" .githooks/pre-commit && chmod +x .githooks/pre-commit
+            # settings.json: 있으면 hooks.PreToolUse에 우리 훅이 없을 때만 더한다(다른 설정은 그대로)
+            node -e '
+              const fs=require("fs");const p=".claude/settings.json";const t=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+              let cur={};try{cur=JSON.parse(fs.readFileSync(p,"utf8"))}catch{}
+              cur.hooks=cur.hooks||{};const list=cur.hooks.PreToolUse=cur.hooks.PreToolUse||[];
+              const ours=t.hooks.PreToolUse[0];const cmd=ours.hooks[0].command;
+              if(!list.some(e=>(e.hooks||[]).some(h=>h.command===cmd)))list.push(ours);
+              fs.writeFileSync(p,JSON.stringify(cur,null,2)+"\n");' "$tpl/claude-settings.json" || { echo "::warning::$REPO: 설정 합치기 실패"; cd - >/dev/null; return 1; }
+            if git diff --quiet && [ -z "$(git status --porcelain)" ]; then echo "$REPO: 이미 같음"; cd - >/dev/null; return 0; fi
+            git config user.name "minoffia"
+            git config user.email "minoffia@users.noreply.github.com"
+            head="ai/hooks"
+            git checkout -q -b "$head" && git add .claude/hooks/guard.mjs .claude/settings.json .githooks/pre-commit && git commit -q --no-verify -m "기본 훅 넣기(위험한 명령·.env·비밀값·삭제 SQL 막기)" || { echo "::warning::$REPO: 커밋 못 함"; cd - >/dev/null; return 1; }
+            if ! git push -q --force origin "$head" 2>/tmp/push.err; then
+              echo "::warning::$REPO: 올리지 못함"; cat /tmp/push.err
+              cd - >/dev/null; return 1
+            fi
+            owner=${REPO%%/*}
+            url=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$head" --jq '.[0].html_url // empty')
+            [ -n "$url" ] || url=$(gh api -X POST "repos/$REPO/pulls" -f title="기본 훅 넣기" -f head="$head" -f base="$base" -f body="미노피아 기본 훅입니다. Claude Code PreToolUse 훅(.claude/settings.json + .claude/hooks/guard.mjs)이 넓은 rm -rf·강제 push·main/release 바로 push·--no-verify·운영 DB 명령·DROP/TRUNCATE·.env 출력/쓰기·비밀값 쓰기를 실행 전에 막고, git pre-commit(.githooks, 켜기: git config core.hooksPath .githooks)이 .env·비밀값·삭제 SQL 커밋을 막습니다. 규칙만, 외부 호출 없음." --jq .html_url) || { echo "::warning::$REPO: PR을 열지 못함"; cd - >/dev/null; return 1; }
+            case "$url" in https://github.com/*/pull/*) ;; *) echo "::warning::$REPO: PR 주소가 이상함: $url"; cd - >/dev/null; return 1;; esac
+            # 막 연 PR은 병합 가능 여부 계산 전이라 거절될 수 있다(v0.7.39): 6초 간격 5번까지
+            merged=0; for try_ in 1 2 3 4 5; do if gh api -X PUT "repos/$REPO/pulls/${url##*/}/merge" -f merge_method=squash >/dev/null 2>&1; then merged=1; break; fi; sleep 6; done
+            [ "$merged" = 1 ] || { echo "::warning::$REPO: PR은 열었지만 병합 못 함 $url"; cd - >/dev/null; return 1; }
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$head" >/dev/null 2>&1 || true
+            echo "$REPO: 넣음 $url"
+            cd - >/dev/null
+          }
+          for REPO in $(echo "$REPOS" | tr ',' ' '); do
+            echo "$REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || { echo "::warning::이름이 이상해 건너뜀: $REPO"; fail=$((fail+1)); continue; }
+            [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "건너뜀: $REPO(받지 않는 저장소)"; continue; }
+            if one "$REPO"; then ok=$((ok+1)); else fail=$((fail+1)); fi
+          done
+          echo "끝: 성공 $ok · 실패 $fail"
+          [ "$fail" -eq 0 ]

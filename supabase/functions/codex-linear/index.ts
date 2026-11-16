@@ -55,6 +55,8 @@ export function submitSection(taskId: string, token: string, url = `${env('SUPAB
     `시험까지 끝나면 저장소 밖 /tmp/result-submit.json 에 {"task_id":"${taskId}","token":"${token}","result":{"summary":"<요약>","changed_files":["<경로>"],"diff":"<git diff 전체(기본 브랜치 대비)>","test_log":"<시험 명령과 결과 그대로>","remaining_issues":"<남은 문제, 없으면 빈 문자열>","screen":"<바뀐 화면을 여는 주소 경로(예: /stats, #/stats). 첫 화면이면 /, 화면 변경이 없으면 빈 문자열>"}} 를 JSON으로 저장하고(문자열은 JSON 이스케이프) 아래를 한 번 실행한다.`,
     `curl -sS -X POST '${url}' -H 'content-type: application/json' --data-binary @/tmp/result-submit.json`,
     '- 이 token은 이 작업의 결과 제출 전용(24시간, 3번까지)이다. 다른 곳에 쓰거나 파일·커밋에 남기지 않는다.',
+    // v0.7.43 하네스: Codex는 Claude 훅을 못 쓰므로 저장소의 git 훅(.githooks/pre-commit)을 켜게 한다(.env·비밀값·삭제 SQL 커밋 막기)
+    '- 작업을 시작하면 저장소에 .githooks 폴더가 있을 때 `git config core.hooksPath .githooks`를 한 번 실행한다. 커밋이 훅에 막히면 이유를 고친다(훅을 끄거나 --no-verify를 쓰지 않는다).',
     // v0.7.35 소유자 "미노가 대신 찍으면 굳이": Codex 클라우드에는 브라우저가 없고 내려받기도 막혀 있다
     '- 브라우저 화면 확인·스크린샷은 하지 않는다(브라우저·Playwright를 설치하려고 하지 않는다). 결과를 받으면 미노피아가 빌드해 휴대폰·PC 화면을 찍는다. 대신 "screen"에 바뀐 화면 경로를 꼭 적는다.',
     '- 응답이 {"ok":true,...}가 아니거나 접속이 막히면 응답(또는 오류)을 한 줄로 보고하고, 위 JSON의 result 부분을 마지막 메시지에 그대로 남긴다(사용자가 직접 옮길 수 있게).',

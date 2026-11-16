@@ -1,5 +1,12 @@
 # 변경 기록
 
+## 하네스: 기본 훅(v0.7.43) — 2026-11-17
+
+- 소유자 "하네스 엔지니어링 ㄱ": 프로젝트 저장소에 기본 훅을 넣는 Actions '기본 훅 넣기'(hooks-sync.yml, 원본 .github/templates/hooks).
+  - Claude Code PreToolUse 훅(.claude/settings.json + .claude/hooks/guard.mjs, 기존 설정은 그대로 두고 더함): 넓은 rm -rf·강제 push·main/release 바로 push·--no-verify·운영 DB 명령(supabase db reset/push)·DROP/TRUNCATE·.env 출력/쓰기·비밀값 쓰기를 실행 전에 막는다(이유를 Claude에게 보여 줌).
+  - git pre-commit(.githooks/pre-commit): .env·비밀값·삭제 SQL 커밋을 막는다. Codex는 Claude 훅을 못 쓰므로 Codex 지시서가 `git config core.hooksPath .githooks`로 켜게 한다(--no-verify 금지).
+- 규칙만, 외부 호출 없음. 시험: scripts/hook-guard.test.mjs, 임시 저장소에서 커밋 막힘 확인.
+
 ## 건너뛴 칸 표시(v0.7.42) — 2026-11-17
 
 - 소유자 "그래프 엔지니어링 ㄱ": 시험 업무에서 시안이 0장이었는데 몰랐다. 원인은 오류가 아니라, Gemini 기획서가 '기존 화면을 고치는 일'(needs_design=false)로 봐서 그리지 않은 것.
