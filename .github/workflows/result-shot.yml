@@ -1,0 +1,109 @@
+# 결과 화면 찍기(v0.7.25, 소유자 "결과 화면 자동 캡처"): 서버 함수 site-check(kind build)가 시작한다.
+# 미리보기 주소가 없는 결과도, 프로젝트 저장소에 결과 변경(diff)을 적용하고 빌드해 이 러너 안에서 열어 PC·휴대폰으로 찍는다.
+# AI 호출 없음. 저장소 토큰은 받아 오기(checkout)에만 쓰고 남기지 않는다(빌드 단계에는 비밀값 없음). 1회용 주소는 로그에 가린다.
+# shortcut: 첫 화면(/)만 찍고, base 경로가 있는 빌드(GitHub Pages용 등)는 그림이 깨질 수 있다. 바뀐 화면 경로를 찍을 때 고친다.
+name: 결과 화면 찍기
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '프로젝트 저장소(owner/name)'
+        required: true
+      diff_url:
+        description: '결과 변경(diff) 1회용 내려받기 주소'
+        required: true
+      targets:
+        description: '찍을 주소 JSON(after = 러너 안 결과)'
+        required: true
+      uploads:
+        description: '파일별 1회용 업로드 주소 JSON'
+        required: true
+permissions:
+  contents: read
+jobs:
+  shot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: 주소 가리기·저장소 확인
+        env:
+          UPLOADS: ${{ inputs.uploads }}
+          DIFF_URL: ${{ inputs.diff_url }}
+          REPO: ${{ inputs.repo }}
+        run: |
+          echo "::add-mask::$DIFF_URL"
+          echo "$UPLOADS" | node -e "const m=JSON.parse(require('fs').readFileSync(0,'utf8'));for(const v of Object.values(m))console.log('::add-mask::'+v)"
+          echo "$REPO" | grep -Eq '^minho-nim/[A-Za-z0-9._-]+$' || { echo "허용하지 않는 저장소"; exit 1; }
+          [ "$(echo "$REPO" | tr 'A-Z' 'a-z')" != "minho-nim/minlab" ] || { echo "이 저장소는 찍지 않습니다."; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+          path: office
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}
+          token: ${{ secrets.TARGET_REPO_TOKEN }}
+          persist-credentials: false
+          path: app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 결과 변경 적용
+        id: apply
+        env:
+          DIFF_URL: ${{ inputs.diff_url }}
+        run: |
+          curl -fsS "$DIFF_URL" -o /tmp/change.diff
+          cd app
+          if git apply --whitespace=nowarn /tmp/change.diff || git apply --3way --whitespace=nowarn /tmp/change.diff; then
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "note=결과 변경을 지금 저장소에 적용하지 못했어요(그 사이 바뀐 곳과 겹침)." >> "$GITHUB_OUTPUT"
+          fi
+      - name: 빌드·띄우기
+        id: serve
+        if: steps.apply.outputs.ok == '1'
+        working-directory: app
+        run: |
+          dir=.
+          if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.build?0:1)"; then
+            if [ -f package-lock.json ]; then npm ci --no-audit --no-fund || npm install --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+            if ! npm run build; then echo "note=결과를 빌드하지 못했어요(npm run build 실패)." >> "$GITHUB_OUTPUT"; exit 0; fi
+            for d in dist build out; do [ -f "$d/index.html" ] && { dir=$d; break; }; done
+          fi
+          [ -f "$dir/index.html" ] || { echo "note=열 화면(index.html)을 찾지 못했어요." >> "$GITHUB_OUTPUT"; exit 0; }
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory "$dir" >/tmp/serve.log 2>&1 &
+          sleep 2
+          echo "ok=1" >> "$GITHUB_OUTPUT"
+      - name: 찍기
+        env:
+          TARGETS: ${{ inputs.targets }}
+          NOTE: ${{ steps.apply.outputs.note }}${{ steps.serve.outputs.note }}
+          SERVED: ${{ steps.serve.outputs.ok }}
+        run: |
+          mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i -s --no-audit --no-fund playwright@1.49.1 >/dev/null
+          npx -y playwright@1.49.1 install --with-deps chromium >/dev/null 2>&1
+          cp "$GITHUB_WORKSPACE/office/scripts/site-check.mjs" /tmp/pw/
+          if [ "$SERVED" = "1" ]; then
+            node /tmp/pw/site-check.mjs "$TARGETS" /tmp/site --local
+          else
+            # 못 띄웠으면 운영 화면만 찍고, 결과 칸에 이유를 남긴다
+            node -e "const t=JSON.parse(process.env.TARGETS).filter(x=>x.key!=='after');console.log(JSON.stringify(t))" > /tmp/rest.json
+            node /tmp/pw/site-check.mjs "$(cat /tmp/rest.json)" /tmp/site
+            node -e "
+              const fs=require('fs');const p='/tmp/site/result.json';const r=JSON.parse(fs.readFileSync(p,'utf8'));
+              r.targets.unshift({key:'after',url:'',status:0,shots:[],note:process.env.NOTE||'결과 화면을 띄우지 못했어요.'});
+              fs.writeFileSync(p,JSON.stringify(r));"
+          fi
+      - name: 올리기
+        if: always()
+        env:
+          UPLOADS: ${{ inputs.uploads }}
+        run: |
+          cd /tmp/site 2>/dev/null || { echo "올릴 것이 없습니다."; exit 0; }
+          echo "$UPLOADS" | node -e "
+            const fs=require('fs');const m=JSON.parse(fs.readFileSync(0,'utf8'));
+            (async()=>{for(const [f,u] of Object.entries(m)){ if(!/^[a-z]+(-[a-z]+)?\.(jpg|json)$/.test(f)||!fs.existsSync(f)) continue;
+              const r=await fetch(u,{method:'PUT',headers:{'Content-Type':f.endsWith('.json')?'application/json':'image/jpeg','x-upsert':'true'},body:fs.readFileSync(f)});
+              console.log(f, r.status);}})();"

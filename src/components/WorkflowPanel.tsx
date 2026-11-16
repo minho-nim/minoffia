@@ -1,6 +1,7 @@
 import { pickedDraft, type DesignDraft, type DesignPick } from '../domain/designDraft';
+import { PointFix } from './PointFix';
+import { DesignDrafts, svgSrc } from './DesignDrafts';
 import { ApprovalSummary, approvalGate } from './ApprovalSummary';
-import { DesignDrafts } from './DesignDrafts';
 import { timelineTime } from '../domain/timeline';
 import { PART_LABEL, PASS_SCORE, VERDICT_LABEL, WEIGHTS, type PanelEntry, type Part } from '../domain/review';
 import { ArchifyView } from './ArchifyView';
@@ -65,7 +66,7 @@ export interface WorkflowActions {
   /** 디자인 자동 검사(v0.5.56): 미리보기 주소가 있는 결과만 */
   designCheck?: { load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>; start(taskId: string, revision: number): Promise<void> };
   /** 화면 확인(v0.6.9): 실제 미리보기·운영 사이트 */
-  siteCheck?: { load(taskId: string): Promise<import('../domain/siteCheck').SiteChecks>; start(taskId: string, kind: 'preview' | 'production'): Promise<void> };
+  siteCheck?: { load(taskId: string): Promise<import('../domain/siteCheck').SiteChecks>; start(taskId: string, kind: import('../domain/siteCheck').SiteKind): Promise<void> };
   /** 성공하면 true. 실패 이유는 App이 알림으로 보여준다. */
   saveSpec: (task: Task, fields: SpecFields) => Promise<boolean>;
   /** Gemini 무료 기획서 초안(서버가 새 버전으로 저장) */
@@ -367,6 +368,8 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
   /** 단계별 자세히(v0.6.27): 기본은 접힘. 바로 가기·버튼으로 칸을 열 때 함께 편다 */
   const [moreOpen, setMoreOpen] = useState(false);
   const [aFeedback, setAFeedback] = useState('');
+  /** 시안 짚어서 수정(v0.7.25): 고른 시안 그림에 표시하면 기획 수정 요청 칸에 넣는다 */
+  const [pointDraft, setPointDraft] = useState<import('../domain/designDraft').DesignDraft | null>(null);
   const [showAFeedback, setShowAFeedback] = useState(false);
   const [revisionText, setRevisionText] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
@@ -567,6 +570,22 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           onDraw={!view.aApproved && actions.drawDesign ? () => void run(() => actions.drawDesign!(task)) : undefined}
           onPick={!view.aApproved && actions.pickDesign ? (d) => void run(() => actions.pickDesign!(task, d)) : undefined}
           compact={view.aApproved}
+          onPoint={!view.aApproved && view.stage === 'development_approval_pending' ? setPointDraft : undefined}
+        />
+      )}
+      {pointDraft && (
+        <PointFix
+          src={svgSrc(pointDraft.svg)}
+          name={pointDraft.who}
+          what="Gemini 시안"
+          onClose={() => setPointDraft(null)}
+          onDone={(text) => {
+            setAFeedback((v) => (v.trim() ? `${v.trimEnd()}\n${text}` : text));
+            setShowAFeedback(true);
+            setPointDraft(null);
+            goTo('A');
+            window.setTimeout(() => document.getElementById(`afb-${task.id}`)?.focus(), 200);
+          }}
         />
       )}
       <details className="wf-more" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
@@ -801,9 +820,11 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               </div>
               {showAFeedback && (
                 <div className="wf-inline">
-                  <input
+                  <textarea
                     id={`afb-${task.id}`}
-                    placeholder="무엇을 고칠지 적어 주세요"
+                    className="rev-input"
+                    rows={aFeedback.includes('\n') ? 4 : 2}
+                    placeholder="무엇을 고칠지 적어 주세요(시안 '짚어서 수정'으로 위치도 넣을 수 있어요)"
                     value={aFeedback}
                     onChange={(e) => setAFeedback(e.target.value)}
                     maxLength={2000}
@@ -1381,6 +1402,10 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
               })()}
               {actions.siteCheck && view.result.previewUrl && (
                 <SiteCheckView key={`p-${view.result.revision}`} kind="preview" canStart api={{ load: () => actions.siteCheck!.load(task.id), start: (k) => actions.siteCheck!.start(task.id, k) }} />
+              )}
+              {/* v0.7.25: 미리보기 주소가 없으면 미노(Actions)가 결과 변경을 적용·빌드해 휴대폰·PC로 찍는다(결과가 오면 자동) */}
+              {actions.siteCheck && !view.result.previewUrl && project?.repo && view.result.diff && (
+                <SiteCheckView key={`b-${view.result.revision}`} kind="build" canStart={!view.bApproved} api={{ load: () => actions.siteCheck!.load(task.id), start: (k) => actions.siteCheck!.start(task.id, k) }} />
               )}
               {view.result.diff && (
                 // 바뀐 곳 구조도(v0.5.24): Codex·Claude·Gemini 결과 모두 diff로 그린다(토큰 0)

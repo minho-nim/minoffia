@@ -1,12 +1,12 @@
 // 화면 확인(v0.6.9, 소유자 "승인 전 중간에서 보는 건?"): 실제 미리보기·운영 사이트를 찍은 사진과 판정 한 줄.
 // 승인 전(preview)은 '지금 운영 / 바뀐 미리보기'를 나란히, 배포 뒤(production)는 '배포 뒤 운영'. 사진은 누르면 크게.
 import { useEffect, useRef, useState } from 'react';
-import { TARGET_LABEL, verdictLine, type SiteCheck, type SiteChecks } from '../domain/siteCheck';
+import { TARGET_LABEL, verdictLine, type SiteCheck, type SiteChecks, type SiteKind } from '../domain/siteCheck';
 import { ImageZoom } from './ImageZoom';
 
-export type SiteCheckApi = { load: () => Promise<SiteChecks>; start: (kind: 'preview' | 'production') => Promise<void> };
+export type SiteCheckApi = { load: () => Promise<SiteChecks>; start: (kind: SiteKind) => Promise<void> };
 
-export function SiteCheckView({ api, kind, canStart }: { api: SiteCheckApi; kind: 'preview' | 'production'; canStart: boolean }) {
+export function SiteCheckView({ api, kind, canStart }: { api: SiteCheckApi; kind: SiteKind; canStart: boolean }) {
   const [check, setCheck] = useState<SiteCheck | null>(null);
   const [state, setState] = useState<'idle' | 'checking' | 'error'>('idle');
   const [msg, setMsg] = useState('');
@@ -44,7 +44,7 @@ export function SiteCheckView({ api, kind, canStart }: { api: SiteCheckApi; kind
   return (
     <div className="site-check">
       <p className="small">
-        <b>{kind === 'preview' ? '화면 확인(승인 전)' : '화면 확인(배포 뒤)'}</b>{' '}
+        <b>{kind === 'preview' ? '화면 확인(승인 전)' : kind === 'build' ? '결과 화면(미노가 빌드해서 찍음)' : '화면 확인(배포 뒤)'}</b>{' '}
         {v ? <span className={v.ok ? 'ok-text' : 'task-error'}>{v.ok ? '✓ ' : '! '}{v.text}</span> : <span className="muted">{state === 'checking' ? '실제 사이트를 여는 중… (사이트가 뜨기까지 몇 분 걸릴 수 있어요)' : '아직 안 했어요.'}</span>}
       </p>
       {check && (
@@ -52,10 +52,12 @@ export function SiteCheckView({ api, kind, canStart }: { api: SiteCheckApi; kind
           {check.result.targets.map((t) => (
             <figure key={t.key}>
               <figcaption className="muted small">
-                {TARGET_LABEL[t.key]}{' '}
-                <a href={t.url} target="_blank" rel="noopener noreferrer">
-                  열기 ↗
-                </a>
+                {kind === 'build' && t.key === 'after' ? '바뀐 결과' : TARGET_LABEL[t.key]}{' '}
+                {/^https:\/\//.test(t.url) && (
+                  <a href={t.url} target="_blank" rel="noopener noreferrer">
+                    열기 ↗
+                  </a>
+                )}
               </figcaption>
               <span className="site-shot-row">
                 {t.shots.map((s) =>
@@ -66,7 +68,7 @@ export function SiteCheckView({ api, kind, canStart }: { api: SiteCheckApi; kind
                     </button>
                   ) : null,
                 )}
-                {!t.shots.length && <span className="muted small">열지 못함(HTTP {t.status || '응답 없음'})</span>}
+                {!t.shots.length && <span className="muted small">{t.note || `열지 못함(HTTP ${t.status || '응답 없음'})`}</span>}
               </span>
             </figure>
           ))}

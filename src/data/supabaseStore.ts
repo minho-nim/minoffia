@@ -726,7 +726,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       async load(taskId) {
         const data = await invoke('site-check', { action: 'load', taskId });
         const out: import('../domain/siteCheck').SiteChecks = {};
-        for (const k of ['preview', 'production'] as const) {
+        for (const k of ['preview', 'production', 'build'] as const) {
           const c = parseSiteCheck(data[k]);
           if (c) out[k] = c;
         }

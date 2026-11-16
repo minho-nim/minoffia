@@ -2,7 +2,9 @@
 // - kind "preview": 결과의 미리보기 주소(after)와 지금 운영 주소(before)를 나란히. 올리기·배포 승인 전에 본다.
 // - kind "production": 배포 뒤 운영 주소(live).
 // 소유자만(또는 submit-result가 서버 키로 부름). 결과는 비공개 버킷 attachments/<소유자>/tasks/<업무>/site/<kind>/ 에.
-// action "load"는 두 kind의 결과 JSON과 사진의 1시간짜리 보기 주소를 돌려준다. AI 호출 없음.
+// - kind "build"(v0.7.25, 소유자 "결과 화면 자동 캡처"): 미리보기 주소가 없는 결과도 찍는다. 최신 결과의 변경(diff)을 1회용 주소로 넘기고
+//   result-shot.yml이 프로젝트 저장소에 적용·빌드해 이 러너 안에서 열어 찍는다(바뀐 결과 + 지금 운영).
+// action "load"는 kind별 결과 JSON과 사진의 1시간짜리 보기 주소를 돌려준다. AI 호출 없음.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
@@ -15,7 +17,7 @@ const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
-const KINDS = ['preview', 'production'] as const;
+const KINDS = ['preview', 'production', 'build'] as const;
 type Kind = (typeof KINDS)[number];
 const FILES: Record<string, string[]> = {
   before: ['before-pc.jpg', 'before-mobile.jpg'],
@@ -89,7 +91,23 @@ Deno.serve(async (req) => {
   if ((project?.repo ?? '').toLowerCase() === 'minho-nim/minlab') return reply(403, { ok: false, error: '이 저장소는 확인하지 않습니다.' });
   const live = productionUrl(project);
   const targets: { key: string; url: string }[] = [];
-  if (kind === 'preview') {
+  let diffUrl = '';
+  if (kind === 'build') {
+    const repo = String(project?.repo ?? '');
+    if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repo)) return reply(409, { ok: false, error: '프로젝트에 저장소가 없어요.' });
+    const { data: result } = await admin.from('result_packages').select('revision, diff').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
+    const diff = String(result?.diff ?? '');
+    if (!/^diff --git /m.test(diff)) return reply(409, { ok: false, error: '찍을 결과 변경(diff)이 없어요.' });
+    const path = `${base}/build/change.diff`;
+    const up = await bucket.upload(path, new Blob([diff], { type: 'text/plain' }), { upsert: true, contentType: 'text/plain' });
+    if (up.error) return reply(500, { ok: false, error: '결과 변경을 넘기지 못했습니다.' });
+    const { data: signed } = await bucket.createSignedUrl(path, 3600);
+    if (!signed?.signedUrl) return reply(500, { ok: false, error: '결과 변경 주소를 만들지 못했습니다.' });
+    diffUrl = signed.signedUrl;
+    // 러너 안에서 연 결과 화면(바깥에서는 열리지 않는 주소, 적어 두기만)
+    targets.push({ key: 'after', url: 'http://127.0.0.1:4173/' });
+    if (live) targets.push({ key: 'before', url: live });
+  } else if (kind === 'preview') {
     const { data: result } = await admin.from('result_packages').select('preview_url').eq('task_id', taskId).order('revision', { ascending: false }).limit(1).maybeSingle();
     const after = String(result?.preview_url ?? '');
     if (!/^https:\/\//.test(after)) return reply(409, { ok: false, error: '이 결과에는 미리보기 주소가 없어요(Cloudflare 주소가 있는 프로젝트만 돼요).' });
@@ -113,10 +131,13 @@ Deno.serve(async (req) => {
     if (error || !data?.signedUrl) return reply(500, { ok: false, error: '업로드 주소를 만들지 못했습니다.' });
     uploads[f] = data.signedUrl;
   }
-  const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/site-check.yml/dispatches`, {
+  const workflow = kind === 'build' ? 'result-shot.yml' : 'site-check.yml';
+  const inputs: Record<string, string> = { targets: JSON.stringify(targets), uploads: JSON.stringify(uploads) };
+  if (kind === 'build') Object.assign(inputs, { repo: String(project?.repo), diff_url: diffUrl });
+  const res = await fetch(`https://api.github.com/repos/${officeRepo}/actions/workflows/${workflow}/dispatches`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${ghToken}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'minoffia', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ref: 'main', inputs: { targets: JSON.stringify(targets), uploads: JSON.stringify(uploads) } }),
+    body: JSON.stringify({ ref: 'main', inputs }),
     signal: AbortSignal.timeout(15_000),
   }).catch(() => null);
   if (!res?.ok) return reply(502, { ok: false, error: `화면 확인을 시작하지 못했습니다(GitHub ${res?.status ?? '응답 없음'}).` });

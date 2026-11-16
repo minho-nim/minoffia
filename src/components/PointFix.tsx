@@ -6,7 +6,7 @@ import { pointNotesText, whereText, type Pin } from '../domain/pointNotes';
  * 화면 짚어서 수정 요청(v0.5.48): 스크린샷을 누르면 번호 표시가 찍히고, 번호마다 고칠 점을 적는다.
  * '수정 요청에 넣기'를 누르면 위치를 말로 바꾼 글을 수정 요청 칸에 붙인다(보내기는 원래 버튼으로).
  */
-export function PointFix({ src, name, onDone, onClose }: { src: string; name: string; onDone: (text: string) => void; onClose: () => void }) {
+export function PointFix({ src, name, what, onDone, onClose }: { src: string; name: string; what?: string; onDone: (text: string) => void; onClose: () => void }) {
   const [pins, setPins] = useState<Pin[]>([]);
   const close = useRef(onClose);
   close.current = onClose;
@@ -20,7 +20,7 @@ export function PointFix({ src, name, onDone, onClose }: { src: string; name: st
       document.body.style.overflow = prev;
     };
   }, []);
-  const text = pointNotesText(name, pins);
+  const text = pointNotesText(name, pins, what);
   return createPortal(
     <div className="point-fix" role="dialog" aria-modal="true" aria-label={`${name} 짚어서 수정`}>
       <div className="point-fix-box">

@@ -10,9 +10,9 @@ export function whereText(x: number, y: number): string {
 }
 
 /** 수정 요청에 넣을 글. 설명이 빈 표시는 뺀다 */
-export function pointNotesText(name: string, pins: Pin[]): string {
+export function pointNotesText(name: string, pins: Pin[], what = '결과 스크린샷'): string {
   const lines = pins
     .filter((p) => p.note.trim())
     .map((p, i) => `${i + 1}) ${whereText(p.x, p.y)}(가로 ${Math.round(p.x)}%·세로 ${Math.round(p.y)}%): ${p.note.trim()}`);
-  return lines.length ? `[화면 짚기] 결과 스크린샷 '${name}'\n${lines.join('\n')}` : '';
+  return lines.length ? `[화면 짚기] ${what} '${name}'\n${lines.join('\n')}` : '';
 }
