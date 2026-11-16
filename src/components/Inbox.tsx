@@ -15,7 +15,9 @@ import { needsResearch, type Source } from '../domain/research';
 import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction, actionNotices, mergeNotices, staleNotices } from '../domain/stageNotice';
-import { canApprove, deriveWorkflow } from '../domain/workflow';
+import { canApprove, canRequestRevision, deriveWorkflow, latestPrCheck, prCheckPasses } from '../domain/workflow';
+import { ApprovalSummary, approvalGate } from './ApprovalSummary';
+import type { DesignDraft } from '../domain/designDraft';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
 import { ImageZoom } from './ImageZoom';
@@ -157,6 +159,11 @@ interface Props {
   onAddFollowup?: (taskId: string, text: string) => Promise<boolean>;
   /** 단계 알림에서 바로 A·올리기 승인(업무 카드의 같은 버튼과 같은 규칙). 성공하면 true */
   onApprove?: (task: Task, gate: 'A' | 'B') => Promise<boolean>;
+  /** 대화 카드에서 바로(v0.7.23 소유자 "대화에서도 업무 진행"): 기획 수정 요청·결과 다시 시키기·배포 승인·시안 바꾸기. 업무 카드의 같은 버튼과 같은 기록 */
+  onReviseSpec?: (task: Task, feedback: string) => Promise<boolean>;
+  onRedo?: (task: Task, feedback: string) => Promise<boolean>;
+  onDeployApprove?: (task: Task) => Promise<boolean>;
+  onPickDraft?: (task: Task, draft: DesignDraft) => Promise<void>;
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
@@ -269,7 +276,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -300,27 +307,124 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
   /** 답을 기다리는 동안 보낸 말(v0.4.58): 앞 일이 끝나면 차례로 처리한다 */
   const [queue, setQueue] = useState<{ text: string; files: File[] }[]>([]);
   const runs = useRef(0);
-  /** 업무 알림 아래 버튼(지금도 그 단계일 때만). 카드면 카드 안에 둔다(v0.7.17) */
+  /** 카드 안 수정 요청·다시 시키기 입력칸(메시지 id) */
+  const [fixFor, setFixFor] = useState<string | null>(null);
+  const [fixText, setFixText] = useState('');
+  /** 결과 카드의 바뀐 파일 막대를 편 메시지 */
+  const [filesFor, setFilesFor] = useState<string | null>(null);
+  /** 업무 알림 아래 버튼(지금도 그 단계일 때만). 카드면 카드 안에 둔다(v0.7.17).
+   *  v0.7.23: 승인 차례면 "승인하면" 한 줄·칩·시안·바뀐 파일과 수정 요청·다시 시키기·배포 승인까지 대화에서 */
   const noticeButtons = (m: Msg) => {
     if (!m.actions || busy) return null;
-                // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
-                const task = snap.tasks.find((t) => t.id === m.taskId);
-                if (!task || deriveWorkflow(task, snap.workflow).stage !== m.stage) return null;
-                return (
-                  <span className="inbox-choices" role="group" aria-label="이 업무에 답하기">
-                    {m.actions.filter((a) => a === 'open' || onApprove).map((a) => (
-                      <button key={a} type="button" className={`btn btn-small ${a === 'open' ? 'btn-ghost' : 'btn-primary'}`} onClick={() => noticeAct(m, a)}>
-                        {ACTION_LABEL[a]}
-                      </button>
-                    ))}
-                    {deriveWorkflow(task, snap.workflow).spec && (
-                      <button type="button" className="btn btn-small btn-ghost" onClick={() => setSpecFor(task.id)}>
-                        기획서 보기
-                      </button>
-                    )}
-                  </span>
-                );
-                };
+    // 지금도 그 단계일 때만 버튼을 보인다(지난 알림의 버튼은 숨김).
+    const task = snap.tasks.find((t) => t.id === m.taskId);
+    if (!task) return null;
+    const view = deriveWorkflow(task, snap.workflow);
+    if (view.stage !== m.stage) return null;
+    const gate = approvalGate(view);
+    // 체험 업무('[체험]', demoServer의 DEMO_TAG)는 저장소 없이도 끝까지 돈다
+    const repo = !!snap.projects.find((p) => p.id === task.projectId)?.repo || task.title.startsWith('[체험]');
+    const fixKind = gate === 'A' && onReviseSpec ? 'A' : gate === 'B' && onRedo && canRequestRevision(view).ok ? 'B' : null;
+    const prOk = prCheckPasses(latestPrCheck(task, snap.workflow));
+    const canDeploy = gate === 'C' && onDeployApprove && canApprove(view, 'C').ok && !!task.prUrl && prOk;
+    const sendFix = () => {
+      const text = fixText.trim();
+      if (!text || !fixKind) return;
+      say('me', `${fixKind === 'A' ? '수정 요청' : '다시 시키기'}: ${text}`, { projectId: task.projectId, taskId: task.id });
+      setFixFor(null);
+      setFixText('');
+      void run(async () => {
+        const ok = fixKind === 'A' ? await onReviseSpec!(task, text) : await onRedo!(task, text);
+        if (!ok) say('office', '기록하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
+      });
+    };
+    return (
+      <>
+        {gate && (
+          <ApprovalSummary
+            task={task}
+            view={view}
+            data={{ ...snap.workflow, prCheck: latestPrCheck(task, snap.workflow) }}
+            gate={gate}
+            repo={repo}
+            showFiles={filesFor === m.id}
+            busy={busy}
+            onPick={onPickDraft ? (d) => void run(() => onPickDraft(task, d)) : undefined}
+          />
+        )}
+        <span className="inbox-choices" role="group" aria-label="이 업무에 답하기">
+          {m.actions
+            .filter((a) => a !== 'open' && onApprove)
+            .map((a) => (
+              <button key={a} type="button" className="btn btn-small btn-primary" onClick={() => noticeAct(m, a)}>
+                {ACTION_LABEL[a]}
+              </button>
+            ))}
+          {canDeploy && (
+            <button
+              type="button"
+              className="btn btn-small btn-deploy"
+              onClick={() => {
+                // 되돌리기 어려운 일이라 한 번 더 묻는다
+                if (!window.confirm(`'${task.title}'을(를) 운영에 반영할까요?\nPR을 합치고 배포해요.`)) return;
+                say('me', '배포 승인', { projectId: task.projectId, taskId: task.id });
+                void run(async () => {
+                  if (!(await onDeployApprove!(task))) say('office', '배포 승인하지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.');
+                });
+              }}
+            >
+              배포 승인
+            </button>
+          )}
+          {fixKind && (
+            <button type="button" className="btn btn-small btn-ghost" aria-expanded={fixFor === m.id} onClick={() => setFixFor(fixFor === m.id ? null : m.id)}>
+              {fixKind === 'A' ? '수정 요청' : '다시 시키기'}
+            </button>
+          )}
+          {gate === 'B' && view.result?.diff && (
+            <button type="button" className="btn btn-small btn-ghost" aria-expanded={filesFor === m.id} onClick={() => setFilesFor(filesFor === m.id ? null : m.id)}>
+              {filesFor === m.id ? '바뀐 것 접기' : '바뀐 것 보기'}
+            </button>
+          )}
+          {gate === 'C' && task.prUrl && (
+            <a className="btn btn-small btn-ghost" href={task.prUrl} target="_blank" rel="noreferrer">
+              PR 보기
+            </a>
+          )}
+          {view.spec && gate !== 'B' && gate !== 'C' && (
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setSpecFor(task.id)}>
+              기획서 보기
+            </button>
+          )}
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => noticeAct(m, 'open')}>
+            {ACTION_LABEL.open}
+          </button>
+        </span>
+        {gate === 'C' && !canDeploy && onDeployApprove && <p className="small muted">{!task.prUrl ? 'PR이 열리면 배포 승인 버튼이 생겨요.' : !prOk ? 'PR 자동검사가 통과하면 배포 승인 버튼이 생겨요.' : ''}</p>}
+        {fixKind && fixFor === m.id && (
+          <form
+            className="inbox-fix"
+            onSubmit={(e) => {
+              e.preventDefault();
+              sendFix();
+            }}
+          >
+            <textarea
+              aria-label={fixKind === 'A' ? '기획서에서 고칠 점' : '결과에서 고칠 점'}
+              rows={2}
+              maxLength={4000}
+              placeholder={fixKind === 'A' ? '무엇을 고칠까요? (예: 지난달 대비도 넣기)' : '무엇을 고칠까요? (예: 숫자를 더 크게)'}
+              value={fixText}
+              onChange={(e) => setFixText(e.target.value)}
+            />
+            <button type="submit" className="btn btn-small btn-primary" disabled={!fixText.trim()}>
+              보내기
+            </button>
+          </form>
+        )}
+      </>
+    );
+  };
   /** 처리 중 '멈추기'(v0.6.97): 켜져 있는 동안 늦게 온 답·접수 카드는 버린다. 하던 일이 다 끝나면 저절로 꺼진다 */
   const muted = useRef(false);
   const [photos, setPhotosState] = useState<File[]>(photoStore.draft);
@@ -1414,22 +1518,24 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                   <p className="card-title">{card.title}</p>
                   {card.did && <p>{card.did}</p>}
                   {card.headline && <p className="card-headline">{card.headline}</p>}
-                  {card.fields.length > 0 && (
-                    <dl className="card-fields">
-                      {card.fields.map((f) => (
-                        <div key={f.label}>
-                          <dt>{f.label}</dt>
-                          <dd>{f.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
                   {(() => {
                     // v0.7.18: 버튼이 보이면 버튼과 같은 말인 안내 줄은 빼고, 기획서 줄은 한 줄로 줄인다(자세한 건 업무 보기·기획서 보기)
                     const btns = noticeButtons(m);
                     const lines = btns ? card.lines.filter((l) => !isGuideLine(l)).map((l) => (l.startsWith('기획서 v') ? shortSpecLine(l) : l)) : card.lines;
+                    // v0.7.23: 버튼(승인 요약)이 보이면 시안은 그림으로 보여 주니 시안 점수 칸은 뺀다
+                    const fields = btns ? card.fields.filter((f) => !f.label.startsWith('시안 ')) : card.fields;
                     return (
                       <>
+                        {fields.length > 0 && (
+                          <dl className="card-fields">
+                            {fields.map((f) => (
+                              <div key={f.label}>
+                                <dt>{f.label}</dt>
+                                <dd>{f.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        )}
                         {lines.map((l, k) => (
                           <p key={k}>{l}</p>
                         ))}
