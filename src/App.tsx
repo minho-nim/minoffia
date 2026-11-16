@@ -1286,7 +1286,9 @@ export function App() {
           }
         },
         decision !== 'approved'
-          ? '수정 요청을 기록했습니다. ChatGPT용 자료를 다시 복사해 재기획하세요.'
+          ? gate === 'A' && snap.workflow.specs.find((x) => x.taskId === task.id && x.revision === revision)?.planner === 'gemini_draft'
+            ? '수정 요청을 기록했습니다. Gemini가 기획서를 다시 써요.'
+            : '수정 요청을 기록했습니다. ChatGPT용 자료를 다시 복사해 재기획하세요.'
           : gate === 'C'
             ? '배포 승인을 기록했습니다. 끝난 업무는 열린 업무 목록에서 빠지고 "완료" 필터에 남습니다.'
             : `${gate} 승인을 기록했습니다.`,
@@ -2286,6 +2288,27 @@ export function App() {
                   return workflowActions.decide(t, 'C', v.result.revision, 'approved', '', { pr_url: t.prUrl, ci: { state: pc.ciState, merged: pc.merged, sha: pc.headSha } });
                 }}
                 onPickDraft={workflowActions.pickDesign}
+                onResultImages={async (t, revision) => {
+                  // v0.7.25: 결과 스크린샷(AI가 보낸 것)과 미노가 찍은 결과 화면(빌드·미리보기, 이 결과 뒤에 찍은 것만)
+                  const out: { src: string; name: string }[] = [];
+                  const result = snap.workflow.results.find((r) => r.taskId === t.id && r.revision === revision);
+                  for (const a of attachmentsOf(snap.workflow.attachments, t.id, 'result', revision).filter((x) => isRaster(x.mime)).slice(0, 2)) {
+                    const src = await store.attachmentUrl(a).catch(() => '');
+                    if (src) out.push({ src, name: a.fileName });
+                  }
+                  if (out.length < 2 && store.siteCheck && result) {
+                    const checks = await store.siteCheck.load(t.id).catch(() => ({}) as import('./domain/siteCheck').SiteChecks);
+                    for (const c of [checks.build, checks.preview]) {
+                      const after = c && c.result.checkedAt >= result.createdAt ? c.result.targets.find((x) => x.key === 'after') : undefined;
+                      const shot = after?.shots.find((x) => x.size === 'mobile') ?? after?.shots[0];
+                      if (c && shot && c.images[shot.file]) {
+                        out.push({ src: c.images[shot.file], name: `결과 화면(${shot.size === 'mobile' ? '휴대폰' : 'PC'})` });
+                        break;
+                      }
+                    }
+                  }
+                  return out.slice(0, 2);
+                }}
                 currentProject={chatProjectId ? (snap.projects.find((p) => p.id === chatProjectId) ?? null) : null}
                 draft={draft}
                 echo={chatEcho}

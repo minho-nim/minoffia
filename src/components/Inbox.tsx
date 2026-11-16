@@ -16,7 +16,9 @@ import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction, actionNotices, mergeNotices, staleNotices } from '../domain/stageNotice';
 import { canApprove, canRequestRevision, deriveWorkflow, latestPrCheck, prCheckPasses } from '../domain/workflow';
-import { ApprovalSummary, approvalGate } from './ApprovalSummary';
+import { ApprovalSummary, approvalGate, type ShotImage } from './ApprovalSummary';
+import { PointFix } from './PointFix';
+import { DESIGN_WORDS, addDesignWord } from '../domain/designWords';
 import type { DesignDraft } from '../domain/designDraft';
 import type { InboxState, NewChatEntry } from '../data/store';
 import type { PendingImage } from './Attachments';
@@ -39,6 +41,8 @@ interface Msg {
   via?: string;
   /** 단계 알림: 그 업무가 아직 이 단계일 때만 버튼을 보인다 */
   taskId?: string;
+  /** 업무 카드에 답장한 내 말(v0.7.25): 위에 붙는 '↩ 프로젝트 · 업무' */
+  reply?: string;
   /** 만든 시각(알림처럼 id에 시각이 없는 메시지, v0.7.17) */
   at?: string;
   /** 이 메시지에 묶인 다른 알림 id(v0.7.16) */
@@ -164,6 +168,8 @@ interface Props {
   onRedo?: (task: Task, feedback: string) => Promise<boolean>;
   onDeployApprove?: (task: Task) => Promise<boolean>;
   onPickDraft?: (task: Task, draft: DesignDraft) => Promise<void>;
+  /** 결과 화면 사진(결과 스크린샷·미노가 찍은 화면, v0.7.25) */
+  onResultImages?: (task: Task, revision: number) => Promise<ShotImage[]>;
 }
 
 const KEY = 'minlab-ai-office:inbox:v1';
@@ -276,7 +282,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onResultImages, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -312,6 +318,37 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
   const [fixText, setFixText] = useState('');
   /** 결과 카드의 바뀐 파일 막대를 편 메시지 */
   const [filesFor, setFilesFor] = useState<string | null>(null);
+  /** 짚어서 수정 중인 그림과 그 카드(v0.7.25) */
+  const [pointImg, setPointImg] = useState<(ShotImage & { what: string; msgId: string }) | null>(null);
+  /** 밀어서 답장(v0.7.25 소유자 "대화엔 모든 프로젝트·업무가 다 보이니 옆으로 밀어서 답장"): 답할 업무 */
+  const [replyTo, setReplyTo] = useState<{ taskId: string; label: string } | null>(null);
+  /** 밀고 있는 카드와 거리(px) */
+  const [swipe, setSwipe] = useState<{ id: string; dx: number } | null>(null);
+  const touch = useRef<{ id: string; x: number; y: number; horiz: boolean | null } | null>(null);
+  const startReply = (m: Msg) => {
+    const task = snap.tasks.find((t) => t.id === m.taskId);
+    if (!task) return;
+    const project = snap.projects.find((p) => p.id === task.projectId);
+    setReplyTo({ taskId: task.id, label: [project?.name, task.title].filter(Boolean).join(' · ') });
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  };
+  /** 답장한 말을 그 업무의 지금 단계에 맞게 넣는다: 질문 → 답, 기획 승인 대기 → 수정 요청, 결과 승인 대기 → 다시 시키기, 그 밖 → 추가 요청 */
+  const sendReply = (to: { taskId: string; label: string }, text: string) => {
+    const task = snap.tasks.find((t) => t.id === to.taskId);
+    setLog((l) => [...l, { id: mid(), from: 'me' as From, text, home: thread, reply: to.label, ...(task ? { taskId: task.id } : {}) }].slice(-KEEP));
+    if (!task) return say('office', '이 업무는 지워졌어요.');
+    archive({ role: 'me', text: `↩ ${to.label}\n${text}`, projectId: task.projectId, taskId: task.id });
+    const v = deriveWorkflow(task, snap.workflow);
+    const done = (ok: boolean, what: string) => say('office', ok ? `'${short(task.title)}'에 ${what}(으)로 넣었어요.` : `'${short(task.title)}'에 넣지 못했어요. 위쪽 알림의 이유를 확인하거나 업무 카드에서 하세요.`);
+    void run(async () => {
+      if (v.stage === 'needs_clarification' && onClarify && v.spec?.planner === 'gemini_draft' && v.spec.intent === 'ambiguous') return done(await onClarify(task, v.spec.answer, text), '확인 질문의 답');
+      if (v.stage === 'development_approval_pending' && v.spec && !v.aApproved && onReviseSpec) return done(await onReviseSpec(task, text), '기획 수정 요청');
+      if (v.stage === 'github_approval_pending' && onRedo && canRequestRevision(v).ok) return done(await onRedo(task, text), '다시 시키기');
+      if (onAddFollowup && v.stage !== 'completed' && v.stage !== 'cancelled') return done(await onAddFollowup(task.id, text), '추가 요청');
+      say('office', `'${short(task.title)}'은(는) 끝난 업무라 답장을 넣을 곳이 없어요. 새 요청으로 보내 주세요.`);
+    });
+  };
+  const addFix = (text: string) => setFixText((v) => (v.trim() ? `${v.trimEnd()}\n${text}` : text));
   /** 업무 알림 아래 버튼(지금도 그 단계일 때만). 카드면 카드 안에 둔다(v0.7.17).
    *  v0.7.23: 승인 차례면 "승인하면" 한 줄·칩·시안·바뀐 파일과 수정 요청·다시 시키기·배포 승인까지 대화에서 */
   const noticeButtons = (m: Msg) => {
@@ -350,6 +387,21 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             showFiles={filesFor === m.id}
             busy={busy}
             onPick={onPickDraft ? (d) => void run(() => onPickDraft(task, d)) : undefined}
+            loadShots={gate === 'B' && onResultImages && view.result ? () => onResultImages(task, view.result!.revision) : undefined}
+            onPoint={fixKind ? (img) => setPointImg({ ...img, msgId: m.id }) : undefined}
+          />
+        )}
+        {pointImg?.msgId === m.id && (
+          <PointFix
+            src={pointImg.src}
+            name={pointImg.name}
+            what={pointImg.what}
+            onClose={() => setPointImg(null)}
+            onDone={(text) => {
+              addFix(text);
+              setFixFor(m.id);
+              setPointImg(null);
+            }}
           />
         )}
         <span className="inbox-choices" role="group" aria-label="이 업무에 답하기">
@@ -409,6 +461,14 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
               sendFix();
             }}
           >
+            {/* 디자인 단어(v0.7.25): 누르면 구체적인 설명이 들어간다 */}
+            <span className="design-words inbox-fix-words" aria-label="디자인 단어로 수정 요청">
+              {DESIGN_WORDS.map((w) => (
+                <button key={w.word} type="button" className="chip" title={w.text} onClick={() => setFixText((v) => addDesignWord(v, w.word))}>
+                  {w.word}
+                </button>
+              ))}
+            </span>
             <textarea
               aria-label={fixKind === 'A' ? '기획서에서 고칠 점' : '결과에서 고칠 점'}
               rows={2}
@@ -978,6 +1038,13 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       return;
     }
     setInput('');
+    if (replyTo) {
+      // 답장은 글만 그 업무로(첨부는 그대로 남겨 둔다)
+      const to = replyTo;
+      setReplyTo(null);
+      sendReply(to, text);
+      return;
+    }
     const sent = photos;
     if (sent.length) {
       setPhotos([]);
@@ -1486,6 +1553,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             const actLine = parsed && m.id.startsWith('act-') ? parsed : null;
             const card = actLine ? null : parsed;
             const face = sp.id === 'me' ? null : characterUrl(sp.id, 'stand');
+            // 업무 카드에만 답장(v0.7.25): 오른쪽으로 밀거나(휴대폰) [↩ 답장](마우스)
+            const canReply = !!card && !!m.taskId && m.from !== 'me' && snap.tasks.some((x) => x.id === m.taskId);
             return (
             <Fragment key={m.id}>
             {newDay && (
@@ -1493,7 +1562,50 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                 <span>{dayLabel(t!)}</span>
               </li>
             )}
-            <li className={`inbox-msg from-${m.from}${cont ? ' is-cont' : ''}`}>
+            <li
+              className={`inbox-msg from-${m.from}${cont ? ' is-cont' : ''}${canReply ? ' can-reply' : ''}${swipe?.id === m.id ? ' is-swiping' : ''}`}
+              style={swipe?.id === m.id ? { transform: `translateX(${swipe.dx}px)` } : undefined}
+              onTouchStart={
+                canReply
+                  ? (e) => {
+                      const p = e.touches[0];
+                      touch.current = { id: m.id, x: p.clientX, y: p.clientY, horiz: null };
+                    }
+                  : undefined
+              }
+              onTouchMove={
+                canReply
+                  ? (e) => {
+                      const st = touch.current;
+                      const p = e.touches[0];
+                      if (!st || st.id !== m.id) return;
+                      const dx = p.clientX - st.x;
+                      const dy = p.clientY - st.y;
+                      if (st.horiz === null && Math.abs(dx) + Math.abs(dy) > 8) st.horiz = Math.abs(dx) > Math.abs(dy) * 1.5 && dx > 0;
+                      if (st.horiz) setSwipe({ id: m.id, dx: Math.max(0, Math.min(72, dx)) });
+                    }
+                  : undefined
+              }
+              onTouchEnd={
+                canReply
+                  ? () => {
+                      if (swipe?.id === m.id && swipe.dx >= 56) startReply(m);
+                      touch.current = null;
+                      setSwipe(null);
+                    }
+                  : undefined
+              }
+            >
+              {swipe?.id === m.id && (
+                <span className={`inbox-swipe-icon${swipe.dx >= 56 ? ' is-ready' : ''}`} aria-hidden="true">
+                  ↩
+                </span>
+              )}
+              {canReply && (
+                <button type="button" className="inbox-reply-btn" onClick={() => startReply(m)} aria-label={`이 업무에 답장: ${card?.title ?? ''}`}>
+                  ↩ 답장
+                </button>
+              )}
               {!cont && (
                 <span className={`inbox-av av-${sp.id}`} aria-hidden="true">
                   {face ? <img src={face} alt="" /> : '나'}
@@ -1507,6 +1619,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                   {t !== null && <time className="inbox-time">{clockLabel(t)}</time>}
                 </p>
               )}
+              {m.reply && <p className="inbox-reply-quote">↩ {m.reply}</p>}
               {actLine ? (
                 <p className="inbox-act">
                   {actLine.did}
@@ -1903,6 +2016,16 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
           if (e.dataTransfer.files.length) addPhotos(e.dataTransfer.files);
         }}
       >
+        {replyTo && (
+          <p className="inbox-reply-bar">
+            <span>
+              <b>↩ 답장</b> {replyTo.label}
+            </span>
+            <button type="button" className="link-btn" aria-label="답장 취소" onClick={() => setReplyTo(null)}>
+              ✕
+            </button>
+          </p>
+        )}
         {/* 보낼 첨부는 입력창 안 위쪽에 붙는다(v0.4.88 소유자: 따로 떨어져 보였음) */}
         {photos.length > 0 && (
           <ul className="inbox-photos" aria-label="보낼 첨부">

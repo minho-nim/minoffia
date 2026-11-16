@@ -13,4 +13,13 @@ describe('화면 확인 주소 검사(v0.6.9)', () => {
     expect(t.map((x) => x.key)).toEqual(['after']);
     expect(safeTargets('not json')).toEqual([]);
   });
+  it('러너 안 결과 주소는 --local일 때 after 하나만(v0.7.25)', () => {
+    const raw = JSON.stringify([
+      { key: 'after', url: 'http://127.0.0.1:4173/' },
+      { key: 'before', url: 'http://127.0.0.1:4173/' },
+      { key: 'after', url: 'http://127.0.0.1:8080/' },
+    ]);
+    expect(safeTargets(raw)).toEqual([]);
+    expect(safeTargets(raw, true).map((x) => `${x.key} ${x.url}`)).toEqual(['after http://127.0.0.1:4173/']);
+  });
 });

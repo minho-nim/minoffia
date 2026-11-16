@@ -1,6 +1,7 @@
 // 화면 확인(v0.6.9, 소유자 "승인 전 중간에서 보는 건?" + 배포 뒤 운영 확인): 실제 사이트(미리보기·운영)를 열어
 // PC 1400px·휴대폰 400px로 찍고 콘솔 오류·가로 넘침을 적는다. AI 호출 없음. GitHub Actions(site-check.yml)가 부른다.
-// 사용: node scripts/site-check.mjs '<targets JSON [{"key":"after","url":"https://…"}]>' <출력 폴더>
+// 사용: node scripts/site-check.mjs '<targets JSON [{"key":"after","url":"https://…"}]>' <출력 폴더> [--local]
+// --local(v0.7.25, result-shot.yml만): 러너 안에서 빌드해 띄운 결과(after = http://127.0.0.1:4173/ 하나)도 받는다.
 // 미리보기는 Cloudflare 빌드가 끝나야 열리므로 200이 될 때까지 최대 8분 기다린다.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,8 +13,10 @@ export const SIZES = [
   ['mobile', 400, 860],
 ];
 
-/** https 주소만, 내부 주소는 받지 않는다 */
-export function safeTargets(raw) {
+export const LOCAL_AFTER = 'http://127.0.0.1:4173/';
+
+/** https 주소만, 내부 주소는 받지 않는다. local이면 러너 안 결과 주소(LOCAL_AFTER) 하나만 더 받는다 */
+export function safeTargets(raw, local = false) {
   let list;
   try {
     list = JSON.parse(raw);
@@ -23,6 +26,7 @@ export function safeTargets(raw) {
   return (Array.isArray(list) ? list : [])
     .filter((t) => t && /^(before|after|live)$/.test(t.key) && typeof t.url === 'string')
     .filter((t) => {
+      if (local && t.key === 'after' && t.url === LOCAL_AFTER) return true;
       try {
         const u = new URL(t.url);
         return u.protocol === 'https:' && !/^(localhost|127\.|10\.|192\.168\.|169\.254\.|\[)/.test(u.hostname) && u.hostname.includes('.');
@@ -44,11 +48,11 @@ async function waitUp(url, ms = 8 * 60_000) {
   return last;
 }
 
-async function main([raw, out]) {
+async function main([raw, out, flag]) {
   // require로 불러야 놓인 폴더의 node_modules와 전역 설치 둘 다 찾는다
   const { chromium } = createRequire(import.meta.url)('playwright');
   fs.mkdirSync(out, { recursive: true });
-  const targets = safeTargets(raw);
+  const targets = safeTargets(raw, flag === '--local');
   const result = { checkedAt: new Date().toISOString(), targets: [] };
   const browser = await chromium.launch();
   for (const t of targets) {

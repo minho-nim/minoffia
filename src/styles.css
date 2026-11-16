@@ -4792,7 +4792,7 @@ a.project-site {
 .point-fix {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 470;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7500,4 +7500,123 @@ html.popup-open .project-sections > details[open] * {
 
 .inbox-choices a.btn {
   text-decoration: none;
+}
+
+/* 대화 카드 수정 칸(v0.7.25): 디자인 단어 줄을 입력칸 위 한 줄로 */
+.inbox-fix {
+  flex-wrap: wrap;
+}
+
+.inbox-fix-words {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}
+
+/* 밀어서 답장(v0.7.25): 업무 카드를 오른쪽으로 밀거나 [↩ 답장] → 입력창 위에 '답장' 줄 */
+.inbox-msg.can-reply {
+  position: relative;
+  touch-action: pan-y;
+}
+
+.inbox-msg.is-swiping {
+  transition: none;
+}
+
+.inbox-msg:not(.is-swiping) {
+  transition: transform 0.15s ease;
+}
+
+.inbox-swipe-icon {
+  position: absolute;
+  left: -40px;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin-top: -15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--line);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.inbox-swipe-icon.is-ready {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.inbox-reply-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 마우스가 있는 기기에서만, 올렸을 때·키보드로 왔을 때 보인다 */
+@media (hover: hover) {
+  .inbox-msg.can-reply:hover .inbox-reply-btn,
+  .inbox-reply-btn:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.inbox-reply-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.inbox-reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 4px 8px;
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+
+.inbox-reply-bar span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-reply-quote {
+  margin: 0 0 2px;
+  padding-left: 6px;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* SVG 시안은 그림 자체 크기가 없어서 폭을 정해 준다(v0.7.25 시안 짚어서 수정) */
+.point-fix-img img[src^='data:image/svg'] {
+  width: min(84vw, 520px);
+  height: auto;
+  background: #fff;
+}
+
+/* 결과 화면 사진은 작게(누르기 전에는 미리보기만) */
+.appr-shots {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 170px));
+}
+
+.appr-shots img {
+  height: 150px;
 }

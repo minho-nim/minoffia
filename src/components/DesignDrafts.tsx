@@ -13,11 +13,13 @@ interface Props {
   onPick?: (draft: DesignDraft) => void;
   /** 기획 승인 뒤: 고른 시안 한 줄로 접어 두고 누르면 두 장을 편다(v0.7.19) */
   compact?: boolean;
+  /** 시안을 짚어서 기획 수정 요청(v0.7.25) */
+  onPoint?: (draft: DesignDraft) => void;
 }
 
-const svgSrc = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+export const svgSrc = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-export function DesignDrafts({ drafts, pickedId, busy, onDraw, onPick, compact }: Props) {
+export function DesignDrafts({ drafts, pickedId, busy, onDraw, onPick, compact, onPoint }: Props) {
   const [open, setOpen] = useState(false);
   if (!drafts.length && !onDraw) return null;
   const sorted = [...drafts].sort((a, b) => a.who.localeCompare(b.who));
@@ -102,6 +104,11 @@ export function DesignDrafts({ drafts, pickedId, busy, onDraw, onPick, compact }
                       ))}
                     </ol>
                   </details>
+                )}
+                {onPoint && (
+                  <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => onPoint(d)}>
+                    짚어서 수정
+                  </button>
                 )}
                 {onPick ? (
                   <button type="button" className={`btn btn-small${picked ? ' btn-primary' : ''}`} disabled={busy || picked} onClick={() => onPick(d)}>

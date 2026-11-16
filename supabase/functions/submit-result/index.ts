@@ -121,15 +121,14 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ taskId: ticket.task_id, resultRevision: imported.revision, ownerId: ticket.owner_id }),
         signal: AbortSignal.timeout(140_000),
       }).catch(() => undefined);
-      // 화면 확인(v0.6.9): 미리보기 주소가 있으면 실제 미리보기·운영 화면을 찍어 승인 전에 보게 한다
-      const shots = saved.preview_url
-        ? fetch(`${env('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/site-check`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: ticket.task_id, kind: 'preview', ownerId: ticket.owner_id }),
-            signal: AbortSignal.timeout(30_000),
-          }).catch(() => undefined)
-        : Promise.resolve(undefined);
+      // 화면 확인(v0.6.9): 미리보기 주소가 있으면 실제 미리보기·운영 화면을 찍어 승인 전에 보게 한다.
+      // v0.7.25: 없으면 미노(Actions)가 결과 변경을 적용·빌드해 찍는다(kind build, 저장소가 없으면 함수가 거절)
+      const shots = fetch(`${env('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/site-check`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: ticket.task_id, kind: saved.preview_url ? 'preview' : 'build', ownerId: ticket.owner_id }),
+        signal: AbortSignal.timeout(30_000),
+      }).catch(() => undefined);
       // v0.6.28: 이 작업이 끝났으니 기다리던 다음 작업을 서버가 바로 시작한다(앱이 닫혀 있어도)
       const next = autoRun(admin, ticket.owner_id, ticket.task_id, env('SUPABASE_URL'), serviceKey).catch(() => undefined);
       const both = Promise.all([scoring, shots, next]);

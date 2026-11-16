@@ -12,5 +12,6 @@ describe('화면 짚어서 수정 요청(v0.5.48)', () => {
       "[화면 짚기] 결과 스크린샷 'desktop.png'\n1) 위쪽 왼쪽(가로 12%·세로 8%): 버튼 크게\n2) 아래쪽 오른쪽(가로 80%·세로 90%): 여백 줄이기",
     );
     expect(pointNotesText('a.png', [{ x: 1, y: 1, note: ' ' }])).toBe('');
+    expect(pointNotesText('B', [{ x: 50, y: 10, note: '제목 크게' }], 'Gemini 시안')).toBe("[화면 짚기] Gemini 시안 'B'\n1) 위쪽 가운데(가로 50%·세로 10%): 제목 크게");
   });
 });

@@ -1,5 +1,7 @@
 // 승인 카드 요약(v0.7.23): "승인하면" 한 줄·상태 칩·시안 그림·바뀐 파일 막대. 대화창 카드와 업무 카드에 같은 모양으로.
 // 규칙만(모델 호출 없음). SVG 시안은 규칙대로 img로만 보여 준다.
+import { svgSrc } from './DesignDrafts';
+import { useEffect, useState } from 'react';
 import { afterApprove, fileBars, prChips, resultChips, type Chip } from '../domain/approvalSummary';
 import { DRAW_STYLE_LABEL, pickedDraft, type DesignDraft } from '../domain/designDraft';
 import type { WorkflowView } from '../domain/workflow';
@@ -7,7 +9,6 @@ import type { Task } from '../domain/types';
 import type { PrCheck, ResultReview } from '../domain/workflow-types';
 import type { DesignPick } from '../domain/designDraft';
 
-const svgSrc = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
 export function Chips({ chips }: { chips: Chip[] }) {
   if (!chips.length) return null;
@@ -71,9 +72,46 @@ interface Props {
   /** 시안 바꾸기(기획 승인 전) */
   onPick?: (d: DesignDraft) => void;
   busy?: boolean;
+  /** 결과 화면 사진(결과 스크린샷·미노가 찍은 화면). 없으면 안 보임(v0.7.25) */
+  loadShots?: () => Promise<ShotImage[]>;
+  /** 그림을 짚어서 수정(시안·결과 화면) */
+  onPoint?: (img: ShotImage & { what: string }) => void;
 }
 
-export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPick, busy }: Props) {
+export interface ShotImage {
+  src: string;
+  name: string;
+}
+
+/** 결과 화면 사진 한 줄(불러오는 동안은 비워 둔다) */
+function ResultShots({ load, onPoint }: { load: () => Promise<ShotImage[]>; onPoint?: Props['onPoint'] }) {
+  const [shots, setShots] = useState<ShotImage[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    load().then((s) => alive && setShots(s), () => alive && setShots([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!shots?.length) return null;
+  return (
+    <ul className="appr-drafts appr-shots" aria-label="결과 화면">
+      {shots.slice(0, 2).map((s) => (
+        <li key={s.src}>
+          <img src={s.src} alt={s.name} loading="lazy" />
+          <span className="small">{s.name}</span>
+          {onPoint && (
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => onPoint({ ...s, what: '결과 화면' })}>
+              짚어서 수정
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPick, busy, loadShots, onPoint }: Props) {
   if (gate === 'A') {
     const rev = view.spec?.revision ?? 0;
     const drafts = (data.designDrafts ?? []).filter((d) => d.taskId === task.id && d.specRevision === rev).sort((a, b) => a.who.localeCompare(b.who));
@@ -93,6 +131,11 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
                     {d.review ? ` · ${d.review.total}점` : ''}
                     {on ? ' · 고름' : ''}
                   </span>
+                  {onPoint && (
+                    <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => onPoint({ src: svgSrc(d.svg), name: d.who, what: 'Gemini 시안' })}>
+                      짚어서 수정
+                    </button>
+                  )}
                   {!on && onPick && (
                     <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => onPick(d)}>
                       시안 {d.who}로
@@ -111,6 +154,7 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
     return (
       <div className="appr">
         <Chips chips={resultChips(view.result, review)} />
+        {loadShots && <ResultShots key={view.result.revision} load={loadShots} onPoint={onPoint} />}
         <p className="appr-after">{afterApprove('B')}</p>
         {showFiles && <FileBars diff={view.result.diff} />}
       </div>
