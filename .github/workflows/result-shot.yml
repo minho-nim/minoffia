@@ -72,7 +72,13 @@ jobs:
             if ! npm run build; then echo "note=결과를 빌드하지 못했어요(npm run build 실패)." >> "$GITHUB_OUTPUT"; exit 0; fi
             for d in dist build out; do [ -f "$d/index.html" ] && { dir=$d; break; }; done
           fi
-          [ -f "$dir/index.html" ] || { echo "note=열 화면(index.html)을 찾지 못했어요." >> "$GITHUB_OUTPUT"; exit 0; }
+          # 맨 위·빌드 폴더에 없으면 얕은 곳(3단계)에서 처음 찾은 index.html의 폴더(node_modules·.git 제외, 빌드 결과 우선)
+          if [ ! -f "$dir/index.html" ]; then
+            found=$(find . -maxdepth 3 -name index.html -not -path '*/node_modules/*' -not -path './.git/*' | awk '{ p = ($0 ~ /\/(dist|build|out|public|docs|site|web|www)\//) ? 0 : 1; print p, length($0), $0 }' | sort -n -k1,1 -k2,2 | head -1 | cut -d' ' -f3-)
+            [ -n "$found" ] && dir=$(dirname "$found")
+          fi
+          [ -f "$dir/index.html" ] || { echo "note=열 화면(index.html)을 찾지 못했어요. 웹 화면이 없는 저장소일 수 있어요." >> "$GITHUB_OUTPUT"; exit 0; }
+          echo "화면 폴더: $dir"
           nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory "$dir" >/tmp/serve.log 2>&1 &
           sleep 2
           echo "ok=1" >> "$GITHUB_OUTPUT"
