@@ -7647,3 +7647,21 @@ html.popup-open .project-sections > details[open] * {
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* 배포 승인 확인 칸(v0.7.32): 브라우저 확인 창 대신 카드 안에서 */
+.inbox-confirm {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--ok);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13.5px;
+}
+
+.inbox-confirm p {
+  margin: 0;
+}
+
+.inbox-confirm .inbox-choices {
+  margin-top: 6px;
+}
