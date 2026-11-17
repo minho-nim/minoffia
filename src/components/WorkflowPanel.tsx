@@ -588,6 +588,8 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
           }}
         />
       )}
+      {/* 기다림 그림(v0.7.58 소유자 "업무 탭에서 보이는 연출"): 접힌 '단계별 자세히' 안에 있어 안 보였다. 기다리는 작업이 있을 때만 카드 위에 */}
+      {view.planCurrent && view.assignments.length > 1 && <WaitMap assignments={view.assignments} all={allAssignments} plan={view.plan} />}
       <details className="wf-more" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
         <summary>단계별 자세히</summary>
       <div className="wf-head">
@@ -1008,7 +1010,6 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
       {view.planCurrent && view.assignments.length > 0 && (
         <section className={fold.cls('E', 3)} id={`wf-${task.id}-E`}>
           {fold.head('E', 3, <>4. 배정된 작업 — {GATE_LABEL.E}</>)}
-          <WaitMap assignments={view.assignments} all={allAssignments} plan={view.plan} />
           {/* 요구사항 번호 검사(v0.5.39): 기획서 완료 기준 중 어느 작업도 맡지 않은 것 */}
           {(() => {
             const missing = view.spec && view.plan ? uncoveredRequirements(view.spec.testCriteria, view.plan.plan.work_items) : [];
