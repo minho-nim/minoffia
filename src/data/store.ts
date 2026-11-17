@@ -160,7 +160,7 @@ export interface OfficeStore {
   /** 고른 프로젝트에 스킬 넣기(Actions '스킬 넣기'를 프로젝트마다 시작) */
   installSkill?(skill: string, projectIds: string[], mode?: 'add' | 'remove'): Promise<{ started: string[]; failed: string[] }>;
   /** 프로젝트 디자인 기준(v0.5.56, Supabase 모드에서만) */
-  designStandard?: { draft(projectId: string): Promise<string>; approve(projectId: string, md: string): Promise<void> };
+  designStandard?: { draft(projectId: string, refs?: string[]): Promise<string>; approve(projectId: string, md: string): Promise<void> };
   /** 디자인 자동 검사(v0.5.56, Supabase 모드에서만) */
   designCheck?: {
     load(taskId: string, revision: number): Promise<import('../domain/designCheck').DesignReport | null>;

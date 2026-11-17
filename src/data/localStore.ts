@@ -1,4 +1,5 @@
 import { redoFeedback, ruleCheck, verdictOf } from '../domain/review';
+import { DESIGN_REFS } from '../domain/designRefs';
 import type { ResultReview } from '../domain/workflow-types';
 import { startBlocker } from '../domain/concurrency';
 import { attachmentBlocker, attachmentsOf, MAX_TOTAL_BYTES, totalBytes } from '../domain/attachments';
@@ -108,6 +109,35 @@ export function createLocalStore(): OfficeStore {
         ...state,
         projects: exists ? state.projects.map((p) => (p.id === project.id ? project : p)) : [...state.projects, project],
       });
+    },
+    // 체험(v0.7.50): 디자인 기준 초안을 실제 AI 없이 예시로(참고 서비스 고르기를 써 볼 수 있게)
+    designStandard: {
+      async draft(projectId, refs = []) {
+        const names = refs.map((r) => DESIGN_REFS.find((d) => d.slug === r)?.name ?? r);
+        const doc = [
+          '# 디자인 기준',
+          ...(names.length ? [`참고: ${names.join(', ')} (구조만 참고)`] : []),
+          '> 체험: 실제 AI 없이 만든 예시 초안이에요.',
+          '## 색',
+          '- 바탕: #f7f3ea (제안) — 화면 바탕',
+          '- 글자: #2a2420 (제안) — 본문',
+          '- 강조: #c8642c (제안) — 주요 버튼·선택 표시에만',
+          '## 글꼴',
+          '- 본문·제목: Pretendard (제안)',
+          '## 글자 크기',
+          '- 작은 글씨 13px, 본문 15px, 제목 22px (제안)',
+          '## 둥글기와 간격',
+          '- 모서리 10px, 간격 4px 단위 (제안)',
+          '## 지킬 것',
+          '- 강조 색은 한 화면에 한두 곳만',
+          '- 카드 안에 카드를 넣지 않는다',
+        ].join('\n');
+        commit({ ...state, projects: state.projects.map((p) => (p.id === projectId ? { ...p, designDraft: doc } : p)) });
+        return doc;
+      },
+      async approve(projectId, md) {
+        commit({ ...state, projects: state.projects.map((p) => (p.id === projectId ? { ...p, designMd: md, designDraft: '' } : p)) });
+      },
     },
     async reorderProjects(ids) {
       commit({ ...state, projects: state.projects.map((p) => ({ ...p, position: Math.max(0, ids.indexOf(p.id)) })) });

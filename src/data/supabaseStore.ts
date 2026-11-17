@@ -704,8 +704,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       },
     },
     designStandard: {
-      async draft(projectId) {
-        const data = await invoke('design-standard', { projectId });
+      async draft(projectId, refs = []) {
+        const data = await invoke('design-standard', { projectId, ...(refs.length ? { refs } : {}) });
         return String(data.draft ?? '');
       },
       async approve(projectId, md) {

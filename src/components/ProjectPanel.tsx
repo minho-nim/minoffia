@@ -335,7 +335,8 @@ export function ProjectPanel({ projects, tasks, turnsByProject, onOpen, onAsk, o
                   {healthOpen[p.id] && renderHealth(p)}
                 </details>
               )}
-              {renderDesign && p.repo && (
+              {/* 체험 프로젝트(저장소 없음)도 디자인 기준·참고 고르기를 써 볼 수 있게(v0.7.50) */}
+              {renderDesign && (p.repo || p.sample) && (
                 <details className="project-rules project-design" onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setDesignOpen((o) => ({ ...o, [p.id]: open })); }}>
                   <summary>디자인{p.designMd ? '' : '(없음)'}</summary>
                   {designOpen[p.id] && renderDesign(p)}

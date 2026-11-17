@@ -2527,7 +2527,7 @@ export function App() {
                     )
                   : undefined
               }
-              renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: () => store.designStandard!.draft(p.id), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
+              renderDesign={store.designStandard ? (p) => <DesignStandard approved={p.designMd ?? ''} draft={p.designDraft ?? ''} api={{ draft: (refs) => store.designStandard!.draft(p.id, refs), approve: async (md) => { await store.designStandard!.approve(p.id, md); await reload(); } }} /> : undefined}
               renderHealth={renderCheck}
               renderMaps={renderMaps}
               renderStructure={renderStructure}
