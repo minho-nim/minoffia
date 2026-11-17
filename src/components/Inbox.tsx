@@ -1516,7 +1516,8 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           if (muted.current) return;
           const raw = got.answer;
           const sources = got.sources ?? [];
-          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
+          // 날씨(v0.7.68)는 Open-Meteo 숫자로 규칙 답(Gemini 안 씀)
+          const via = got.engine === 'Open-Meteo' ? 'Open-Meteo 날씨 자료 · 규칙으로 답함' : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
           if (via || sources.length) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {
