@@ -6,6 +6,7 @@
 // 원본(기획서·결과)은 그대로 두고 위키만 쓴다. AI를 못 쓰면 '지난 결정'에 한 줄씩만 더한다. minho-nim/MinLab은 건너뛴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { appendDecisions, cleanWiki, diffFiles, wikiPrompt, WIKI_SYSTEM, type TaskFacts } from './wiki.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 const MODEL = 'gemini-3.5-flash-lite';
 const DAILY_CAP = 40;
@@ -63,7 +64,7 @@ async function callGemini(admin: Admin, ownerId: string, text: string): Promise<
     { slot: 2, key: env('GEMINI_API_KEY2'), judge: 'Gemini · Studio B', agent: 'studioB' },
   ].filter((k) => k.key && !off.has(k.agent));
   for (const k of keys) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': k.key },
       body: JSON.stringify({ systemInstruction: { parts: [{ text: WIKI_SYSTEM }] }, contents: [{ role: 'user', parts: [{ text }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.2 } }),

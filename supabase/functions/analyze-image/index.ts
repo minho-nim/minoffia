@@ -7,6 +7,7 @@ import JSZip from 'npm:jszip@3.10.1';
 import { buildDocPrompt, buildPrompt, geminiMime, parseAnalysis, toBase64 } from './analysis.ts';
 import { extractOffice, OFFICE_KIND, officeToText } from './office.ts';
 import { NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
     let message = '';
     let tokens: GeminiTokens = NO_TOKENS;
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({

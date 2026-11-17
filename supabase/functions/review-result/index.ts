@@ -12,6 +12,7 @@ import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
 import { designReviewSection } from './designReview.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 // v0.7.8: 결과 하나에 Gemini 두 번(A·B)이라 상한도 두 배
 const HARD_DAILY_CAP = 100;
@@ -33,7 +34,7 @@ const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 async function callGemini(key: string, model: string, text: string) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({

@@ -6,6 +6,7 @@
 import { deepSearch, failMessage, searchCredits, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 /** 코드 상한. GEMINI_DAILY_CAP을 더 크게 줘도 넘지 않는다(이미지 분석과 무료 한도를 나눠 쓴다). */
 const HARD_DAILY_CAP = 100;
@@ -140,7 +141,7 @@ export function thinkingOrder(model: string): ThinkingMode[] {
 async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
   const call = (mode: ThinkingMode) =>
-    fetch(url, {
+    geminiFetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
       body: requestBody(question, history, images, mode, system),

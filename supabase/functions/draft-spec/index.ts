@@ -7,6 +7,7 @@ import { loadRules, rulesSection, saveRules } from './projectRules.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { codePaths, NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
 import { appMapSection } from './appMap.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 const HARD_DAILY_CAP = 50;
 const DEFAULT_DAILY_CAP = 20;
@@ -26,7 +27,7 @@ const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 async function callGemini(key: string, model: string, text: string) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({

@@ -4,6 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { cleanRefs, cleanStandard, REF_SYSTEM, STANDARD_SYSTEM, styleFiles } from './standard.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 40_000;
@@ -26,7 +27,7 @@ const reply = (status: number, body: Record<string, unknown>) =>
 const gh = (token: string) => ({ Authorization: `Bearer ${token}`, 'User-Agent': 'minoffia', 'X-GitHub-Api-Version': '2022-11-28' });
 
 async function callGemini(key: string, model: string, text: string, system: string) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
