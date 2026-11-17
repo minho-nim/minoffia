@@ -77,6 +77,7 @@ import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
 import { installPopupClose } from './components/popupClose';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
+import { FREE_MONTHLY, type Credits } from './domain/searchCredits';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'skills' | 'settings';
 type Filter = 'open' | 'all' | TaskStatus | 'st:working' | 'st:turn' | 'st:stuck';
@@ -189,6 +190,19 @@ export function App() {
     }
   };
   const [selected, setSelected] = useState<AgentId | null>(null);
+  // 오늘 사용량의 Tavily·Firecrawl(v0.7.55 소유자 "다른 API처럼, 대시보드의 토큰을 연결"): 각 서비스 키로 실제 사용량을 읽는다(켤 때, 10분마다). 막히면 앱이 센 추정
+  const [liveCredits, setLiveCredits] = useState<{ tavily: Credits | null; firecrawl: Credits | null } | null>(null);
+  useEffect(() => {
+    if (!store?.searchCredits) return;
+    let alive = true;
+    const run = () => void store.searchCredits!().then((c) => alive && setLiveCredits(c), () => undefined);
+    run();
+    const t = window.setInterval(run, 600_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [store]);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [handoff, setHandoff] = useState<string | null>(null);
   const handoffRef = useRef<HTMLTextAreaElement>(null);
@@ -635,6 +649,24 @@ export function App() {
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
 
   // 오늘 사용량(큰 머리와 얇은 머리의 '사용량 보기'가 같이 쓴다)
+  const searchRow = (engine: 'tavily' | 'firecrawl') => {
+    const live = liveCredits?.[engine] ?? null;
+    const used = live ? live.used : (snap.searchCredits?.[engine] ?? 0);
+    const limit = live ? live.limit : FREE_MONTHLY[engine];
+    const name = engine === 'tavily' ? 'Tavily' : 'Firecrawl';
+    return (
+      <li key={engine} className={used >= limit ? 'is-full' : ''} title={`${name}: 오늘 ${engine === 'tavily' ? '검색' : '검색·본문'} ${snap.searchToday?.[engine] ?? 0}회. 이번 달 크레딧 ${used}/${limit}${live ? '(서비스가 알려 준 실제 값)' : '(앱이 센 추정: 서비스가 사용량을 알려 주지 않음)'}.`}>
+        <span>{name}</span>
+        <span className="meter" aria-hidden="true">
+          <span style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} />
+        </span>
+        <span className="num">
+          {snap.searchToday?.[engine] ?? 0}회 · 월 {used.toLocaleString('ko-KR')}/{limit.toLocaleString('ko-KR')}
+          {live ? '' : '(추정)'}
+        </span>
+      </li>
+    );
+  };
   const usageList = (
     <ul className="usage" aria-label="오늘 등록된 실행 횟수">
       {AGENTS.filter((a) => a.dailyCap !== null).map((a) => {
@@ -665,6 +697,8 @@ export function App() {
           </span>
         </li>
       )}
+      {store.mode === 'supabase' && searchRow('tavily')}
+      {store.mode === 'supabase' && searchRow('firecrawl')}
     </ul>
   );
 
@@ -2541,7 +2575,7 @@ export function App() {
             <AgentRoster
               snap={snap}
               onLinearProbe={store.mode === 'supabase' ? () => store.linearProbe() : undefined}
-              onCredits={store.searchCredits ? () => store.searchCredits!() : undefined}
+              liveCredits={liveCredits}
               onSetLimit={(kind, n) => void mutate(() => store.setAgentLimit(kind, n), `동시 작업 상한을 ${n}개로 바꿨습니다.`)}
               selected={selected}
               onSelect={(id) => setSelected(id)}

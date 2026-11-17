@@ -1,10 +1,8 @@
 // 웹 검색 크레딧(v0.7.53 소유자 "Tavily·Firecrawl 사용량 대시보드 연결"): 팀 관리의 Tavily·Firecrawl 칸.
-// 서비스 사용량 API(서버 ask-gemini usage)가 되면 그 숫자를, 무료 등급에서 막혀 있으면 앱이 직접 센 추정을 보여 주고 정확한 숫자는 대시보드로 넘긴다.
+// 서비스 사용량 API(서버 ask-gemini usage, 서버 키로 대시보드와 같은 숫자)가 되면 그 숫자를, 막혀 있으면 앱이 직접 센 추정을 보여 준다(v0.7.55 오늘 사용량에도).
 
 /** 무료 등급 월 크레딧(카드 없음). 서비스가 바꾸면 여기만 고친다 */
 export const FREE_MONTHLY = { tavily: 1000, firecrawl: 1000 } as const;
-/** 각 서비스 사용량 화면 */
-export const DASHBOARD = { tavily: 'https://app.tavily.com/home', firecrawl: 'https://www.firecrawl.dev/app/usage' } as const;
 /** 한 번에 드는 크레딧 추정: Tavily 기본 검색 1, Firecrawl 검색(결과 5개) 2·본문 1 */
 const COST: Record<string, Record<string, number>> = { tavily: { search: 1 }, firecrawl: { search: 2, scrape: 1 } };
 
@@ -12,6 +10,14 @@ const COST: Record<string, Record<string, number>> = { tavily: { search: 1 }, fi
 export function searchCreditsOf(rows: { provider: string; model: string }[]): { tavily: number; firecrawl: number } {
   const out = { tavily: 0, firecrawl: 0 };
   for (const r of rows) if (r.provider === 'tavily' || r.provider === 'firecrawl') out[r.provider] += COST[r.provider][r.model] ?? 1;
+  return out;
+}
+
+/** 오늘(KST) 성공한 조사 횟수: Tavily 검색 수, Firecrawl 검색+본문 수 */
+export function searchTodayOf(rows: { provider: string; model: string; created_at: string }[], now = new Date()): { tavily: number; firecrawl: number } {
+  const day = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+  const out = { tavily: 0, firecrawl: 0 };
+  for (const r of rows) if ((r.provider === 'tavily' || r.provider === 'firecrawl') && day(new Date(r.created_at)) === day(now)) out[r.provider] += 1;
   return out;
 }
 
