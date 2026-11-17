@@ -1015,7 +1015,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           const b = await res.json().catch(() => ({}));
           if (res.ok && b?.ok && b.answer) {
             onDelta(b.answer);
-            return { answer: b.answer as string, keySlot: b.keySlot as number, sources: cleanSources(b.sources), engine: typeof b.engine === 'string' ? (b.engine as string) : undefined };
+            return { answer: b.answer as string, keySlot: b.keySlot as number, sources: cleanSources(b.sources), engine: typeof b.engine === 'string' ? (b.engine as string) : undefined, pages: Number(b.pages) || 0 };
           }
           throw new Error(b?.error ?? `Gemini가 답하지 못했습니다(HTTP ${res.status}).`);
         }
@@ -1024,6 +1024,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         let answer = '';
         let keySlot = 0;
         let engine: string | undefined;
+        let pages = 0;
         let sources: Source[] = [];
         for (;;) {
           const { value, done } = await reader.read();
@@ -1034,7 +1035,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
             const line = buf.slice(0, nl).trim();
             buf = buf.slice(nl + 1);
             if (!line) continue;
-            const m = JSON.parse(line) as { d?: string; done?: boolean; keySlot?: number; error?: string; sources?: unknown; engine?: unknown };
+            const m = JSON.parse(line) as { d?: string; done?: boolean; keySlot?: number; error?: string; sources?: unknown; engine?: unknown; pages?: unknown };
             if (m.error) throw new Error(answer ? `${m.error} (받은 데까지 보여 드렸어요)` : m.error);
             if (m.d) {
               answer += m.d;
@@ -1044,11 +1045,12 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
               keySlot = m.keySlot ?? 0;
               sources = cleanSources(m.sources);
               if (typeof m.engine === 'string') engine = m.engine;
+              pages = Number(m.pages) || 0;
             }
           }
         }
         if (!answer.trim()) throw new Error('Gemini가 답하지 못했습니다.');
-        return { answer: answer.trim(), keySlot, sources, engine };
+        return { answer: answer.trim(), keySlot, sources, engine, pages };
       }
       const { data, error } = await client.functions.invoke('ask-gemini', { body: { question, history, images, ...opts } });
       if (error) {
@@ -1065,7 +1067,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         throw new Error(message);
       }
       if (!data?.ok || !data.answer) throw new Error(data?.error ?? 'Gemini가 답하지 못했습니다.');
-      return { answer: data.answer as string, keySlot: data.keySlot as number, sources: cleanSources(data.sources), engine: typeof data.engine === 'string' ? (data.engine as string) : undefined };
+      return { answer: data.answer as string, keySlot: data.keySlot as number, sources: cleanSources(data.sources), engine: typeof data.engine === 'string' ? (data.engine as string) : undefined, pages: Number(data.pages) || 0 };
     },
     async readLink(taskId, url) {
       const { data, error } = await client.functions.invoke('fetch-link', { body: { taskId, url } });

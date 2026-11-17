@@ -2,7 +2,7 @@
 // 업무 알림은 카드(왼쪽 색 막대·프로젝트·업무 이름·점수 칸)로 나눠 보여 준다. 모두 규칙(모델 호출 없음), 저장된 글은 그대로 두고 보이는 모양만.
 import type { Stage } from './workflow-types';
 
-export type SpeakerId = 'me' | 'mina' | 'claude' | 'codex' | 'studioA' | 'studioB' | 'exa' | 'ci';
+export type SpeakerId = 'me' | 'mina' | 'claude' | 'codex' | 'studioA' | 'studioB' | 'search' | 'ci';
 export interface Speaker {
   id: SpeakerId;
   name: string;
@@ -33,8 +33,8 @@ export function speakerOf(m: ChatMsgLike): Speaker {
     const via = m.via ?? '';
     if (via.includes('Claude')) return { id: 'claude', name: 'Claude', role: '웹 조사' };
     // 웹 조사(v0.7.51 Tavily·Firecrawl, 예전 기록은 Exa): "<엔진> 검색 + Gemini ·"
-    const web = /(\S+) 검색 \+ Gemini/.exec(via);
-    if (web) return { id: 'exa', name: `${web[1]} + Gemini`, role: '웹 조사' };
+    const web = /(\S+) 검색(?: \+ (?:본문 \d+개|요약만))? \+ Gemini/.exec(via);
+    if (web) return { id: 'search', name: `${web[1]} + Gemini`, role: '웹 조사' };
     if (via.includes('Studio B')) return { id: 'studioB', name: 'Gemini B', role: '답변' };
     return { id: 'studioA', name: 'Gemini A', role: '답변' };
   }

@@ -75,7 +75,7 @@ export const AGENTS: Agent[] = [
     palette: { hair: '#1c1f26', skin: '#e2b48f', shirt: '#2f9e7a', pants: '#2b3140', accent: '#c9f2e2' },
   },
   {
-    id: 'exa',
+    id: 'search',
     name: 'Tavily',
     role: '웹 조사',
     provider: 'Tavily 검색(먼저)·Firecrawl 검색(예비), 카드 없는 무료 크레딧 + Gemini 정리',
@@ -136,7 +136,7 @@ export const CANDIDATES: Record<WorkType, AgentId[]> = {
   dev: ['codex', 'claude'],
   design: ['studioA', 'studioB'],
   prototype: ['studioB', 'studioA'],
-  // 조사 업무: Gemini(Studio A·B)가 먼저, Claude는 마지막. 대화의 웹 조사는 Exa가 찾고 Gemini가 정리(업무 배정과 별개). Grok은 뺐다(2026-11-13)
+  // 조사 업무: Gemini(Studio A·B)가 먼저, Claude는 마지막. 대화의 웹 조사는 Tavily가 찾고 Gemini가 정리(업무 배정과 별개). Grok은 뺐다(2026-11-13)
   research: ['studioA', 'studioB', 'claude'],
   qa: ['ci'],
 };

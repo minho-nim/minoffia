@@ -5,7 +5,7 @@ import type { AgentId } from '../domain/types';
  *   src/assets/office/background.png        (가로:세로 = 300:224, 예: 1200×896)
  *   src/assets/office/characters/<id>-stand.png
  *   src/assets/office/characters/<id>-walk.png   (없으면 stand를 쓴다)
- * <id>: mina, claude, codex, exa, studioA, studioB, ci
+ * <id>: mina, claude, codex, search, studioA, studioB, ci
  */
 const backgrounds = import.meta.glob('../assets/office/background.{png,jpg,webp}', {
   eager: true,
