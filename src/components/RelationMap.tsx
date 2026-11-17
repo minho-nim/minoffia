@@ -495,10 +495,12 @@ export function NetView({ spec, style, focus }: { spec: { nodes: { id: string; l
 }
 
 /** 스킬 목록·상태를 (서버에 저장된 것부터) 읽어 관계 지도를 그린다 */
-export function RelationLoader({ load, projects, focus }: {
+export function RelationLoader({ load, projects, focus, ver = 0 }: {
   load: () => Promise<{ files: import('../domain/skills').SkillFile[]; map: import('../domain/skills').SkillMapData; mcp: Record<string, string[]> }>;
   projects: { id: string; name: string }[];
   focus?: string;
+  /** 스킬 자료를 새로 읽으면 바뀜: 다시 그린다 */
+  ver?: number;
 }) {
   const [input, setInput] = useState<RelInput | null>(null);
   const [error, setError] = useState('');
@@ -507,7 +509,7 @@ export function RelationLoader({ load, projects, focus }: {
       (d) => setInput({ skills: d.files.map(toSkillView), projects, map: d.map, mcp: d.mcp }),
       (e) => setError((e as Error).message || '관계 지도를 읽지 못했어요.'),
     );
-  }, []);
+  }, [ver]);
   if (error) return <p className="task-error small rel-pad">{error}</p>;
   if (!input) return <p className="muted small rel-pad">관계 지도를 불러오는 중…</p>;
   return <RelationMap input={input} focus={focus && projects.some((p) => p.id === focus) ? focus : undefined} focusName={projects.find((p) => p.id === focus)?.name} />;

@@ -15,7 +15,7 @@ const COLUMNS: { key: string; label: string; states: SimpleState[] }[] = [
 const DONE_LIMIT = 8;
 
 export function TaskBoard({ tasks, states, projects, onOpen }: { tasks: Task[]; states: Map<string, SimpleState>; projects: Map<string, Project>; onOpen: (task: Task) => void }) {
-  // 칸 접고 펴기(v0.6.72 소유자 "보드가 먼저 보이고 접고 열게"): 처음엔 업무가 있는 칸만 펼치고 '끝남'은 접어 둔다
+  // 칸 접고 펴기(v0.6.72 소유자 "보드가 먼저 보이고 접고 열게"): 처음엔 '끝남'만 접고 나머지는 빈 칸도 펼쳐 둔다(v0.7.47 소유자 "보드는 끝남만 닫히고 나머지는 열린 상태로")
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   return (
     <div className="task-board" role="list" aria-label="업무 보드">
@@ -24,7 +24,7 @@ export function TaskBoard({ tasks, states, projects, onOpen }: { tasks: Task[]; 
           .filter((t) => col.states.includes(states.get(t.id) ?? 'working'))
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         const shown = col.key === 'done' ? all.slice(0, DONE_LIMIT) : all;
-        const closed = folded[col.key] ?? (all.length === 0 || col.key === 'done');
+        const closed = folded[col.key] ?? col.key === 'done';
         return (
           <section key={col.key} className={`board-col board-${col.key}${all.length === 0 ? ' is-empty' : ''}${closed ? ' is-closed' : ''}`} role="listitem" aria-label={`${col.label} ${all.length}개`}>
             <h4>

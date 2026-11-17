@@ -28,6 +28,7 @@ import { advanceDemo, DEMO_TAG, demoTask, newDemoTask } from './demo/demoServer'
 /** 점검(앱 지도 그리기)을 시작한 시각, 프로젝트별(v0.7.4 미노 말풍선) */
 const drawStarted = new Map<string, number>();
 import { RelationLoader } from './components/RelationMap';
+import { NoticeToast } from './components/NoticeToast';
 import { OfficeMap } from './components/OfficeMap';
 import { FormPopup } from './components/FormPopup';
 import { ProjectSkills } from './components/ProjectSkills';
@@ -406,27 +407,15 @@ export function App() {
   }, [tab]);
   const [picOpen, setPicOpen] = useState(false);
   const [directOpen, setDirectOpen] = useState(false);
-  // 대화 탭 프로젝트 칩 접기(v0.6.72). 이 기기에만 기억
-  const [chatChipsOpen, setChatChipsOpenState] = useState(() => {
-    try {
-      return localStorage.getItem('chatChipsOpen') !== '0';
-    } catch {
-      return true;
-    }
-  });
-  const setChatChipsOpen = (f: (v: boolean) => boolean) =>
-    setChatChipsOpenState((v) => {
-      const n = f(v);
-      try {
-        localStorage.setItem('chatChipsOpen', n ? '1' : '0');
-      } catch {
-        // 저장 못 해도 화면은 그대로
-      }
-      return n;
-    });
+  // 대화 탭 프로젝트 칩 접기(v0.6.72). v0.7.47 소유자 "대화창에 프로젝트들은 기본으로 닫혀 있도록": 켤 때마다 접힌 채로 시작(고른 프로젝트 하나만 보임)
+  const [chatChipsOpen, setChatChipsOpenState] = useState(false);
+  const setChatChipsOpen = (f: (v: boolean) => boolean) => setChatChipsOpenState(f);
   // 스킬 탭의 '구조 보기'·'점검' 칸(v0.6.70): 열었을 때만 그린다
   const [skillMapsOpen, setSkillMapsOpen] = useState(false);
   const [skillCheckOpen, setSkillCheckOpen] = useState(false);
+  // 스킬 자료를 GitHub에서 새로 읽을 때마다 1씩(v0.7.47 소유자 "게임 탭은 있는데 구조 보기에 연결이 안 됨, 앞으로도 연동되게"):
+  // 저장해 둔 옛 자료로 먼저 그린 관계 지도·프로젝트 스킬이 새 자료로 다시 그려지게
+  const [skillsVer, setSkillsVer] = useState(0);
   const skillsData = useRef<{ at: number; p: Promise<{ files: import('./domain/skills').SkillFile[]; map: import('./domain/skills').SkillMapData; mcp: Record<string, string[]> }> } | null>(null);
   // 스킬 목록·프로젝트 상태는 한 번 읽어 10분 동안 나눠 쓴다(v0.6.67 소유자 "스킬은 켤 때마다 불러와야 돼?"). '다시 읽기'·넣기 뒤에는 새로 읽는다
   // 앱을 다시 켜도 '읽는 중' 없이 바로 보이게(v0.6.70 소유자 "켤 때 스킬을 불러온다고 계속 나와", "서버로 올리면 안 돼?"):
@@ -460,6 +449,7 @@ export function App() {
         skillsData.current = { at: Date.now(), p: Promise.resolve(d) };
         setSlimProjects(d.map);
         setSkillTitles(d.files.map(toSkillView));
+        setSkillsVer((v) => v + 1);
       },
       () => {
         if (skillsData.current?.p === p2) skillsData.current = null;
@@ -1951,7 +1941,7 @@ export function App() {
       health={store.healthCheck && p.repo ? { load: () => store.healthCheck!.load(p.id), map: () => store.healthCheck!.map(p.id) } : undefined}
       structure={() => renderStructure(p)}
       office={OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) ? renderOffice : undefined}
-      relation={store.skills && store.skillMap ? () => <RelationLoader load={() => loadSkillsData()} projects={relProjects} focus={p.repo && p.repo.toLowerCase() !== SKILLS_REPO ? p.id : undefined} /> : undefined}
+      relation={store.skills && store.skillMap ? () => <RelationLoader load={() => loadSkillsData()} ver={skillsVer} projects={relProjects} focus={p.repo && p.repo.toLowerCase() !== SKILLS_REPO ? p.id : undefined} /> : undefined}
     />
   );
   return (
@@ -2217,16 +2207,7 @@ export function App() {
             </div>
           )}
 
-          {notice && (
-            <p className={`notice notice-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
-              <span>{notice.text}</span>
-              {notice.kind === 'error' && (
-                <button type="button" className="notice-close" onClick={() => setNotice(null)} aria-label="알림 닫기">
-                  닫기
-                </button>
-              )}
-            </p>
-          )}
+          {notice && <NoticeToast kind={notice.kind} text={notice.text} onClose={() => setNotice(null)} />}
 
           {handoff && (
             <div className="handoff">
@@ -2534,6 +2515,7 @@ export function App() {
                       <ProjectSkills
                         projectId={p.id}
                         load={() => loadSkillsData()}
+                        ver={skillsVer}
                         onManage={(skill) => {
                           // 팝업을 닫고(뒤 화면 잠금도 풀고) 스킬 탭으로. 이름이 있으면 그 스킬의 넣기 창을 연다
                           document.querySelectorAll<HTMLDetailsElement>('.project-sections > details[open]').forEach((d) => (d.open = false));
