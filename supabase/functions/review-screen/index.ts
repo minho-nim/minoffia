@@ -68,8 +68,9 @@ Deno.serve(async (req) => {
   const { data: away } = await admin.from('agent_leave').select('agent').eq('owner_id', ownerId);
   const off = new Set((away ?? []).map((r: { agent: string }) => r.agent));
   const keys = [
-    { slot: 1, key: env('GEMINI_API_KEY'), judge: 'Gemini · Studio A', agent: 'studioA' },
+    // v0.7.64: 업무 쪽은 Studio B 키 먼저(서로 다른 계정이라 한도가 따로), 막히면 A
     { slot: 2, key: env('GEMINI_API_KEY2'), judge: 'Gemini · Studio B', agent: 'studioB' },
+    { slot: 1, key: env('GEMINI_API_KEY'), judge: 'Gemini · Studio A', agent: 'studioA' },
   ].filter((k) => k.key && !off.has(k.agent));
   let parsed: { score: number; problems: string[] } | null = null;
   let judge = '';

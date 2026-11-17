@@ -23,7 +23,8 @@ const RANK: Record<SpeechKind, number> = { alert: 0, ask: 1, busy: 2 };
 
 export function speechFor(tasks: Task[], all: WorkflowData, leave: AgentId[] = []): Map<AgentId, Speech> {
   // 캐릭터 하나 = 계정 하나(v0.4.44): Gemini 일은 근무 중인 Studio(A 먼저, A가 휴가면 B)가, ChatGPT 기획은 Codex(같은 OpenAI 계정)가 말한다.
-  const gemini: AgentId = leave.includes('studioA') && !leave.includes('studioB') ? 'studioB' : 'studioA';
+  // v0.7.64: 업무(기획서 초안·견본·Gemini 개발)는 Studio B가 먼저 맡는다(대화는 A). B가 휴가이고 A가 근무면 A
+  const gemini: AgentId = leave.includes('studioB') && !leave.includes('studioA') ? 'studioA' : 'studioB';
   const agentOf = (assignee: AgentAssignment['assignee']): AgentId => (assignee === 'gemini' ? gemini : assignee);
   const found: { agent: AgentId; speech: Speech; at: string }[] = [];
   const say = (agent: AgentId, kind: SpeechKind, text: string, task: Task, label = text) =>

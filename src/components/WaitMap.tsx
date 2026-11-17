@@ -6,7 +6,8 @@ import type { AgentId } from '../domain/types';
 import type { AgentAssignment, PmPlan } from '../domain/workflow-types';
 import { characterUrl } from '../office/assets';
 
-const idOf = (a: AgentAssignment): AgentId => (a.assignee === 'gemini' ? 'studioA' : a.assignee);
+// Gemini 업무는 Studio B가 먼저 맡는다(v0.7.64)
+const idOf = (a: AgentAssignment): AgentId => (a.assignee === 'gemini' ? 'studioB' : a.assignee);
 
 const stateOf = (a: AgentAssignment | undefined): string =>
   !a ? '없음' : a.dispatchStatus === 'started' || a.dispatchStatus === 'starting' ? '하는 중' : a.dispatchStatus === 'failed' || a.dispatchStatus.startsWith('blocked') ? '막힘' : '시작 전';

@@ -11,7 +11,8 @@ export interface FlowNow {
   label: string;
 }
 
-const agentOf = (assignee: string): AgentId => (assignee === 'gemini' ? 'studioA' : (assignee as AgentId));
+// Gemini 업무는 Studio B가 먼저 맡는다(v0.7.64)
+const agentOf = (assignee: string): AgentId => (assignee === 'gemini' ? 'studioB' : (assignee as AgentId));
 
 export function flowNow(workflow: WorkflowData, research: { step: 'search' | 'write'; studio: 'studioA' | 'studioB' } | null): FlowNow | null {
   if (research) {

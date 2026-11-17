@@ -27,9 +27,10 @@ const assignment = (dispatchStatus: AgentAssignment['dispatchStatus'], assignee:
 const data = (d: Partial<WorkflowData>): WorkflowData => ({ ...EMPTY_WORKFLOW, ...d });
 
 describe('사무실 말풍선(v0.4.4)', () => {
-  it('Gemini 초안이 오면 Gemini(스튜디오 A)가 기획 승인을 부탁한다', () => {
+  it('Gemini 초안이 오면 업무 담당 Studio B가 기획 승인을 부탁한다(v0.7.64, B 휴가면 A)', () => {
     const s = speechFor([task], data({ specs: [spec()] }));
-    expect(s.get('studioA')).toEqual({ text: '기획[?]', label: '기획 승인해 주세요', kind: 'ask', taskId: 't1' });
+    expect(speechFor([task], data({ specs: [spec()] }), ['studioB']).get('studioA')?.text).toBe('기획[?]');
+    expect(s.get('studioB')).toEqual({ text: '기획[?]', label: '기획 승인해 주세요', kind: 'ask', taskId: 't1' });
     expect(speechFor([task], data({ specs: [spec('chatgpt_manual')] })).get('codex')?.label).toBe('기획 승인해 주세요');
   });
 
