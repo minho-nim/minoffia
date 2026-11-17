@@ -135,6 +135,8 @@ export interface Snapshot {
   research?: import('./claudeResearch').ClaudeResearch[];
   /** 이번 달 웹 검색 크레딧 추정(v0.7.53, 앱이 직접 센 것: Tavily 검색 1, Firecrawl 검색 2·본문 1). Supabase 모드만 */
   searchCredits?: { tavily: number; firecrawl: number };
+  /** 오늘 성공한 웹 검색·본문 읽기 횟수(v0.7.55) */
+  searchToday?: { tavily: number; firecrawl: number };
 }
 
 /** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */

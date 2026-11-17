@@ -11,3 +11,11 @@ describe('웹 검색 크레딧(v0.7.53)', () => {
     expect(creditLine('tavily', undefined, null)).toBe('사용 기록 없음');
   });
 });
+
+describe('오늘 조사 횟수(v0.7.55)', () => {
+  it('KST 오늘 것만, 공급자별', async () => {
+    const { searchTodayOf } = await import('./searchCredits');
+    const now = new Date('2026-11-17T05:00:00Z'); // KST 14시
+    expect(searchTodayOf([{ provider: 'tavily', model: 'search', created_at: '2026-11-17T01:00:00Z' }, { provider: 'firecrawl', model: 'scrape', created_at: '2026-11-17T02:00:00Z' }, { provider: 'tavily', model: 'search', created_at: '2026-11-16T10:00:00Z' }], now)).toEqual({ tavily: 1, firecrawl: 1 });
+  });
+});
