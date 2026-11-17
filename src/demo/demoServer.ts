@@ -113,7 +113,7 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
       { id: nid(), taskId: task.id, specRevision: 1, who: 'A', judge: 'Gemini · Studio A', svg: demoSvg('A'), flow: 'flowchart TD\nA[로그인 화면] --> B[이메일·비밀번호 입력]\nB --> C[주황 로그인 버튼]\nC --> D{맞음?}\nD -->|예| E[홈]\nD -->|아니오| F[오류 안내]\nF --> B', note: '로그인 버튼을 앱 주황색으로 가장 눈에 띄게\n다른 버튼(회원가입)은 글자 버튼으로 낮춤\n오류 안내는 입력칸 바로 아래', review: { by: 'B', parts: { request: 38, ease: 22, mobile: 18, simple: 12 }, total: 90, good: ['주황 버튼이 바로 보임'], fix: ['비밀번호 찾기 글자가 작음'] }, createdAt: iso },
       { id: nid(), taskId: task.id, specRevision: 1, who: 'B', judge: 'Gemini · Studio B', svg: demoSvg('B'), flow: 'flowchart TD\nA[로그인 화면] --> B[입력]\nB --> C[주황 로그인 버튼]\nC --> D[홈]', note: '입력칸 두 개와 주황 버튼만 남김\n버튼을 화면 아래 엄지 닿는 곳에\n회원가입은 다음 화면으로 뺌', review: { by: 'A', parts: { request: 34, ease: 23, mobile: 19, simple: 15 }, total: 91, good: ['단계가 가장 짧음'], fix: ['오류 안내 자리가 없음'] }, createdAt: iso },
     ]);
-    return '체험: Gemini(Studio A)가 기획서 초안을 쓰고, Gemini A·B가 화면 시안을 하나씩 그려 서로 평가했어요. 업무 탭의 체험 업무에서 시안을 하나 고르고 [기획 승인]을 눌러 보세요.';
+    return '체험: Gemini(Studio B, 업무 담당 키)가 기획서 초안을 쓰고, Gemini A·B가 화면 시안을 하나씩 그려 서로 평가했어요. 업무 탭의 체험 업무에서 시안을 하나 고르고 [기획 승인]을 눌러 보세요.';
   }
   if (step === 'plan') {
     const v = deriveWorkflow(task, snap.workflow);
@@ -192,8 +192,8 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
     await store.putDemoReview?.({
       id: nid(), taskId: task.id, resultRevision: 1, workItemId: a.workItemId, assignee: a.assignee, gates, score: out.score, total: out.total, verdict: out.verdict,
       reasons: out.reasons, feedback: '', autoRedo: 0, judge: panelJudge(panel), panel, createdAt: iso,
-      // 화면 평가(v0.7.40): 미노가 찍은 결과 화면을 기획서와 견준 점수(체험은 정해진 값)
-      screen: { score: 88, problems: [], judge: 'Gemini · Studio A', errors: 0, overflow: false },
+      // 화면 평가(v0.7.40): 미노가 찍은 결과 화면을 기획서와 견준 점수(체험은 정해진 값). 업무라 Studio B(v0.7.64 키 나눠 쓰기)
+      screen: { score: 88, problems: [], judge: 'Gemini · Studio B', errors: 0, overflow: false },
     });
     return '체험: Codex 결과가 왔고 AI 셋(Gemini A·B, Claude)이 같은 항목을 다른 관점으로 채점했어요. 업무 카드에서 점수와 평균을 보고 [결과 승인](올리기 승인)을 눌러 보세요.';
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_WORKFLOW } from '../domain/workflow-types';
 import type { Snapshot } from '../domain/types';
-import { demoNext, demoTask, newDemoTask, DEMO_TAG } from './demoServer';
+import { advanceDemo, demoNext, demoTask, newDemoTask, DEMO_TAG } from './demoServer';
 
 const snapOf = (tasks: Snapshot['tasks'], wf = {}): Snapshot => ({ projects: [], tasks, usage: [], workflow: { ...EMPTY_WORKFLOW, ...wf } } as unknown as Snapshot);
 
@@ -30,5 +30,15 @@ describe('체험 넘겨주기(v0.7.58)', () => {
     const later = Date.parse('2026-11-13T00:00:11Z');
     expect(demoNext(t, snapOf([t], wf('proposed')), later)).toBe('handoff');
     expect(demoNext(t, snapOf([t], wf('proposed')), Date.parse('2026-11-13T00:00:01Z'))).toBeNull();
+  });
+});
+
+describe('체험 업무 담당(v0.7.66, 키 나눠 쓰기)', () => {
+  it('기획서 초안은 업무 담당 Studio B가 쓴다고 안내한다', async () => {
+    const task = newDemoTask('p1', '2026-11-17T00:00:00Z');
+    const snap = snapOf([task]);
+    expect(demoNext(task, snap, Date.now())).toBe('spec');
+    const store = new Proxy({}, { get: () => async () => undefined }) as unknown as Parameters<typeof advanceDemo>[0];
+    expect(await advanceDemo(store, snap)).toContain('Studio B');
   });
 });
