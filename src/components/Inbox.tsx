@@ -5,6 +5,7 @@ import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
 import { answerSlot, asksSearch, insertMention, mentionOptions, mentionQuery, searchEngineOf } from '../domain/mention';
+import { setResearchPhase } from '../office/webResearch';
 import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
@@ -131,6 +132,8 @@ interface Props {
   /** 다른 탭에서 넘어온 입력 초안. taskId가 있으면 그 업무에 대한 질문(보낼 때 업무 상태를 참고로 붙임, v0.5.1) */
   /** send = 채우고 바로 보낸다(스킬 입력 창, v0.6.57) */
   draft?: { text: string; n: number; taskId?: string; send?: boolean } | null;
+  /** 체험 모드: 웹 조사 말이면 정해진 체험 답(v0.7.60) */
+  demoResearch?: boolean;
   onAskGemini: (
     question: string,
     history: { role: 'user' | 'model'; text: string }[],
@@ -288,7 +291,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onResultImages, onDrawDesign, active, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onResultImages, onDrawDesign, active, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -1267,6 +1270,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
       if (asksSearch(text)) askGemini(text, questionProject(text, snap.projects)?.name, undefined, { research: true });
       else askGemini(text, questionProject(text, snap.projects)?.name, { prior }, { research: needsResearch(text) });
     }
+    // 체험(v0.7.60): 웹 조사 말이면 정해진 체험 답으로(사무실에서 Tavily·Firecrawl이 리서치실로 가는 연출을 볼 수 있게)
+    else if (demoResearch && (asksSearch(text) || needsResearch(text))) askGemini(text, questionProject(text, snap.projects)?.name, undefined, { research: true });
     else ruleRoute(text, prior);
   };
 
@@ -1478,10 +1483,21 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
         if (focus) focusTask.current = null;
         const ask = focusedTask ? `${text}\n\n${taskContext(focusedTask, snap.workflow)}` : text;
         let webFailed = false;
+        // 사무실 연출(v0.7.60): 웹 조사 동안 Tavily·Firecrawl이 리서치실에서 일하고, 답이 오기 시작하면 Gemini가 정리
+        const studio = opts.slot === 2 ? 'studioB' : 'studioA';
+        let writing = false;
+        const livePut = (t: string) => {
+          if (research && !writing) {
+            writing = true;
+            setResearchPhase('write', studio);
+          }
+          put(t);
+        };
+        if (research) setResearchPhase('search', studio);
         try {
           let got: Awaited<ReturnType<typeof onAskGemini>>;
           try {
-            got = await onAskGemini(ask, history.slice(-6), encoded, put, opts);
+            got = await onAskGemini(ask, history.slice(-6), encoded, livePut, opts).finally(() => setResearchPhase(null));
           } catch (e) {
             if (!research) throw e;
             // 웹 검색(Tavily·Firecrawl)이 안 되면(휴가·무료 사용량 끝 등) 검색 없이 한 번 더 묻는다.

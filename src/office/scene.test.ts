@@ -123,3 +123,19 @@ describe('막힘·대기도 업무의 방에서(v0.7.59)', () => {
     expect(s.spot.zone).toBe('dev');
   });
 });
+
+describe('웹 조사 연출(v0.7.60)', () => {
+  it('찾고 쓰는 동안 쉬던 Tavily·Firecrawl은 리서치실 자기 자리로, 끝나면 그대로', async () => {
+    const { withResearch } = await import('./scene');
+    const base = buildScene([]);
+    const on = withResearch(base, 'search');
+    for (const id of ['search', 'firecrawl']) {
+      const s = on.find((x) => x.agent === id)!;
+      expect(s.spot.zone).toBe('research');
+      expect(s.activity).toBe('working');
+    }
+    expect(on.find((x) => x.agent === 'search')!.seatId).not.toBe(on.find((x) => x.agent === 'firecrawl')!.seatId);
+    expect(withResearch(base, null)).toBe(base);
+    expect(withResearch(base, 'write').find((x) => x.agent === 'search')!.spot.zone).toBe('research');
+  });
+});

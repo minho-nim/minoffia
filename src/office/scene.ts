@@ -146,3 +146,15 @@ export function buildScene(tasks: Task[], assignments: AgentAssignment[] = []): 
 
   return result;
 }
+
+/** 웹 조사 중(v0.7.60): 찾고 답을 쓰는 동안 Tavily·Firecrawl을 리서치실 자기 자리에서 일하게 한다(업무로 이미 움직이는 중이면 그대로). 끝나면 쉰다 */
+export function withResearch(scene: AgentScene[], step: 'search' | 'write' | null): AgentScene[] {
+  if (!step) return scene;
+  const room = ROOM_BY_ID.research;
+  const residents = AGENTS.filter((a) => a.home === 'research');
+  return scene.map((s) => {
+    if ((s.agent !== 'search' && s.agent !== 'firecrawl') || s.activity !== 'resting') return s;
+    const seat = room.seats[residents.findIndex((a) => a.id === s.agent)];
+    return { ...s, spot: seat ? { x: seat.x, y: seat.y, zone: 'research' } : { ...room.idle, zone: 'research' }, activity: 'working', seatId: seat?.id ?? null };
+  });
+}

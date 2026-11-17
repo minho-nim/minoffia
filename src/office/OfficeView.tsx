@@ -1,3 +1,4 @@
+import { useResearchPhase } from './webResearch';
 import { useDrawing } from './drawing';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AGENT_BY_ID, AGENTS } from '../domain/agents';
@@ -5,7 +6,7 @@ import type { AgentId, Task } from '../domain/types';
 import type { AgentAssignment, WorkflowData } from '../domain/workflow-types';
 import { drawOffice } from './draw';
 import { EXIT, H, MEMO_BOARD, pathBetween, ROOMS, W, type Point, type Spot } from './layout';
-import { ACTIVITY_LABEL, buildScene } from './scene';
+import { ACTIVITY_LABEL, buildScene, withResearch } from './scene';
 import { badgeFor } from './marks';
 import { speechFor, type Speech } from './speech';
 import { spriteFor } from './sprites';
@@ -51,10 +52,11 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
   const agentRefs = useRef(new Map<AgentId, HTMLButtonElement>());
   const movers = useRef(new Map<AgentId, Mover>());
   const leaveKey = leave.join(',');
+  const research = useResearchPhase();
   // 휴가 중인 AI는 자리 대신 아래 출입문으로 간다(도착하면 사라짐).
   const scene = useMemo(
-    () => buildScene(tasks, assignments).map((s) => (leaveKey.split(',').includes(s.agent) ? { ...s, spot: { ...EXIT, zone: 'corridor' as const }, activity: 'resting' as const } : s)),
-    [tasks, assignments, leaveKey],
+    () => withResearch(buildScene(tasks, assignments), research?.step ?? null).map((s) => (leaveKey.split(',').includes(s.agent) ? { ...s, spot: { ...EXIT, zone: 'corridor' as const }, activity: 'resting' as const } : s)),
+    [tasks, assignments, leaveKey, research?.step],
   );
   const leaveRef = useRef(leave);
   leaveRef.current = leave;
@@ -63,8 +65,14 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
     const m: Map<AgentId, Speech> = workflow ? speechFor(tasks, workflow, leaveKey ? (leaveKey.split(',') as AgentId[]) : []) : new Map();
     // 미노가 앱 지도·구조도를 만드는 중(v0.7.4): PR·배포 말풍선이 없을 때만
     if (drawing && !m.has('ci')) m.set('ci', { text: `${drawing}[…]`, label: `${drawing}을(를) 만드는 중`, kind: 'busy', taskId: '' });
+    // 웹 조사(v0.7.60): 찾는 동안 Tavily 찾기·Firecrawl 본문, 답을 쓰는 동안 Gemini 정리(업무 말풍선이 없을 때만)
+    if (research?.step === 'search') {
+      if (!m.has('search')) m.set('search', { text: '찾기[…]', label: '대화의 웹 조사: 링크·요약을 찾는 중', kind: 'busy', taskId: '' });
+      if (!m.has('firecrawl')) m.set('firecrawl', { text: '본문[…]', label: '대화의 웹 조사: 찾은 글 본문을 읽는 중', kind: 'busy', taskId: '' });
+    }
+    if (research?.step === 'write' && !m.has(research.studio)) m.set(research.studio, { text: '정리[…]', label: '찾은 자료로 답을 쓰는 중', kind: 'busy', taskId: '' });
     return m;
-  }, [tasks, workflow, leaveKey, drawing]);
+  }, [tasks, workflow, leaveKey, drawing, research?.step, research?.studio]);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
@@ -147,7 +155,8 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         if (!m || !el) continue;
         let walking = false;
         if (m.path.length) {
-          let budget = SPEED * dt;
+          // 웹 조사(v0.7.60): 검색은 몇 초 만에 끝나서 Tavily·Firecrawl은 리서치실로 뛰어간다(3배)
+          let budget = SPEED * dt * (s.spot.zone === 'research' && (s.agent === 'search' || s.agent === 'firecrawl') && s.activity === 'working' ? 3 : 1);
           while (budget > 0 && m.path.length) {
             const p = m.path[0];
             const dx = p.x - m.x;
