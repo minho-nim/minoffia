@@ -16,3 +16,14 @@ describe('개발 스킬 고르기(v0.7.0)', () => {
     expect(r[0]).toContain('소유자가 이 업무에 고른 스킬: ui-check —');
   });
 });
+
+describe('게임 스킬 추천(v0.7.46)', () => {
+  const installed = ['game-design', 'game-gameplay', 'game-ui', 'game-qa', 'game-debug', 'ui-check', 'debugging-and-error-recovery'];
+  it('게임 업무면 게임 스킬을 먼저', () => {
+    expect(suggestSkills('MinSnakey 레벨 난이도 올려 줘', installed)).toEqual(['game-design', 'game-gameplay', 'game-ui', 'game-qa']);
+    expect(suggestSkills('게임이 휴대폰에서 끊겨', installed)[0]).toBe('game-debug');
+  });
+  it('게임 스킬이 없는 저장소면 추천하지 않는다', () => {
+    expect(suggestSkills('게임 점수판 버튼 고쳐', ['ui-check', 'debugging-and-error-recovery'])).toEqual(['debugging-and-error-recovery', 'ui-check']);
+  });
+});

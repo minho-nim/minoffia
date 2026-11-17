@@ -49,9 +49,11 @@ export interface SkillView {
 }
 
 /** 스킬 지도 분류(v0.6.61 소유자 "스킬을 분류해서 빨리 찾게"). 앞머리에 적은 분류가 먼저, 없으면 제목·설명 낱말로 고른다(규칙만) */
-export const SKILL_CATEGORIES = ['배포', '화면·디자인', '시험·점검', '문서', '데이터·DB', '보안', '도구', '기타'] as const;
+export const SKILL_CATEGORIES = ['배포', '화면·디자인', '시험·점검', '문서', '데이터·DB', '보안', '게임', '도구', '기타'] as const;
 export type SkillCategory = (typeof SKILL_CATEGORIES)[number];
 const CATEGORY_WORDS: [SkillCategory, RegExp][] = [
+  // v0.7.46 게임 스킬(game-*): 앞머리에 분류가 없어도 게임 낱말이면 게임으로
+  ['게임', /게임|game|레벨|플레이|three\.?js/i],
   ['배포', /배포|올리기|릴리스|release|deploy|PR|병합/i],
   ['보안', /보안|비밀|토큰|권한|security|secret|auth/i],
   ['데이터·DB', /DB|데이터베이스|마이그레이션|supabase|sql|database/i],
@@ -151,7 +153,7 @@ export const SKILL_PRESETS: { label: string; what: string; when: string; rules: 
   { label: '운영 점검', what: '최근 실패한 AI 작업·Gemini 실패율·Actions 사용량을 한 번에 보고', when: '"운영 점검해줘", "요즘 상태 어때"라고 할 때', rules: '읽기만 한다(고치지 않음). 문제마다 원인 추정과 다음 할 일 한 줄' },
 ];
 
-export const SKILL_AREAS = ['디자인', '시험', '배포', '문서', '코드 품질', '자동화'];
+export const SKILL_AREAS = ['디자인', '게임', '시험', '배포', '문서', '코드 품질', '자동화'];
 
 const clean = (s: string | undefined, n: number) => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 

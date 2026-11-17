@@ -4,6 +4,9 @@
 
 /** 글에 이런 말이 있으면 이 스킬을 추천(앞쪽이 먼저) */
 export const SKILL_HINTS: [RegExp, string[]][] = [
+  // 게임(v0.7.46 소유자 "게임 관련으로 묶어서"): 게임 업무면 게임 스킬을 먼저(그 저장소에 들어 있을 때만 추천됨)
+  [/(게임|플레이).*(느려|끊겨|프레임|fps|빈\s?화면)|(느려|끊겨|프레임|fps).*(게임|플레이)/i, ['game-debug']],
+  [/게임|레벨|스테이지|난이도|밸런스|플레이어|보스|아이템|조작감|손맛|hud|점수판|three\.?js/i, ['game-design', 'game-gameplay', 'game-ui', 'game-qa']],
   [/버그|오류|에러|안\s?돼|안\s?됨|깨[져지졌]|실패|고쳐|문제/i, ['debugging-and-error-recovery']],
   [/화면|버튼|디자인|레이아웃|색|글꼴|모바일|휴대폰|페이지|ui|css|스타일|팝업|탭/i, ['ui-check', 'frontend-ui-engineering']],
   [/디자인|예쁘|다듬|개성|ai\s?티|뻔한/i, ['impeccable', 'unslop']],
