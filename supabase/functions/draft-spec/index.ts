@@ -125,7 +125,8 @@ Deno.serve(async (req) => {
   if (away.has('studioA')) keys[0] = '';
   if (away.has('studioB')) keys[1] = '';
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
-  for (const [i, key] of keys.entries()) {
+  // v0.7.64 소유자 "API 두 개(서로 다른 계정)니까 나눠서": 업무 쪽은 Studio B 키 먼저, 막히면 A(대화 쪽은 A 먼저)
+  for (const [i, key] of ([1, 0] as const).map((j) => [j, keys[j]] as const)) {
     if (!key) continue;
     let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
     try {
