@@ -111,3 +111,15 @@ describe('배정 기록 반영', () => {
     expect(buildScene([parent], [assignment('completed')]).find((x) => x.agent === 'codex')!.activity).toBe('resting');
   });
 });
+
+describe('막힘·대기도 업무의 방에서(v0.7.59)', () => {
+  it('Studio A의 조사 업무가 막히면 리서치실에서 기다린다', () => {
+    const s = of([task({ id: 'r', type: 'research', assignee: 'studioA', status: 'blocked' })], 'studioA');
+    expect(s.activity).toBe('blocked');
+    expect(s.spot.zone).toBe('research');
+  });
+  it('자기 방 업무면 자기 책상에서 기다린다', () => {
+    const s = of([task({ id: 'd', type: 'dev', assignee: 'codex', status: 'queued' })], 'codex');
+    expect(s.spot.zone).toBe('dev');
+  });
+});
