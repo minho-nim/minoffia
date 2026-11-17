@@ -7856,39 +7856,64 @@ html.popup-open .project-sections > details[open] * {
   gap: 8px 12px;
 }
 
-/* 대화를 크게 볼 때(v0.7.62 소유자 "사무실은 오른쪽 위 머리에 맞춰 조그맣게, 그 왼쪽에 AI가 주고받는 애니메이션") */
+/* 대화를 크게 볼 때(v0.7.62~63 소유자 "사무실은 오른쪽 위 머리에 맞춰 조그맣게, 부드럽게 작아지며 넘어가고 나올 때 반대로, 다른 탭도 똑같이"):
+   자리(position)는 그대로 두고 transform만 바꿔서 줄어들기·펴지기·띄우기가 모두 이어지는 애니메이션이 된다.
+   이동·배율(--tiny-x·--tiny-y·--tiny-scale)은 App.tsx가 사무실 원래 상자에서 계산한다 */
 @media (max-width: 1039px) {
-  .stage.is-tiny .office {
-    position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 5px);
-    right: max(16px, env(safe-area-inset-right, 0px));
-    width: var(--office-w, 360px);
-    transform-origin: top right;
-    transform: scale(var(--tiny-scale, 0.1));
+  .stage .office {
+    transform-origin: top left;
+    transition: transform 0.32s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.2s ease, visibility 0.2s, box-shadow 0.32s ease;
+  }
+  .stage.is-mini .office {
+    transform: translateX(calc(var(--office-w, 360px) * 0.25)) scale(0.5);
+  }
+  .stage.is-tiny .office,
+  .stage.is-docked:not(.is-peek) .office {
+    transform: translate(var(--tiny-x, 0px), var(--tiny-y, 0px)) scale(var(--tiny-scale, 0.1));
     opacity: 1;
     visibility: visible;
-    z-index: 61;
     pointer-events: auto;
     cursor: zoom-in;
-    border-radius: 18px;
-    box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.45);
   }
-  /* 무대(z 40)가 얇은 머리(z 60) 아래라 고정한 작은 사무실이 가렸다: 접힌 동안만 무대를 위로(무대 상자는 거의 높이 0) */
-  .stage.is-tiny:not(.is-peek) {
-    z-index: 61;
-    background: transparent;
-    box-shadow: none;
-  }
-  .stage.is-tiny.is-peek .office {
-    position: relative;
-    top: auto;
-    right: auto;
-    width: auto;
+  .stage.is-peek .office {
     transform: none;
     box-shadow: none;
     cursor: auto;
   }
-  /* 접힌 동안 머리 오른쪽은 작은 사무실 자리: 사용량·프로젝트 이름·밝기 버튼은 잠깐 숨긴다(설정 탭에 있음) */
+  /* 무대(z 40)가 얇은 머리(z 60) 아래라 작은 사무실이 가렸다: 접힌 동안만 무대를 위로(무대 바탕·그림자는 지움) */
+  .stage.is-tiny:not(.is-peek),
+  .stage.is-docked:not(.is-peek) {
+    z-index: 61;
+    background: transparent;
+    box-shadow: none;
+  }
+  .stage.is-tiny:not(.is-peek)::before,
+  .stage.is-docked:not(.is-peek)::before {
+    height: 0;
+    opacity: 0;
+  }
+  /* 사무실을 숨기던 탭: 위에 고정한 상자 안에서 사무실이 머리 오른쪽으로 접혀 있고, 띄우면(…·작은 사무실 누르기) 그 자리에서 펴진다 */
+  .layout.tab-tasks > .stage.is-docked,
+  .layout.tab-projects > .stage.is-docked,
+  .layout.tab-team > .stage.is-docked,
+  .layout.tab-settings > .stage.is-docked {
+    display: block;
+    position: fixed;
+    top: calc(var(--mini-h) + env(safe-area-inset-top, 0px) + 6px);
+    left: 8px;
+    right: 8px;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+  }
+  .layout.tab-tasks > .stage.is-docked.is-peek,
+  .layout.tab-projects > .stage.is-docked.is-peek,
+  .layout.tab-team > .stage.is-docked.is-peek,
+  .layout.tab-settings > .stage.is-docked.is-peek {
+    z-index: 455;
+    pointer-events: auto;
+  }
   .topbar-mini.is-tiny .bar-btn-usage,
   .topbar-mini.is-tiny .topbar-project,
   .topbar-mini.is-tiny .theme-toggle {
@@ -7912,6 +7937,11 @@ html.popup-open .project-sections > details[open] * {
   }
   .topbar-mini.is-tiny .flow-strip + .bar-office-slot {
     margin-left: 0;
+  }
+}
+@media (max-width: 1039px) and (prefers-reduced-motion: reduce) {
+  .stage .office {
+    transition: opacity 0.15s ease;
   }
 }
 .flow-strip {
