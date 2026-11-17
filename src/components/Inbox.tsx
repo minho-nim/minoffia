@@ -137,10 +137,10 @@ interface Props {
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
     opts?: AskOptions,
-  ) => Promise<{ answer: string; keySlot: number; sources?: Source[] }>;
+  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string }>;
   /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
   geminiAway?: boolean;
-  /** Claude 웹 조사(v0.7.11): Exa 웹 검색이 안 됐을 때 'Claude에게 찾아보기'. Supabase 모드·Claude 근무일 때만 */
+  /** Claude 웹 조사(v0.7.11): 웹 검색(Tavily·Firecrawl)이 안 됐을 때 'Claude에게 찾아보기'. Supabase 모드·Claude 근무일 때만 */
   onAskClaude?: (question: string) => Promise<{ already?: boolean }>;
   /** Codex(OpenAI·ChatGPT 계정)가 휴가면 GPT로 넘기는 링크를 숨긴다(v0.4.44) */
   gptAway?: boolean;
@@ -1263,7 +1263,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     }
     else if (canAskGemini) {
       // v0.4.29(소유자 2026-11-01): 그 밖의 말은 AI가 먼저 판단한다(질문·업무·애매 + 프로젝트). 질문이면 같은 한 번에 답한다.
-      // @Exa면 판단 없이 바로 웹 조사(v0.7.3)
+      // @Tavily(@웹검색, 예전 @Exa)면 판단 없이 바로 웹 조사(v0.7.3, v0.7.51)
       if (asksExa(text)) askGemini(text, questionProject(text, snap.projects)?.name, undefined, { research: true });
       else askGemini(text, questionProject(text, snap.projects)?.name, { prior }, { research: needsResearch(text) });
     }
@@ -1483,7 +1483,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
             got = await onAskGemini(ask, history.slice(-6), encoded, put, opts);
           } catch (e) {
             if (!research) throw e;
-            // Exa 웹 검색이 안 되면(휴가·무료 사용량 끝 등) 검색 없이 한 번 더 묻는다.
+            // 웹 검색(Tavily·Firecrawl)이 안 되면(휴가·무료 사용량 끝 등) 검색 없이 한 번 더 묻는다.
             set('');
             got = await onAskGemini(ask, history.slice(-6), encoded, put, { ...opts, research: false });
             webFailed = true;
@@ -1492,7 +1492,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
           if (muted.current) return;
           const raw = got.answer;
           const sources = got.sources ?? [];
-          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', 'Exa 검색 + Gemini ·') : VIA_OF_SLOT[got.keySlot]) : undefined;
+          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색 + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
           if (via || sources.length) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {
@@ -1964,7 +1964,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                   <button
                     type="button"
                     className="link-btn"
-                    title="Exa가 웹에서 찾고 Gemini가 정리해 출처를 붙여 답합니다(Exa 무료 사용량 안)."
+                    title="Tavily(안 되면 Firecrawl)가 웹에서 찾고 Gemini가 정리해 출처를 붙여 답합니다(무료 크레딧 안)."
                     onClick={() => {
                       say('me', `웹에서 찾아봐 줘: ${pending.text.length > 40 ? `${pending.text.slice(0, 39)}…` : pending.text}`);
                       askGemini(pending.text, pending.projectName, undefined, { research: true });
@@ -1980,7 +1980,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
                   <button
                     type="button"
                     className="link-btn"
-                    title="Exa 웹 검색이 안 될 때 Claude가 웹에서 찾아 답합니다(Claude 하루 사용량 1회, 몇 분 걸림)."
+                    title="웹 검색(Tavily·Firecrawl)이 안 될 때 Claude가 웹에서 찾아 답합니다(Claude 하루 사용량 1회, 몇 분 걸림)."
                     onClick={() => {
                       const q = pending.text;
                       setPending(null);

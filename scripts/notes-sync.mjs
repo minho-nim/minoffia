@@ -196,13 +196,13 @@ export const OFFICE_CLOUD = {
     ['codexc', 'Codex 클라우드', '주 개발 AI가 일하는 곳', -255, 420, '5'],
     ['routine', 'Claude 루틴', '보조 개발 AI가 일하는 곳', 0, 420, '5'],
     ['gem', 'Gemini API', '채점·초안·질문 답(무료 키)', 255, 420, '3'],
-    ['exa', 'Exa 검색', '웹 조사: 찾은 글을 Gemini가 정리', 255, 540, '3'],
+    ['exa', 'Tavily·Firecrawl 검색', '웹 조사: Tavily 먼저, 안 되면 Firecrawl. 찾은 글을 Gemini가 정리(카드 없는 무료 크레딧).', 255, 540, '3'],
     ['notes', '노트 보관함', '앱 지도·버전 노트(이 Obsidian)', 510, 420, '3'],
   ],
   links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['sb', 'exa', '웹 조사'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
 };
 export const OFFICE_FLOW = [['s-req', '요청'], ['s-plan', '기획'], ['g-a', '기획 승인'], ['s-dev', '개발'], ['s-rev', '채점'], ['g-b', '올리기 승인'], ['s-pr', 'PR'], ['g-c', '배포 승인'], ['s-dep', '배포']];
-export const OFFICE_WHO = [['owner', '나(소유자)', ['s-req', 'g-a', 'g-b', 'g-c']], ['pm', 'Claude PM', ['s-plan']], ['codex', 'Codex', ['s-dev']], ['claude', 'Claude', ['s-dev']], ['gemini', 'Gemini A·B', ['s-rev']], ['exa', 'Exa', ['s-req']], ['mino', '미노(CI)', ['s-pr', 's-dep']], ['server', '서버(자동)', ['g-a', 's-rev']]];
+export const OFFICE_WHO = [['owner', '나(소유자)', ['s-req', 'g-a', 'g-b', 'g-c']], ['pm', 'Claude PM', ['s-plan']], ['codex', 'Codex', ['s-dev']], ['claude', 'Claude', ['s-dev']], ['gemini', 'Gemini A·B', ['s-rev']], ['exa', 'Tavily', ['s-req']], ['mino', '미노(CI)', ['s-pr', 's-dep']], ['server', '서버(자동)', ['g-a', 's-rev']]];
 export function officeCanvas(projects) {
   const nodes = [];
   const edges = [];

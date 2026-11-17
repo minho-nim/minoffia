@@ -3,7 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
-import { EXA_RULE, exaContext, exaSearch } from './exa.ts';
+import { failMessage, WEB_RULE, webContext as toContext, webSearch } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
@@ -216,25 +216,25 @@ Deno.serve(async (req) => {
     return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   }
 
-  // 웹 조사 = Exa 검색 + Gemini 정리(v0.7.1). Exa가 찾은 글을 질문 뒤에 자료로 붙이고 Gemini는 정리만 한다.
-  // v0.7.10: Gemini 검색 연결 길은 지웠다. Exa가 휴가·키 없음·실패면 여기서 알리고, 앱은 검색 없이 Gemini가 아는 범위로 다시 묻는다.
+  // 웹 조사 = Tavily(먼저)·Firecrawl(예비) 검색 + Gemini 정리(v0.7.51, Exa 제외). 찾은 글을 질문 뒤에 자료로 붙이고 Gemini는 정리만 한다.
+  // 검색이 휴가·키 없음·실패면 여기서 알리고, 앱은 검색 없이 Gemini가 아는 범위로 다시 묻는다.
   const exaFound = new Map<string, string>();
   let webContext = '';
-  // 팀 관리 휴가(v0.4.44, Exa는 v0.7.9): 키 A = Studio A, 키 B = Studio B, Exa = 웹 검색. 휴가인 쪽은 부르지 않는다(표가 없거나 못 읽으면 모두 근무).
+  let searchEngine = '';
+  // 팀 관리 휴가: 키 A = Studio A, 키 B = Studio B, 'exa' = 웹 검색 자리(이름은 Tavily로 바뀜, DB 기록 호환으로 id는 그대로). 휴가인 쪽은 부르지 않는다.
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (research) {
-    if (away.has('exa')) return reply(503, { ok: false, leave: true, error: 'Exa가 휴가라 웹 검색을 하지 않았어요.' });
-    const exaKey = env('EXA_API_KEY');
-    if (!exaKey) return reply(503, { ok: false, error: 'Exa 키(EXA_API_KEY)가 없어 웹 검색을 못 해요.' });
-    const r = await exaSearch(exaKey, question);
-    if (!r.ok || !r.results.length) {
-      console.log(JSON.stringify({ fn: 'ask-gemini', exa: 'fail', status: r.status, error: r.error }));
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'research', key_slot: null, ok: false, http_status: r.status || null, model: 'exa-search', prompt_chars: question.length, error: (r.error || '결과 없음').slice(0, 300) });
-      return reply(502, { ok: false, status: r.status, error: r.status === 402 ? 'Exa 무료 사용량이 끝났어요(dashboard.exa.ai 확인).' : `Exa 웹 검색이 안 됐어요(${r.error || '결과 없음'}).` });
+    if (away.has('exa')) return reply(503, { ok: false, leave: true, error: '웹 검색(Tavily)이 휴가라 웹 검색을 하지 않았어요.' });
+    const { hit, tries } = await webSearch({ tavily: env('TAVILY_API_KEY'), firecrawl: env('FIRECRAWL_API_KEY') }, question);
+    for (const t of tries.filter((t) => t !== hit)) {
+      console.log(JSON.stringify({ fn: 'ask-gemini', search: t.engine, fail: true, status: t.status, error: t.error }));
+      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'research', key_slot: null, ok: false, http_status: t.status || null, model: `${t.engine}-search`, prompt_chars: question.length, error: (t.error || '결과 없음').slice(0, 300) });
     }
-    webContext = exaContext(r.results);
-    for (const x of r.results) exaFound.set(x.url, x.title);
+    if (!hit) return reply(502, { ok: false, status: tries.at(-1)?.status ?? 0, error: failMessage(tries) });
+    webContext = toContext(hit.results);
+    searchEngine = hit.engine === 'tavily' ? 'Tavily' : 'Firecrawl';
+    for (const x of hit.results) exaFound.set(x.url, x.title);
   }
   const viaExa = webContext !== '';
 
@@ -249,7 +249,7 @@ Deno.serve(async (req) => {
     routeProjects ? SYSTEM.replace('\n개발·수정 작업이 필요해 보이면, AI Office에 업무로 접수하라고 한 줄로 안내한다.', '') : SYSTEM,
     project ? projectRules(project) : '',
     routeProjects ? routeRules(routeProjects) : '',
-    viaExa ? EXA_RULE : '',
+    viaExa ? WEB_RULE : '',
   ].join('');
   // v0.7.41 LLM 위키: 이 프로젝트 위키를 참고 자료로 질문 뒤에 붙인다(시스템 지시가 아니라 자료로)
   let wikiContext = '';
@@ -311,12 +311,12 @@ Deno.serve(async (req) => {
                   controller.enqueue(enc.encode(JSON.stringify({ d: text }) + '\n'));
                 }
               }
-              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
+              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
             } catch (e) {
               controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
             } finally {
               controller.close();
-              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, exa: viaExa, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
+              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, search: searchEngine, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
               await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total, ...tokens });
             }
           },
@@ -329,7 +329,7 @@ Deno.serve(async (req) => {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
         const found = new Map<string, string>(exaFound);
-        return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}) });
+        return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine } : {}) });
       }
       last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
       // 웹 조사는 모델·키마다 실패 이유를 남긴다(v0.6.3 소유자 "검색 한도가 실제로 걸린 건지"): 마지막 실패만 남아 원인을 몰랐다

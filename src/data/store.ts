@@ -53,7 +53,7 @@ export interface OfficeStore {
   putDemoDrafts?(drafts: DesignDraft[]): Promise<void>;
   /** 체험 모드(로컬)만: 실행 기록을 서버가 확인한 모양으로 바꾸기(v0.7.12, 실제 실행 없음) */
   putDemoAssignment?(assignment: AgentAssignment): Promise<void>;
-  /** Claude 웹 조사(v0.7.11): Exa가 안 될 때 Claude에게 맡긴다. 답은 나중에 snapshot.research로 온다 */
+  /** Claude 웹 조사(v0.7.11): 웹 검색(Tavily·Firecrawl)이 안 될 때 Claude에게 맡긴다. 답은 나중에 snapshot.research로 온다 */
   askClaudeResearch?(question: string): Promise<{ id: string; sessionUrl: string | null; already?: boolean }>;
   /** 3중 평가(v0.7.8): 동료 평가를 기다리지 않고 지금 모인 점수로 판정 */
   finishReview?(taskId: string, resultRevision: number): Promise<ResultReview>;
@@ -203,7 +203,7 @@ export interface OfficeStore {
     onDelta?: (soFar: string) => void,
     /** AI 먼저 판단(프로젝트 이름들)·고른 프로젝트 정보(v0.4.29) */
     opts?: AskOptions,
-  ): Promise<{ answer: string; keySlot: number; sources?: Source[] }>;
+  ): Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string }>;
 }
 
 /** Linear 연결 확인 결과(읽기만, v0.4.11) */
