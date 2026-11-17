@@ -1,5 +1,10 @@
 # 변경 기록
 
+## 한국어 윤문·디자인 참고 스킬(v0.7.49) — 2026-11-17
+
+- 스킬 원본에 2개(minoffia-skills#15): 한국어 AI 티 없애기(humanize-korean, epoko77-ai/im-not-ai MIT, 번역투·기계적 나열 등 패턴과 바뀐 비율 검증 스크립트), 유명 서비스 디자인 참고(design-reference, VoltAgent/awesome-design-md MIT, DESIGN.md 84개 고정본, 구조만 참고하고 대표 색·로고·이름 흉내 금지). 프로젝트 12곳에 넣었다.
+- 개발 스킬 추천: 윤문·번역투·README·포트폴리오·안내문 → humanize-korean, "○○ 느낌으로 디자인"·디자인 기준 → design-reference.
+
 ## 화면·게임·보안 스킬 추천(v0.7.48) — 2026-11-17
 
 - 소유자 "UI 관련은 다 넣는 게 나을지도, AI 느낌 나는 UI는 싫어": 스킬 원본에 6개(minoffia-skills#14) — AI 티 안 나는 새 화면(hallmark)·화면 손맛 다듬기(emil-design-eng)·웹 화면 규칙 점검(web-design-guidelines, 규칙 고정본)·깊은 보안 감사(security-audit, 요청할 때만)·게임 밸런스 확인(game-balance)·게임 플레이 기록 정리(game-playtest).

@@ -15,8 +15,12 @@ export const SKILL_HINTS: [RegExp, string[]][] = [
   [/새\s?(화면|페이지)|랜딩|처음부터.*(화면|디자인)|홈\s?화면.*(만들|새로)/i, ['hallmark']],
   [/애니메이션|움직임|전환|모션|눌림|손맛/i, ['emil-design-eng']],
   [/접근성|키보드|라벨|화면\s?(검토|점검)|ui\s?(검토|리뷰)/i, ['web-design-guidelines']],
+  // v0.7.49 "○○ 느낌으로·디자인 기준"이면 유명 서비스 디자인 참고(구조만, 흉내 금지)
+  [/(느낌|스타일|처럼).*(디자인|화면|만들)|디자인\s?기준|design\.md/i, ['design-reference']],
   [/화면|버튼|디자인|레이아웃|색|글꼴|모바일|휴대폰|페이지|ui|css|스타일|팝업|탭/i, ['ui-check', 'frontend-ui-engineering']],
   [/디자인|예쁘|다듬|개성|ai\s?티|뻔한/i, ['impeccable', 'unslop']],
+  // v0.7.49 한국어 글 다듬기: README·포트폴리오·안내문·문구 윤문
+  [/윤문|ai\s?티.*(글|문장|문구)|번역투|readme|포트폴리오|안내\s?문|자연스럽게.*(글|문장|문구)/i, ['humanize-korean']],
   // 깊은 보안 감사는 소유자가 요청할 때만(토큰을 많이 씀)
   [/보안\s?감사|취약점\s?(전체|전부|점검)|침투\s?(시험|테스트)/i, ['security-audit']],
   [/db|테이블|마이그레이션|supabase|rls|로그인|권한|토큰|결제|비밀/i, ['db-security-check', 'security-and-hardening']],
