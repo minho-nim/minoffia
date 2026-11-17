@@ -15,7 +15,9 @@ describe('대신 맡을 AI가 없는 일 안내', () => {
   });
   it('Studio A·B가 모두 휴가면 Gemini 안내가 나온다', () => {
     expect(uncovered(['studioA', 'studioB']).some((x) => x.includes('Gemini'))).toBe(true);
-    expect(uncovered(['search']).some((x) => x.includes('Tavily'))).toBe(true);
+    expect(uncovered(['search']).some((x) => x.includes('Firecrawl이 대신'))).toBe(true);
+    expect(uncovered(['firecrawl']).some((x) => x.includes('요약만'))).toBe(true);
+    expect(uncovered(['search', 'firecrawl']).some((x) => x.includes('모두 휴가'))).toBe(true);
   });
 
 });

@@ -195,6 +195,8 @@ export interface OfficeStore {
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
   /** 질문 전에 Gemini 질문 서버를 미리 깨운다(입력창을 누를 때, Gemini는 부르지 않음, v0.4.23) */
   warmGemini?(): void;
+  /** 웹 검색 남은 크레딧(서비스 사용량 API, 막혀 있으면 null, v0.7.53) */
+  searchCredits?(): Promise<{ tavily: import('../domain/searchCredits').Credits | null; firecrawl: import('../domain/searchCredits').Credits | null }>;
   askGemini(
     question: string,
     history: { role: 'user' | 'model'; text: string }[],

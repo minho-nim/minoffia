@@ -7844,3 +7844,14 @@ html.popup-open .project-sections > details[open] * {
   gap: 6px;
   margin: 6px 0 0;
 }
+
+/* Tavily·Firecrawl 남은 크레딧(v0.7.53) */
+.agent-credits p {
+  margin: 0 0 4px;
+}
+.agent-credits-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}

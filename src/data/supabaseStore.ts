@@ -7,6 +7,7 @@ import type { DesignDraft } from '../domain/designDraft';
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, ResultReview, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
+import { searchCreditsOf } from '../domain/searchCredits';
 import type { OfficeStore, ResultInboxItem } from './store';
 import { parseHealth } from '../domain/healthText';
 import { parseSiteCheck } from '../domain/siteCheck';
@@ -373,6 +374,11 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         client.from('design_drafts').select('*').order('created_at'),
         client.from('design_picks').select('*').order('created_at'),
       ]);
+      // 이번 달(KST) 웹 검색 크레딧 추정(v0.7.53): 공급자 tavily·firecrawl 기록만 읽는다(가벼움)
+      const kstNow = new Date(Date.now() + 9 * 3600_000);
+      const monthStart = new Date(Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), 1) - 9 * 3600_000).toISOString();
+      const searchRows = await client.from('ai_calls').select('provider, model, ok').in('provider', ['tavily', 'firecrawl']).eq('ok', true).gte('created_at', monthStart);
+      const searchCredits = searchCreditsOf((searchRows.data ?? []) as { provider: string; model: string }[]);
       return {
         projects: (check(projects) ?? []).map(toProject),
         tasks: (check(tasks) ?? []).map(toTask),
@@ -422,7 +428,8 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
             })),
         agentLimits: agentLimits.error ? {} : Object.fromEntries((agentLimits.data ?? []).map((r: Row) => [r.assignee as string, r.max_running as number])),
         // 표가 아직 없는 운영 DB(마이그레이션 전)에서도 화면은 열리게 한다.
-        aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : (r.purpose as string) === 'research' ? 'research' : 'question') as 'question' | 'image' | 'research', httpStatus: (r.http_status as number | null) ?? null, tokens: callTokens(r), createdAt: r.created_at as string })),
+        searchCredits,
+        aiCalls: aiCalls.error ? [] : (aiCalls.data ?? []).filter((r: Row) => !r.provider || r.provider === 'gemini').map((r: Row) => ({ id: r.id as string, ok: r.ok as boolean, keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: ((r.purpose as string) === 'image' ? 'image' : (r.purpose as string) === 'research' ? 'research' : 'question') as 'question' | 'image' | 'research', httpStatus: (r.http_status as number | null) ?? null, tokens: callTokens(r), createdAt: r.created_at as string })),
       };
     },
     async saveProject(p) {
@@ -702,6 +709,15 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       async remove(project, task) {
         await invoke('notes', { action: 'remove', project, task: task ?? '' });
       },
+    },
+    async searchCredits() {
+      const data = await invoke('ask-gemini', { usage: true });
+      const c = (data.credits ?? {}) as Record<string, unknown>;
+      const one = (v: unknown) => {
+        const x = v as { used?: unknown; limit?: unknown } | null;
+        return x && Number.isFinite(Number(x.used)) && Number(x.limit) > 0 ? { used: Number(x.used), limit: Number(x.limit) } : null;
+      };
+      return { tavily: one(c.tavily), firecrawl: one(c.firecrawl) };
     },
     designStandard: {
       async draft(projectId, refs = []) {

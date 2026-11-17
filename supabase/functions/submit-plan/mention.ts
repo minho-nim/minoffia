@@ -42,11 +42,20 @@ export const MENTION_OPTIONS = [
   { tag: 'StudioA', ko: '스튜디오A', desc: 'Gemini 답(키 A)' },
   { tag: 'StudioB', ko: '스튜디오B', desc: 'Gemini 답(키 B)' },
   // v0.7.3(소유자 "exa도 태그, 얘도 AI니까"): 웹에서 찾아 Gemini가 정리하는 질문. v0.7.52 Tavily로 찾고 Firecrawl로 본문
-  { tag: 'Tavily', ko: '타빌리', desc: '웹 조사(찾아서 정리)' },
+  { tag: 'Tavily', ko: '타빌리', desc: '웹 조사(Tavily로 찾고 본문 2개 읽어 정리)' },
+  // v0.7.53(소유자 "@Firecrawl도 만들어야지"): Firecrawl로 먼저 찾고 본문 2개 읽어 정리
+  { tag: 'Firecrawl', ko: '파이어크롤', desc: '웹 조사(Firecrawl로 찾고 본문 2개 읽어 정리)' },
 ] as const;
 
-/** 질문 글에 @Tavily(@타빌리·@웹검색)가 있으면 웹 조사로(v0.7.3, v0.7.52 @Exa 삭제) */
-export const asksSearch = (text: string | null | undefined): boolean => /@(?:tavily|타빌리|웹검색)(?![a-z])/i.test(text ?? '');
+/** 질문 글에 @Tavily(@타빌리·@웹검색)·@Firecrawl(@파이어크롤)이 있으면 웹 조사로(v0.7.3, v0.7.52 @Exa 삭제, v0.7.53 @Firecrawl) */
+export const asksSearch = (text: string | null | undefined): boolean => /@(?:tavily|타빌리|웹검색|firecrawl|파이어크롤)(?![a-z])/i.test(text ?? '');
+
+/** 먼저 쓸 검색: @Firecrawl이면 firecrawl, @Tavily면 tavily, 없으면 null(기본 Tavily 먼저) */
+export function searchEngineOf(text: string | null | undefined): 'tavily' | 'firecrawl' | null {
+  if (/@(?:firecrawl|파이어크롤)(?![a-z])/i.test(text ?? '')) return 'firecrawl';
+  if (/@(?:tavily|타빌리)(?![a-z])/i.test(text ?? '')) return 'tavily';
+  return null;
+}
 
 /** 질문 글의 @StudioA·@StudioB → 먼저 쓸 Gemini 키(1=A, 2=B). 없으면 null(기본 A, 안 되면 B) */
 export function answerSlot(text: string | null | undefined): 1 | 2 | null {

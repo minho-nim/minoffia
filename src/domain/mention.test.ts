@@ -39,7 +39,7 @@ describe('@ 목록(v0.5.47)', () => {
     expect(mentionQuery('다크모드 @', 6)).toEqual({ start: 5, query: '' });
     expect(mentionQuery('@cl', 3)).toEqual({ start: 0, query: 'cl' });
     expect(mentionQuery('a@b', 3)).toBeNull();
-    expect(mentionOptions('').length).toBe(5);
+    expect(mentionOptions('').length).toBe(6);
     expect(mentionOptions('cl').map((o) => o.tag)).toEqual(['Claude']);
     expect(mentionOptions('제').map((o) => o.tag)).toEqual([]);
     expect(insertMention('고쳐줘 @cl', 7, 4, 'Claude')).toEqual({ text: '고쳐줘 @Claude ', caret: 12 });
@@ -65,5 +65,17 @@ describe('@Tavily(v0.7.3, v0.7.52 @Exa 삭제)', () => {
     expect(asksSearch('@Tavilyish')).toBe(false);
     expect(mentionOptions('ta').map((o) => o.tag)).toEqual(['Tavily']);
     expect(mentionOptions('ex')).toEqual([]);
+  });
+});
+
+describe('@Firecrawl(v0.7.53)', () => {
+  it('웹 조사로 가고, 먼저 쓸 검색을 고른다', async () => {
+    const { asksSearch, searchEngineOf, mentionOptions } = await import('./mention');
+    expect(asksSearch('@Firecrawl 이 페이지 요약')).toBe(true);
+    expect(asksSearch('@파이어크롤 찾아줘')).toBe(true);
+    expect(searchEngineOf('@Firecrawl 최신 뉴스')).toBe('firecrawl');
+    expect(searchEngineOf('@Tavily 최신 뉴스')).toBe('tavily');
+    expect(searchEngineOf('요즘 뉴스 찾아줘')).toBeNull();
+    expect(mentionOptions('fi').map((o) => o.tag)).toEqual(['Firecrawl']);
   });
 });

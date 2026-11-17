@@ -73,3 +73,24 @@ describe('3단계 조사: 알짜 2개 본문(v0.7.52)', () => {
     expect(scraped).toBe(0);
   });
 });
+
+describe('@Firecrawl이면 Firecrawl 먼저(v0.7.53)', () => {
+  it('first = firecrawl', async () => {
+    const order: string[] = [];
+    const ok = (engine: 'tavily' | 'firecrawl'): SearchOutcome => ({ ok: true, engine, results: [{ title: '', url: 'https://x.com', text: '' }], status: 200, error: '' });
+    const r = await webSearch({ tavily: 'k', firecrawl: 'k' }, 'q', { tavily: async () => (order.push('t'), ok('tavily')), firecrawl: async () => (order.push('f'), ok('firecrawl')) }, 'firecrawl');
+    expect(r.hit?.engine).toBe('firecrawl');
+    expect(order).toEqual(['f']);
+  });
+});
+
+describe('남은 크레딧 읽기(v0.7.53)', () => {
+  it('Tavily·Firecrawl 사용량 답', async () => {
+    const { parseTavilyUsage, parseFirecrawlUsage } = await import('./websearch');
+    expect(parseTavilyUsage({ account: { plan_usage: 40, plan_limit: 1000 } })).toEqual({ used: 40, limit: 1000 });
+    expect(parseTavilyUsage({ key: { usage: 3, limit: 1000 } })).toEqual({ used: 3, limit: 1000 });
+    expect(parseTavilyUsage({})).toBeNull();
+    expect(parseFirecrawlUsage({ success: true, data: { remainingCredits: 990, planCredits: 1000 } })).toEqual({ used: 10, limit: 1000 });
+    expect(parseFirecrawlUsage({ data: {} })).toBeNull();
+  });
+});

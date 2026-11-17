@@ -74,9 +74,10 @@ export const firecrawlSearch = (key: string, question: string) =>
 export const outOfCredit = (status: number) => status === 402 || status === 429 || status === 432 || status === 433;
 
 /** Tavily 먼저, 안 되거나 결과가 없으면 Firecrawl. 키가 없는 쪽은 건너뛴다. 시도한 것 모두 돌려준다(기록용) */
-export async function webSearch(keys: { tavily: string; firecrawl: string }, question: string, run = { tavily: tavilySearch, firecrawl: firecrawlSearch }): Promise<{ hit: SearchOutcome | null; tries: SearchOutcome[] }> {
+export async function webSearch(keys: { tavily: string; firecrawl: string }, question: string, run = { tavily: tavilySearch, firecrawl: firecrawlSearch }, first: Engine = 'tavily'): Promise<{ hit: SearchOutcome | null; tries: SearchOutcome[] }> {
   const tries: SearchOutcome[] = [];
-  for (const engine of ['tavily', 'firecrawl'] as const) {
+  // @Firecrawl이면 Firecrawl 먼저(v0.7.53), 아니면 Tavily 먼저. 안 되면 다른 쪽
+  for (const engine of (first === 'firecrawl' ? ['firecrawl', 'tavily'] : ['tavily', 'firecrawl']) as Engine[]) {
     if (!keys[engine]) continue;
     const r = await run[engine](keys[engine], question);
     tries.push(r);
@@ -160,8 +161,9 @@ export async function deepSearch(
   keys: { tavily: string; firecrawl: string },
   question: string,
   run = { tavily: tavilySearch, firecrawl: firecrawlSearch, scrape: firecrawlScrape },
+  first: Engine = 'tavily',
 ): Promise<{ hit: SearchOutcome | null; tries: SearchOutcome[]; pages: number; scrapeFails: { url: string; status: number; error: string }[] }> {
-  const { hit, tries } = await webSearch(keys, question, run);
+  const { hit, tries } = await webSearch(keys, question, run, first);
   if (!hit || !keys.firecrawl) return { hit, tries, pages: 0, scrapeFails: [] };
   const picks = pickPages(hit.results);
   const got = await Promise.all(picks.map((p) => run.scrape(keys.firecrawl, p.url).then((r) => ({ url: p.url, ...r }))));
@@ -170,4 +172,35 @@ export async function deepSearch(
   // 본문을 읽은 것을 앞으로(Gemini가 먼저 보게)
   results.sort((a, b) => Number(Boolean(b.body)) - Number(Boolean(a.body)));
   return { hit: { ...hit, results }, tries, pages: bodies.size, scrapeFails: got.filter((g) => !g.ok).map(({ url, status, error }) => ({ url, status, error })) };
+}
+
+// 남은 크레딧(v0.7.53 소유자 "사용량 대시보드 연결"): 각 서비스의 사용량 API를 읽는다. 무료 등급에서 막혀 있으면 null이고, 앱은 직접 센 추정과 대시보드 링크를 보여 준다.
+export interface Credits {
+  used: number;
+  limit: number;
+}
+/** Tavily /usage 답 → 이번 달 사용·한도(계정 기준, 없으면 키 기준) */
+export function parseTavilyUsage(data: unknown): Credits | null {
+  const d = data as { account?: { plan_usage?: unknown; plan_limit?: unknown }; key?: { usage?: unknown; limit?: unknown } };
+  const used = Number(d?.account?.plan_usage ?? d?.key?.usage);
+  const limit = Number(d?.account?.plan_limit ?? d?.key?.limit);
+  return Number.isFinite(used) && Number.isFinite(limit) && limit > 0 ? { used, limit } : null;
+}
+/** Firecrawl /v2/team/credit-usage 답 → 사용·한도(남은 것 = 한도 − 사용) */
+export function parseFirecrawlUsage(data: unknown): Credits | null {
+  const d = (data as { data?: { remainingCredits?: unknown; remaining_credits?: unknown; planCredits?: unknown; plan_credits?: unknown } })?.data;
+  const remaining = Number(d?.remainingCredits ?? d?.remaining_credits);
+  const plan = Number(d?.planCredits ?? d?.plan_credits);
+  return Number.isFinite(remaining) && Number.isFinite(plan) && plan > 0 ? { used: Math.max(0, plan - remaining), limit: plan } : null;
+}
+async function getJson(url: string, key: string): Promise<unknown> {
+  const res = await fetch(url, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(6_000) }).catch(() => null);
+  return res?.ok ? await res.json().catch(() => null) : null;
+}
+export async function searchCredits(keys: { tavily: string; firecrawl: string }): Promise<{ tavily: Credits | null; firecrawl: Credits | null }> {
+  const [t, f] = await Promise.all([
+    keys.tavily ? getJson('https://api.tavily.com/usage', keys.tavily) : null,
+    keys.firecrawl ? getJson('https://api.firecrawl.dev/v2/team/credit-usage', keys.firecrawl) : null,
+  ]);
+  return { tavily: t ? parseTavilyUsage(t) : null, firecrawl: f ? parseFirecrawlUsage(f) : null };
 }
