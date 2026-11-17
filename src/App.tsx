@@ -661,8 +661,8 @@ export function App() {
           <span style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} />
         </span>
         <span className="num">
-          {snap.searchToday?.[engine] ?? 0}회 · 월 {used.toLocaleString('ko-KR')}/{limit.toLocaleString('ko-KR')}
-          {live ? '' : '(추정)'}
+          {live ? '' : '약 '}
+          {used.toLocaleString('ko-KR')}/{limit.toLocaleString('ko-KR')}
         </span>
       </li>
     );
@@ -697,8 +697,9 @@ export function App() {
           </span>
         </li>
       )}
-      {store.mode === 'supabase' && searchRow('tavily')}
-      {store.mode === 'supabase' && searchRow('firecrawl')}
+      {/* v0.7.57 소유자 "오늘 사용량에 올린 거 맞음?": 체험에서도 보이게(체험은 0) */}
+      {searchRow('tavily')}
+      {searchRow('firecrawl')}
     </ul>
   );
 

@@ -280,10 +280,11 @@ Deno.serve(async (req) => {
         return null;
       };
       const got = await run(`${prompt}\n\n${PERSPECTIVE_NOTE[who]}`, canReadFiles);
-      if (!got) return panelEntry(who, `Gemini ${who}`, null, used >= cap ? '오늘 채점 한도에 닿음' : '점수를 받지 못함(키·응답 확인)');
+      if (!got) return panelEntry(who, `Gemini ${who}`, null, used >= cap ? '오늘 채점 한도에 닿음' : !keys[who === 'A' ? 0 : 1] ? `Studio ${who} 휴가·키 없음(다른 Studio가 대신 채점하지 않음)` : '점수를 받지 못함(키·응답 확인)');
       return panelEntry(who, `Gemini · Studio ${got.slot === 0 ? 'A' : 'B'}${filesAsked ? ' · 파일 확인' : ''}`, got.score);
     };
-    if (keys[0] || keys[1]) panel.push(...(await Promise.all([askGemini('A', [0, 1]), askGemini('B', [1, 0])])));
+    // v0.7.57 소유자 "Gemini가 같은 일을 하거나 서로 교차하는 건 넘기지 않는 게 맞음": A 자리는 Studio A 키만, B 자리는 Studio B 키만(한쪽이 막히면 그 자리는 빠짐으로 남긴다. 같은 키 안의 예비 모델은 그대로)
+    if (keys[0] || keys[1]) panel.push(...(await Promise.all([askGemini('A', [0]), askGemini('B', [1])])));
     else panel.push(panelEntry('A', 'Gemini A', null, '두 키 모두 휴가·없음'), panelEntry('B', 'Gemini B', null, '두 키 모두 휴가·없음'));
 
     // 3단계: 동료 개발 AI. 두 Gemini가 이미 둘 다 기준 미달이면(3개 중 2개 = 과반) 부르지 않는다(토큰 아끼기).

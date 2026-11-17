@@ -80,8 +80,8 @@ Deno.serve(async (req) => {
   const model = env('GEMINI_DRAW_MODEL') || env('GEMINI_MODEL') || DEFAULT_MODEL;
   const project = task.projects as unknown as { name?: string; design_md?: string } | null;
   const material = buildDrawPrompt({ projectName: String(project?.name ?? ''), finalPrompt: String(spec.final_prompt ?? ''), changeScope: String(spec.change_scope ?? ''), testCriteria: String(spec.test_criteria ?? ''), designMd: String(project?.design_md ?? '') });
-  // A는 Studio A 키 먼저, B는 Studio B 키 먼저. 한쪽이 휴가·실패면 다른 키로.
-  const order = (who: DrawWho) => (who === 'A' ? [0, 1] : [1, 0]).filter((i) => keys[i]);
+  // A는 Studio A 키만, B는 Studio B 키만(v0.7.57 소유자 "같은 일·서로 교차하는 건 넘기지 않음": 서로 평가하는 시안이라 한쪽이 대신 그리지 않는다)
+  const order = (who: DrawWho) => (who === 'A' ? [0] : [1]).filter((i) => keys[i]);
   const ask = async (who: DrawWho, system: string, text: string, maxTokens: number, timeoutMs: number) => {
     for (const i of order(who)) {
       let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
