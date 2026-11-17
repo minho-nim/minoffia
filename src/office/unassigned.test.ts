@@ -13,7 +13,7 @@ describe('미배정 캐릭터', () => {
     expect(list[0]).toMatchObject({ stand: 'p', walk: 'pw' });
     expect(list[1].walk).toBeNull();
   });
-  it('저장소의 실제 그림 3명', () => {
-    expect(unassignedCharacters().map((c) => c.id)).toEqual(['clipboard', 'hoodie', 'nightdev']);
+  it('저장소의 실제 그림 2명(클립보드는 v0.7.53 Firecrawl에 배정)', () => {
+    expect(unassignedCharacters().map((c) => c.id)).toEqual(['hoodie', 'nightdev']);
   });
 });

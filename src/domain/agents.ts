@@ -96,7 +96,7 @@ export const AGENTS: Agent[] = [
     home: 'research',
     skills: [],
     dailyCap: null,
-    note: '웹 조사 2단계(v0.7.53, 소유자 "@Firecrawl도, 캐릭터도 배정"): Tavily가 찾은 글 중 알짜 2개의 본문 전체를 광고·틀 빼고 읽어 Gemini에 넘긴다. Tavily가 안 되면 대신 찾고, @Firecrawl이면 먼저 찾는다. 휴가면 본문 없이 요약만으로 정리한다.',
+    note: '웹 조사 2단계(v0.7.53, 소유자 "@Firecrawl도, 캐릭터도 배정", 그림은 미배정이던 클립보드 캐릭터): Tavily가 찾은 글 중 알짜 2개의 본문 전체를 광고·틀 빼고 읽어 Gemini에 넘긴다. Tavily가 안 되면 대신 찾고, @Firecrawl이면 먼저 찾는다. 휴가면 본문 없이 요약만으로 정리한다.',
     sprite: 'person',
     palette: { hair: '#5a2a14', skin: '#f0c49c', shirt: '#e8642c', pants: '#3a2a24', accent: '#ffd9a8' },
   },

@@ -1,4 +1,5 @@
 // 미배정 캐릭터(2026-11-02, 소유자): 아직 연결된 AI가 없는 예비 캐릭터. 사무실에는 나오지 않고 팀 관리 탭에만 보인다.
+// v0.7.53: 클립보드 캐릭터는 Firecrawl(본문 읽기)에 배정했다.
 // 새 AI를 연결할 때 이 그림을 characters/<id>-stand|walk.png로 옮기고 agents.ts에 그 AI를 더한다.
 const files = import.meta.glob('../assets/office/unassigned/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
@@ -11,7 +12,6 @@ export interface UnassignedCharacter {
 }
 
 const LABEL: Record<string, string> = {
-  clipboard: '기획 · 클립보드 (예전 Claude)',
   hoodie: '개발 · 보라 후드 (예전 Studio B)',
   nightdev: '야간 개발 · 투블럭',
 };
