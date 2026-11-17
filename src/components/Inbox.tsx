@@ -4,7 +4,7 @@ import { FormPopup } from './FormPopup';
 import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
-import { answerSlot, asksExa, insertMention, mentionOptions, mentionQuery } from '../domain/mention';
+import { answerSlot, asksSearch, insertMention, mentionOptions, mentionQuery } from '../domain/mention';
 import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
@@ -137,7 +137,7 @@ interface Props {
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
     opts?: AskOptions,
-  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string }>;
+  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number }>;
   /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
   geminiAway?: boolean;
   /** Claude 웹 조사(v0.7.11): 웹 검색(Tavily·Firecrawl)이 안 됐을 때 'Claude에게 찾아보기'. Supabase 모드·Claude 근무일 때만 */
@@ -1263,8 +1263,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
     }
     else if (canAskGemini) {
       // v0.4.29(소유자 2026-11-01): 그 밖의 말은 AI가 먼저 판단한다(질문·업무·애매 + 프로젝트). 질문이면 같은 한 번에 답한다.
-      // @Tavily(@웹검색, 예전 @Exa)면 판단 없이 바로 웹 조사(v0.7.3, v0.7.51)
-      if (asksExa(text)) askGemini(text, questionProject(text, snap.projects)?.name, undefined, { research: true });
+      // @Tavily(@웹검색)면 판단 없이 바로 웹 조사(v0.7.3, v0.7.52)
+      if (asksSearch(text)) askGemini(text, questionProject(text, snap.projects)?.name, undefined, { research: true });
       else askGemini(text, questionProject(text, snap.projects)?.name, { prior }, { research: needsResearch(text) });
     }
     else ruleRoute(text, prior);
@@ -1433,8 +1433,8 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
   }, [busy, queue]);
 
   const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }, extra: { research?: boolean } = {}) => {
-    // 조사(v0.4.61, v0.7.10부터 Exa만): 웹에서 찾아야 하는 질문은 Exa가 찾고 Gemini가 정리해 출처를 붙인다(규칙으로 고름, Exa 휴가·실패면 검색 없이 다시).
-    const research = extra.research ?? (needsResearch(text) || asksExa(text));
+    // 조사(v0.4.61, v0.7.52 Tavily·Firecrawl): 웹에서 찾아야 하는 질문은 Tavily가 찾고 Firecrawl이 본문을 읽고 Gemini가 정리해 출처를 붙인다(규칙으로 고름, Exa 휴가·실패면 검색 없이 다시).
+    const research = extra.research ?? (needsResearch(text) || asksSearch(text));
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
@@ -1492,7 +1492,7 @@ export function Inbox({ snap, canAskGemini, geminiAway, gptAway, onAskClaude, on
           if (muted.current) return;
           const raw = got.answer;
           const sources = got.sources ?? [];
-          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색 + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
+          const via = VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
           if (via || sources.length) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {

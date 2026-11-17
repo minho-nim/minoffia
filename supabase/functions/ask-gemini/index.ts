@@ -3,7 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
-import { failMessage, WEB_RULE, webContext as toContext, webSearch } from './websearch.ts';
+import { deepSearch, failMessage, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
@@ -18,9 +18,7 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const TIMEOUT_MS = 25_000;
-/** 웹 조사(Exa 검색 + Gemini 정리) 하루 상한: 기본 20, 코드 최대 50(GEMINI_RESEARCH_DAILY_CAP). 질문과 따로 센다. */
-const RESEARCH_HARD_CAP = 50;
-const RESEARCH_DEFAULT_CAP = 20;
+// 웹 조사 하루 상한은 없앴다(v0.7.52 소유자 "하루 상한은 일단 없애"). Tavily·Firecrawl 무료 크레딧이 끝나면 각 서비스가 막고, 그때는 요약만·검색 없이로 내려간다.
 const sourceList = (m: Map<string, string>) => [...m].map(([uri, title]) => ({ uri, title }));
 
 const SYSTEM = [
@@ -207,26 +205,27 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const research = body.research === true;
   const purpose = research ? 'research' : 'question';
-  const cap = research
-    ? Math.min(RESEARCH_HARD_CAP, Number(env('GEMINI_RESEARCH_DAILY_CAP')) || RESEARCH_DEFAULT_CAP)
-    : Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+  const cap = research ? Number.POSITIVE_INFINITY : Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
   const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', purpose).eq('ok', true).gte('created_at', kstMidnight);
   if ((count ?? 0) >= cap) {
     return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   }
 
-  // 웹 조사 = Tavily(먼저)·Firecrawl(예비) 검색 + Gemini 정리(v0.7.51, Exa 제외). 찾은 글을 질문 뒤에 자료로 붙이고 Gemini는 정리만 한다.
+  // 웹 조사 3단계(v0.7.52): ① Tavily로 찾기(안 되면 Firecrawl 검색) ② 알짜 2개를 Firecrawl로 본문 ③ Gemini가 종합. 자료는 질문 뒤에만 붙인다.
   // 검색이 휴가·키 없음·실패면 여기서 알리고, 앱은 검색 없이 Gemini가 아는 범위로 다시 묻는다.
-  const exaFound = new Map<string, string>();
+  const webFound = new Map<string, string>();
   let webContext = '';
   let searchEngine = '';
-  // 팀 관리 휴가: 키 A = Studio A, 키 B = Studio B, 'exa' = 웹 검색 자리(이름은 Tavily로 바뀜, DB 기록 호환으로 id는 그대로). 휴가인 쪽은 부르지 않는다.
+  let bodyPages = 0;
+  // 팀 관리 휴가: 키 A = Studio A, 키 B = Studio B, 'search' = 웹 검색(Tavily·Firecrawl, v0.7.52에 exa에서 바꿈). 휴가인 쪽은 부르지 않는다.
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (research) {
-    if (away.has('exa')) return reply(503, { ok: false, leave: true, error: '웹 검색(Tavily)이 휴가라 웹 검색을 하지 않았어요.' });
-    const { hit, tries } = await webSearch({ tavily: env('TAVILY_API_KEY'), firecrawl: env('FIRECRAWL_API_KEY') }, question);
+    if (away.has('search')) return reply(503, { ok: false, leave: true, error: '웹 검색(Tavily)이 휴가라 웹 검색을 하지 않았어요.' });
+    const { hit, tries, pages, scrapeFails } = await deepSearch({ tavily: env('TAVILY_API_KEY'), firecrawl: env('FIRECRAWL_API_KEY') }, question);
+    for (const f of scrapeFails) console.log(JSON.stringify({ fn: 'ask-gemini', scrape: 'fail', status: f.status, error: f.error }));
+    bodyPages = pages;
     for (const t of tries.filter((t) => t !== hit)) {
       console.log(JSON.stringify({ fn: 'ask-gemini', search: t.engine, fail: true, status: t.status, error: t.error }));
       await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'research', key_slot: null, ok: false, http_status: t.status || null, model: `${t.engine}-search`, prompt_chars: question.length, error: (t.error || '결과 없음').slice(0, 300) });
@@ -234,9 +233,9 @@ Deno.serve(async (req) => {
     if (!hit) return reply(502, { ok: false, status: tries.at(-1)?.status ?? 0, error: failMessage(tries) });
     webContext = toContext(hit.results);
     searchEngine = hit.engine === 'tavily' ? 'Tavily' : 'Firecrawl';
-    for (const x of hit.results) exaFound.set(x.url, x.title);
+    for (const x of hit.results) webFound.set(x.url, x.title);
   }
-  const viaExa = webContext !== '';
+  const viaWeb = webContext !== '';
 
   const baseModel = env('GEMINI_MODEL') || DEFAULT_MODEL;
   const models = [baseModel];
@@ -249,7 +248,7 @@ Deno.serve(async (req) => {
     routeProjects ? SYSTEM.replace('\n개발·수정 작업이 필요해 보이면, AI Office에 업무로 접수하라고 한 줄로 안내한다.', '') : SYSTEM,
     project ? projectRules(project) : '',
     routeProjects ? routeRules(routeProjects) : '',
-    viaExa ? WEB_RULE : '',
+    viaWeb ? WEB_RULE : '',
   ].join('');
   // v0.7.41 LLM 위키: 이 프로젝트 위키를 참고 자료로 질문 뒤에 붙인다(시스템 지시가 아니라 자료로)
   let wikiContext = '';
@@ -275,7 +274,7 @@ Deno.serve(async (req) => {
       let mode: ThinkingMode;
       let headMs = 0;
       try {
-        ({ res, mode } = await openGemini(key, model, (viaExa ? question + webContext : question) + wikiContext, history, images, stream, system));
+        ({ res, mode } = await openGemini(key, model, (viaWeb ? question + webContext : question) + wikiContext, history, images, stream, system));
         headMs = Date.now() - started;
       } catch (e) {
         last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
@@ -291,7 +290,7 @@ Deno.serve(async (req) => {
             let total = 0;
             let first = 0;
             let tokens: GeminiTokens = NO_TOKENS;
-            const found = new Map<string, string>(exaFound);
+            const found = new Map<string, string>(webFound);
             try {
               for (;;) {
                 const { value, done } = await reader.read();
@@ -311,12 +310,12 @@ Deno.serve(async (req) => {
                   controller.enqueue(enc.encode(JSON.stringify({ d: text }) + '\n'));
                 }
               }
-              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
+              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
             } catch (e) {
               controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
             } finally {
               controller.close();
-              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, search: searchEngine, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
+              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, search: searchEngine, pages: bodyPages, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
               await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total, ...tokens });
             }
           },
@@ -328,8 +327,8 @@ Deno.serve(async (req) => {
       if (text) {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
-        const found = new Map<string, string>(exaFound);
-        return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine } : {}) });
+        const found = new Map<string, string>(webFound);
+        return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) });
       }
       last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
       // 웹 조사는 모델·키마다 실패 이유를 남긴다(v0.6.3 소유자 "검색 한도가 실제로 걸린 건지"): 마지막 실패만 남아 원인을 몰랐다

@@ -56,15 +56,14 @@ describe('@ 목록(v0.5.47)', () => {
   });
 });
 
-describe('@Tavily(v0.7.3, v0.7.51 Exa 제외)', () => {
-  it('@Exa·@엑사면 웹 조사, 목록에도 나온다', async () => {
-    const { asksExa, mentionOptions } = await import('./mention');
-    expect(asksExa('@Exa 요즘 Gemini 무료 한도')).toBe(true);
-    expect(asksExa('@엑사 찾아줘')).toBe(true);
-    expect(asksExa('exa라는 회사')).toBe(false);
-    expect(asksExa('@Exabyte')).toBe(false);
-    expect(asksExa('@Tavily 요즘 무료 한도')).toBe(true);
-    expect(asksExa('@웹검색 찾아줘')).toBe(true);
+describe('@Tavily(v0.7.3, v0.7.52 @Exa 삭제)', () => {
+  it('@Tavily·@웹검색이면 웹 조사, @Exa는 더 이상 아님', async () => {
+    const { asksSearch, mentionOptions } = await import('./mention');
+    expect(asksSearch('@Tavily 요즘 무료 한도')).toBe(true);
+    expect(asksSearch('@웹검색 찾아줘')).toBe(true);
+    expect(asksSearch('@Exa 찾아줘')).toBe(false);
+    expect(asksSearch('@Tavilyish')).toBe(false);
     expect(mentionOptions('ta').map((o) => o.tag)).toEqual(['Tavily']);
+    expect(mentionOptions('ex')).toEqual([]);
   });
 });

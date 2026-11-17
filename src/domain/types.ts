@@ -1,7 +1,7 @@
 import type { Stage, WorkflowData } from './workflow-types';
 
-/** exa = 웹 조사(서버 자동, 업무는 맡지 않음). Grok은 2026-11-13 완전히 뺐다(소유자) */
-export type AgentId = 'mina' | 'claude' | 'codex' | 'exa' | 'studioA' | 'studioB' | 'ci';
+/** search = 웹 조사(Tavily·Firecrawl, 서버 자동, 업무는 맡지 않음). Grok은 2026-11-13 완전히 뺐다(소유자) */
+export type AgentId = 'mina' | 'claude' | 'codex' | 'search' | 'studioA' | 'studioB' | 'ci';
 export type RoomId = 'research' | 'dev' | 'terminal' | 'planning' | 'lounge';
 export type WorkType = 'planning' | 'dev' | 'design' | 'prototype' | 'research' | 'qa';
 export type RequestedType = WorkType | 'auto';
@@ -136,7 +136,7 @@ export interface Snapshot {
 }
 
 /** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */
-export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'exa', 'studioA', 'studioB'];
+export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'search', 'studioA', 'studioB'];
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
