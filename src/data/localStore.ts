@@ -454,8 +454,19 @@ export function createLocalStore(): OfficeStore {
     async draftSpec() {
       throw new Error('로컬 데모에서는 Gemini 기획서 초안을 쓸 수 없습니다. ChatGPT로 기획하세요.');
     },
-    async askGemini() {
-      throw new Error('로컬 데모에서는 Gemini에 물을 수 없습니다. ChatGPT로 복사해 물어보세요.');
+    // 체험(v0.7.60): 웹 조사 질문이면 실제 AI 없이 정해진 답을 천천히 보여 준다(사무실에서 Tavily·Firecrawl이 리서치실로 가는 연출을 볼 수 있게)
+    async askGemini(_question, _history, _images, onDelta, opts) {
+      if (!opts?.research) throw new Error('로컬 데모에서는 Gemini에 물을 수 없습니다. ChatGPT로 복사해 물어보세요.');
+      const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      await wait(9000);
+      const answer = '체험 답이에요(실제 검색·AI 없음). 실제 앱에서는 Tavily가 웹에서 글 5개를 찾고, Firecrawl이 그중 알짜 2개의 본문을 읽고, Gemini가 그걸 근거로 출처 번호를 달아 정리해요.';
+      let shown = '';
+      for (const part of answer.match(/.{1,12}/g) ?? []) {
+        shown += part;
+        onDelta?.(shown);
+        await wait(200);
+      }
+      return { answer, keySlot: 1 };
     },
     async readLink() {
       throw new Error('로컬 데모에서는 링크를 읽을 수 없습니다. Supabase에 연결된 사이트에서 쓰세요.');

@@ -2261,6 +2261,7 @@ export function App() {
               <Inbox
                 snap={snap}
                 canAskGemini={store.mode === 'supabase' && !geminiAway}
+                demoResearch={store.mode === 'local'}
                 geminiAway={geminiAway}
                 gptAway={(snap.leave ?? []).includes('codex')}
                 onAskClaude={
