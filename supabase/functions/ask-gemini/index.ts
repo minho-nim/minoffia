@@ -3,7 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
-import { deepSearch, failMessage, searchCredits, WEB_RULE, webContext as toContext } from './websearch.ts';
+import { deepSearch, failMessage, searchCredits, searchText, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { geminiFetch } from './gemini-fallback.ts';
@@ -160,6 +160,15 @@ async function openGemini(key: string, model: string, question: string, history:
   return { res: res!, mode };
 }
 
+/** 답이 끝난 이유(STOP이 정상). RECITATION·SAFETY 등이면 답이 중간에 멈춘 것이다(v0.7.65). */
+export const finishOf = (data: unknown) => String((data as { candidates?: { finishReason?: string }[] }).candidates?.[0]?.finishReason ?? '');
+const CUT_NOTE: Record<string, string> = {
+  RECITATION: '자료 문장을 그대로 옮기려다 Gemini가 멈췄어요',
+  SAFETY: 'Gemini 안전 기준에 걸려 멈췄어요',
+  MAX_TOKENS: '답이 길어 한도에서 끊겼어요',
+};
+export const cutNote = (finish: string) => (finish && finish !== 'STOP' ? `\n\n(${CUT_NOTE[finish] ?? `Gemini가 답을 끝까지 보내지 않았어요(${finish})`}. 다시 물어보세요.)` : '');
+
 const partsText = (data: unknown) =>
   ((data as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] }).candidates?.[0]?.content?.parts ?? [])
     .filter((p) => !p.thought)
@@ -227,7 +236,7 @@ Deno.serve(async (req) => {
   if (research) {
     // 휴가(v0.7.53): Tavily·Firecrawl 둘 다 휴가면 검색 없이, 하나만이면 그 키를 빼고 남은 쪽만 쓴다
     if (away.has('search') && away.has('firecrawl')) return reply(503, { ok: false, leave: true, error: 'Tavily·Firecrawl이 모두 휴가라 웹 검색을 하지 않았어요.' });
-    const { hit, tries, pages, scrapeFails } = await deepSearch({ tavily: away.has('search') ? '' : env('TAVILY_API_KEY'), firecrawl: away.has('firecrawl') ? '' : env('FIRECRAWL_API_KEY') }, question, undefined, body.engine === 'firecrawl' ? 'firecrawl' : 'tavily');
+    const { hit, tries, pages, scrapeFails } = await deepSearch({ tavily: away.has('search') ? '' : env('TAVILY_API_KEY'), firecrawl: away.has('firecrawl') ? '' : env('FIRECRAWL_API_KEY') }, searchText(question, history), undefined, body.engine === 'firecrawl' ? 'firecrawl' : 'tavily');
     for (const f of scrapeFails) console.log(JSON.stringify({ fn: 'ask-gemini', scrape: 'fail', status: f.status, error: f.error }));
     bodyPages = pages;
     // 사용 기록(v0.7.53): 검색·본문 읽기마다 한 줄(공급자 tavily·firecrawl). 팀 관리의 이번 달 크레딧 추정에 쓴다
@@ -303,6 +312,7 @@ Deno.serve(async (req) => {
             let total = 0;
             let first = 0;
             let tokens: GeminiTokens = NO_TOKENS;
+            let finish = '';
             const found = new Map<string, string>(webFound);
             try {
               for (;;) {
@@ -316,6 +326,7 @@ Deno.serve(async (req) => {
                   if (!line.startsWith('data:')) continue;
                   const chunk = JSON.parse(line.slice(5).trim() || '{}');
                   tokens = latestTokens(tokens, chunk);
+                  finish = finishOf(chunk) || finish;
                   const text = partsText(chunk);
                   if (!text) continue;
                   if (!first) first = Date.now() - started;
@@ -323,12 +334,14 @@ Deno.serve(async (req) => {
                   controller.enqueue(enc.encode(JSON.stringify({ d: text }) + '\n'));
                 }
               }
+              const note = total ? cutNote(finish) : '';
+              if (note) controller.enqueue(enc.encode(JSON.stringify({ d: note }) + '\n'));
               controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
             } catch (e) {
               controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
             } finally {
               controller.close();
-              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, search: searchEngine, pages: bodyPages, sources: found.size, thinking: mode, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
+              console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, search: searchEngine, pages: bodyPages, sources: found.size, thinking: mode, finish, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
               await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total, ...tokens });
             }
           },
@@ -336,7 +349,8 @@ Deno.serve(async (req) => {
         return new Response(out, { status: 200, headers: { ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
       }
       const data = await res.json().catch(() => ({}));
-      const text = res.status === 200 ? partsText(data).trim() : '';
+      const got = res.status === 200 ? partsText(data).trim() : '';
+      const text = got ? got + cutNote(finishOf(data)) : '';
       if (text) {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });

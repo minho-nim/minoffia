@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BODY_MAX, deepSearch, failMessage, outOfCredit, parseFirecrawl, parseScrape, parseTavily, pickPages, webContext, webQuery, webSearch, WEB_RULE, type SearchOutcome } from './websearch';
+import { BODY_MAX, deepSearch, failMessage, outOfCredit, parseFirecrawl, parseScrape, parseTavily, pickPages, searchText, webContext, webQuery, webSearch, WEB_RULE, type SearchOutcome } from './websearch';
 
 describe('웹 조사 검색(v0.7.51~ Tavily → Firecrawl)', () => {
   it('검색어 정리', () => {
@@ -107,5 +107,24 @@ describe('배포 도구 함정(2026-11-17)', () => {
         }
       }
     }
+  });
+});
+
+describe('검색어 만들기(v0.7.65)', () => {
+  it('@부르기 표시는 검색어에서 뺀다', () => {
+    expect(webQuery('@Tavily 무료 AI 서비스 알려줘')).toBe('무료 AI 서비스 알려줘');
+    expect(webQuery('메일 a@b.com 확인')).toBe('메일 a@b.com 확인');
+  });
+  it('"다시·물어본" 같은 말이면 앞 사용자 질문을 붙인다', () => {
+    const history = [
+      { role: 'user', text: '무료로 쓸 수 있는 AI 서비스 뭐 있어?' },
+      { role: 'model', text: '…' },
+    ];
+    expect(searchText('@Tavily ai서비스 물어본거 다시 대답해봐', history)).toBe('무료로 쓸 수 있는 AI 서비스 뭐 있어? ai서비스 물어본거 다시 대답해봐');
+    expect(searchText('더', history)).toContain('무료로 쓸 수 있는 AI 서비스');
+  });
+  it('새 질문이면 앞 질문을 붙이지 않는다', () => {
+    expect(searchText('서울 내일 날씨 알려줘요', [{ role: 'user', text: '무료 AI 서비스' }])).toBe('서울 내일 날씨 알려줘요');
+    expect(searchText('아까 그거', [])).toBe('아까 그거');
   });
 });
