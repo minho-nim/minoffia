@@ -123,12 +123,16 @@ export function buildScene(tasks: Task[], assignments: AgentAssignment[] = []): 
     const queued = pick(mine.filter((t) => t.status === 'queued'));
     const shown = blocked ?? review ?? queued;
     if (shown && agent.home) {
-      const room = ROOM_BY_ID[agent.home];
-      // 자기 책상에서 기다린다(모니터는 끈 채로). 자리가 겹치지 않는다.
-      const own = room.seats.find((s) => s.id === homeSeat.get(agent.id)) ?? room.idle;
+      // v0.7.59 소유자 "조사는 리서치 방 왜 안 가?": 막힘·결과 대기·순서 대기도 그 업무의 방에서 기다린다(자기 방이면 자기 책상).
+      // 다른 방이면 비어 있는 자리, 없으면 방 안 빈 곳. 모니터는 끈 채로(자리 표시 없음).
+      const roomId = WORK_ROOM[shown.type] ?? agent.home;
+      const room = ROOM_BY_ID[roomId];
+      const free = room.seats.find((s) => ![...homeSeat.values()].includes(s.id) && !takenSeats.has(s.id));
+      const own = (roomId === agent.home ? room.seats.find((s) => s.id === homeSeat.get(agent.id)) : free) ?? room.idle;
+      if (roomId !== agent.home && free) takenSeats.add(free.id);
       result.push({
         agent: agent.id,
-        spot: { x: own.x, y: own.y, zone: agent.home },
+        spot: { x: own.x, y: own.y, zone: roomId },
         activity: blocked ? 'blocked' : review ? 'review' : 'waiting',
         task: shown,
         open: mine.length,
