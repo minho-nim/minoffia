@@ -6,7 +6,7 @@ import { TurnMenu } from './components/TurnMenu';
 import { ThemeToggle } from './components/ThemeToggle';
 import { FlowStrip } from './components/FlowStrip';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AgentRoster, ReviewLog } from './components/AgentPanel';
 import { DevlogPanel } from './components/DevlogPanel';
 import { ProjectHistory } from './components/ProjectHistory';
@@ -411,16 +411,42 @@ export function App() {
   const [mini, setMini] = useState(false);
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
+  // 휴대폰 폭(v0.7.63): 사무실을 숨기던 탭(업무·프로젝트·팀·설정·스킬)도 머리 오른쪽에 작은 사무실을 붙인다
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1039px)').matches);
   useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1039px)');
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  // 작은 사무실 자리 계산(v0.7.63 소유자 "부드럽게 작아지며 오른쪽 위로, 나올 때 반대로"): 위치를 바꾸지 않고 transform만 바꿔 애니메이션이 이어지게.
+  // 사무실 원래 상자(무대 안쪽) → 머리 오른쪽(높이 36px)으로 가는 이동·배율을 CSS 변수로 넘긴다
+  const docked = narrow && (tiny || !['chat', 'agent'].includes(tab));
+  useLayoutEffect(() => {
     const stage = stageEl.current;
     if (!stage) return;
-    // 사무실 원래 너비 = 무대 안쪽 너비(사무실이 고정 위치로 바뀌어도 무대 너비는 그대로), 높이 = 너비 × 0.747(배경 비율)
-    const cs = getComputedStyle(stage);
-    const w = stage.clientWidth - parseFloat(cs.paddingLeft || '0') - parseFloat(cs.paddingRight || '0');
-    if (w <= 0) return;
-    stage.style.setProperty('--office-w', `${w}px`);
-    stage.style.setProperty('--tiny-scale', String(36 / (w * 0.747)));
-  }, [mini, tiny, store]);
+    const place = () => {
+      const cs = getComputedStyle(stage);
+      const r = stage.getBoundingClientRect();
+      const pl = parseFloat(cs.paddingLeft || '0');
+      const pt = parseFloat(cs.paddingTop || '0');
+      const w = r.width - pl - parseFloat(cs.paddingRight || '0');
+      if (w <= 0) return;
+      // 붙어 있는(sticky) 무대는 고정된 높이(top)를 쓴다: 지금 스크롤 위치와 상관없이 접힌 뒤 자리
+      const top = (cs.position === 'sticky' ? parseFloat(cs.top || '0') : r.top) + pt;
+      const left = r.left + pl;
+      const s = 36 / (w * 0.747);
+      const bar = document.querySelector<HTMLElement>('.topbar-mini');
+      const safeTop = bar ? Math.max(0, parseFloat(getComputedStyle(bar).paddingTop || '10') - 10) : 0;
+      stage.style.setProperty('--office-w', `${w}px`);
+      stage.style.setProperty('--tiny-scale', String(s));
+      stage.style.setProperty('--tiny-x', `${window.innerWidth - 16 - w * s - left}px`);
+      stage.style.setProperty('--tiny-y', `${safeTop + 5 - top}px`);
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [mini, tiny, tab, narrow, store]);
   const [peek, setPeek] = useState(false);
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
   // 사무실 지도 팝업(역할·클라우드)
@@ -2037,7 +2063,7 @@ export function App() {
         </div>
       )}
 
-      <div className={`topbar-mini${barOn ? ' is-on' : ''}${tiny ? ' is-tiny' : ''}`} aria-hidden={!barOn}>
+      <div className={`topbar-mini${barOn ? ' is-on' : ''}${docked ? ' is-tiny' : ''}`} aria-hidden={!barOn}>
         <button type="button" tabIndex={barOn ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
           minoffia. <span className="ver">v{version}</span>
         </button>
@@ -2050,7 +2076,7 @@ export function App() {
         {/* 사무실 띄워 보기는 모든 탭에서 오른쪽 아래 '…' 하나로(v0.6.79 소유자 "대화에서 사무실 일관성이 없다"): 얇은 머리의 '사무실 ▾'는 뺐다 */}
         {/* 지금 주고받는 장면(v0.7.62): 웹 조사·업무 넘겨주기가 있을 때만. 작은 사무실이 머리 오른쪽에 붙으면 그 자리를 비워 둔다 */}
         {barOn && <FlowStrip workflow={snap.workflow} />}
-        {tiny && <span className="bar-office-slot" aria-hidden="true" />}
+        {docked && <span className="bar-office-slot" aria-hidden="true" />}
         {/* 큰 머리 내용(연결·알림·사용량)을 펼쳐 본다(v0.5.31) */}
         <button type="button" className={`bar-btn bar-btn-usage${usageOpen ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={usageOpen} onClick={() => setUsageOpen((v) => !v)}>
           사용량 보기
@@ -2121,11 +2147,11 @@ export function App() {
           </span>
         )}
         <section
-          className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`}
+          className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${docked ? ' is-docked' : ''}${peek ? ' is-peek' : ''}`}
           aria-label="오피스"
           ref={stageEl}
           // v0.7.62: 머리 오른쪽의 작은 사무실을 누르면 크게 띄워 본다
-          onClickCapture={tiny && !peek ? (e) => { e.preventDefault(); e.stopPropagation(); setPeek(true); } : undefined}
+          onClickCapture={docked && !peek ? (e) => { e.preventDefault(); e.stopPropagation(); setPeek(true); } : undefined}
         >
           <OfficeView
             lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
