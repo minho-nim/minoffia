@@ -1,5 +1,5 @@
 // 비밀 열쇠 상태(v0.5.38, 소유자 "90일 걸어둔 것 화면에 보이게"): 들어 있는지와 GitHub 토큰 만료일만 보인다(값은 받지 않음).
-// 14일 이하 노랑, 3일 이하·거절 빨강. 바꾸는 곳은 Supabase 대시보드 → Edge Functions → Secrets.
+// v0.7.67: Gemini A·B·Tavily·Firecrawl도 무료 확인 주소로 먹히는지 본다. 14일 이하 노랑, 3일 이하·거절 빨강. 바꾸는 곳은 Supabase 대시보드 → Edge Functions → Secrets.
 import { useEffect, useState } from 'react';
 import type { KeyStatus } from '../data/store';
 
@@ -34,7 +34,7 @@ export function KeyStatusList({ load }: { load: () => Promise<KeyStatus[]> }) {
             const state = !k.set
               ? '없음 — 이 기능이 멈춰요'
               : k.works === false
-                ? 'GitHub가 거절함(만료·권한 확인)'
+                ? k.secret.startsWith('GITHUB') ? 'GitHub가 거절함(만료·권한 확인)' : '거절됨(키 확인)'
                 : left !== null
                   ? `${k.expiresAt!.slice(0, 10)} 만료 (${left <= 0 ? '지남' : `D-${left}`})`
                   : k.works
