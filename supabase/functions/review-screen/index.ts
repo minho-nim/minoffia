@@ -6,6 +6,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { verifyNotify } from './notifySig.ts';
 import { requestRedoOnServer } from './redo.ts';
 import { parseScreen, screenDecision, screenFeedback, screenPrompt, SCREEN_SYSTEM, type ScreenReview } from './screen.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 const MODEL = 'gemini-3.5-flash-lite';
 const MAX_AUTO_REDO = 2; // review-result/rubric.ts와 같게
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
   let parsed: { score: number; problems: string[] } | null = null;
   let judge = '';
   for (const k of keys) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': k.key },
       body: JSON.stringify({

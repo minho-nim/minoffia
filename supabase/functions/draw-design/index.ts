@@ -5,6 +5,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildDesignReviewPrompt, buildDrawPrompt, DESIGN_REVIEW_SYSTEM, DRAW_STYLE, DRAW_SYSTEM, parseDesignReview, parseDraw, type DesignReview, type DrawWho } from './designDraft.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
+import { geminiFetch } from './gemini-fallback.ts';
 
 const HARD_DAILY_CAP = 40;
 const DEFAULT_DAILY_CAP = 16;
@@ -22,7 +23,7 @@ const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 async function callGemini(key: string, model: string, system: string, text: string, maxTokens: number, timeoutMs: number) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
