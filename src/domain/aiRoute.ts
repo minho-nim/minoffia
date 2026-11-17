@@ -10,7 +10,7 @@ export type RouteKind = 'question' | 'task' | 'ambiguous';
 export interface AskOptions {
   route?: { projects: string[] };
   project?: { id?: string; name: string; description: string; repo: string | null; openTasks: string[] };
-  /** 조사: Exa가 찾고 Gemini가 정리해 출처를 붙인다(v0.7.10) */
+  /** 조사: Tavily(안 되면 Firecrawl)가 찾고 Gemini가 정리해 출처를 붙인다(v0.7.10, v0.7.51 Exa 제외) */
   research?: boolean;
   /** 먼저 쓸 Gemini 키(1=Studio A, 2=Studio B, @StudioA·@StudioB, v0.6.24). 안 되면 다른 쪽이 대신 */
   slot?: 1 | 2;

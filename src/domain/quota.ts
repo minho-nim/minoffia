@@ -60,7 +60,7 @@ export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date())
     case 'exa': {
       const todays = (snap.aiCalls ?? []).filter((c) => c.purpose === 'research' && today(c.createdAt, now));
       const ok = todays.filter((c) => c.ok).length;
-      return { state: 'available', label: `오늘 조사 ${ok}회`, detail: `오늘 웹 조사 ${ok}회 답함(Exa로 찾고 Gemini가 정리). Exa 무료 사용량은 Exa 대시보드에서 본다.` };
+      return { state: 'available', label: `오늘 조사 ${ok}회`, detail: `오늘 웹 조사 ${ok}회 답함(Tavily로, 안 되면 Firecrawl로 찾고 Gemini가 정리). 무료 크레딧은 각 대시보드에서 본다(Tavily 월 1,000, Firecrawl 월 1,000).` };
     }
     case 'ci':
       return { state: 'unknown', label: '해당 없음', detail: 'GitHub Actions 무료 범위에서 돈다. AI 사용량이 아니다.' };

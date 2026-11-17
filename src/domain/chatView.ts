@@ -32,7 +32,9 @@ export function speakerOf(m: ChatMsgLike): Speaker {
   if (m.from === 'gemini') {
     const via = m.via ?? '';
     if (via.includes('Claude')) return { id: 'claude', name: 'Claude', role: '웹 조사' };
-    if (via.includes('Exa')) return { id: 'exa', name: 'Exa + Gemini', role: '웹 조사' };
+    // 웹 조사(v0.7.51 Tavily·Firecrawl, 예전 기록은 Exa): "<엔진> 검색 + Gemini ·"
+    const web = /(\S+) 검색 \+ Gemini/.exec(via);
+    if (web) return { id: 'exa', name: `${web[1]} + Gemini`, role: '웹 조사' };
     if (via.includes('Studio B')) return { id: 'studioB', name: 'Gemini B', role: '답변' };
     return { id: 'studioA', name: 'Gemini A', role: '답변' };
   }

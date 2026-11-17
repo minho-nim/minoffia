@@ -41,12 +41,12 @@ export const MENTION_OPTIONS = [
   // v0.6.24(소유자 "제미나이도 각각 태그"): 질문에 누가 답할지. 그 키가 안 되면 다른 쪽이 대신 답한다
   { tag: 'StudioA', ko: '스튜디오A', desc: 'Gemini 답(키 A)' },
   { tag: 'StudioB', ko: '스튜디오B', desc: 'Gemini 답(키 B)' },
-  // v0.7.3(소유자 "exa도 태그, 얘도 AI니까"): 웹에서 찾아 Gemini가 정리하는 질문
-  { tag: 'Exa', ko: '엑사', desc: '웹 조사(찾아서 정리)' },
+  // v0.7.3(소유자 "exa도 태그, 얘도 AI니까"): 웹에서 찾아 Gemini가 정리하는 질문. v0.7.51 Exa 제외 → Tavily(안 되면 Firecrawl)
+  { tag: 'Tavily', ko: '타빌리', desc: '웹 조사(찾아서 정리)' },
 ] as const;
 
-/** 질문 글에 @Exa가 있으면 웹 조사로(v0.7.3) */
-export const asksExa = (text: string | null | undefined): boolean => /@(?:exa|엑사)(?![a-z])/i.test(text ?? '');
+/** 질문 글에 @Tavily(@타빌리·@웹검색, 예전 @Exa)가 있으면 웹 조사로(v0.7.3, v0.7.51) */
+export const asksExa = (text: string | null | undefined): boolean => /@(?:tavily|타빌리|웹검색|exa|엑사)(?![a-z])/i.test(text ?? '');
 
 /** 질문 글의 @StudioA·@StudioB → 먼저 쓸 Gemini 키(1=A, 2=B). 없으면 null(기본 A, 안 되면 B) */
 export function answerSlot(text: string | null | undefined): 1 | 2 | null {

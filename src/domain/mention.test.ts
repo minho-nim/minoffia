@@ -56,13 +56,15 @@ describe('@ 목록(v0.5.47)', () => {
   });
 });
 
-describe('@Exa(v0.7.3)', () => {
+describe('@Tavily(v0.7.3, v0.7.51 Exa 제외)', () => {
   it('@Exa·@엑사면 웹 조사, 목록에도 나온다', async () => {
     const { asksExa, mentionOptions } = await import('./mention');
     expect(asksExa('@Exa 요즘 Gemini 무료 한도')).toBe(true);
     expect(asksExa('@엑사 찾아줘')).toBe(true);
     expect(asksExa('exa라는 회사')).toBe(false);
     expect(asksExa('@Exabyte')).toBe(false);
-    expect(mentionOptions('ex').map((o) => o.tag)).toEqual(['Exa']);
+    expect(asksExa('@Tavily 요즘 무료 한도')).toBe(true);
+    expect(asksExa('@웹검색 찾아줘')).toBe(true);
+    expect(mentionOptions('ta').map((o) => o.tag)).toEqual(['Tavily']);
   });
 });
