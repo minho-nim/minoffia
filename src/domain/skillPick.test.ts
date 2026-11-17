@@ -44,3 +44,15 @@ describe('화면·게임·보안 새 스킬 추천(v0.7.48)', () => {
     expect(suggestSkills('전체 보안 감사 해 줘', all)).toContain('security-audit');
   });
 });
+
+describe('한국어 윤문·디자인 참고 추천(v0.7.49)', () => {
+  const all = ['humanize-korean', 'design-reference', 'hallmark', 'ui-check', 'frontend-ui-engineering', 'impeccable', 'unslop'];
+  it('README·포트폴리오·윤문이면 humanize-korean', () => {
+    expect(suggestSkills('포트폴리오 소개 글 윤문해 줘', all)).toContain('humanize-korean');
+    expect(suggestSkills('README 번역투 고쳐', all)).toContain('humanize-korean');
+  });
+  it('"○○ 느낌으로" 디자인이면 design-reference', () => {
+    expect(suggestSkills('리니어 느낌으로 새 화면 디자인', all)).toContain('design-reference');
+    expect(suggestSkills('버튼 색 고쳐', all)).not.toContain('design-reference');
+  });
+});
