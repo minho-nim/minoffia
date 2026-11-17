@@ -94,3 +94,18 @@ describe('남은 크레딧 읽기(v0.7.53)', () => {
     expect(parseFirecrawlUsage({ data: {} })).toBeNull();
   });
 });
+
+describe('배포 도구 함정(2026-11-17)', () => {
+  it('export 뒤 첫 따옴표 글이 255바이트를 넘지 않는다(넘으면 배포 도구가 경로로 읽다 실패)', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs');
+    for (const dir of readdirSync('supabase/functions', { withFileTypes: true }).filter((d) => d.isDirectory())) {
+      for (const f of readdirSync(`supabase/functions/${dir.name}`).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'))) {
+        const s = readFileSync(`supabase/functions/${dir.name}/${f}`, 'utf8');
+        for (const m of s.matchAll(/export[^'"`]*['"]([^'"]*)['"]/g)) {
+          const longest = Math.max(...m[1].split('/').map((x) => new TextEncoder().encode(x).length));
+          expect(longest, `${dir.name}/${f}: ${m[1].slice(0, 30)}`).toBeLessThan(255);
+        }
+      }
+    }
+  });
+});
