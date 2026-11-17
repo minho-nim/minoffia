@@ -1783,7 +1783,7 @@ export function WorkflowPanel({ jump, task, project, view, attachments, analyses
 const MARK: Record<'met' | 'partial' | 'unmet', string> = { met: '✓', partial: '△', unmet: '✗' };
 
 /** 결과 점수표(v0.4.64): 규칙 검사·AI 점수·판정. 올리기 승인은 늘 사람이 한다.
- *  v0.7.8 3중 평가: Gemini A(요청·사용자)·Gemini B(코드 품질·안전)·동료 개발 AI 점수를 각각, 그리고 평균. */
+ *  v0.7.8 3중 평가: Gemini A(요청·사용자)·Gemini B(반대 심문, v0.7.44)·동료 개발 AI 점수를 각각, 그리고 평균. */
 function ReviewCard({ review, onFinish, busy }: { review: ResultReview | null; onFinish?: () => void; busy?: boolean }) {
   if (!review) return <p className="muted small review-wait">AI 평가 중… (규칙 검사 → Gemini A·B → 동료 AI)</p>;
   const bad = review.gates.filter((g) => !g.ok);

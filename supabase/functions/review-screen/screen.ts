@@ -20,6 +20,8 @@ export interface ScreenReview {
 
 /** 이 점수 아래거나 빈 화면이면 자동으로 다시 개발(평균 판정과 따로, 화면이 확실히 깨졌을 때만) */
 export const SCREEN_REDO_SCORE = 60;
+/** v0.7.44: 이 점수 아래면(60~79) 코드 채점이 통과여도 사장님 확인으로 둔다(화면이 애매하면 사람이 본다) */
+export const SCREEN_PASS_SCORE = 80;
 
 export function screenPrompt(spec: string, stats: { errors: number; overflow: boolean }): string {
   return [
@@ -54,7 +56,8 @@ export function parseScreen(text: string): { score: number; problems: string[] }
 /** 화면 평가로 판정을 바꿀지: 이미 결과 승인했거나, 이미 다시 개발이거나, 자동 다시 개발 횟수를 다 썼으면 기록만 */
 export function screenDecision(s: { score: number; problems: string[] }, o: { verdict: string; bApproved: boolean; redos: number; maxRedo: number }): 'redo' | 'owner' | 'note' {
   if (o.bApproved || o.verdict === 'redo') return 'note';
-  if (s.score >= SCREEN_REDO_SCORE) return 'note';
+  if (s.score >= SCREEN_PASS_SCORE) return 'note';
+  if (s.score >= SCREEN_REDO_SCORE) return o.verdict === 'pass' ? 'owner' : 'note';
   return o.redos < o.maxRedo ? 'redo' : 'owner';
 }
 

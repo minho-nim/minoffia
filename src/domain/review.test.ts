@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { averageMany, buildReviewPrompt, changedFiles, panelEntry, panelOutcome, pendingEntry, parseScore, redoFeedback, ruleCheck, total, verdictOf, type Score } from './review';
+import { averageMany, buildReviewPrompt, changedFiles, panelEntry, panelOutcome, pendingEntry, parseScore, redoFeedback, ruleCheck, total, verdictOf, type Score, requireRunEvidence } from './review';
 
 const diff = ['diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@', '-old', '+new'].join('\n');
 const passLog = ' Test Files  3 passed (3)\n      Tests  20 passed (20)\n✓ built in 1.2s';
@@ -41,8 +41,9 @@ describe('결과 평가 1단계: 규칙 검사', () => {
 describe('결과 평가 2단계: 점수와 판정', () => {
   it('JSON 점수를 읽고 배점을 넘지 않게 자른다', () => {
     const s = parseScore('```json\n{"parts":{"acceptance":99,"spec":20,"constraints":15,"scope":10,"quality":-3},"criteria":[{"text":"a","status":"partial","evidence":"x"}],"violations":[],"fixes":["b"]}\n```')!;
-    expect(s.parts).toEqual({ acceptance: 40, spec: 20, constraints: 15, scope: 10, quality: 0 });
-    expect(total(s)).toBe(85);
+    // v0.7.44: 완료 기준 점수는 기준별 판정(일부 = 0.5)으로 계산한 값을 넘지 않는다
+    expect(s.parts).toEqual({ acceptance: 20, spec: 20, constraints: 15, scope: 10, quality: 0 });
+    expect(total(s)).toBe(65);
     expect(parseScore('아무 말')).toBeNull();
   });
   it('80점 이상·위반 없음이면 통과, 아니면 다시 개발(2번까지), 그다음은 사장님', () => {
@@ -169,5 +170,35 @@ describe('채점 보강(v0.5.93)', () => {
     const diff = ['diff --git a/CLAUDE.md b/CLAUDE.md', '+++ b/CLAUDE.md', '+- 규칙', 'diff --git a/README.md b/README.md', '+++ b/README.md', '+한 줄'].join('\n');
     const g = ruleCheck({ diff, testLog: 'npm test 통과', changeScope: 'README.md' }).find((x) => x.id === 'scope');
     expect(g?.ok).toBe(true);
+  });
+
+  it('점수 보정(v0.7.44): 근거 없는 만점은 90점, 말뿐인 근거는 일부', () => {
+    const json = (crit: { status: string; evidence: string }[], parts = { acceptance: 40, spec: 25, constraints: 15, scope: 10, quality: 10 }) =>
+      parseScore(JSON.stringify({ parts, criteria: crit.map((c, i) => ({ text: `기준 ${i}`, ...c })), violations: [], fixes: [] }))!;
+    // Gemini A·B가 근거 없이 100점: 말뿐인 근거 → 일부, 완료 기준 점수 내려감
+    const vague = json([{ status: 'met', evidence: '잘 구현되었습니다' }, { status: 'met', evidence: '문제 없음' }]);
+    expect(vague.criteria.map((c) => c.status)).toEqual(['partial', 'partial']);
+    expect(total(vague)).toBe(80);
+    // 확인된 근거 1개뿐인 100점 → 90점
+    const one = json([{ status: 'met', evidence: 'src/Card.tsx:12 카드 추가' }]);
+    expect(total(one)).toBe(90);
+    expect(one.parts.quality).toBe(0);
+    // 확인된 근거 2개 이상이면 만점 인정
+    const two = json([{ status: 'met', evidence: 'src/Card.tsx:12' }, { status: 'met', evidence: '시험 card.test.ts 통과' }]);
+    expect(total(two)).toBe(100);
+    // 기준이 없으면 완료 기준 점수는 AI 숫자 그대로(근거 부족으로 90점 제한)
+    expect(total(json([]))).toBe(90);
+  });
+
+  it('실행 증거(v0.7.44): 화면 확인 기록이 없으면 화면 기준 충족은 일부', () => {
+    const sc = parseScore(JSON.stringify({ parts: { acceptance: 40, spec: 25, constraints: 15, scope: 10, quality: 10 }, criteria: [
+      { text: '(필수) 400px 휴대폰에서 가로 넘침 없음', status: 'met', evidence: 'src/style.css 절대 위치로 넘침 방지' },
+      { text: '(필수) 10m마다 효과', status: 'met', evidence: 'src/App.tsx:40 milestone' },
+    ], violations: [], fixes: [] }))!;
+    const noRun = requireRunEvidence(sc, 'npm run check\n✓ 57 passed\nChromium 없음: 화면 확인 못 함');
+    expect(noRun.criteria.map((c) => c.status)).toEqual(['partial', 'met']);
+    expect(total(noRun)).toBeLessThan(total(sc));
+    const ran = requireRunEvidence(sc, 'check-result width 1400 errors [] overflow false / width 400 overflow false');
+    expect(ran.criteria.map((c) => c.status)).toEqual(['met', 'met']);
   });
 });
