@@ -4,6 +4,7 @@ import { withBaseRules } from './domain/baseRules';
 import { TeamPanel } from './components/TeamPanel';
 import { TurnMenu } from './components/TurnMenu';
 import { ThemeToggle } from './components/ThemeToggle';
+import { FlowStrip } from './components/FlowStrip';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentRoster, ReviewLog } from './components/AgentPanel';
@@ -191,6 +192,8 @@ export function App() {
   };
   const [selected, setSelected] = useState<AgentId | null>(null);
   // 오늘 사용량의 Tavily·Firecrawl(v0.7.55 소유자 "다른 API처럼, 대시보드의 토큰을 연결"): 각 서비스 키로 실제 사용량을 읽는다(켤 때, 10분마다). 막히면 앱이 센 추정
+  // 머리 오른쪽의 작은 사무실(v0.7.62): 접힐 때 사무실 원래 크기를 재서 높이 36px에 맞는 비율을 CSS에 넘긴다
+  const stageEl = useRef<HTMLElement | null>(null);
   const [liveCredits, setLiveCredits] = useState<{ tavily: Credits | null; firecrawl: Credits | null } | null>(null);
   useEffect(() => {
     if (!store?.searchCredits) return;
@@ -408,6 +411,16 @@ export function App() {
   const [mini, setMini] = useState(false);
   /** 2단계(v0.5.29 소유자): 더 내리면 사무실을 접고, 얇은 머리의 '사무실' 버튼으로 잠깐 띄워 본다 */
   const [tiny, setTiny] = useState(false);
+  useEffect(() => {
+    const stage = stageEl.current;
+    if (!stage) return;
+    // 사무실 원래 너비 = 무대 안쪽 너비(사무실이 고정 위치로 바뀌어도 무대 너비는 그대로), 높이 = 너비 × 0.747(배경 비율)
+    const cs = getComputedStyle(stage);
+    const w = stage.clientWidth - parseFloat(cs.paddingLeft || '0') - parseFloat(cs.paddingRight || '0');
+    if (w <= 0) return;
+    stage.style.setProperty('--office-w', `${w}px`);
+    stage.style.setProperty('--tiny-scale', String(36 / (w * 0.747)));
+  }, [mini, tiny, store]);
   const [peek, setPeek] = useState(false);
   // 프로젝트 칸 '스킬'(v0.6.66): 스킬 모음과 프로젝트별 상태를 한 번 읽어 모든 프로젝트가 나눠 쓴다
   // 사무실 지도 팝업(역할·클라우드)
@@ -2024,7 +2037,7 @@ export function App() {
         </div>
       )}
 
-      <div className={`topbar-mini${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
+      <div className={`topbar-mini${barOn ? ' is-on' : ''}${tiny ? ' is-tiny' : ''}`} aria-hidden={!barOn}>
         <button type="button" tabIndex={barOn ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="맨 위로">
           minoffia. <span className="ver">v{version}</span>
         </button>
@@ -2035,6 +2048,9 @@ export function App() {
           return id ? <span className="topbar-project">{snap.projects.find((p) => p.id === id)?.name}</span> : null;
         })()}
         {/* 사무실 띄워 보기는 모든 탭에서 오른쪽 아래 '…' 하나로(v0.6.79 소유자 "대화에서 사무실 일관성이 없다"): 얇은 머리의 '사무실 ▾'는 뺐다 */}
+        {/* 지금 주고받는 장면(v0.7.62): 웹 조사·업무 넘겨주기가 있을 때만. 작은 사무실이 머리 오른쪽에 붙으면 그 자리를 비워 둔다 */}
+        {barOn && <FlowStrip workflow={snap.workflow} />}
+        {tiny && <span className="bar-office-slot" aria-hidden="true" />}
         {/* 큰 머리 내용(연결·알림·사용량)을 펼쳐 본다(v0.5.31) */}
         <button type="button" className={`bar-btn bar-btn-usage${usageOpen ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={usageOpen} onClick={() => setUsageOpen((v) => !v)}>
           사용량 보기
@@ -2104,7 +2120,13 @@ export function App() {
           </button>
           </span>
         )}
-        <section className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`} aria-label="오피스">
+        <section
+          className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${peek ? ' is-peek' : ''}`}
+          aria-label="오피스"
+          ref={stageEl}
+          // v0.7.62: 머리 오른쪽의 작은 사무실을 누르면 크게 띄워 본다
+          onClickCapture={tiny && !peek ? (e) => { e.preventDefault(); e.stopPropagation(); setPeek(true); } : undefined}
+        >
           <OfficeView
             lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
             tasks={snap.tasks}

@@ -1456,7 +1456,12 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
         const encoded = await Promise.all(images.map(async (f) => ({ mime: f.type, data: await toBase64(f) })));
         // 보내자마자 빈 Gemini 말(입력 중 …)을 두고, 답 조각이 오면 그 자리에 글을 채운다.
         const id = mid();
-        setLog((l) => [...l, { id, from: 'gemini' as From, text: '', home: thread }].slice(-KEEP));
+        // v0.7.62 소유자 "대화에서 어떤 캐릭터가 작업 중인지 … 표시가 안 맞아": 기다리는 동안의 얼굴을 실제로 일하는 쪽으로.
+        // 웹 조사면 찾는 쪽(Tavily, @Firecrawl이면 Firecrawl), 아니면 먼저 답할 Studio(@StudioB면 B). 답이 오기 시작하면 Gemini로 바뀐다
+        const slotNow = answerSlot(text) ?? 1;
+        const searcher = searchEngineOf(text) === 'firecrawl' ? 'Firecrawl' : 'Tavily';
+        const waitingVia = research ? `${searcher} 검색 + Gemini · 찾는 중` : VIA_OF_SLOT[slotNow];
+        setLog((l) => [...l, { id, from: 'gemini' as From, text: '', home: thread, via: waitingVia }].slice(-KEEP));
         const set = (t: string) => !muted.current && setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
         // 판단을 맡겼으면 첫 줄(판단 머리)은 숨기고, 질문 답일 때만 본문을 바로 보여 준다.
         // v0.4.58: 여러 개로 나눴으면 질문 답만 모아 보여 준다(업무·애매는 끝난 뒤 카드로).
@@ -1490,6 +1495,8 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           if (research && !writing) {
             writing = true;
             setResearchPhase('write', studio);
+            // 찾기가 끝나고 답을 쓰기 시작: 대화 얼굴도 정리하는 Gemini로
+            setLog((l) => l.map((m) => (m.id === id ? { ...m, via: VIA_OF_SLOT[studio === 'studioB' ? 2 : 1] } : m)));
           }
           put(t);
         };
