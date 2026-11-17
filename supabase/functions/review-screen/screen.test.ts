@@ -15,7 +15,10 @@ describe('화면 평가(v0.7.40)', () => {
     expect(screenDecision(bad, { verdict: 'pass', bApproved: false, redos: 2, maxRedo: 2 })).toBe('owner');
     expect(screenDecision(bad, { verdict: 'pass', bApproved: true, redos: 0, maxRedo: 2 })).toBe('note');
     expect(screenDecision(bad, { verdict: 'redo', bApproved: false, redos: 0, maxRedo: 2 })).toBe('note');
-    expect(screenDecision({ score: 75, problems: ['여백'] }, { verdict: 'pass', bApproved: false, redos: 0, maxRedo: 2 })).toBe('note');
+    // v0.7.44: 60~79점은 코드 채점이 통과여도 사장님 확인
+    expect(screenDecision({ score: 75, problems: ['여백'] }, { verdict: 'pass', bApproved: false, redos: 0, maxRedo: 2 })).toBe('owner');
+    expect(screenDecision({ score: 75, problems: ['여백'] }, { verdict: 'owner', bApproved: false, redos: 0, maxRedo: 2 })).toBe('note');
+    expect(screenDecision({ score: 85, problems: [] }, { verdict: 'pass', bApproved: false, redos: 0, maxRedo: 2 })).toBe('note');
     expect(screenFeedback(bad)).toContain('1) 빈 화면');
   });
   it('알림 표 서명: 맞는 것만, 만료·바꾼 값은 거절', async () => {

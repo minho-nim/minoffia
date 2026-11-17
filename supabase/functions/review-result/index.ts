@@ -6,7 +6,7 @@
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않는다. 글은 저장하지 않고 점수·이유만 남긴다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { requestRedoOnServer } from './redo.ts';
-import { buildReviewPrompt, panelEntry, panelJudge, panelOutcome, parseScore, pendingEntry, PASS_SCORE, PEER_NOTE, PERSPECTIVE_NOTE, ranChecks, redoFeedback, REVIEW_SYSTEM, ruleCheck, type Gate, type PanelEntry, type Score } from './rubric.ts';
+import { buildReviewPrompt, panelEntry, panelJudge, panelOutcome, parseScore, pendingEntry, PASS_SCORE, PEER_NOTE, PERSPECTIVE_NOTE, ranChecks, redoFeedback, requireRunEvidence, REVIEW_SYSTEM, ruleCheck, type Gate, type PanelEntry, type Score } from './rubric.ts';
 import { loadRules } from './projectRules.ts';
 import { buildClaudeReviewPayload, resultBranch } from './claude.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
@@ -262,7 +262,9 @@ Deno.serve(async (req) => {
           } catch (e) {
             r = { status: 0, text: '', message: (e as Error).name };
           }
-          const parsed = r.status === 200 ? parseScore(r.text) : null;
+          // v0.7.44 실행 증거: 시험 기록에 화면 확인이 없으면 Gemini의 화면 기준 '충족'은 '일부'로
+          const raw = r.status === 200 ? parseScore(r.text) : null;
+          const parsed = raw ? requireRunEvidence(raw, String(result.test_log ?? '')) : null;
           const need = !parsed && allowFiles && r.status === 200 ? parseNeedFiles(r.text) : null;
           await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed || need), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}), ...(parsed || need ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
           used += parsed || need ? 1 : 0;

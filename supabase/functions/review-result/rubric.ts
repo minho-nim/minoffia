@@ -166,15 +166,66 @@ export function parseScore(text: string): Score | null {
       evidence: String(c.evidence ?? '').slice(0, 300),
     }))
     .filter((c) => c.text)
-    // 근거 없는 '충족'은 믿지 않는다(v0.5.80, replica-skill '근거 없으면 버림' 참고): 일부만으로 낮춘다
-    .map((c) => (c.status === 'met' && !c.evidence.trim() ? { ...c, status: 'partial' as const } : c))
+    // 근거 없는 '충족'은 믿지 않는다(v0.5.80, replica-skill '근거 없으면 버림' 참고): 일부만으로 낮춘다.
+    // v0.7.44: 근거는 파일·줄·코드·시험·화면처럼 확인할 수 있는 것이어야 한다("잘 됨" 같은 말은 근거가 아님)
+    .map((c) => (c.status === 'met' && !HAS_EVIDENCE.test(c.evidence) ? { ...c, status: 'partial' as const } : c))
     .slice(0, 20);
   // 근거(파일 이름·줄)가 없는 '위반'은 바로 다시 개발로 보내지 않고 고칠 점으로만 남긴다
   const allViolations = strs(raw.violations, 300);
   const grounded = (v: string) => HAS_GROUND.test(v);
   const violations = allViolations.filter(grounded);
   const fixes = [...strs(raw.fixes, 300), ...allViolations.filter((v) => !grounded(v)).map((v) => `(근거 없음) ${v}`)].slice(0, 12);
-  return { parts, criteria, violations, fixes, summary: String(raw.summary ?? '').slice(0, 600) };
+  return calibrate({ parts, criteria, violations, fixes, summary: String(raw.summary ?? '').slice(0, 600) });
+}
+
+/** 화면에 관한 완료 기준(보이는지·폭·넘침·배치) */
+const SCREEN_CRITERION = /화면|\d+\s*px|넘침|휴대폰|모바일|데스크톱|레이아웃|배치|보이|디자인|다크|라이트|색/;
+/** 시험 기록에 실제 화면 확인(브라우저로 연 흔적)이 있는지 */
+export const SCREEN_RUN = /overflow|가로 넘침|넘침 없음|스크린샷|screenshot|playwright|chromium으로|화면 확인\(자동\)|1400\s*px.*400\s*px|400\s*px.*1400\s*px/i;
+
+/**
+ * 실행 증거(v0.7.44 소유자 "채점 고도화"): 시험 기록에 화면을 실제로 연 흔적이 없으면 화면에 관한 '충족'은 '일부'로.
+ * (MinSnakey: 개발 AI가 "브라우저가 없어 화면 확인 못 함"이라 했는데 Gemini 둘이 "가로 넘침 없음 확인"으로 100점을 줬다)
+ * 동료 AI는 직접 브라우저로 확인하므로 Gemini 채점에만 쓴다.
+ */
+export function requireRunEvidence(score: Score, testLog: string): Score {
+  if (SCREEN_RUN.test(testLog)) return score;
+  const criteria = score.criteria.map((c) => (c.status === 'met' && SCREEN_CRITERION.test(c.text) ? { ...c, status: 'partial' as const, evidence: `${c.evidence} (시험 기록에 화면 확인 없음)`.slice(0, 300) } : c));
+  if (criteria.every((c, i) => c === score.criteria[i])) return score;
+  return calibrate({ ...score, criteria });
+}
+
+/** 확인할 수 있는 근거: 파일·줄·코드 조각·시험·빌드·화면 사진 */
+const HAS_EVIDENCE = /[\w-]+\.[a-z]{1,5}\b|:\d+|`[^`]+`|line \d+|L\d+|시험|테스트|test|빌드|build|화면|스크린샷|사진|로그/i;
+
+/** 만점 근처에 필요한 확인된 근거 수 */
+export const HIGH_SCORE = 95;
+export const HIGH_SCORE_EVIDENCE = 2;
+export const HIGH_SCORE_CAP = 90;
+
+/**
+ * 점수 보정(v0.7.44 소유자 "채점 고도화"): 무료 채점 AI가 근거 없이 만점을 주던 것(Gemini A·B 둘 다 100점)을 막는다.
+ * 1) 완료 기준 점수(acceptance)는 AI가 준 숫자와 기준별 판정(충족 1·일부 0.5·미충족 0)으로 계산한 값 중 낮은 쪽.
+ * 2) 95점 이상인데 확인된 근거가 있는 '충족'이 2개 미만이면 90점에 맞춘다(품질·범위부터 깎음).
+ */
+export function calibrate(score: Score): Score {
+  const parts = { ...score.parts };
+  if (score.criteria.length) {
+    const got = score.criteria.reduce((n, c) => n + (c.status === 'met' ? 1 : c.status === 'partial' ? 0.5 : 0), 0);
+    parts.acceptance = Math.min(parts.acceptance, Math.round((WEIGHTS.acceptance * got) / score.criteria.length));
+  }
+  const sum = (Object.keys(WEIGHTS) as Part[]).reduce((s, k) => s + parts[k], 0);
+  const evidenced = score.criteria.filter((c) => c.status === 'met' && HAS_EVIDENCE.test(c.evidence)).length;
+  if (sum >= HIGH_SCORE && evidenced < HIGH_SCORE_EVIDENCE) {
+    let over = sum - HIGH_SCORE_CAP;
+    for (const k of ['quality', 'scope', 'constraints', 'spec', 'acceptance'] as Part[]) {
+      const cut = Math.min(over, parts[k]);
+      parts[k] -= cut;
+      over -= cut;
+      if (over <= 0) break;
+    }
+  }
+  return { ...score, parts };
 }
 
 export function total(score: Score): number {
@@ -276,6 +327,8 @@ export const REVIEW_SYSTEM = [
   '- 사용자 글을 innerHTML로 넣거나, 로그에 비밀값을 찍거나, 사용자 입력을 AI 지시문에 이어 붙였으면 violations에 적는다. 화면을 바꿨는데 불러오는 중·빈 화면·오류 상태가 없으면 quality에서 감점한다.',
   '- 시험 로그의 "화면 확인(자동)"에 콘솔 오류나 가로 넘침이 있으면 quality에서 감점하고 fixes에 적는다(화면을 바꾼 일일 때).',
   '- 근거 없이 후하게 주지 않는다. 첫 결과는 대개 고칠 것이 있다. 만점이나 "문제 없음"은 diff·로그에 근거가 보일 때만.',
+  '- 점수 기준점(v0.7.44): 95~100 = 모든 완료 기준을 시험·빌드·화면 기록 같은 실행 증거로 확인했고 고칠 것이 없다. 85 = 요구는 다 했지만 한두 기준은 코드만 보고 판단했다. 70 = 요구 일부가 빠졌거나 확인할 증거가 없다. 50 이하 = 핵심 요구가 없거나 시험이 실패했다.',
+  '- criteria의 evidence는 확인할 수 있는 것만 적는다: 파일:줄, 코드 조각, 시험 이름·결과, 화면 기록. "잘 구현됨" 같은 말은 근거가 아니다(근거가 없으면 partial).',
 ].join('\n');
 
 /** AI에게 보낼 평가 자료(길면 자른다) */
@@ -336,7 +389,7 @@ export interface PanelEntry {
   score: Score | null;
 }
 
-export const PANEL_PERSPECTIVE: Record<PanelWho, string> = { A: '요청·사용자', B: '코드 품질·안전', peer: '동료 개발 AI' };
+export const PANEL_PERSPECTIVE: Record<PanelWho, string> = { A: '요청·사용자', B: '반대 심문(품질·안전)', peer: '동료 개발 AI' };
 
 /** Gemini 두 채점자의 관점 안내(항목·형식은 같고 보는 눈만 다르다) */
 export const PERSPECTIVE_NOTE: Record<'A' | 'B', string> = {
@@ -345,10 +398,12 @@ export const PERSPECTIVE_NOTE: Record<'A' | 'B', string> = {
     '소유자가 요청한 것이 실제로 되었는지, 화면·문구·흐름이 쓰는 사람에게 맞는지를 중심으로 본다(완료 기준·기획서 요구).',
     '채점 항목과 JSON 형식은 위와 같다. 근거가 확인된 것은 관점과 상관없이 인정하고, 근거 없이 깎지 않는다.',
   ].join('\n'),
+  // v0.7.44 소유자 "반대 심문 ㅇㅇ": 셋이 같은 쪽으로 쏠려 만점이 나오던 것을, 한 명은 '안 된 이유'를 찾게 한다
   B: [
-    '## 이번 채점의 관점: 코드 품질·안전',
-    '깨질 수 있는 곳, 오류 처리, 보안·비밀값, 범위 밖 변경, 시험이 실제로 바뀐 것을 확인하는지를 중심으로 본다.',
-    '채점 항목과 JSON 형식은 위와 같다. 근거가 확인된 것은 관점과 상관없이 인정하고, 근거 없이 깎지 않는다.',
+    '## 이번 채점의 관점: 반대 심문(코드 품질·안전 포함)',
+    '너는 이 결과가 "안 된 이유"를 찾는 검사관이다. 완료 기준마다 "정말 됐다는 증거가 diff·시험 로그에 있나?"를 의심하고, 증거를 못 찾으면 partial이나 unmet으로 적는다.',
+    '깨질 수 있는 곳(긴 글자·빈 값·휴대폰 폭·오류), 보안·비밀값, 범위 밖 변경, 시험이 실제로 바뀐 동작을 확인하는지도 본다.',
+    '찾은 문제는 반드시 파일:줄이나 코드 조각을 근거로 fixes·violations에 적는다. 근거 없는 트집은 적지 않는다(근거 없는 지적은 버려진다). 문제를 못 찾았으면 그대로 높은 점수를 준다.',
   ].join('\n'),
 };
 
