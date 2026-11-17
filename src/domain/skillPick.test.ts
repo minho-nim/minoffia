@@ -27,3 +27,20 @@ describe('게임 스킬 추천(v0.7.46)', () => {
     expect(suggestSkills('게임 점수판 버튼 고쳐', ['ui-check', 'debugging-and-error-recovery'])).toEqual(['debugging-and-error-recovery', 'ui-check']);
   });
 });
+
+describe('화면·게임·보안 새 스킬 추천(v0.7.48)', () => {
+  const all = ['hallmark', 'impeccable', 'unslop', 'emil-design-eng', 'web-design-guidelines', 'ui-check', 'frontend-ui-engineering', 'security-audit', 'game-balance', 'game-playtest', 'game-design', 'game-gameplay', 'game-ui', 'game-qa'];
+  it('새 화면이면 hallmark, 움직임이면 emil, 접근성이면 규칙 점검', () => {
+    expect(suggestSkills('랜딩 새 페이지 만들어 줘', all)[0]).toBe('hallmark');
+    expect(suggestSkills('팝업 열릴 때 애니메이션 다듬어', all)).toContain('emil-design-eng');
+    expect(suggestSkills('버튼 접근성 키보드 점검', all)).toContain('web-design-guidelines');
+  });
+  it('게임 밸런스·플레이 기록', () => {
+    expect(suggestSkills('MinSnakey 난이도가 너무 어려워', all)[0]).toBe('game-balance');
+    expect(suggestSkills('게임 해 보니 첫 판이 헷갈려, 플레이 테스트 정리', all)[0]).toBe('game-playtest');
+  });
+  it('깊은 보안 감사는 요청할 때만', () => {
+    expect(suggestSkills('로그인 권한 고쳐', all)).not.toContain('security-audit');
+    expect(suggestSkills('전체 보안 감사 해 줘', all)).toContain('security-audit');
+  });
+});
