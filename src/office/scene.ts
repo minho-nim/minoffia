@@ -144,17 +144,38 @@ export function buildScene(tasks: Task[], assignments: AgentAssignment[] = []): 
     result.push({ agent: agent.id, spot: rest, activity: 'resting', task: null, open: 0, seatId: null });
   });
 
-  return result;
+  return spread(result);
 }
 
-/** 웹 조사 중(v0.7.60): 찾고 답을 쓰는 동안 Tavily·Firecrawl을 리서치실 자기 자리에서 일하게 한다(업무로 이미 움직이는 중이면 그대로). 끝나면 쉰다 */
-export function withResearch(scene: AgentScene[], step: 'search' | 'write' | null): AgentScene[] {
+/** 같은 곳에 둘 이상 서면(빈자리가 없어 방 안 빈 곳에 모인 경우 등) 옆으로 조금씩 비켜 세운다(v0.7.61) */
+export function spread(scene: AgentScene[]): AgentScene[] {
+  const seen = new Map<string, number>();
+  return scene.map((s) => {
+    const key = `${s.spot.x},${s.spot.y}`;
+    const n = seen.get(key) ?? 0;
+    seen.set(key, n + 1);
+    if (!n) return s;
+    const dx = (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 13;
+    return { ...s, spot: { ...s.spot, x: s.spot.x + dx } };
+  });
+}
+
+/** 웹 조사 중(v0.7.60): 찾고 답을 쓰는 동안 Tavily·Firecrawl을 리서치실 자기 자리에서 일하게 한다(업무로 이미 움직이는 중이면 그대로).
+ *  v0.7.61 소유자 "정리하는 것도 움직여?": 답을 쓰는 동안 정리하는 Gemini(쉬고 있었다면)도 리서치실로 온다. 끝나면 모두 쉰다 */
+export function withResearch(scene: AgentScene[], step: 'search' | 'write' | null, studio: AgentId = 'studioA'): AgentScene[] {
   if (!step) return scene;
   const room = ROOM_BY_ID.research;
   const residents = AGENTS.filter((a) => a.home === 'research');
-  return scene.map((s) => {
-    if ((s.agent !== 'search' && s.agent !== 'firecrawl') || s.activity !== 'resting') return s;
-    const seat = room.seats[residents.findIndex((a) => a.id === s.agent)];
-    return { ...s, spot: seat ? { x: seat.x, y: seat.y, zone: 'research' } : { ...room.idle, zone: 'research' }, activity: 'working', seatId: seat?.id ?? null };
+  const taken = new Set(scene.filter((s) => s.seatId).map((s) => s.seatId!));
+  const moved = scene.map((s): AgentScene => {
+    if (s.activity !== 'resting') return s;
+    if (s.agent === 'search' || s.agent === 'firecrawl') {
+      const seat = room.seats[residents.findIndex((a) => a.id === s.agent)];
+      const free = seat && !taken.has(seat.id);
+      return { ...s, spot: free ? { x: seat.x, y: seat.y, zone: 'research' as const } : { ...room.idle, zone: 'research' as const }, activity: 'working', seatId: free ? seat.id : null };
+    }
+    if (step === 'write' && s.agent === studio) return { ...s, spot: { ...room.idle, zone: 'research' as const }, activity: 'helping', seatId: null };
+    return s;
   });
+  return spread(moved);
 }
