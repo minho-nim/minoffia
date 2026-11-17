@@ -55,8 +55,8 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
   const research = useResearchPhase();
   // 휴가 중인 AI는 자리 대신 아래 출입문으로 간다(도착하면 사라짐).
   const scene = useMemo(
-    () => withResearch(buildScene(tasks, assignments), research?.step ?? null).map((s) => (leaveKey.split(',').includes(s.agent) ? { ...s, spot: { ...EXIT, zone: 'corridor' as const }, activity: 'resting' as const } : s)),
-    [tasks, assignments, leaveKey, research?.step],
+    () => withResearch(buildScene(tasks, assignments), research?.step ?? null, research?.studio).map((s) => (leaveKey.split(',').includes(s.agent) ? { ...s, spot: { ...EXIT, zone: 'corridor' as const }, activity: 'resting' as const } : s)),
+    [tasks, assignments, leaveKey, research?.step, research?.studio],
   );
   const leaveRef = useRef(leave);
   leaveRef.current = leave;
@@ -156,7 +156,7 @@ export function OfficeView({ tasks, assignments = [], selected, onSelect, workfl
         let walking = false;
         if (m.path.length) {
           // 웹 조사(v0.7.60): 검색은 몇 초 만에 끝나서 Tavily·Firecrawl은 리서치실로 뛰어간다(3배)
-          let budget = SPEED * dt * (s.spot.zone === 'research' && (s.agent === 'search' || s.agent === 'firecrawl') && s.activity === 'working' ? 3 : 1);
+          let budget = SPEED * dt * (s.spot.zone === 'research' && !s.task && (s.agent === 'search' || s.agent === 'firecrawl' || s.agent === 'studioA' || s.agent === 'studioB') && s.activity !== 'resting' ? 3 : 1);
           while (budget > 0 && m.path.length) {
             const p = m.path[0];
             const dx = p.x - m.x;

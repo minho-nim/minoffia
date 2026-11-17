@@ -139,3 +139,40 @@ describe('웹 조사 연출(v0.7.60)', () => {
     expect(withResearch(base, 'write').find((x) => x.agent === 'search')!.spot.zone).toBe('research');
   });
 });
+
+describe('방별 움직임 전체 확인(v0.7.61)', () => {
+  const ROOM_OF = { planning: 'planning', dev: 'dev', design: 'planning', prototype: 'planning', research: 'research', qa: 'terminal' } as const;
+  const workers = ['claude', 'codex', 'studioA', 'studioB', 'ci'] as const;
+  for (const agent of workers) {
+    for (const type of Object.keys(ROOM_OF) as (keyof typeof ROOM_OF)[]) {
+      for (const status of ['in_progress', 'blocked', 'review', 'queued'] as const) {
+        it(`${agent} · ${type} · ${status} → ${ROOM_OF[type]}`, () => {
+          const s = of([task({ id: 'x', type, assignee: agent, status })], agent);
+          expect(s.spot.zone).toBe(ROOM_OF[type]);
+        });
+      }
+    }
+  }
+  it('미니엉은 메모가 있으면 복도 접수 데스크, 없으면 휴게실', () => {
+    expect(of([task({ id: 'm', type: 'dev', assignee: 'codex', status: 'queued' })], 'mina').spot.zone).toBe('corridor');
+    expect(of([], 'mina').spot.zone).toBe('lounge');
+  });
+  it('같은 방에 여럿이 몰려도 겹쳐 서지 않는다', () => {
+    const tasks = (['claude', 'codex', 'studioA', 'studioB', 'ci'] as const).map((a, i) => task({ id: `r${i}`, type: 'research', assignee: a, status: 'in_progress' }));
+    const scene = buildScene(tasks);
+    const spots = scene.filter((s) => s.spot.zone === 'research').map((s) => `${s.spot.x},${s.spot.y}`);
+    expect(spots.length).toBe(5);
+    expect(new Set(spots).size).toBe(spots.length);
+  });
+  it('웹 조사: 찾는 동안 Tavily·Firecrawl, 쓰는 동안 정리하는 Gemini도 리서치실(겹치지 않게)', async () => {
+    const { withResearch } = await import('./scene');
+    const w = withResearch(buildScene([]), 'write', 'studioB');
+    for (const id of ['search', 'firecrawl', 'studioB']) expect(w.find((x) => x.agent === id)!.spot.zone).toBe('research');
+    expect(w.find((x) => x.agent === 'studioA')!.spot.zone).toBe('lounge');
+    const pos = w.filter((x) => x.spot.zone === 'research').map((x) => `${x.spot.x},${x.spot.y}`);
+    expect(new Set(pos).size).toBe(pos.length);
+    // 정리하는 Gemini가 업무 중이면 그대로 둔다
+    const busy = withResearch(buildScene([task({ id: 'p', type: 'planning', assignee: 'studioA', status: 'in_progress' })]), 'write', 'studioA');
+    expect(busy.find((x) => x.agent === 'studioA')!.spot.zone).toBe('planning');
+  });
+});

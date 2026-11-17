@@ -464,7 +464,7 @@ export function createLocalStore(): OfficeStore {
       for (const part of answer.match(/.{1,12}/g) ?? []) {
         shown += part;
         onDelta?.(shown);
-        await wait(200);
+        await wait(350);
       }
       return { answer, keySlot: 1 };
     },
