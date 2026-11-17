@@ -10,18 +10,20 @@ const STATE: Record<SkillMapState, { mark: string; label: string }> = {
   extra: { mark: '◇', label: '이 프로젝트에만 있음' },
 };
 
-export function ProjectSkills({ projectId, load, onManage }: {
+export function ProjectSkills({ projectId, load, onManage, ver = 0 }: {
   projectId: string;
   /** 스킬 모음 목록과 프로젝트별 상태(한 번 읽어 나눠 씀) */
   load: () => Promise<{ files: SkillFile[]; map: SkillMapData }>;
   /** 스킬 탭에서 이 스킬 넣기 창 열기(이름이 없으면 스킬 탭만) */
   onManage: (skill?: string) => void;
+  /** 스킬 자료를 새로 읽으면 바뀜: 다시 그린다(v0.7.47) */
+  ver?: number;
 }) {
   const [data, setData] = useState<{ files: SkillFile[]; map: SkillMapData } | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     load().then(setData, (e) => setError((e as Error).message || '스킬을 읽지 못했어요.'));
-  }, []);
+  }, [ver]);
   if (error) return <p className="task-error small">{error}</p>;
   if (!data) return <p className="muted small">이 프로젝트의 스킬을 읽는 중…</p>;
   const views = data.files.map(toSkillView);

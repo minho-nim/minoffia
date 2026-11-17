@@ -7739,3 +7739,46 @@ html.popup-open .project-sections > details[open] * {
   padding-left: 18px;
   color: var(--muted);
 }
+
+/* 앱 안 알림 팝업(v0.7.47): 탭 줄 바로 아래에 살짝 뜬다. 위치는 NoticeToast가 탭 줄을 재서 정한다 */
+.notice-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: 50%;
+  width: min(560px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  z-index: 300;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  animation: notice-pop 0.18s ease-out;
+}
+.notice-toast span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.notice-toast .notice-close {
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  min-width: 24px;
+  min-height: 24px;
+}
+@keyframes notice-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notice-toast {
+    animation: none;
+  }
+}
