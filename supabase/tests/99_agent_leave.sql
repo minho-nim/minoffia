@@ -13,8 +13,8 @@ do $$ begin
   end;
 end $$;
 -- v0.7.9: 웹 검색도 휴가를 줄 수 있다(v0.7.52 'exa' → 'search')
-insert into agent_leave (agent) values ('search');
-delete from agent_leave where agent = 'search';
+insert into agent_leave (agent) values ('search'), ('firecrawl');
+delete from agent_leave where agent in ('search', 'firecrawl');
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', false);
 do $$ begin
   if (select count(*) from agent_leave) <> 0 then raise exception '다른 사람 휴가가 보이면 안 됨'; end if;

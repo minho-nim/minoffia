@@ -2541,6 +2541,7 @@ export function App() {
             <AgentRoster
               snap={snap}
               onLinearProbe={store.mode === 'supabase' ? () => store.linearProbe() : undefined}
+              onCredits={store.searchCredits ? () => store.searchCredits!() : undefined}
               onSetLimit={(kind, n) => void mutate(() => store.setAgentLimit(kind, n), `동시 작업 상한을 ${n}개로 바꿨습니다.`)}
               selected={selected}
               onSelect={(id) => setSelected(id)}

@@ -14,6 +14,8 @@ export interface AskOptions {
   research?: boolean;
   /** 먼저 쓸 Gemini 키(1=Studio A, 2=Studio B, @StudioA·@StudioB, v0.6.24). 안 되면 다른 쪽이 대신 */
   slot?: 1 | 2;
+  /** 웹 조사에서 먼저 쓸 검색(@Firecrawl이면 firecrawl, v0.7.53). 없으면 Tavily 먼저 */
+  engine?: 'tavily' | 'firecrawl';
 }
 
 export interface Routed {

@@ -7,6 +7,7 @@ describe('디스코드식 대화창', () => {
     expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Gemini · Studio B가 답함' }).name).toBe('Gemini B');
     expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Exa 검색 + Gemini · Studio A가 답함' }).id).toBe('search');
     expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Firecrawl 검색 + Gemini · Studio B가 답함' }).name).toBe('Firecrawl + Gemini');
+    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Firecrawl 검색 + 본문 2개 + Gemini · Studio B가 답함' }).id).toBe('firecrawl');
     expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Tavily 검색 + 본문 2개 + Gemini · Studio A가 답함' }).name).toBe('Tavily + Gemini');
     expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Claude가 웹에서 찾아 답함' }).id).toBe('claude');
     expect(speakerOf({ id: 'stage-t-1', from: 'office', text: "'x' → 개발 중\nClaude(W1)가 개발 중이에요.", stage: 'executing' }).name).toBe('Claude');

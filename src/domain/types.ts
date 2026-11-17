@@ -1,7 +1,7 @@
 import type { Stage, WorkflowData } from './workflow-types';
 
-/** search = 웹 조사(Tavily·Firecrawl, 서버 자동, 업무는 맡지 않음). Grok은 2026-11-13 완전히 뺐다(소유자) */
-export type AgentId = 'mina' | 'claude' | 'codex' | 'search' | 'studioA' | 'studioB' | 'ci';
+/** search = 웹 조사 1단계 Tavily, firecrawl = 2단계 본문 읽기(v0.7.53, 서버 자동, 업무는 맡지 않음). Grok은 2026-11-13 완전히 뺐다(소유자) */
+export type AgentId = 'mina' | 'claude' | 'codex' | 'search' | 'firecrawl' | 'studioA' | 'studioB' | 'ci';
 export type RoomId = 'research' | 'dev' | 'terminal' | 'planning' | 'lounge';
 export type WorkType = 'planning' | 'dev' | 'design' | 'prototype' | 'research' | 'qa';
 export type RequestedType = WorkType | 'auto';
@@ -133,10 +133,12 @@ export interface Snapshot {
   projectRules?: ProjectRule[];
   /** Claude 웹 조사(v0.7.11, Supabase 모드만, 최근 7일) */
   research?: import('./claudeResearch').ClaudeResearch[];
+  /** 이번 달 웹 검색 크레딧 추정(v0.7.53, 앱이 직접 센 것: Tavily 검색 1, Firecrawl 검색 2·본문 1). Supabase 모드만 */
+  searchCredits?: { tavily: number; firecrawl: number };
 }
 
 /** 휴가를 줄 수 있는 AI(미니엉 접수·CI 봇은 늘 근무). DB 0026_agent_leave.sql의 check와 같아야 한다 */
-export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'search', 'studioA', 'studioB'];
+export const LEAVE_AGENTS: AgentId[] = ['claude', 'codex', 'search', 'firecrawl', 'studioA', 'studioB'];
 
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 

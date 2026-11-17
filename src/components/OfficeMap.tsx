@@ -19,7 +19,8 @@ const ROLE: { nodes: N[]; links: [string, string][] } = {
     ['codex', 'Codex', 'agent', '주 개발. Linear로 받아 클라우드에서 개발·시험하고 결과를 보낸다.'],
     ['claude', 'Claude', 'agent', '보조 개발. Codex가 못 하거나 휴가면 맡고, 올리기 승인 뒤 PR을 연다.'],
     ['gemini', 'Gemini A·B', 'agent', '결과 채점(같은 항목, 다른 관점)·질문 답·기획서 초안. 무료 키 2개.'],
-    ['search', 'Tavily', 'agent', '대화의 웹 조사. 찾은 글을 Gemini가 정리한다.'],
+    ['search', 'Tavily', 'agent', '웹 조사 1단계: 링크·요약 찾기.'],
+    ['firecrawl', 'Firecrawl', 'agent', '웹 조사 2단계: 알짜 2개 본문 읽기.'],
     ['mino', '미노(CI)', 'server', 'GitHub Actions: PR 검사·배포, 바뀐 곳 구조도·앱 지도.'],
     ['server', '서버(자동)', 'server', '실행 승인 자동 기록, 결과 받기, 알림.'],
     ['skills', '저장소 스킬', 'skill', '개발 AI가 필요할 때 꺼내 쓰는 작업 설명서(프로젝트마다).'],
@@ -33,7 +34,7 @@ const ROLE: { nodes: N[]; links: [string, string][] } = {
     ['g-c', '배포 승인', 'gate', '소유자가 누름.'],
     ['s-dep', '배포', 'stage', '서버가 운영에 올림.'],
   ],
-  links: [['owner', 's-req'], ['owner', 'g-a'], ['owner', 'g-b'], ['owner', 'g-c'], ['pm', 's-plan'], ['codex', 's-dev'], ['claude', 's-dev'], ['gemini', 's-rev'], ['search', 's-req'], ['server', 'g-a'], ['server', 's-rev'], ['mino', 's-pr'], ['mino', 's-dep'], ['codex', 'skills'], ['claude', 'skills'],
+  links: [['owner', 's-req'], ['owner', 'g-a'], ['owner', 'g-b'], ['owner', 'g-c'], ['pm', 's-plan'], ['codex', 's-dev'], ['claude', 's-dev'], ['gemini', 's-rev'], ['search', 's-req'], ['firecrawl', 's-req'], ['server', 'g-a'], ['server', 's-rev'], ['mino', 's-pr'], ['mino', 's-dep'], ['codex', 'skills'], ['claude', 'skills'],
     ['s-req', 's-plan'], ['s-plan', 'g-a'], ['g-a', 's-dev'], ['s-dev', 's-rev'], ['s-rev', 'g-b'], ['g-b', 's-pr'], ['s-pr', 'g-c'], ['g-c', 's-dep']],
 };
 const CLOUD: { nodes: N[]; links: [string, string, string][] } = {
@@ -46,10 +47,11 @@ const CLOUD: { nodes: N[]; links: [string, string, string][] } = {
     ['codexc', 'Codex 클라우드', 'agent', '주 개발 AI가 일하는 곳.'],
     ['routine', 'Claude 루틴', 'agent', '보조 개발 AI가 일하는 곳.'],
     ['gem', 'Gemini API', 'ext', '채점·초안·질문 답(무료 키).'],
-    ['search', 'Tavily·Firecrawl 검색', 'ext', '웹 조사: Tavily 먼저, 안 되면 Firecrawl. 찾은 글을 Gemini가 정리(카드 없는 무료 크레딧).'],
+    ['search', 'Tavily 검색', 'ext', '웹 조사 1단계: 찾기(카드 없는 무료 크레딧).'],
+    ['fcapi', 'Firecrawl', 'ext', '웹 조사 2단계: 본문 읽기(카드 없는 무료 크레딧). Tavily가 안 되면 찾기도.'],
     ['notes', '노트 보관함', 'ext', '앱 지도·버전 노트(Obsidian, 저장소가 있을 때).'],
   ],
-  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['sb', 'search', '웹 조사'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
+  links: [['app', 'cf', '화면 받기'], ['app', 'sb', '로그인 · 자료'], ['sb', 'gh', '저장소 읽기 · Actions'], ['sb', 'linear', '업무 맡기기'], ['linear', 'codexc', '위임'], ['codexc', 'sb', '결과 보내기'], ['sb', 'routine', '업무 맡기기'], ['routine', 'sb', '결과 보내기'], ['sb', 'gem', '채점 · 초안'], ['sb', 'search', '웹 조사'], ['sb', 'fcapi', '본문 읽기'], ['gh', 'cf', '배포'], ['gh', 'notes', '앱 지도 · 버전 노트'], ['codexc', 'gh', '작업 브랜치'], ['routine', 'gh', '작업 브랜치']],
 };
 const STYLE: NetStyle = {
   person: { color: '--accent', name: '사람·기기', size: 11 },
@@ -81,11 +83,11 @@ export function OfficeMap({ tab, state = {} }: { tab: 'role' | 'cloud'; state?: 
   const line = useMemo(() => {
     if (tab === 'role') {
       const flow = ['s-req', 's-plan', 'g-a', 's-dev', 's-rev', 'g-b', 's-pr', 'g-c', 's-dep'];
-      const who = ['owner', 'pm', 'codex', 'claude', 'gemini', 'search', 'mino', 'server'];
+      const who = ['owner', 'pm', 'codex', 'claude', 'gemini', 'search', 'firecrawl', 'mino', 'server'];
       const edges: RelEdge[] = ROLE.links.filter(([a, b]) => who.includes(a) && flow.includes(b)).map(([a, b]) => [b, a, 1]);
       return { rows: [flow.map(node), who.map(node)], edges, hint: '왼쪽(넓은 화면은 위) = 업무 순서(굵은 테두리 = 소유자 승인), 오른쪽 = 누가 하는지. 상자를 누르면 이어진 선만 진하게.' };
     }
-    const rows = [['app'], ['cf', 'sb', 'gh'], ['linear', 'codexc', 'routine', 'gem', 'search', 'notes']];
+    const rows = [['app'], ['cf', 'sb', 'gh'], ['linear', 'codexc', 'routine', 'gem', 'search', 'fcapi', 'notes']];
     return { rows: rows.map((r) => r.map(node)), edges: CLOUD.links.map(([a, b]): RelEdge => [a, b, 1]), hint: '위에서 아래로: 휴대폰 → 화면·서버·저장소 → 일하는 곳과 외부 서비스. 상자를 누르면 무엇이 오가는지 옆에 나와요.' };
   }, [tab, state.lastDeploy, state.onLeave?.join()]);
   const [width, setWidth] = useState(360);

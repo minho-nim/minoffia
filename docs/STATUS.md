@@ -17,7 +17,7 @@
 
 ## 미해결
 
-- 웹 조사(v0.7.52): ① Tavily 찾기(안 되면 Firecrawl 검색) ② 알짜 2개 Firecrawl 본문 ③ Gemini 종합. Exa는 카드 등록이 필요해 뺐다. 키 TAVILY_API_KEY·FIRECRAWL_API_KEY는 소유자가 2026-11-17 넣음. 하루 상한 없음. 휴가 값 search(마이그레이션 0064, 운영 적용은 배포 때). 실제 앱 질문으로 아직 확인 안 함.
+- 웹 조사(v0.7.52~53): ① Tavily 찾기(안 되면 Firecrawl 검색) ② 알짜 2개 Firecrawl 본문 ③ Gemini 종합. Exa는 카드 등록이 필요해 뺐다. 키 TAVILY_API_KEY·FIRECRAWL_API_KEY는 소유자가 2026-11-17 넣음. 하루 상한 없음. 휴가 값 search(마이그레이션 0064, 운영 적용은 배포 때). 실제 앱 질문으로 아직 확인 안 함. @Firecrawl·Firecrawl 에이전트·팀 관리 크레딧(추정+실제 확인 버튼). 각 서비스 사용량 API의 무료 등급 응답 모양은 배포 뒤 확인 필요(shortcut: 모양이 다르면 추정만 보임, parseTavilyUsage·parseFirecrawlUsage 고치기). Firecrawl 캐릭터는 코드 도트(그림 PNG를 src/assets/office/characters/firecrawl-stand.png로 넣으면 바뀜).
 - Claude 루틴(보조 개발)에는 add_repo가 없다: 새 저장소는 claude.ai/code 루틴 설정의 저장소 목록에 소유자가 추가해야 한다(MinLab 제외).
 - 새 저장소는 Codex 레거시 클라우드 환경에 손으로 추가한다(생성 API 없음, 프로젝트 '준비'에 안내).
 

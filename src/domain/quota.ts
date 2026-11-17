@@ -3,6 +3,7 @@
  * 공급자의 남은 토큰은 알 수 없다. 이 오피스가 기록한 횟수와 받은 한도 오류(429)로만 판단하고,
  * 셀 수 없는 AI(ChatGPT·Codex 등)는 '알 수 없음'으로 정직하게 둔다.
  */
+import { creditLine, FREE_MONTHLY } from './searchCredits';
 import { AGENT_BY_ID } from './agents';
 import type { AgentId, AiCall, Snapshot } from './types';
 import { kstDay, runsToday } from './usage';
@@ -57,10 +58,15 @@ export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date())
       return { state: 'unknown', label: '알 수 없음', detail: 'ChatGPT Plus 사용량은 앱에서 알 수 없다(수동 인계, 추가 비용 없음).' };
     case 'codex':
       return { state: 'unknown', label: '알 수 없음', detail: `Codex(ChatGPT Plus) 사용량은 앱에서 알 수 없다. 오늘 수동 시작 기록 ${runsToday(snap.usage, 'codex', now)}회.` };
-    case 'search': {
-      const todays = (snap.aiCalls ?? []).filter((c) => c.purpose === 'research' && today(c.createdAt, now));
-      const ok = todays.filter((c) => c.ok).length;
-      return { state: 'available', label: `오늘 조사 ${ok}회`, detail: `오늘 웹 조사 ${ok}회 답함(Tavily로, 안 되면 Firecrawl로 찾고 Gemini가 정리). 무료 크레딧은 각 대시보드에서 본다(Tavily 월 1,000, Firecrawl 월 1,000).` };
+    case 'search':
+    case 'firecrawl': {
+      // v0.7.53: 이번 달 남은 크레딧(앱이 직접 센 추정). 정확한 숫자는 펼친 칸의 '실제 남은 크레딧 확인'·대시보드
+      const engine = agent === 'search' ? 'tavily' : 'firecrawl';
+      const used = snap.searchCredits?.[engine];
+      const left = used === undefined ? null : FREE_MONTHLY[engine] - used;
+      const what = engine === 'tavily' ? 'Tavily: 1단계 찾기(검색 1번 = 1크레딧)' : 'Firecrawl: 2단계 본문 읽기(본문 1개 = 1, 찾기 대신 = 2크레딧)';
+      if (left !== null && left <= 0) return { state: 'exhausted', label: '이번 달 소진(추정)', detail: `${what}. ${creditLine(engine, used, null)}.` };
+      return { state: 'available', label: left === null ? '기록 없음' : `남은 약 ${left.toLocaleString('ko-KR')}`, detail: `${what}. ${creditLine(engine, used, null)}.` };
     }
     case 'ci':
       return { state: 'unknown', label: '해당 없음', detail: 'GitHub Actions 무료 범위에서 돈다. AI 사용량이 아니다.' };

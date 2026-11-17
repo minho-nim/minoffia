@@ -15,7 +15,10 @@ export function uncovered(leave: AgentId[]): string[] {
     const able = AGENTS.filter((a) => a.skills.includes(type) && LEAVE_AGENTS.includes(a.id));
     if (able.length && able.every((a) => leave.includes(a.id))) out.push(`${WORK_TYPE_LABEL[type]}: ${able.map((a) => a.name).join('·')} 모두 휴가라 새 업무는 복귀 뒤에 시작해요.`);
   }
-  if (leave.includes('search')) out.push('웹 조사: Tavily(웹 검색)가 휴가라 웹 검색을 하지 않고, Gemini가 아는 범위로만 답해요.');
+  // 웹 조사(v0.7.53): Tavily·Firecrawl 둘 다 휴가면 검색 없이, 하나만이면 남은 쪽이 대신
+  if (leave.includes('search') && leave.includes('firecrawl')) out.push('웹 조사: Tavily·Firecrawl이 모두 휴가라 웹 검색을 하지 않고, Gemini가 아는 범위로만 답해요.');
+  else if (leave.includes('search')) out.push('웹 조사: Tavily가 휴가라 Firecrawl이 대신 찾아요.');
+  else if (leave.includes('firecrawl')) out.push('웹 조사: Firecrawl이 휴가라 본문은 읽지 않고 Tavily 요약만으로 정리해요.');
   if (leave.includes('studioA') && leave.includes('studioB')) out.push('대화 답·기획서 초안·견본·사진 분석: Studio A·B(Gemini)가 모두 휴가라 미니엉이 앱 상태 질문만 답해요.');
 
   return out;

@@ -3,7 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
-import { deepSearch, failMessage, WEB_RULE, webContext as toContext } from './websearch.ts';
+import { deepSearch, failMessage, searchCredits, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 
@@ -180,12 +180,14 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean; slot?: number };
+  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean; slot?: number; engine?: string; usage?: boolean };
   try {
     body = await req.json();
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
   }
+  // 팀 관리 '남은 크레딧 확인'(v0.7.53): 각 서비스 사용량 API만 읽는다(검색·Gemini는 부르지 않음)
+  if (body.usage === true) return reply(200, { ok: true, credits: await searchCredits({ tavily: env('TAVILY_API_KEY'), firecrawl: env('FIRECRAWL_API_KEY') }) });
   const question = (body.question ?? '').trim();
   if (!question || question.length > MAX_QUESTION) return reply(400, { ok: false, error: `질문은 1~${MAX_QUESTION}자여야 합니다.` });
   const history = (Array.isArray(body.history) ? body.history : [])
@@ -222,14 +224,19 @@ Deno.serve(async (req) => {
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (research) {
-    if (away.has('search')) return reply(503, { ok: false, leave: true, error: '웹 검색(Tavily)이 휴가라 웹 검색을 하지 않았어요.' });
-    const { hit, tries, pages, scrapeFails } = await deepSearch({ tavily: env('TAVILY_API_KEY'), firecrawl: env('FIRECRAWL_API_KEY') }, question);
+    // 휴가(v0.7.53): Tavily·Firecrawl 둘 다 휴가면 검색 없이, 하나만이면 그 키를 빼고 남은 쪽만 쓴다
+    if (away.has('search') && away.has('firecrawl')) return reply(503, { ok: false, leave: true, error: 'Tavily·Firecrawl이 모두 휴가라 웹 검색을 하지 않았어요.' });
+    const { hit, tries, pages, scrapeFails } = await deepSearch({ tavily: away.has('search') ? '' : env('TAVILY_API_KEY'), firecrawl: away.has('firecrawl') ? '' : env('FIRECRAWL_API_KEY') }, question, undefined, body.engine === 'firecrawl' ? 'firecrawl' : 'tavily');
     for (const f of scrapeFails) console.log(JSON.stringify({ fn: 'ask-gemini', scrape: 'fail', status: f.status, error: f.error }));
     bodyPages = pages;
-    for (const t of tries.filter((t) => t !== hit)) {
-      console.log(JSON.stringify({ fn: 'ask-gemini', search: t.engine, fail: true, status: t.status, error: t.error }));
-      await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'research', key_slot: null, ok: false, http_status: t.status || null, model: `${t.engine}-search`, prompt_chars: question.length, error: (t.error || '결과 없음').slice(0, 300) });
-    }
+    // 사용 기록(v0.7.53): 검색·본문 읽기마다 한 줄(공급자 tavily·firecrawl). 팀 관리의 이번 달 크레딧 추정에 쓴다
+    const rows = [
+      ...tries.map((t) => ({ owner_id: user.id, provider: t.engine, purpose: 'research', key_slot: null, ok: t === hit, http_status: t.status || null, model: 'search', prompt_chars: question.length, answer_chars: t.results.length, ...(t === hit ? {} : { error: (t.error || '결과 없음').slice(0, 300) }) })),
+      ...Array.from({ length: pages }, () => ({ owner_id: user.id, provider: 'firecrawl', purpose: 'research', key_slot: null, ok: true, http_status: 200, model: 'scrape', prompt_chars: 0 })),
+      ...scrapeFails.map((f) => ({ owner_id: user.id, provider: 'firecrawl', purpose: 'research', key_slot: null, ok: false, http_status: f.status || null, model: 'scrape', prompt_chars: 0, error: (f.error || '본문 없음').slice(0, 300) })),
+    ];
+    if (rows.length) await admin.from('ai_calls').insert(rows);
+    for (const t of tries.filter((t) => t !== hit)) console.log(JSON.stringify({ fn: 'ask-gemini', search: t.engine, fail: true, status: t.status, error: t.error }));
     if (!hit) return reply(502, { ok: false, status: tries.at(-1)?.status ?? 0, error: failMessage(tries) });
     webContext = toContext(hit.results);
     searchEngine = hit.engine === 'tavily' ? 'Tavily' : 'Firecrawl';

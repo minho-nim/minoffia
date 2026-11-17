@@ -9,6 +9,7 @@ import type { LinearProbe } from '../data/store';
 import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
 import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
 import { quotaFor, QUOTA_STATE_LABEL, type QuotaInfo } from '../domain/quota';
+import { creditLine, DASHBOARD, type Credits } from '../domain/searchCredits';
 import { limitFor, MAX_AGENT_LIMIT } from '../domain/concurrency';
 import type { AgentKind } from '../domain/workflow-types';
 import type { AgentAssignment } from '../domain/workflow-types';
@@ -39,6 +40,10 @@ interface Props {
   limit?: { kind: AgentKind; value: number; running: number; onSet: (n: number) => void };
   /** Codex: Linear 연결 확인(읽기만) */
   onLinearProbe?: () => Promise<LinearProbe>;
+  /** Tavily·Firecrawl: 남은 크레딧 실제 확인(v0.7.53) */
+  onCredits?: () => Promise<{ tavily: Credits | null; firecrawl: Credits | null }>;
+  /** 이번 달 직접 센 크레딧 추정 */
+  searchCredits?: { tavily: number; firecrawl: number };
   /** 결과 점수 평가 기록(AI별 성적, v0.4.64) */
   reviews?: ResultReview[];
 }
@@ -122,7 +127,7 @@ function SpeechMark({ speech, leave, onOpen }: { speech?: AgentMark; leave?: boo
   );
 }
 
-export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, speech, leave, cover, reviews = [] }: Props) {
+export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], serverMode = false, quota, limit, onLinearProbe, onCredits, searchCredits, speech, leave, cover, reviews = [] }: Props) {
   const card = reportCard(reviews, KIND_OF[agentId]);
   const a = AGENT_BY_ID[agentId];
   const adapter = ADAPTER_OF[agentId] === 'gemini_vision' ? geminiAdapter(aiCalls, serverMode) : ADAPTERS.find((x) => x.agent === ADAPTER_OF[agentId]);
@@ -168,6 +173,7 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
         </div>
       )}
       {agentId === 'codex' && serverMode && onLinearProbe && <LinearCheck onProbe={onLinearProbe} />}
+      {(agentId === 'search' || agentId === 'firecrawl') && <CreditCheck engine={agentId === 'search' ? 'tavily' : 'firecrawl'} used={searchCredits?.[agentId === 'search' ? 'tavily' : 'firecrawl']} onCheck={serverMode ? onCredits : undefined} />}
       {quota && (
         <p className="small">
           오늘 한도 <span className={`pill pill-quota-${quota.state}`}>{QUOTA_STATE_LABEL[quota.state]}</span> {quota.label !== QUOTA_STATE_LABEL[quota.state] && quota.label}
@@ -230,6 +236,32 @@ export function AgentPanel({ agentId, tasks, usage, onOpenTask, aiCalls = [], se
  * 에이전트 탭: 모든 에이전트를 보여 주고, 고른 에이전트는 맨 위에 자세히 펼친다.
  * 나머지는 한 줄 요약(지금 하는 일·오늘 한도·맡은 업무 수)이고 누르면 펼쳐진다.
  */
+/** Tavily·Firecrawl 남은 크레딧(v0.7.53): 추정 한 줄 + [실제 남은 크레딧 확인] + 대시보드 링크 */
+function CreditCheck({ engine, used, onCheck }: { engine: 'tavily' | 'firecrawl'; used?: number; onCheck?: () => Promise<{ tavily: Credits | null; firecrawl: Credits | null }> }) {
+  const [live, setLive] = useState<Credits | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const name = engine === 'tavily' ? 'Tavily' : 'Firecrawl';
+  return (
+    <div className="small agent-credits">
+      <p>{creditLine(engine, used, live)}</p>
+      {live === null && <p className="muted">{name}가 무료 등급에서 사용량을 알려 주지 않아 앱이 직접 센 추정이에요. 정확한 숫자는 대시보드에서 봐 주세요.</p>}
+      <p className="agent-credits-actions">
+        {onCheck && (
+          <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => {
+            setBusy(true);
+            onCheck().then((c) => setLive(c[engine]), () => setLive(null)).finally(() => setBusy(false));
+          }}>
+            {busy ? '확인 중…' : '실제 남은 크레딧 확인'}
+          </button>
+        )}
+        <a className="link-btn small" href={DASHBOARD[engine]} target="_blank" rel="noopener noreferrer">
+          {name} 대시보드 열기 ↗
+        </a>
+      </p>
+    </div>
+  );
+}
+
 export function AgentRoster({
   snap,
   selected,
@@ -238,8 +270,10 @@ export function AgentRoster({
   serverMode,
   onSetLimit,
   onLinearProbe,
+  onCredits,
 }: {
   onLinearProbe?: () => Promise<LinearProbe>;
+  onCredits?: () => Promise<{ tavily: Credits | null; firecrawl: Credits | null }>;
   snap: Snapshot;
   onSetLimit: (kind: AgentKind, n: number) => void;
   selected: AgentId | null;
@@ -285,6 +319,8 @@ export function AgentRoster({
                 }
                 onOpenTask={onOpenTask}
                 onLinearProbe={onLinearProbe}
+                onCredits={onCredits}
+                searchCredits={snap.searchCredits}
               />
             </section>
           );
