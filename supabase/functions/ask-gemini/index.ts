@@ -231,12 +231,17 @@ Deno.serve(async (req) => {
     for (const f of scrapeFails) console.log(JSON.stringify({ fn: 'ask-gemini', scrape: 'fail', status: f.status, error: f.error }));
     bodyPages = pages;
     // 사용 기록(v0.7.53): 검색·본문 읽기마다 한 줄(공급자 tavily·firecrawl). 팀 관리의 이번 달 크레딧 추정에 쓴다
+    // v0.7.62: 여러 줄을 한 번에 넣을 때 칸 구성이 같아야 한다(빠진 칸은 NULL이 되어 NOT NULL 칸에서 통째로 실패했다)
+    const row = (provider: string, model: string, ok: boolean, status: number, results: number, error: string) => ({ owner_id: user.id, provider, purpose: 'research', key_slot: null, ok, http_status: status || null, model, prompt_chars: question.length, answer_chars: results, error: error.slice(0, 300) });
     const rows = [
-      ...tries.map((t) => ({ owner_id: user.id, provider: t.engine, purpose: 'research', key_slot: null, ok: t === hit, http_status: t.status || null, model: 'search', prompt_chars: question.length, answer_chars: t.results.length, ...(t === hit ? {} : { error: (t.error || '결과 없음').slice(0, 300) }) })),
-      ...Array.from({ length: pages }, () => ({ owner_id: user.id, provider: 'firecrawl', purpose: 'research', key_slot: null, ok: true, http_status: 200, model: 'scrape', prompt_chars: 0 })),
-      ...scrapeFails.map((f) => ({ owner_id: user.id, provider: 'firecrawl', purpose: 'research', key_slot: null, ok: false, http_status: f.status || null, model: 'scrape', prompt_chars: 0, error: (f.error || '본문 없음').slice(0, 300) })),
+      ...tries.map((t) => row(t.engine, 'search', t === hit, t.status, t.results.length, t === hit ? '' : t.error || '결과 없음')),
+      ...Array.from({ length: pages }, () => row('firecrawl', 'scrape', true, 200, 1, '')),
+      ...scrapeFails.map((f) => row('firecrawl', 'scrape', false, f.status, 0, f.error || '본문 없음')),
     ];
-    if (rows.length) await admin.from('ai_calls').insert(rows);
+    if (rows.length) {
+      const { error: logError } = await admin.from('ai_calls').insert(rows);
+      if (logError) console.log(JSON.stringify({ fn: 'ask-gemini', usageLog: 'fail', error: logError.message }));
+    }
     for (const t of tries.filter((t) => t !== hit)) console.log(JSON.stringify({ fn: 'ask-gemini', search: t.engine, fail: true, status: t.status, error: t.error }));
     if (!hit) return reply(502, { ok: false, status: tries.at(-1)?.status ?? 0, error: failMessage(tries) });
     webContext = toContext(hit.results);
