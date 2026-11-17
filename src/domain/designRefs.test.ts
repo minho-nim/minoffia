@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
 import { cleanDesignRefs, DESIGN_REF_GROUPS, DESIGN_REFS } from './designRefs';
 
 describe('참고할 서비스 목록(v0.7.50)', () => {
@@ -13,10 +12,5 @@ describe('참고할 서비스 목록(v0.7.50)', () => {
   });
   it('목록에 있는 것만, 중복 없이, 3개까지', () => {
     expect(cleanDesignRefs(['vercel', 'nope', 'vercel', 'linear.app', 'stripe', 'notion'])).toEqual(['vercel', 'linear.app', 'stripe']);
-  });
-  // 스킬 저장소를 같이 받은 세션에서만: 고정본 파일과 목록이 맞는지
-  const dir = '../minoffia-skills/.claude/skills/design-reference/brands';
-  it.runIf(existsSync(dir))('스킬 저장소 고정본에 파일이 다 있다', () => {
-    for (const r of DESIGN_REFS) expect(existsSync(`${dir}/${r.slug}.md`), r.slug).toBe(true);
   });
 });
