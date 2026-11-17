@@ -15,6 +15,8 @@ const DEMO_TITLE = `${DEMO_TAG} 로그인 버튼 색 바꾸기`;
 const DEMO_TEXT = '로그인 화면의 로그인 버튼 색을 앱 주황색으로 바꿔 줘';
 /** AI가 일하는 척 기다리는 시간(ms) */
 const WORK_MS = 4000;
+/** 넘겨주기 전 W1 시간: 업무 카드의 기다림 그림을 볼 수 있게 조금 길게(v0.7.58) */
+const HANDOFF_MS = 10_000;
 
 const nid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `demo-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
@@ -76,11 +78,15 @@ export function newDemoTask(projectId: string, now = new Date().toISOString()): 
 }
 
 /** 다음에 체험 서버가 할 일(없으면 null = 소유자 차례이거나 끝) */
-export function demoNext(task: Task, snap: Snapshot, now = Date.now()): 'spec' | 'plan' | 'result' | 'pr' | null {
+export function demoNext(task: Task, snap: Snapshot, now = Date.now()): 'spec' | 'plan' | 'handoff' | 'result' | 'pr' | null {
   const v = deriveWorkflow(task, snap.workflow);
   if (!v.spec) return 'spec';
   if (v.aApproved && !v.plan) return 'plan';
   const a = snap.workflow.assignments.find((x) => x.taskId === task.id && x.dispatchStatus === 'started');
+  // v0.7.58 넘겨주기: 기다리던 작업(W2)이 있으면 W1을 끝내고 W2에게 넘긴다(업무 카드의 기다림 그림이 보이게)
+  const waiter = snap.workflow.assignments.find((x) => x.taskId === task.id && x.dispatchStatus === 'proposed');
+  if (a && waiter && now - Date.parse(a.startedAt ?? a.updatedAt) >= HANDOFF_MS) return 'handoff';
+  if (a && waiter) return null;
   if (a && !v.result && now - Date.parse(a.startedAt ?? a.updatedAt) >= WORK_MS) return 'result';
   if (v.bApproved && !snap.workflow.prChecks.some((p) => p.taskId === task.id)) return 'pr';
   return null;
@@ -113,8 +119,11 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
     const v = deriveWorkflow(task, snap.workflow);
     const json = JSON.stringify({
       task_id: task.id, repository: 'minho-nim/minoffia', target_base_revision: 'demo000', plan_revision: 1, status: 'planned', questions: [],
-      development_mode: 'direct', mode_reason: '작은 일이라 작업 하나(체험)',
-      work_items: [{ id: 'W1', title: '로그인 버튼 색 바꾸기', goal: '로그인 버튼을 주황색으로', dependencies: [], assignee_preference: 'codex_primary', execution_mode: 'manual_handoff', acceptance_tests: ['npm test'], preserve_constraints: ['다른 화면 그대로'], attachment_refs: [], requires_execution_approval: true }],
+      development_mode: 'direct', mode_reason: '바꾸기와 시험을 나눠 두 AI가 이어서(체험)',
+      work_items: [
+        { id: 'W1', title: '로그인 버튼 색 바꾸기', goal: '로그인 버튼을 주황색으로', dependencies: [], assignee_preference: 'codex_primary', execution_mode: 'manual_handoff', acceptance_tests: ['npm test'], preserve_constraints: ['다른 화면 그대로'], attachment_refs: [], requires_execution_approval: true },
+        { id: 'W2', title: '버튼 색 시험 더하기', goal: 'W1이 바꾼 버튼 색을 확인하는 시험', dependencies: ['W1'], assignee_preference: 'claude_support', execution_mode: 'manual_handoff', acceptance_tests: ['npm test'], preserve_constraints: ['화면은 그대로'], attachment_refs: [], requires_execution_approval: true },
+      ],
     });
     const parsed = parsePmPlan(json, task.id);
     if (!parsed.ok) throw new Error(parsed.errors.join(' / '));
@@ -124,16 +133,26 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
       dispatchStatus: 'awaiting_user_execution_approval', statusSource: 'none', providerExecutionId: null, providerTaskUrl: null, actualProviderStatus: '',
       startedAt: null, lastVerifiedAt: null, updatedAt: iso,
     };
-    await store.addPlan(plan, [a]);
-    await store.addApproval({ id: nid(), taskId: task.id, gate: 'E', decision: 'approved', approvedRevision: 1, previousRevision: null, workItemId: 'W1', scope: { auto: true, note: '기획 승인에 포함(체험)' }, actor: '체험', createdAt: iso });
+    // W2는 W1이 끝날 때까지 기다린다(시작 전). 업무 카드에 'Codex W1 → ⏳ Claude W2' 그림이 뜬다
+    const b: AgentAssignment = { ...a, id: nid(), workItemId: 'W2', title: '버튼 색 시험 더하기', assignee: 'claude', dispatchStatus: 'proposed', actualProviderStatus: 'W1이 끝나면 시작' };
+    await store.addPlan(plan, [a, b]);
+    for (const w of ['W1', 'W2']) await store.addApproval({ id: nid(), taskId: task.id, gate: 'E', decision: 'approved', approvedRevision: 1, previousRevision: null, workItemId: w, scope: { auto: true, note: '기획 승인에 포함(체험)' }, actor: '체험', createdAt: iso });
     await (store.putDemoAssignment ?? store.updateAssignment)({ ...a, dispatchStatus: 'started', statusSource: 'server_verified', actualProviderStatus: 'linear: 개발 중 — 브랜치를 만들고 시험을 돌리는 중', startedAt: iso, updatedAt: iso });
-    return '체험: Claude(PM)가 작업 1개로 나눴고, 실행 승인은 기획 승인에 포함해 자동으로 기록했어요. Codex가 개발을 시작했어요(몇 초 걸려요).';
+    await (store.putDemoAssignment ?? store.updateAssignment)(b);
+    return '체험: Claude(PM)가 작업 2개로 나눴어요. Codex가 W1(버튼 색)을 하고, 끝나면 Claude가 이어받아 W2(시험)를 해요. 업무 카드에서 기다림 그림을 볼 수 있어요.';
+  }
+  if (step === 'handoff') {
+    const a = snap.workflow.assignments.find((x) => x.taskId === task.id && x.dispatchStatus === 'started')!;
+    const b = snap.workflow.assignments.find((x) => x.taskId === task.id && x.dispatchStatus === 'proposed')!;
+    await (store.putDemoAssignment ?? store.updateAssignment)({ ...a, dispatchStatus: 'completed', actualProviderStatus: 'linear: 끝남 — W2에게 넘김', lastVerifiedAt: iso, updatedAt: iso });
+    await (store.putDemoAssignment ?? store.updateAssignment)({ ...b, dispatchStatus: 'started', statusSource: 'server_verified', actualProviderStatus: '루틴: W1 결과를 받아 시험을 쓰는 중', startedAt: iso, updatedAt: iso });
+    return `체험: Codex가 ${a.workItemId}를 끝내고 Claude에게 넘겼어요. Claude가 ${b.workItemId}(시험)를 시작했어요.`;
   }
   if (step === 'result') {
     const a = snap.workflow.assignments.find((x) => x.taskId === task.id && x.dispatchStatus === 'started')!;
     const result: ResultPackage = {
       id: nid(), taskId: task.id, revision: 1, planRevision: a.planRevision, workItemId: a.workItemId, source: 'codex_linear_auto',
-      summary: '로그인 버튼 색을 앱 주황색으로 바꿨어요. 다른 화면은 그대로예요.\n쓴 스킬: ui-check',
+      summary: 'W1(Codex) 로그인 버튼 색을 앱 주황색으로 바꾸고, W2(Claude) 버튼 색 시험을 더했어요. 다른 화면은 그대로예요.\n쓴 스킬: ui-check',
       diff: "diff --git a/src/components/Login.tsx b/src/components/Login.tsx\n--- a/src/components/Login.tsx\n+++ b/src/components/Login.tsx\n@@ -52 +52 @@\n-          <button type=\"submit\" className=\"btn\">\n+          <button type=\"submit\" className=\"btn btn-primary\">",
       testLog: 'npm test  → Tests 500 passed (500)\nnpm run build → ✓ built\n휴대폰 400px·데스크톱 1400px: 콘솔 오류·가로 넘침 없음',
       remainingIssues: '', sha256: DEMO_SHA, createdAt: iso,
@@ -165,12 +184,13 @@ export async function advanceDemo(store: OfficeStore, snap: Snapshot, now = new 
     const panel = [
       panelEntry('A', 'Gemini · Studio A', s(38, 24, 9, '요청대로 로그인 버튼만 주황색이 됐어요.')),
       panelEntry('B', 'Gemini · Studio B', s(36, 22, 8, '바뀐 줄이 하나라 깨질 곳이 없어요.', ['버튼 색 시험을 하나 더 두면 좋아요'])),
-      panelEntry('peer', 'Claude', s(37, 23, 9, '브랜치에서 화면을 열어 확인했어요.')),
+      // 동료 평가는 만든 AI가 아닌 쪽(마지막 작업 W2를 Claude가 했으면 Codex)
+      panelEntry('peer', a.assignee === 'claude' ? 'Codex' : 'Claude', s(37, 23, 9, '브랜치에서 화면을 열어 확인했어요.')),
     ];
     const gates = ruleCheck({ diff: `diff --git a/src/components/Login.tsx b/src/components/Login.tsx\n${result.diff}`, testLog: result.testLog, changeScope: 'src/components/Login.tsx' });
     const out = panelOutcome(gates, panel, 0, { executed: true });
     await store.putDemoReview?.({
-      id: nid(), taskId: task.id, resultRevision: 1, workItemId: a.workItemId, assignee: 'codex', gates, score: out.score, total: out.total, verdict: out.verdict,
+      id: nid(), taskId: task.id, resultRevision: 1, workItemId: a.workItemId, assignee: a.assignee, gates, score: out.score, total: out.total, verdict: out.verdict,
       reasons: out.reasons, feedback: '', autoRedo: 0, judge: panelJudge(panel), panel, createdAt: iso,
       // 화면 평가(v0.7.40): 미노가 찍은 결과 화면을 기획서와 견준 점수(체험은 정해진 값)
       screen: { score: 88, problems: [], judge: 'Gemini · Studio A', errors: 0, overflow: false },
