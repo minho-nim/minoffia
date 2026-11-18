@@ -66,7 +66,7 @@ describe('사용량 한 계산', () => {
 
   it('0회여도 토큰 수를 보인다', () => {
     const empty = summarize({ ...input, calls: [], runs: [], results: [] }, rangeOf('day', now));
-    expect(empty.map(usageText)).toEqual(['0회 · 0 토큰', '0회 · 0 토큰', '0회 · 0 토큰', '0회 · 0 토큰', '0회 · 크레딧 0', '0회 · 크레딧 0']);
+    expect(empty.map(usageText)).toEqual(['0회 · 0 토큰', '0회 · 0 토큰', '0회 · 0 토큰', '0회 · 0 토큰', '0회 · 크레딧 0', '0회 · 크레딧 0', '0회 · 0분']);
   });
 
   it('Claude는 세션이 적은 쓴 토큰, Codex는 글자 수 추정(약)', () => {
@@ -90,15 +90,23 @@ describe('사용량 한 계산', () => {
     expect(daily[1].rows.studioB).toEqual({ n: 1, amount: 5000 });
     expect(daily.reduce((a, d) => a + d.rows.studioA.amount, 0)).toBe(week.find((x) => x.id === 'studioA')!.amount);
     // 내 프로젝트 목록 그대로(0회 포함), 지운 것은 맨 아래
-    expect(byProject(input, rangeOf('week', now)).map((p) => [p.name, p.claude, p.codex, p.tokens])).toEqual([
-      ['MinSnakey', 1, 1, 12345 + estimateTokens(300 + 30 + 270)],
-      ['Valumin', 0, 0, 0],
-      ['지운 프로젝트·업무', 0, 1, 0],
+    expect(byProject(input, rangeOf('week', now)).map((p) => [p.name, p.claude, p.codex, p.ci, p.tokens])).toEqual([
+      ['MinSnakey', 1, 1, 0, 12345 + estimateTokens(300 + 30 + 270)],
+      ['Valumin', 0, 0, 0, 0],
+      ['지운 프로젝트·업무', 0, 1, 0, 0],
     ]);
+    // 많이 쓴 순서가 먼저, 같으면 목록 순서(v0.7.93): Valumin 저장소 Actions 3회 → 맨 위
+    const acts = [1, 2, 3].map(() => ({ repo: 'minho-nim/Valumin', private: false, workflow: 'PR 검사(verify)', ok: true, createdAt: at('2026-11-18T09:00'), minutes: 2 }));
+    const withActs = { ...input, projects: [{ id: 'p1', name: 'MinSnakey', repo: 'minho-nim/MinSnakey' }, { id: 'p2', name: 'Valumin', repo: 'minho-nim/Valumin' }], actions: acts };
+    expect(byProject(withActs, rangeOf('week', now)).map((p) => [p.name, p.ci])).toEqual([['Valumin', 3], ['MinSnakey', 0], ['지운 프로젝트·업무', 0]]);
     expect(byProject({ ...input, runs: [], results: [] }, rangeOf('week', now)).map((p) => p.name)).toEqual(['MinSnakey', 'Valumin']);
+    // Actions 줄: 횟수·분, 한도에 드는 비공개 분
+    const ci = summarize({ ...withActs, actions: [...acts, { ...acts[0], repo: 'minho-nim/TestRepo', private: true, minutes: 4 }] }, rangeOf('week', now)).find((x) => x.id === 'ci')!;
+    expect(ci).toMatchObject({ n: 4, amount: 10, billed: 4 });
+    expect(usageText(ci)).toBe('4회 · 10분');
     // 모든 에이전트의 한 일 종류
     const kinds = kindsOf(input, rangeOf('week', now));
-    expect(kinds.map((k) => k.name)).toEqual(['Claude', 'Codex', 'Studio A', 'Studio B', 'Tavily', 'Firecrawl']);
+    expect(kinds.map((k) => k.name)).toEqual(['Claude', 'Codex', 'Studio A', 'Studio B', 'Tavily', 'Firecrawl', 'GitHub Actions']);
     expect(kinds.find((k) => k.id === 'codex')!.kinds.map((x) => [x.label, x.n])).toEqual([['개발', 1], ['지운·시험 업무', 1]]);
     expect(kinds.find((k) => k.id === 'firecrawl')!.kinds.map((x) => x.label)).toEqual(['본문 읽기', '검색']);
   });

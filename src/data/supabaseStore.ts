@@ -741,6 +741,12 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         runs: (runs.data ?? []).map((r: Row) => ({ agent: String(r.agent), taskId: (r.task_id as string | null) ?? null, createdAt: String(r.created_at) })),
       };
     },
+    // GitHub Actions 실행 기록(v0.7.93): 서버가 GitHub에서 읽는다(토큰은 서버에만)
+    async actionsUsage(fromIso, toIso) {
+      const data = await invoke('actions-usage', { from: fromIso, to: toIso });
+      const runs = Array.isArray(data.runs) ? (data.runs as Record<string, unknown>[]) : [];
+      return runs.map((r) => ({ repo: String(r.repo ?? ''), private: Boolean(r.private), workflow: String(r.workflow ?? ''), ok: Boolean(r.ok), createdAt: String(r.createdAt ?? ''), minutes: Math.max(0, Number(r.minutes) || 0) }));
+    },
     async searchCredits() {
       const data = await invoke('ask-gemini', { usage: true });
       const c = (data.credits ?? {}) as Record<string, unknown>;

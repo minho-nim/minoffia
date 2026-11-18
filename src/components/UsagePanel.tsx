@@ -64,6 +64,29 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, fresh]);
+  // GitHub Actions(v0.7.93): GitHub API를 아끼려고 기간마다 10분 동안 다시 읽지 않는다(기록이 바뀌어도)
+  const [actions, setActions] = useState<{ key: string; runs: NonNullable<UsageInput['actions']> } | null>(null);
+  useEffect(() => {
+    if (!store?.actionsUsage) return;
+    const hit = actionsCache.get(rangeKey);
+    if (hit && Date.now() - hit.at < 10 * 60_000) {
+      setActions({ key: rangeKey, runs: hit.runs });
+      return;
+    }
+    let live = true;
+    const { fromIso, toIso } = rangeIso(range);
+    store
+      .actionsUsage(fromIso, toIso)
+      .then((runs) => {
+        actionsCache.set(rangeKey, { at: Date.now(), runs });
+        if (live) setActions({ key: rangeKey, runs });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, rangeKey]);
   return useMemo(() => {
     const latest = new Map<string, { revision: number; chars: number }>();
     for (const s of snap.workflow.specs) {
@@ -73,7 +96,8 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
     const base = {
       results: snap.workflow.results.map((r) => ({ taskId: r.taskId, source: r.source, summary: r.summary, diff: r.diff, testLog: r.testLog, createdAt: r.createdAt })),
       tasks: snap.tasks.map((t) => ({ id: t.id, title: t.title, projectId: t.projectId, type: t.type })),
-      projects: snap.projects.map((p) => ({ id: p.id, name: p.name })),
+      projects: snap.projects.map((p) => ({ id: p.id, name: p.name, repo: p.repo })),
+      actions: actions && actions.key === rangeKey ? actions.runs : [],
       promptChars: Object.fromEntries([...latest].map(([k, v]) => [k, v.chars])),
     };
     // 고른 기간의 기록이 도착하기 전에는 이전 기간 숫자 대신 스냅샷(최근 7일)으로 센다
@@ -83,8 +107,9 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
       calls: (snap.aiCalls ?? []).map((c) => ({ provider: 'gemini', keySlot: c.keySlot, purpose: c.purpose, model: '', ok: c.ok, tokens: c.tokens ?? null, createdAt: c.createdAt })),
       runs: snap.usage.map((r) => ({ agent: r.agent, taskId: r.taskId, createdAt: r.createdAt })),
     };
-  }, [remote, snap, rangeKey]);
+  }, [remote, snap, rangeKey, actions]);
 }
+const actionsCache = new Map<string, { at: number; runs: NonNullable<UsageInput['actions']> }>();
 
 const CAP: Partial<Record<UsageAgentId, number>> = {
   claude: AGENT_BY_ID.claude.dailyCap ?? 20,
@@ -158,7 +183,7 @@ export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCr
                         <li key={w.key}>
                           <span>{w.label}</span>
                           <span>
-                            {w.n}회{row.unit === 'credit' ? ` · 크레딧 ${w.tokens}` : w.tokens || row.id.startsWith('studio') ? ` · ${row.source === 'est' ? '약 ' : ''}${shortNum(w.tokens)} 토큰` : ''}
+                            {w.n}회{row.unit === 'credit' ? ` · 크레딧 ${w.tokens}` : row.unit === 'minute' ? ` · ${w.tokens}분` : w.tokens || row.id.startsWith('studio') ? ` · ${row.source === 'est' ? '약 ' : ''}${shortNum(w.tokens)} 토큰` : ''}
                           </span>
                         </li>
                       ))}
@@ -167,7 +192,7 @@ export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCr
                     <p className="muted small">이 기간에 한 일이 없어요.</p>
                   )}
                   <p className="muted small">
-                    {row.unit === 'credit' ? '크레딧: 앱 기록(검색 1번 = Tavily 1, Firecrawl 찾기 2·본문 1, 실패해도 서비스에 닿은 요청은 셈)' : `토큰: ${SOURCE_LABEL[row.source]}`} · 횟수: 앱 기록
+                    {row.unit === 'minute' ? `GitHub 실행 기록. 한도(한 달 2,000분)에 드는 비공개 저장소 ${row.billed ?? 0}분, 공개 저장소는 무료` : row.unit === 'credit' ? '크레딧: 앱 기록(검색 1번 = Tavily 1, Firecrawl 찾기 2·본문 1, 실패해도 서비스에 닿은 요청은 셈)' : `토큰: ${SOURCE_LABEL[row.source]}`}{row.unit === 'minute' ? '' : ' · 횟수: 앱 기록'}
                     {cap ? ` · 오늘 상한 ${row.id.startsWith('studio') ? `질문 ${cap}회(키마다)` : `${cap}회`}` : ''}
                   </p>
                   {engine && (
@@ -196,11 +221,12 @@ export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCr
   );
 }
 
-const COLOR: Record<UsageAgentId, string> = { claude: 'var(--viz-1)', codex: 'var(--viz-2)', studioA: 'var(--viz-3)', studioB: 'var(--viz-4)', search: 'var(--viz-5)', firecrawl: 'var(--viz-6)' };
+const COLOR: Record<UsageAgentId, string> = { claude: 'var(--viz-1)', codex: 'var(--viz-2)', studioA: 'var(--viz-3)', studioB: 'var(--viz-4)', search: 'var(--viz-5)', firecrawl: 'var(--viz-6)', ci: 'var(--viz-7)' };
 
 /** 통계 보기: 고른 기간의 날짜별 사용, 에이전트마다 한 일, 내 프로젝트별 */
 function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
-  const [period, setPeriod] = useState<'week' | 'month' | 'custom'>('month');
+  // v0.7.93 소유자 "통계에 처음 들어갈 땐 주간·횟수"
+  const [period, setPeriod] = useState<'week' | 'month' | 'custom'>('week');
   const [offset, setOffset] = useState(0);
   const pick = (p: 'week' | 'month' | 'custom') => {
     setPeriod(p);
@@ -227,7 +253,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   /** 횟수와 양을 함께(v0.7.90 소유자 "날짜별 횟수·토큰 다 표시"): 토큰 AI는 '3회 · 1.2k', 검색은 '3회 · 크레딧 3' */
   const both = (id: UsageAgentId, n: number, amount: number) => {
     const row = rows.find((r) => r.id === id)!;
-    return row.unit === 'credit' ? `${n}회 · 크레딧 ${amount}` : `${n}회 · ${row.source === 'est' && amount ? '약 ' : ''}${shortNum(amount)} 토큰`;
+    return row.unit === 'credit' ? `${n}회 · 크레딧 ${amount}` : row.unit === 'minute' ? `${n}회 · ${amount}분` : `${n}회 · ${row.source === 'est' && amount ? '약 ' : ''}${shortNum(amount)} 토큰`;
   };
   const total = rows.filter((r) => series.some((s) => s.id === r.id)).reduce((a, r) => a + (measure === 'n' ? r.n : r.amount), 0);
   const top = [...rows].filter((r) => series.some((s) => s.id === r.id)).sort((a, b) => (measure === 'n' ? b.n - a.n : b.amount - a.amount))[0];
@@ -247,26 +273,30 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   const bw = (W - L - R) / Math.max(1, daily.length);
   const barW = Math.max(6, Math.min(22, bw * 0.6));
   const tipDay = tip ? daily.find((d) => d.day === tip) : undefined;
-  const pmax = Math.max(1, ...projects.map((p) => p.claude + p.codex));
+  const pmax = Math.max(1, ...projects.map((p) => p.claude + p.codex + p.ci));
   // 무슨 일에 썼나(v0.7.91 소유자 "원래 디자인이 좋음"): 일 종류마다 막대 한 줄, 에이전트는 색으로 쌓는다(모든 에이전트)
   const workMap = new Map<string, { label: string; parts: { id: UsageAgentId; name: string; v: number }[]; total: number }>();
+  // 줄은 횟수가 있는 일로 정하고(토글을 바꿔도 줄 수·순서가 같아 흔들리지 않게, v0.7.93) 값만 바꾼다
+  const order = new Map<string, number>();
   for (const k of kinds) {
-    if (!series.some((s) => s.id === k.id)) continue;
     for (const x of k.kinds) {
-      const v = measure === 'n' ? x.n : x.tokens;
-      if (!v) continue;
+      if (!x.n) continue;
+      order.set(x.label, (order.get(x.label) ?? 0) + x.n);
       const line = workMap.get(x.label) ?? { label: x.label, parts: [], total: 0 };
-      line.parts.push({ id: k.id, name: k.name, v });
+      const v = measure === 'n' ? x.n : series.some((s) => s.id === k.id) ? x.tokens : 0;
+      if (v) line.parts.push({ id: k.id, name: k.name, v });
       line.total += v;
       workMap.set(x.label, line);
     }
   }
-  const work = [...workMap.values()].sort((a, b) => b.total - a.total);
+  const work = [...workMap.values()].sort((a, b) => (order.get(b.label) ?? 0) - (order.get(a.label) ?? 0));
   const wmax = Math.max(1, ...work.map((w) => w.total));
   // 에이전트별: 에이전트마다 한 줄(그 색), 아래에 한 일 종류를 짧게
-  const byAgent = kinds
-    .filter((k) => series.some((s) => s.id === k.id))
-    .map((k) => ({ id: k.id, name: k.name, total: measure === 'n' ? k.n : k.amount, lines: k.kinds.map((x) => ({ label: x.label, v: measure === 'n' ? x.n : x.tokens })).filter((x) => x.v > 0) }));
+  // 에이전트별: 모든 에이전트 줄을 늘 보인다(토큰 보기에서 토큰이 없는 Tavily·Firecrawl·Actions는 '—')
+  const byAgent = kinds.map((k) => {
+    const has = series.some((s) => s.id === k.id);
+    return { id: k.id, name: k.name, has, total: !has ? 0 : measure === 'n' ? k.n : k.amount, lines: k.kinds.map((x) => ({ label: x.label, v: measure === 'n' ? x.n : x.tokens })).filter((x) => has && x.v > 0) };
+  });
   const amax = Math.max(1, ...byAgent.map((a) => a.total));
   return (
     <div className="viz usage-stats">
@@ -329,13 +359,14 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
         <h4>{measure === 'n' ? '날짜별 사용 횟수' : '날짜별 토큰'}</h4>
         <p className="muted small">막대를 누르면 그날 AI마다 횟수·토큰(검색은 크레딧)이 나와요.</p>
         <ul className="usage-legend">
-          {series.map((s) => (
-            <li key={s.id}>
+          {USAGE_AGENTS.map((s) => (
+            <li key={s.id} className={series.some((x) => x.id === s.id) ? '' : 'is-off'}>
               <i style={{ background: COLOR[s.id] }} />
               {s.name}
             </li>
           ))}
         </ul>
+        <div className="usage-svg-wrap">
         <div className="usage-svg">
           <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="날짜별 사용">
             {Array.from({ length: max / step + 1 }, (_, i) => i * step).map((v) => (
@@ -365,7 +396,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
                       {crossMonth ? dayLabel(d.day) : Number(d.day.slice(8, 10))}
                     </text>
                   )}
-                  <rect x={L + bw * i} y={T} width={bw} height={H - T - B} fill="transparent" onClick={() => setTip(tip === d.day ? null : d.day)} onMouseEnter={() => setTip(d.day)}>
+                  <rect x={L + bw * i} y={T} width={bw} height={H - T - B} fill="transparent" onClick={() => setTip(tip === d.day ? null : d.day)}>
                     <title>{`${dayLabel(d.day)} ${USAGE_AGENTS.map((s) => `${s.name} ${both(s.id, d.rows[s.id].n, d.rows[s.id].amount)}`).join(', ')}`}</title>
                   </rect>
                 </g>
@@ -374,8 +405,8 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
           </svg>
         </div>
         {tipDay && (
-          <div className="usage-tip">
-            <b>{dayLabel(tipDay.day)} 하루</b>
+          <div className="usage-tip" onClick={() => setTip(null)}>
+            <b>{dayLabel(tipDay.day)} 하루 ✕</b>
             {USAGE_AGENTS.map((s) => (
               <span key={s.id}>
                 <i style={{ background: COLOR[s.id] }} />
@@ -384,6 +415,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
             ))}
           </div>
         )}
+        </div>
       </section>
 
       <section className="usage-chart">
@@ -405,7 +437,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
                 <div className={`usage-hb${a.total ? '' : ' is-zero'}`}>
                   <span>{a.name}</span>
                   <span className="bar">{a.total > 0 && <span style={{ width: `${(a.total / amax) * 100}%`, background: COLOR[a.id] }} />}</span>
-                  <span className="v">{fmt(a.total)}</span>
+                  <span className="v">{a.has ? fmt(a.total) : '—'}</span>
                 </div>
                 {a.lines.length > 0 && <p className="usage-hb-note">{a.lines.map((l) => `${l.label} ${fmt(l.v)}`).join(' · ')}</p>}
               </div>
@@ -414,8 +446,8 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
         ) : (
           <>
         <ul className="usage-legend">
-          {series.map((s) => (
-            <li key={s.id}>
+          {USAGE_AGENTS.map((s) => (
+            <li key={s.id} className={series.some((x) => x.id === s.id) ? '' : 'is-off'}>
               <i style={{ background: COLOR[s.id] }} />
               {s.name}
             </li>
@@ -444,7 +476,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
 
       <section className="usage-chart">
         <h4>어느 프로젝트에 썼나</h4>
-        <p className="muted small">내 프로젝트 목록 그대로(만들거나 지우면 같이 바뀜). Claude·Codex 업무 횟수와 토큰. Studio·검색은 프로젝트를 남기지 않아 빠져요.</p>
+        <p className="muted small">많이 쓴 순서, 같으면 내 프로젝트 목록 순서(만들거나 지우면 같이 바뀜). Claude·Codex 업무와 그 저장소의 Actions 실행. Studio·검색은 프로젝트를 남기지 않아 빠져요.</p>
         <ul className="usage-legend">
           <li>
             <i style={{ background: COLOR.claude }} />
@@ -454,17 +486,22 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
             <i style={{ background: COLOR.codex }} />
             Codex
           </li>
+          <li>
+            <i style={{ background: COLOR.ci }} />
+            GitHub Actions
+          </li>
         </ul>
         <div className="usage-hbars">
           {projects.map((p) => (
-            <div key={p.id} className={`usage-hb${p.claude + p.codex ? '' : ' is-zero'}`}>
+            <div key={p.id} className={`usage-hb${p.claude + p.codex + p.ci ? '' : ' is-zero'}`}>
               <span title={p.name}>{p.name}</span>
               <span className="bar">
                 {p.claude > 0 && <span style={{ width: `${(p.claude / pmax) * 100}%`, background: COLOR.claude }} title={`Claude ${p.claude}회`} />}
                 {p.codex > 0 && <span style={{ width: `${(p.codex / pmax) * 100}%`, background: COLOR.codex }} title={`Codex ${p.codex}회`} />}
+                {p.ci > 0 && <span style={{ width: `${(p.ci / pmax) * 100}%`, background: COLOR.ci }} title={`Actions ${p.ci}회`} />}
               </span>
               <span className="v">
-                {p.claude}·{p.codex}회 · {p.tokens ? `약 ${shortNum(p.tokens)}` : '0'} 토큰
+                {p.claude + p.codex + p.ci}회 · {p.tokens ? `약 ${shortNum(p.tokens)}` : '0'} 토큰
               </span>
             </div>
           ))}
