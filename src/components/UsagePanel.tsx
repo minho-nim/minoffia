@@ -9,6 +9,7 @@ import { AGENT_BY_ID } from '../domain/agents';
 import { GEMINI_QUESTION_CAP } from '../domain/quota';
 import {
   byProject,
+  customRange,
   dailyOf,
   daysOf,
   rangeIso,
@@ -25,6 +26,7 @@ import {
   type UsageRow,
 } from '../domain/usageStats';
 import { FormPopup } from './FormPopup';
+import { kstDay } from '../domain/usage';
 
 const PERIOD_KEY = 'usagePeriod';
 export function readPeriod(): Period {
@@ -195,15 +197,19 @@ const COLOR: Record<UsageAgentId, string> = { claude: 'var(--viz-1)', codex: 'va
 
 /** 통계 보기: 고른 주·달의 날짜별 사용, 한 일, 프로젝트 */
 function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
-  const [period, setPeriod] = useState<'week' | 'month'>('month');
-  const pick = (p: 'week' | 'month') => {
+  const [period, setPeriod] = useState<'week' | 'month' | 'custom'>('month');
+  const pick = (p: 'week' | 'month' | 'custom') => {
     setPeriod(p);
     setOffset(0);
   };
+  // 캘린더로 고르기(v0.7.85): 처음엔 이번 달 1일 ~ 오늘
+  const today = kstDay();
+  const [from, setFrom] = useState(() => rangeOf('month').from);
+  const [to, setTo] = useState(today);
   const [offset, setOffset] = useState(0);
   const [measure, setMeasure] = useState<'n' | 'amount'>('n');
   const [tip, setTip] = useState<string | null>(null);
-  const range = useMemo(() => rangeOf(period, new Date(), offset), [period, offset]);
+  const range = useMemo(() => (period === 'custom' ? customRange(from, to) : rangeOf(period, new Date(), offset)), [period, offset, from, to]);
   const input = useUsageInput(store, snap, range);
   const rows = useMemo(() => summarize(input, range), [input, range]);
   const daily = useMemo(() => dailyOf(input, range), [input, range]);
@@ -218,6 +224,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
     return v > best.v ? { day: d.day, v } : best;
   }, { day: '', v: 0 });
   const dayLabel = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10))}`;
+  const crossMonth = range.from.slice(0, 7) !== range.to.slice(0, 7);
   // 날짜별 쌓은 막대
   const W = 640, H = 220, L = 42, R = 8, T = 10, B = 26;
   const totals = daily.map((d) => series.reduce((a, s) => a + val(d, s.id), 0));
@@ -239,12 +246,25 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
     <div className="viz usage-stats">
       <div className="usage-stats-ctrl">
         <div className="seg" role="group" aria-label="통계 기간">
-          {(['week', 'month'] as const).map((p) => (
+          {(['week', 'month', 'custom'] as const).map((p) => (
             <button key={p} type="button" aria-pressed={period === p} onClick={() => pick(p)}>
-              {p === 'week' ? '주' : '월'}
+              {p === 'week' ? '주' : p === 'month' ? '월' : '직접'}
             </button>
           ))}
         </div>
+        {period === 'custom' ? (
+          <div className="usage-dates">
+            <label>
+              <span className="sr-only">시작일</span>
+              <input id="usage-from" type="date" value={range.from} max={today} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <span aria-hidden="true">~</span>
+            <label>
+              <span className="sr-only">끝일</span>
+              <input id="usage-to" type="date" value={range.to} max={today} onChange={(e) => setTo(e.target.value)} />
+            </label>
+          </div>
+        ) : (
         <div className="usage-pager">
           <button type="button" aria-label="이전" onClick={() => setOffset((o) => o - 1)}>
             ◀
@@ -254,6 +274,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
             ▶
           </button>
         </div>
+        )}
         <div className="seg" role="group" aria-label="무엇을 셀까">
           <button type="button" aria-pressed={measure === 'n'} onClick={() => setMeasure('n')}>
             횟수
@@ -302,7 +323,8 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
               const cx = L + bw * i + bw / 2;
               let acc = 0;
               const segs = series.map((s) => ({ s, v: val(d, s.id) })).filter((x) => x.v > 0);
-              const showDay = daily.length <= 7 || i % 3 === 0 || i === daily.length - 1;
+              const every = Math.max(1, Math.ceil(daily.length / 10));
+              const showDay = daily.length <= 7 || i % every === 0 || i === daily.length - 1;
               return (
                 <g key={d.day}>
                   {segs.map(({ s, v }, j) => {
@@ -313,7 +335,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
                   })}
                   {showDay && (
                     <text x={cx} y={H - 8} textAnchor="middle">
-                      {Number(d.day.slice(8, 10))}
+                      {crossMonth ? dayLabel(d.day) : Number(d.day.slice(8, 10))}
                     </text>
                   )}
                   <rect x={L + bw * i} y={T} width={bw} height={H - T - B} fill="transparent" onClick={() => setTip(tip === d.day ? null : d.day)} onMouseEnter={() => setTip(d.day)}>

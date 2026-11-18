@@ -85,6 +85,23 @@ export function rangeOf(period: Period, now: Date = new Date(), offset = 0): Ran
   return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10), label: `${first.getUTCFullYear()}년 ${first.getUTCMonth() + 1}월` };
 }
 
+/** 캘린더로 고른 기간(v0.7.85 소유자 "검색 기간을 캘린더로"): 끝일은 오늘까지, 시작 > 끝이면 바꾸고, 최대 366일 */
+export const MAX_CUSTOM_DAYS = 366;
+export function customRange(from: string, to: string, now: Date = new Date()): Range {
+  const today = kstDay(now);
+  const ok = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`));
+  let a = ok(from) ? from : today;
+  let b = ok(to) ? to : today;
+  if (a > b) [a, b] = [b, a];
+  if (b > today) b = today;
+  if (a > b) a = b;
+  const earliest = addDays(b, -(MAX_CUSTOM_DAYS - 1));
+  if (a < earliest) a = earliest;
+  const y = today.slice(0, 4);
+  const lab = (d: string) => `${d.slice(0, 4) !== y ? `${d.slice(0, 4)}년 ` : ''}${md(d)}`;
+  return { from: a, to: b, label: a === b ? lab(a) : `${lab(a)} ~ ${lab(b)}` };
+}
+
 /** 범위의 날짜 목록 */
 export function daysOf(r: Range): string[] {
   const out: string[] = [];
