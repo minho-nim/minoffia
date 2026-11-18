@@ -8,14 +8,17 @@
 import { kstDay } from './usage';
 import { billable, searchCreditsOf } from './searchCredits';
 
-export type UsageAgentId = 'claude' | 'codex' | 'studioA' | 'studioB' | 'search' | 'firecrawl';
-export const USAGE_AGENTS: { id: UsageAgentId; name: string; unit: 'token' | 'credit' }[] = [
+export type UsageAgentId = 'claude' | 'codex' | 'studioA' | 'studioB' | 'search' | 'firecrawl' | 'ci';
+export type UsageUnit = 'token' | 'credit' | 'minute';
+export const USAGE_AGENTS: { id: UsageAgentId; name: string; unit: UsageUnit }[] = [
   { id: 'claude', name: 'Claude', unit: 'token' },
   { id: 'codex', name: 'Codex', unit: 'token' },
   { id: 'studioA', name: 'Studio A', unit: 'token' },
   { id: 'studioB', name: 'Studio B', unit: 'token' },
   { id: 'search', name: 'Tavily', unit: 'credit' },
   { id: 'firecrawl', name: 'Firecrawl', unit: 'credit' },
+  // v0.7.93 소유자 "통계에 깃허브 액션도": 에이전트는 아니지만 미노(Actions)의 실행 횟수·분
+  { id: 'ci', name: 'GitHub Actions', unit: 'minute' },
 ];
 
 /** ai_calls 한 줄(모든 공급자) */
@@ -49,7 +52,9 @@ export interface UsageInput {
   runs: UsageRunRow[];
   results: UsageResult[];
   tasks: { id: string; title: string; projectId: string; type?: string }[];
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; repo?: string | null }[];
+  /** GitHub Actions 실행(서버 actions-usage가 읽음, v0.7.93). 없으면 0 */
+  actions?: { repo: string; private: boolean; workflow: string; ok: boolean; createdAt: string; minutes: number }[];
   /** 업무별 지시서(최신 기획서 final_prompt) 글자 수: Codex·Claude 추정에 쓴다 */
   promptChars?: Record<string, number>;
 }
@@ -150,7 +155,9 @@ export interface WorkLine {
 export interface UsageRow {
   id: UsageAgentId;
   name: string;
-  unit: 'token' | 'credit';
+  unit: UsageUnit;
+  /** Actions: 한도(한 달 2,000분)에 드는 비공개 저장소 분 */
+  billed?: number;
   /** 사용 횟수(앱 기록) */
   n: number;
   /** 토큰(unit token) 또는 앱이 센 크레딧(unit credit) */
@@ -185,6 +192,18 @@ export function summarize(input: UsageInput, r: Range): UsageRow[] {
     return p ? `${p.name} · ${t.title}` : t.title;
   };
   return USAGE_AGENTS.map(({ id, name, unit }) => {
+    if (id === 'ci') {
+      const runs = (input.actions ?? []).filter((x) => inRange(x.createdAt, r));
+      const work = new Map<string, WorkLine>();
+      for (const x of runs) {
+        const line = work.get(x.workflow) ?? { key: x.workflow, label: x.workflow, n: 0, tokens: 0 };
+        line.n += 1;
+        line.tokens += x.minutes;
+        work.set(x.workflow, line);
+      }
+      const lines = [...work.values()].sort((a, b) => b.n - a.n || b.tokens - a.tokens);
+      return { id, name, unit, n: runs.length, amount: runs.reduce((a, x) => a + x.minutes, 0), billed: runs.filter((x) => x.private).reduce((a, x) => a + x.minutes, 0), source: 'svc' as TokenSource, work: lines };
+    }
     if (id === 'claude' || id === 'codex') {
       const runs = input.runs.filter((x) => x.agent === id && inRange(x.createdAt, r));
       const results = input.results.filter((x) => agentOfSource(x.source) === id && inRange(x.createdAt, r));
@@ -247,8 +266,9 @@ export function dailyOf(input: UsageInput, r: Range): { day: string; rows: Recor
   const calls = byDay(input.calls);
   const runs = byDay(input.runs);
   const results = byDay(input.results);
+  const actions = byDay(input.actions ?? []);
   return daysOf(r).map((day) => {
-    const one = summarize({ ...input, calls: calls.get(day) ?? [], runs: runs.get(day) ?? [], results: results.get(day) ?? [] }, { from: day, to: day, label: day });
+    const one = summarize({ ...input, calls: calls.get(day) ?? [], runs: runs.get(day) ?? [], results: results.get(day) ?? [], actions: actions.get(day) ?? [] }, { from: day, to: day, label: day });
     return { day, rows: Object.fromEntries(one.map((x) => [x.id, { n: x.n, amount: x.amount }])) as Record<UsageAgentId, { n: number; amount: number }> };
   });
 }
@@ -258,7 +278,7 @@ const TASK_KIND: Record<string, string> = { planning: '기획·설계', dev: '�
 
 /** 에이전트마다 한 일 종류별 횟수·양(통계 '무슨 일에 썼나', v0.7.90 소유자 "각각 모든 에이전트가 표시되게").
  *  Studio = 일 종류(질문·웹 조사·기획서…), Claude·Codex = 업무 종류(개발·디자인…), 검색 = 검색·본문 읽기 */
-export function kindsOf(input: UsageInput, r: Range): { id: UsageAgentId; name: string; unit: 'token' | 'credit'; n: number; amount: number; source: TokenSource; kinds: WorkLine[] }[] {
+export function kindsOf(input: UsageInput, r: Range): { id: UsageAgentId; name: string; unit: UsageUnit; n: number; amount: number; source: TokenSource; kinds: WorkLine[] }[] {
   return summarize(input, r).map((row) => {
     if (row.id !== 'claude' && row.id !== 'codex') return { ...row, kinds: row.work };
     const kinds = new Map<string, WorkLine>();
@@ -286,9 +306,9 @@ export function kindsOf(input: UsageInput, r: Range): { id: UsageAgentId; name: 
 
 /** 프로젝트별 Claude·Codex 횟수·토큰(통계). 내 프로젝트 목록을 그대로(0회 포함, 순서도 목록대로) 쓰고,
  *  지운 프로젝트·업무에 쓴 것은 맨 아래 한 줄(v0.7.90 소유자 "내 프로젝트들 리스트, 생성·삭제와 연동") */
-export function byProject(input: UsageInput, r: Range): { id: string; name: string; claude: number; codex: number; tokens: number; gone?: boolean }[] {
-  const lines = input.projects.map((p) => ({ id: p.id, name: p.name, claude: 0, codex: 0, tokens: 0 }));
-  const gone = { id: '-', name: '지운 프로젝트·업무', claude: 0, codex: 0, tokens: 0, gone: true };
+export function byProject(input: UsageInput, r: Range): { id: string; name: string; claude: number; codex: number; ci: number; tokens: number; gone?: boolean }[] {
+  const lines = input.projects.map((p, order) => ({ id: p.id, name: p.name, repo: (p as { repo?: string | null }).repo ?? null, order, claude: 0, codex: 0, ci: 0, tokens: 0 }));
+  const gone = { id: '-', name: '지운 프로젝트·업무', repo: null as string | null, order: Number.MAX_SAFE_INTEGER, claude: 0, codex: 0, ci: 0, tokens: 0, gone: true };
   const lineOf = (taskId: string | null) => {
     const t = input.tasks.find((x) => x.id === taskId);
     return (t && lines.find((l) => l.id === t.projectId)) || gone;
@@ -301,7 +321,17 @@ export function byProject(input: UsageInput, r: Range): { id: string; name: stri
     if (!agentOfSource(x.source) || !inRange(x.createdAt, r)) continue;
     lineOf(x.taskId).tokens += resultTokens(x, input).tokens;
   }
-  return gone.claude + gone.codex + gone.tokens > 0 ? [...lines, gone] : lines;
+  // Actions는 저장소로 프로젝트를 찾는다(미노피아 자체 저장소 실행은 프로젝트 목록에 미노피아가 있으면 그 줄)
+  for (const x of input.actions ?? []) {
+    if (!inRange(x.createdAt, r)) continue;
+    const line = lines.find((l) => l.repo && l.repo.toLowerCase() === x.repo.toLowerCase());
+    if (line) line.ci += 1;
+  }
+  // v0.7.93 소유자 "많이 쓴 순서가 기본, 아래로는 목록 순서": 쓴 것(횟수 합)이 큰 순서, 같으면(0회 포함) 목록 순서. 지운 것은 맨 아래
+  const used = (l: { claude: number; codex: number; ci: number }) => l.claude + l.codex + l.ci;
+  const sorted = [...lines].sort((a, b) => used(b) - used(a) || a.order - b.order).map(({ repo: _r, order: _o, ...x }) => x);
+  const { repo: _gr, order: _go, ...g } = gone;
+  return used(gone) + gone.tokens > 0 ? [...sorted, g] : sorted;
 }
 
 /** 짧은 숫자(1.2k) */
@@ -310,6 +340,7 @@ export const shortNum = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` 
 /** 한 줄 글: "5회 · 36.9k 토큰", "0회 · 0 토큰", "5회 · 크레딧 5", 추정이면 "약" */
 export function usageText(row: UsageRow): string {
   if (row.unit === 'credit') return `${row.n}회 · 크레딧 ${row.amount.toLocaleString('ko-KR')}`;
+  if (row.unit === 'minute') return `${row.n}회 · ${row.amount.toLocaleString('ko-KR')}분`;
   return `${row.n}회 · ${row.source === 'est' ? '약 ' : ''}${shortNum(row.amount)} 토큰`;
 }
 

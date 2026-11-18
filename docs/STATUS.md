@@ -1,6 +1,6 @@
 # 현재 상태 · 2026-11-18
 
-소스 버전은 package.json(지금 v0.7.92). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.90까지 배포. /portfolio = 포트폴리오, /demo = 데모판(예시 데이터·이 기기만·클라우드·AI 안 씀, '체험 업무 시작'으로 승인 3번 흐름 체험), / = 소유자 앱(로그인). 운영 Supabase에는 마이그레이션 0065까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
+소스 버전은 package.json(지금 v0.7.93). 운영 사이트 minlab-ai-office.pages.dev는 v0.7.90까지 배포. /portfolio = 포트폴리오, /demo = 데모판(예시 데이터·이 기기만·클라우드·AI 안 씀, '체험 업무 시작'으로 승인 3번 흐름 체험), / = 소유자 앱(로그인). 운영 Supabase에는 마이그레이션 0065까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
 
 ## 소유자 결정(현재 기준)
 
@@ -22,6 +22,8 @@
 - 새 저장소는 Codex 레거시 클라우드 환경에 손으로 추가한다(생성 API 없음, 프로젝트 '준비'에 안내).
 
 ## 미검증(실제 업무로 아직 안 해 봄)
+
+- GitHub Actions 통계(v0.7.93): 서버 토큰(GITHUB_REPO_TOKEN)이 저장소마다 Actions 실행을 읽을 권한이 있는지(없으면 actions-usage 로그 skipped).
 
 - 사용량(v0.7.84): Claude가 결과 끝에 '쓴 토큰: n'을 실제로 적는지(루틴 세션 기록 경로).
 
