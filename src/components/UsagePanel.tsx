@@ -246,6 +246,21 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   const barW = Math.max(6, Math.min(22, bw * 0.6));
   const tipDay = tip ? daily.find((d) => d.day === tip) : undefined;
   const pmax = Math.max(1, ...projects.map((p) => p.claude + p.codex));
+  // 무슨 일에 썼나(v0.7.91 소유자 "원래 디자인이 좋음"): 일 종류마다 막대 한 줄, 에이전트는 색으로 쌓는다(모든 에이전트)
+  const workMap = new Map<string, { label: string; parts: { id: UsageAgentId; name: string; v: number }[]; total: number }>();
+  for (const k of kinds) {
+    if (!series.some((s) => s.id === k.id)) continue;
+    for (const x of k.kinds) {
+      const v = measure === 'n' ? x.n : x.tokens;
+      if (!v) continue;
+      const line = workMap.get(x.label) ?? { label: x.label, parts: [], total: 0 };
+      line.parts.push({ id: k.id, name: k.name, v });
+      line.total += v;
+      workMap.set(x.label, line);
+    }
+  }
+  const work = [...workMap.values()].sort((a, b) => b.total - a.total);
+  const wmax = Math.max(1, ...work.map((w) => w.total));
   return (
     <div className="viz usage-stats">
       <div className="usage-stats-ctrl">
@@ -305,7 +320,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
 
       <section className="usage-chart">
         <h4>{measure === 'n' ? '날짜별 사용 횟수' : '날짜별 토큰'}</h4>
-        <p className="muted small">막대를 누르면 그날 AI마다 횟수·토큰(검색은 크레딧)이 나와요. 아래 '날짜별 표'에도 같이 있어요.</p>
+        <p className="muted small">막대를 누르면 그날 AI마다 횟수·토큰(검색은 크레딧)이 나와요.</p>
         <ul className="usage-legend">
           {series.map((s) => (
             <li key={s.id}>
@@ -366,38 +381,31 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
 
       <section className="usage-chart">
         <h4>무슨 일에 썼나</h4>
-        <p className="muted small">에이전트마다 한 일 종류별 횟수·토큰. Claude·Codex는 업무 종류, Studio는 일 종류, 검색은 검색·본문 읽기.</p>
-        <div className="usage-agents">
-          {kinds.map((k) => {
-            const kmax = Math.max(1, ...k.kinds.map((x) => (measure === 'n' ? x.n : x.tokens)));
-            return (
-              <div key={k.id} className="usage-agent">
-                <div className="usage-agent-head">
-                  <span>
-                    <i style={{ background: COLOR[k.id] }} />
-                    <b>{k.name}</b>
-                  </span>
-                  <span className="v">{both(k.id, k.n, k.amount)}</span>
-                </div>
-                {k.kinds.length ? (
-                  <div className="usage-hbars">
-                    {k.kinds.map((x) => (
-                      <div key={x.key} className="usage-hb">
-                        <span title={x.label}>{x.label}</span>
-                        <span className="bar">
-                          <span style={{ width: `${((measure === 'n' ? x.n : x.tokens) / kmax) * 100}%`, background: COLOR[k.id] }} />
-                        </span>
-                        <span className="v">{both(k.id, x.n, x.tokens)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted small">이 기간에 한 일이 없어요.</p>
-                )}
+        <ul className="usage-legend">
+          {series.map((s) => (
+            <li key={s.id}>
+              <i style={{ background: COLOR[s.id] }} />
+              {s.name}
+            </li>
+          ))}
+        </ul>
+        {work.length ? (
+          <div className="usage-hbars">
+            {work.map((w) => (
+              <div key={w.label} className="usage-hb">
+                <span title={w.label}>{w.label}</span>
+                <span className="bar">
+                  {w.parts.map((p) => (
+                    <span key={p.id} style={{ width: `${(p.v / wmax) * 100}%`, background: COLOR[p.id] }} title={`${p.name} ${fmt(p.v)}`} />
+                  ))}
+                </span>
+                <span className="v">{fmt(w.total)}</span>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted small">이 기간에 한 일이 없어요.</p>
+        )}
       </section>
 
       <section className="usage-chart">
@@ -430,7 +438,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
       </section>
 
       <details className="usage-table">
-        <summary>날짜별 표(횟수 · 토큰)</summary>
+        <summary>날짜별 표(횟수)</summary>
         <div className="usage-table-scroll">
           <table>
             <thead>
@@ -446,7 +454,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
                 <tr key={d.day}>
                   <td>{dayLabel(d.day)}</td>
                   {USAGE_AGENTS.map((s) => (
-                    <td key={s.id}>{d.rows[s.id].n ? both(s.id, d.rows[s.id].n, d.rows[s.id].amount) : '—'}</td>
+                    <td key={s.id}>{d.rows[s.id].n || '—'}</td>
                   ))}
                 </tr>
               ))}
