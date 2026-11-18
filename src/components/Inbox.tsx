@@ -1443,10 +1443,21 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
+      // v0.7.69 소유자 "1·2 해": 기본 창에서 프로젝트로 알아본 질문은 (1) 질문·답을 그 프로젝트 창에도 보이고 (2) 그 프로젝트 창의 대화를 문맥으로 쓴다
+      const linked = thread === '' && projectName ? snap.projects.find((p) => p.name === projectName) : undefined;
+      const ctxMsgs = linked ? log.filter((m) => (m.home ?? '') === linked.id || Boolean(m.projects?.includes(linked.id))) : shown;
       const history: { role: 'user' | 'model'; text: string }[] = [];
-      shown.forEach((m, i) => {
-        if (m.from === 'gemini' && shown[i - 1]?.from === 'me') history.push({ role: 'user', text: shown[i - 1].text }, { role: 'model', text: m.text });
+      ctxMsgs.forEach((m, i) => {
+        if (m.from === 'gemini' && m.text && ctxMsgs[i - 1]?.from === 'me') history.push({ role: 'user', text: ctxMsgs[i - 1].text }, { role: 'model', text: m.text });
       });
+      if (linked) {
+        setLog((l) => {
+          const at = [...l].reverse().findIndex((m) => m.from === 'me' && (m.home ?? '') === '' && m.text === text);
+          if (at < 0) return l;
+          const idx = l.length - 1 - at;
+          return l.map((x, i) => (i === idx && !x.projects?.includes(linked.id) ? { ...x, projects: [...(x.projects ?? []), linked.id] } : x));
+        });
+      }
       // 질문에는 이미지만 보낸다(문서는 업무 요청 자료로 올린 뒤 'Gemini로 요약').
       const held = photoStore.held.filter((f) => isRaster(f.type));
       const images = held.slice(0, MAX_GEMINI_IMAGES);
@@ -1461,7 +1472,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
         const slotNow = answerSlot(text) ?? 1;
         const searcher = searchEngineOf(text) === 'firecrawl' ? 'Firecrawl' : 'Tavily';
         const waitingVia = research ? `${searcher} 검색 + Gemini · 찾는 중` : VIA_OF_SLOT[slotNow];
-        setLog((l) => [...l, { id, from: 'gemini' as From, text: '', home: thread, via: waitingVia }].slice(-KEEP));
+        setLog((l) => [...l, { id, from: 'gemini' as From, text: '', home: thread, ...(linked ? { projects: [linked.id] } : {}), via: waitingVia }].slice(-KEEP));
         const set = (t: string) => !muted.current && setLog((l) => l.map((m) => (m.id === id ? { ...m, text: t } : m)));
         // 판단을 맡겼으면 첫 줄(판단 머리)은 숨기고, 질문 답일 때만 본문을 바로 보여 준다.
         // v0.4.58: 여러 개로 나눴으면 질문 답만 모아 보여 준다(업무·애매는 끝난 뒤 카드로).
@@ -1799,10 +1810,11 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
               )}
               {m.sources && m.sources.length > 0 && (
                 <ul className="inbox-sources" aria-label="출처">
-                  {m.sources.map((src) => (
+                  {m.sources.map((src, i) => (
                     <li key={src.uri}>
                       <a href={src.uri} target="_blank" rel="noreferrer noopener">
-                        {src.title}
+                        {/* 답 속 [1]·[2]가 어느 출처인지(v0.7.69) */}
+                        <span className="src-no">[{i + 1}]</span> {src.title}
                       </a>
                     </li>
                   ))}
