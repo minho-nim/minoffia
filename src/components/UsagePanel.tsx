@@ -47,7 +47,8 @@ export function savePeriod(p: Period) {
 
 /** 기간의 기록을 읽어 계산 재료로 만든다(서버가 있으면 그 기간만 읽고, 없으면 스냅샷 최근 7일) */
 export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: Range): UsageInput {
-  const [remote, setRemote] = useState<Pick<UsageInput, 'calls' | 'runs'> | null>(null);
+  const [remote, setRemote] = useState<(Pick<UsageInput, 'calls' | 'runs'> & { key: string }) | null>(null);
+  const rangeKey = `${range.from}:${range.to}`;
   const fresh = `${range.from}:${range.to}:${snap.aiCalls?.length ?? 0}:${snap.usage.length}:${snap.workflow.results.length}:${snap.searchToday?.tavily ?? 0}:${snap.searchToday?.firecrawl ?? 0}`;
   useEffect(() => {
     if (!store?.usageRange) return;
@@ -55,7 +56,7 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
     const { fromIso, toIso } = rangeIso(range);
     store
       .usageRange(fromIso, toIso)
-      .then((x) => live && setRemote(x))
+      .then((x) => live && setRemote({ ...x, key: rangeKey }))
       .catch(() => live && setRemote(null));
     return () => {
       live = false;
@@ -74,13 +75,14 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
       projects: snap.projects.map((p) => ({ id: p.id, name: p.name })),
       promptChars: Object.fromEntries([...latest].map(([k, v]) => [k, v.chars])),
     };
-    if (remote) return { ...remote, ...base };
+    // 고른 기간의 기록이 도착하기 전에는 이전 기간 숫자 대신 스냅샷(최근 7일)으로 센다
+    if (remote && remote.key === rangeKey) return { calls: remote.calls, runs: remote.runs, ...base };
     return {
       ...base,
       calls: (snap.aiCalls ?? []).map((c) => ({ provider: 'gemini', keySlot: c.keySlot, purpose: c.purpose, model: '', ok: c.ok, tokens: c.tokens ?? null, createdAt: c.createdAt })),
       runs: snap.usage.map((r) => ({ agent: r.agent, taskId: r.taskId, createdAt: r.createdAt })),
     };
-  }, [remote, snap]);
+  }, [remote, snap, rangeKey]);
 }
 
 const CAP: Partial<Record<UsageAgentId, number>> = {

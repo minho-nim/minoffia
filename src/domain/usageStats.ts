@@ -229,8 +229,23 @@ export function summarize(input: UsageInput, r: Range): UsageRow[] {
 
 /** 날짜별(통계 막대) AI별 횟수·양 */
 export function dailyOf(input: UsageInput, r: Range): { day: string; rows: Record<UsageAgentId, { n: number; amount: number }> }[] {
+  // 긴 기간(최대 366일)에서도 가볍게: 기록을 날짜별로 먼저 나눈 뒤 그날 것만 센다
+  const byDay = <T extends { createdAt: string }>(xs: T[]) => {
+    const m = new Map<string, T[]>();
+    for (const x of xs) {
+      const d = kstDay(new Date(x.createdAt));
+      if (d < r.from || d > r.to) continue;
+      const list = m.get(d);
+      if (list) list.push(x);
+      else m.set(d, [x]);
+    }
+    return m;
+  };
+  const calls = byDay(input.calls);
+  const runs = byDay(input.runs);
+  const results = byDay(input.results);
   return daysOf(r).map((day) => {
-    const one = summarize(input, { from: day, to: day, label: day });
+    const one = summarize({ ...input, calls: calls.get(day) ?? [], runs: runs.get(day) ?? [], results: results.get(day) ?? [] }, { from: day, to: day, label: day });
     return { day, rows: Object.fromEntries(one.map((x) => [x.id, { n: x.n, amount: x.amount }])) as Record<UsageAgentId, { n: number; amount: number }> };
   });
 }

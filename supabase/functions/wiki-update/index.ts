@@ -56,15 +56,16 @@ async function doneTasks(admin: Admin, ownerId: string, projectId: string) {
 
 async function callGemini(admin: Admin, ownerId: string, text: string): Promise<{ body: string; judge: string } | null> {
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId).eq('purpose', 'wiki').gte('created_at', kstMidnight);
-  if ((count ?? 0) >= DAILY_CAP) return null;
+  // 하루 상한은 키마다 따로(v0.7.86, v0.7.80~81과 같은 기준: 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛴다
+  const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', ownerId).eq('purpose', 'wiki').gte('created_at', kstMidnight);
+  const full = new Set([1, 2].filter((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length >= DAILY_CAP));
   const { data: away } = await admin.from('agent_leave').select('agent').eq('owner_id', ownerId);
   const off = new Set((away ?? []).map((r: { agent: string }) => r.agent));
   const keys = [
     // v0.7.64: 업무 쪽은 Studio B 키 먼저(서로 다른 계정이라 한도가 따로), 막히면 A
     { slot: 2, key: env('GEMINI_API_KEY2'), judge: 'Gemini · Studio B', agent: 'studioB' },
     { slot: 1, key: env('GEMINI_API_KEY'), judge: 'Gemini · Studio A', agent: 'studioA' },
-  ].filter((k) => k.key && !off.has(k.agent));
+  ].filter((k) => k.key && !off.has(k.agent) && !full.has(k.slot));
   for (const k of keys) {
     const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: 'POST',

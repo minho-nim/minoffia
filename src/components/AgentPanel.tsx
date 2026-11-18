@@ -299,7 +299,7 @@ export function AgentRoster({
                 reviews={snap.workflow.reviews ?? []}
                 aiCalls={snap.aiCalls ?? []}
                 serverMode={serverMode}
-                quota={withUsage(a.id, quotaFor(a.id, snap, undefined, liveCredits))}
+                quota={quotaFor(a.id, snap, undefined, liveCredits)}
                 limit={
                   KIND_OF[a.id]
                     ? {
