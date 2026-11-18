@@ -59,6 +59,7 @@ import { canTransition } from './domain/status';
 import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/types';
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
+import { GEMINI_QUESTION_CAP, geminiToday, quotaFor } from './domain/quota';
 import { receiveWorkflowInbox } from './workflow/receiveInbox';
 import { preparePlanImport } from './workflow/planImport';
 import { createResultReviewer } from './workflow/resultReview';
@@ -735,6 +736,20 @@ export function App() {
   const usageList = (
     <ul className="usage" aria-label="오늘 등록된 실행 횟수">
       {AGENTS.filter((a) => a.dailyCap !== null).map((a) => {
+        // v0.7.83 소유자 "제미나이는 없애고 스튜디오로 전부 대체": Studio A·B 줄은 그 키의 Gemini 횟수·토큰(에이전트 탭과 같은 값). 하루 상한은 키마다 질문 40·이미지 20
+        if (a.id === 'studioA' || a.id === 'studioB') {
+          const q = quotaFor(a.id, snap);
+          const g = geminiToday(snap.aiCalls ?? [], undefined, a.id === 'studioA' ? 1 : 2);
+          return (
+            <li key={a.id} className={q.state === 'exhausted' ? 'is-full' : ''} title={q.detail}>
+              <span>{a.name}</span>
+              <span className="meter" aria-hidden="true">
+                <span style={{ width: `${Math.min(100, (g.question / GEMINI_QUESTION_CAP) * 100)}%` }} />
+              </span>
+              <span className="num">{g.text}</span>
+            </li>
+          );
+        }
         const used = runsToday(snap.usage, a.id);
         const cap = a.dailyCap ?? 0;
         return (
@@ -749,7 +764,6 @@ export function App() {
           </li>
         );
       })}
-      {/* Gemini 횟수·토큰은 에이전트 탭 Studio A·B에만(v0.7.82 소유자 "제미나이 토큰은 ㄴㄴ 스튜디오만 냅둬") */}
       {/* v0.7.57 소유자 "오늘 사용량에 올린 거 맞음?": 체험에서도 보이게(체험은 0) */}
       {searchRow('tavily')}
       {searchRow('firecrawl')}
