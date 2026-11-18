@@ -3,7 +3,7 @@
  * 공급자의 남은 토큰은 알 수 없다. 이 오피스가 기록한 횟수와 받은 한도 오류(429)로만 판단하고,
  * 셀 수 없는 AI(ChatGPT·Codex 등)는 '알 수 없음'으로 정직하게 둔다.
  */
-import { creditLine, FREE_MONTHLY } from './searchCredits';
+import { creditLine, FREE_MONTHLY, type Credits } from './searchCredits';
 import { AGENT_BY_ID } from './agents';
 import type { AgentId, AiCall, Snapshot } from './types';
 import { kstDay, runsToday } from './usage';
@@ -63,7 +63,7 @@ function gemini(calls: AiCall[], now: Date, slot: 1 | 2): QuotaInfo {
   return { state: 'available', label: mine.text, detail };
 }
 
-export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date()): QuotaInfo {
+export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date(), live?: { tavily: Credits | null; firecrawl: Credits | null } | null): QuotaInfo {
   switch (agent) {
     case 'claude': {
       const cap = AGENT_BY_ID.claude.dailyCap ?? 0;
@@ -83,13 +83,17 @@ export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date())
       return { state: 'unknown', label: '알 수 없음', detail: `Codex(ChatGPT Plus) 사용량은 앱에서 알 수 없다. 오늘 수동 시작 기록 ${runsToday(snap.usage, 'codex', now)}회.` };
     case 'search':
     case 'firecrawl': {
-      // v0.7.53: 이번 달 남은 크레딧(앱이 직접 센 추정). 정확한 숫자는 펼친 칸의 '실제 남은 크레딧 확인'·대시보드
+      // v0.7.53: 이번 달 남은 크레딧. v0.7.79 소유자 "키랑 사용량 계산은 화면상 모두 연결?": 오늘 사용량·펼친 칸처럼
+      // 서비스가 알려 준 실제 값을 먼저 쓰고, 없을 때만 앱이 센 추정(줄 칩만 추정을 써서 숫자가 달랐다)
       const engine = agent === 'search' ? 'tavily' : 'firecrawl';
-      const used = snap.searchCredits?.[engine];
-      const left = used === undefined ? null : FREE_MONTHLY[engine] - used;
+      const real = live?.[engine] ?? null;
+      const used = real ? real.used : snap.searchCredits?.[engine];
+      const limit = real ? real.limit : FREE_MONTHLY[engine];
+      const left = used === undefined ? null : limit - used;
       const what = engine === 'tavily' ? 'Tavily: 1단계 찾기(검색 1번 = 1크레딧)' : 'Firecrawl: 2단계 본문 읽기(본문 1개 = 1, 찾기 대신 = 2크레딧)';
-      if (left !== null && left <= 0) return { state: 'exhausted', label: '이번 달 소진(추정)', detail: `${what}. ${creditLine(engine, used, null)}.` };
-      return { state: 'available', label: left === null ? '기록 없음' : `남은 약 ${left.toLocaleString('ko-KR')}`, detail: `${what}. ${creditLine(engine, used, null)}.` };
+      const line = creditLine(engine, real ? undefined : used, real);
+      if (left !== null && left <= 0) return { state: 'exhausted', label: real ? '이번 달 소진' : '이번 달 소진(추정)', detail: `${what}. ${line}.` };
+      return { state: 'available', label: left === null ? '기록 없음' : `남은 ${real ? '' : '약 '}${left.toLocaleString('ko-KR')}`, detail: `${what}. ${line}.` };
     }
     case 'ci':
       return { state: 'unknown', label: '해당 없음', detail: 'GitHub Actions 무료 범위에서 돈다. AI 사용량이 아니다.' };

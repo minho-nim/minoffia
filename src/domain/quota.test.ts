@@ -38,6 +38,13 @@ describe('quotaFor', () => {
     expect(geminiToday(calls, now, 1).tokens + geminiToday(calls, now, 2).tokens).toBe(all.tokens);
   });
 
+  it('Tavily·Firecrawl 줄 칩도 오늘 사용량처럼 서비스 실제 값을 먼저 쓴다', () => {
+    const s: Snapshot = { ...base, searchCredits: { tavily: 10, firecrawl: 5 } };
+    expect(quotaFor('search', s, now).label).toBe('남은 약 990');
+    expect(quotaFor('search', s, now, { tavily: { used: 120, limit: 1000 }, firecrawl: null }).label).toBe('남은 880');
+    expect(quotaFor('firecrawl', s, now, { tavily: null, firecrawl: { used: 500, limit: 500 } })).toMatchObject({ state: 'exhausted', label: '이번 달 소진' });
+  });
+
   it('셀 수 없는 AI는 알 수 없음', () => {
     for (const a of ['mina', 'codex'] as const) expect(quotaFor(a, base, now).state).toBe('unknown');
   });
