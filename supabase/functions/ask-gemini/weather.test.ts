@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WEATHER_RE } from '../../../src/domain/weather';
-import { cleanWhere, skyOf, WEATHER, weatherAnswer, weatherAsk, weatherText } from './weather';
+import { cleanWhere, fromMet, skyOf, skyOfMet, WEATHER, weatherAnswer, weatherAsk, weatherText } from './weather';
 
 const forecast = {
   current: { temperature_2m: 4.6, weather_code: 0 },
@@ -85,5 +85,25 @@ describe('날씨 질문(v0.7.68)', () => {
     expect(cleanWhere({ lat: 200, lon: 0 })).toBeNull();
     expect(cleanWhere({ place: '<script>' })).toBeNull();
     expect(cleanWhere('x')).toBeNull();
+  });
+  it('Open-Meteo가 막히면 MET Norway 숫자로 답하고, 어디서 막혔는지 남긴다(v0.7.72)', async () => {
+    const met = {
+      properties: {
+        timeseries: [
+          { time: '2026-11-18T00:00:00Z', data: { instant: { details: { air_temperature: 4.4 } }, next_1_hours: { summary: { symbol_code: 'clearsky_day' }, details: { probability_of_precipitation: 0 } }, next_6_hours: { summary: { symbol_code: 'fair_day' }, details: { air_temperature_max: 11.2, air_temperature_min: 3, probability_of_precipitation: 10 } } } },
+          { time: '2026-11-18T06:00:00Z', data: { instant: { details: { air_temperature: 9 } }, next_6_hours: { summary: { symbol_code: 'cloudy' }, details: { air_temperature_min: 1.6, probability_of_precipitation: 5 } } } },
+          { time: '2026-11-19T00:00:00Z', data: { instant: { details: { air_temperature: 5 } }, next_6_hours: { summary: { symbol_code: 'rain' }, details: { air_temperature_max: 9, air_temperature_min: 3, probability_of_precipitation: 70 } } } },
+        ],
+      },
+    };
+    const logs: Record<string, unknown>[] = [];
+    const got = await weatherAnswer({ place: '부산', day: 0 }, null, async (u) => (u.includes('open-meteo') ? json({ reason: 'limit' }, 429) : json(met)), (e) => logs.push(e));
+    expect(got?.source).toBe('MET Norway');
+    expect(got?.data.days[0]).toMatchObject({ date: '2026-11-18', lo: 2, hi: 11, rain: 10 });
+    expect(got?.data.days[1]).toMatchObject({ date: '2026-11-19', sky: '비', rain: 70 });
+    expect(got?.data.now).toEqual({ temp: 4, sky: '맑음' });
+    expect(logs[0]).toMatchObject({ weatherTry: 'Open-Meteo', status: 429 });
+    expect(skyOfMet('lightsnowshowers_night')).toBe('눈');
+    expect(fromMet('서울', {})).toBeNull();
   });
 });

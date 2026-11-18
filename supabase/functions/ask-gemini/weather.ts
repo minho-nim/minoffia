@@ -107,24 +107,89 @@ function dayLine(f: Forecast, i: number): string | null {
 
 /** 받은 숫자로 답 글을 만든다(규칙). v0.7.69 소유자 "오늘 내일 모레 알려주고 1주일": 늘 오늘·내일·모레 + 그 뒤 4일 */
 export function weatherText(place: string, _day: 0 | 1 | 2, f: Forecast): string | null {
-  const first = dayLine(f, 0);
-  if (!first) return null;
-  const lines = [`${place} 날씨`];
-  const now = round(f.current?.temperature_2m);
-  lines.push(`오늘 ${first}${now !== null ? ` (지금 ${now}°${typeof f.current?.weather_code === 'number' ? ` ${skyOf(f.current.weather_code)}` : ''})` : ''}`);
-  for (const i of [1, 2]) {
-    const l = dayLine(f, i);
-    if (l) lines.push(`${DAY_WORD[i]} ${l}`);
-  }
-  const rest = [3, 4, 5, 6].map((i) => dayLine(f, i)).filter(Boolean) as string[];
+  const data = weatherData(place, f);
+  return data ? textOf(data) : null;
+}
+
+/** 표 숫자 → 글 답(복사·문맥용. 화면은 표로 그린다) */
+export function textOf(data: WeatherData): string {
+  const line = (d: WeatherDay) =>
+    `${d.date.slice(5).replace('-', '/')} ${d.wd} · ${d.sky} · ${d.lo}°~${d.hi}°${d.rain !== null ? ` · 비·눈 ${d.rain}%` : ''}${(d.rain ?? 0) >= 50 ? ' ☂' : ''}`;
+  const [today, ...more] = data.days;
+  const lines = [`${data.place} 날씨`, `오늘 ${line(today)}${data.now ? ` (지금 ${data.now.temp}°${data.now.sky ? ` ${data.now.sky}` : ''})` : ''}`];
+  more.slice(0, 2).forEach((d, i) => lines.push(`${DAY_WORD[i + 1]} ${line(d)}`));
+  const rest = more.slice(2, 6).map(line);
   if (rest.length) lines.push('', '이번 주 남은 날', ...rest);
-  if ([0, 1, 2].some((i) => (f.daily?.precipitation_probability_max?.[i] ?? 0) >= 50)) lines.push('', '☂ 표시 날은 우산을 챙기세요.');
+  if (data.days.slice(0, 3).some((d) => (d.rain ?? 0) >= 50)) lines.push('', '☂ 표시 날은 우산을 챙기세요.');
   return lines.join('\n');
+}
+
+// ── 예비 날씨: 노르웨이 기상청 MET Norway(무료·키 없음, v0.7.72). Open-Meteo가 막히면 쓴다 ──
+interface MetSeries {
+  time: string;
+  data?: {
+    instant?: { details?: { air_temperature?: number } };
+    next_1_hours?: { summary?: { symbol_code?: string }; details?: { probability_of_precipitation?: number } };
+    next_6_hours?: { summary?: { symbol_code?: string }; details?: { air_temperature_max?: number; air_temperature_min?: number; probability_of_precipitation?: number } };
+  };
+}
+
+/** MET 날씨 기호 → 쉬운 말 */
+export function skyOfMet(symbol: string): string {
+  const s = symbol.replace(/_(day|night|polartwilight)$/, '');
+  if (/thunder/.test(s)) return '뇌우';
+  if (/sleet/.test(s)) return '진눈깨비';
+  if (/snow/.test(s)) return '눈';
+  if (/rain|drizzle/.test(s)) return '비';
+  if (s === 'fog') return '안개';
+  if (s === 'cloudy') return '흐림';
+  if (s === 'partlycloudy' || s === 'fair') return '구름 조금';
+  if (s === 'clearsky') return '맑음';
+  return '알 수 없음';
+}
+
+const kstDate = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+const kstHour = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).getUTCHours();
+
+/** MET 시간별 예보 → 하루씩(한국 날짜) 표 숫자 */
+export function fromMet(place: string, json: unknown): WeatherData | null {
+  const series = ((json as { properties?: { timeseries?: MetSeries[] } })?.properties?.timeseries ?? []).filter((t) => typeof t?.time === 'string');
+  if (!series.length) return null;
+  const byDay = new Map<string, MetSeries[]>();
+  for (const t of series) {
+    const k = kstDate(t.time);
+    byDay.set(k, [...(byDay.get(k) ?? []), t]);
+  }
+  const days: WeatherDay[] = [];
+  for (const [date, list] of [...byDay].slice(0, 7)) {
+    const temps: number[] = [];
+    let rain: number | null = null;
+    const skies = new Map<string, number>();
+    for (const t of list) {
+      const d = t.data;
+      const at = d?.instant?.details?.air_temperature;
+      if (typeof at === 'number') temps.push(at);
+      for (const v of [d?.next_6_hours?.details?.air_temperature_max, d?.next_6_hours?.details?.air_temperature_min]) if (typeof v === 'number') temps.push(v);
+      for (const p of [d?.next_1_hours?.details?.probability_of_precipitation, d?.next_6_hours?.details?.probability_of_precipitation]) if (typeof p === 'number') rain = Math.max(rain ?? 0, p);
+      const sym = d?.next_6_hours?.summary?.symbol_code ?? d?.next_1_hours?.summary?.symbol_code;
+      // 낮(6~18시) 하늘을 더 무겁게
+      if (sym) skies.set(skyOfMet(sym), (skies.get(skyOfMet(sym)) ?? 0) + (kstHour(t.time) >= 6 && kstHour(t.time) < 18 ? 2 : 1));
+    }
+    if (!temps.length || !skies.size) continue;
+    const sky = [...skies].sort((x, y) => y[1] - x[1])[0][0];
+    days.push({ date, wd: WEEKDAY[new Date(`${date}T00:00:00Z`).getUTCDay()], sky, lo: Math.round(Math.min(...temps)), hi: Math.round(Math.max(...temps)), rain: rain === null ? null : Math.round(rain) });
+  }
+  if (!days.length) return null;
+  const first = series[0].data;
+  const t = first?.instant?.details?.air_temperature;
+  const sym = first?.next_1_hours?.summary?.symbol_code;
+  return { place, now: typeof t === 'number' ? { temp: Math.round(t), sky: sym ? skyOfMet(sym) : '' } : null, days };
 }
 
 type Fetch = (url: string) => Promise<Response>;
 // Nominatim 이용 규칙: 앱 이름을 User-Agent로 밝힌다
-const get: Fetch = (url) => fetch(url, { headers: { 'User-Agent': 'minoffia-weather/1.0' }, signal: AbortSignal.timeout(8_000) });
+// 하나가 늦어도 전체가 오래 걸리지 않게 5초에서 끊는다(v0.7.72)
+const get: Fetch = (url) => fetch(url, { headers: { 'User-Agent': 'minoffia-weather/1.0 (personal app)' }, signal: AbortSignal.timeout(5_000) });
 
 /** 곳 이름 → 좌표(표에 없으면 Open-Meteo 위치 찾기) */
 async function locate(place: string, run: Fetch): Promise<Spot | null> {
@@ -169,30 +234,55 @@ export function cleanWhere(raw: unknown): Where | null {
 }
 
 export const WEATHER_SOURCE = 'https://open-meteo.com/';
+export const MET_SOURCE = 'https://www.met.no/en';
 const SEOUL: Spot = { name: '서울', lat: CITY['서울'][0], lon: CITY['서울'][1] };
 
-/** 곳 정하기: 질문에 적힌 곳 > 설정한 지역 > 현재 위치 > 서울 */
-async function pick(ask: WeatherAsk, where: Where | null, run: Fetch): Promise<Spot> {
-  if (ask.place) return (await locate(ask.place, run)) ?? SEOUL;
-  if (where && 'place' in where) return (await locate(where.place, run)) ?? SEOUL;
-  if (where) return { name: await areaName(where.lat, where.lon, run), lat: where.lat, lon: where.lon };
-  return SEOUL;
+/** 곳 정하기: 질문에 적힌 곳 > 설정한 지역 > 현재 위치 > 서울. 현재 위치의 동네 이름은 따로(예보와 동시에) 찾는다 */
+async function pick(ask: WeatherAsk, where: Where | null, run: Fetch): Promise<{ spot: Spot; name: Promise<string> | null }> {
+  if (ask.place) return { spot: (await locate(ask.place, run).catch(() => null)) ?? SEOUL, name: null };
+  if (where && 'place' in where) return { spot: (await locate(where.place, run).catch(() => null)) ?? SEOUL, name: null };
+  if (where) return { spot: { name: '현재 위치', lat: where.lat, lon: where.lon }, name: areaName(where.lat, where.lon, run) };
+  return { spot: SEOUL, name: null };
 }
 
-/** 날씨 답(못 받으면 null → 평소처럼 웹 조사) */
-export async function weatherAnswer(ask: WeatherAsk, where: Where | null = null, run: Fetch = get): Promise<{ answer: string; place: string; data: WeatherData } | null> {
-  try {
-    const spot = await pick(ask, where, run);
-    const url =
-      `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}` +
-      '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=7';
-    const res = await run(url);
-    if (!res.ok) return null;
-    const f = (await res.json()) as Forecast;
-    const text = weatherText(spot.name, ask.day, f);
-    const data = weatherData(spot.name, f);
-    return text && data ? { answer: text, place: spot.name, data } : null;
-  } catch {
-    return null;
+export interface WeatherResult {
+  answer: string;
+  place: string;
+  data: WeatherData;
+  /** 숫자를 준 곳 */
+  source: 'Open-Meteo' | 'MET Norway';
+}
+
+/** 날씨 답. Open-Meteo → 안 되면 MET Norway. 둘 다 안 되면 null(어디서 왜 안 됐는지 log로) */
+export async function weatherAnswer(ask: WeatherAsk, where: Where | null = null, run: Fetch = get, log: (e: Record<string, unknown>) => void = () => undefined): Promise<WeatherResult | null> {
+  const { spot, name } = await pick(ask, where, run);
+  const tryOne = async (source: WeatherResult['source'], url: string, read: (place: string, json: unknown) => WeatherData | null) => {
+    const t0 = Date.now();
+    try {
+      const res = await run(url);
+      if (!res.ok) {
+        await res.body?.cancel();
+        log({ weatherTry: source, status: res.status, ms: Date.now() - t0 });
+        return null;
+      }
+      const data = read(spot.name, await res.json());
+      if (!data) log({ weatherTry: source, status: 200, empty: true, ms: Date.now() - t0 });
+      return data;
+    } catch (e) {
+      log({ weatherTry: source, error: (e as Error).name, ms: Date.now() - t0 });
+      return null;
+    }
+  };
+  const om = `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}` +
+    '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=7';
+  let source: WeatherResult['source'] = 'Open-Meteo';
+  let data = await tryOne('Open-Meteo', om, (p, j) => weatherData(p, j as Forecast));
+  if (!data) {
+    source = 'MET Norway';
+    data = await tryOne('MET Norway', `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${spot.lat}&lon=${spot.lon}`, fromMet);
   }
+  if (!data) return null;
+  const place = name ? await name : spot.name;
+  const named = { ...data, place };
+  return { answer: textOf(named), place, data: named, source };
 }
