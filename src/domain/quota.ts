@@ -18,7 +18,7 @@ export interface QuotaInfo {
   detail: string;
 }
 
-/** 서버 기본 상한(secret으로 바꿀 수 있어 화면 값은 기본값 기준) */
+/** 서버 기본 상한, 키마다 따로(v0.7.80. secret으로 바꿀 수 있어 화면 값은 기본값 기준) */
 export const GEMINI_QUESTION_CAP = 40;
 export const GEMINI_IMAGE_CAP = 20;
 
@@ -57,9 +57,10 @@ function gemini(calls: AiCall[], now: Date, slot: 1 | 2): QuotaInfo {
   const all = geminiToday(calls, now);
   const mine = geminiToday(calls, now, slot);
   const last = mine.todays[mine.todays.length - 1];
-  const detail = `${slot}번 키 오늘 성공 ${mine.text}(질문 ${mine.question}·웹 조사 ${mine.research}·이미지 ${mine.image}). 두 키 합계 ${all.text}는 오늘 사용량의 Gemini와 같다. 서버 기본 상한은 두 키 합쳐 질문 ${GEMINI_QUESTION_CAP}회·이미지 ${GEMINI_IMAGE_CAP}회, 무료 한도 숫자는 Google이 정한다.`;
+  // v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 서버 하루 상한도 키마다 따로(질문 40·이미지 20씩). 다 쓴 키는 건너뛰고 다른 키가 답한다
+  const detail = `${slot}번 키 오늘 성공 ${mine.text}(질문 ${mine.question}/${GEMINI_QUESTION_CAP}·웹 조사 ${mine.research}·이미지 ${mine.image}/${GEMINI_IMAGE_CAP}, 상한은 키마다 따로). 두 키 합계 ${all.text}는 오늘 사용량의 Gemini와 같다. 무료 한도 숫자는 Google이 계정마다 정한다.`;
   if (last && !last.ok && last.httpStatus === 429) return { state: 'exhausted', label: '오늘 소진', detail: `이 키의 마지막 호출이 무료 한도(429)에 걸렸다. ${detail}` };
-  if (all.question >= GEMINI_QUESTION_CAP && all.image >= GEMINI_IMAGE_CAP) return { state: 'exhausted', label: '오늘 소진', detail };
+  if (mine.question >= GEMINI_QUESTION_CAP && mine.image >= GEMINI_IMAGE_CAP) return { state: 'exhausted', label: '오늘 소진', detail };
   return { state: 'available', label: mine.text, detail };
 }
 
