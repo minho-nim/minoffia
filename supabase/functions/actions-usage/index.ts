@@ -1,7 +1,7 @@
 // GitHub Actions 사용량(v0.7.93 소유자 "통계에 깃허브 액션도 포함"): 고른 기간의 실행 기록을 저장소마다 읽어 돌려준다.
 // 소유자만. AI 호출 없음. 토큰은 서버 비밀값 GITHUB_REPO_TOKEN(값은 내려보내지 않음). 비공개 저장소는 작업(job) 시간을 읽어 청구 분을 센다.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { jobMinutes, reposToRead, runMinutes, workflowLabel, type ActionRun, type GhJob, type GhRun } from './actionsUsage.ts';
+import { jobMinutes, reposToRead, runMinutes, skipWhy, workflowLabel, type ActionRun, type GhJob, type GhRun } from './actionsUsage.ts';
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 const cors = {
@@ -47,14 +47,16 @@ Deno.serve(async (req) => {
       signal: AbortSignal.timeout(15_000),
     });
   const range = `${new Date(from).toISOString()}..${new Date(to).toISOString()}`;
-  const skipped: string[] = [];
+  // 못 읽은 저장소와 이유(v0.7.94 소유자 "권한 같은 게 필요할 때"): 화면에 이름과 필요한 권한을 보인다
+  const skipped: { repo: string; status: number; why: string }[] = [];
+  const skip = (repo: string, status: number) => skipped.push({ repo, status, why: skipWhy(status) });
   const out: ActionRun[] = [];
   await Promise.all(
     repos.map(async (repo) => {
       try {
         const info = await gh(`/repos/${repo}`);
         if (!info.ok) {
-          skipped.push(repo);
+          skip(repo, info.status);
           await info.body?.cancel();
           return;
         }
@@ -63,6 +65,7 @@ Deno.serve(async (req) => {
         for (let page = 1; runs.length < MAX_RUNS_PER_REPO && page <= 3; page++) {
           const res = await gh(`/repos/${repo}/actions/runs?per_page=100&page=${page}&created=${encodeURIComponent(range)}`);
           if (!res.ok) {
+            skip(repo, res.status);
             await res.body?.cancel();
             break;
           }
@@ -85,11 +88,11 @@ Deno.serve(async (req) => {
           );
         }
       } catch {
-        skipped.push(repo);
+        skip(repo, 0);
       }
     }),
   );
   out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  if (skipped.length) console.log(JSON.stringify({ fn: 'actions-usage', skipped: skipped.length }));
+  if (skipped.length) console.log(JSON.stringify({ fn: 'actions-usage', skipped: skipped.map((s) => `${s.repo}:${s.status}`) }));
   return reply(200, { ok: true, runs: out, repos: repos.length - skipped.length, skipped });
 });

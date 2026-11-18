@@ -745,7 +745,11 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async actionsUsage(fromIso, toIso) {
       const data = await invoke('actions-usage', { from: fromIso, to: toIso });
       const runs = Array.isArray(data.runs) ? (data.runs as Record<string, unknown>[]) : [];
-      return runs.map((r) => ({ repo: String(r.repo ?? ''), private: Boolean(r.private), workflow: String(r.workflow ?? ''), ok: Boolean(r.ok), createdAt: String(r.createdAt ?? ''), minutes: Math.max(0, Number(r.minutes) || 0) }));
+      const skipped = Array.isArray(data.skipped) ? (data.skipped as Record<string, unknown>[]) : [];
+      return {
+        runs: runs.map((r) => ({ repo: String(r.repo ?? ''), private: Boolean(r.private), workflow: String(r.workflow ?? ''), ok: Boolean(r.ok), createdAt: String(r.createdAt ?? ''), minutes: Math.max(0, Number(r.minutes) || 0) })),
+        skipped: skipped.map((x) => ({ repo: String(x.repo ?? ''), why: String(x.why ?? '') })).filter((x) => x.repo),
+      };
     },
     async searchCredits() {
       const data = await invoke('ask-gemini', { usage: true });

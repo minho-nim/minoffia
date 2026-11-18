@@ -55,6 +55,8 @@ export interface UsageInput {
   projects: { id: string; name: string; repo?: string | null }[];
   /** GitHub Actions 실행(서버 actions-usage가 읽음, v0.7.93). 없으면 0 */
   actions?: { repo: string; private: boolean; workflow: string; ok: boolean; createdAt: string; minutes: number }[];
+  /** Actions를 못 읽은 저장소와 이유(권한 등, v0.7.94). 화면에 안내만 */
+  actionsSkipped?: { repo: string; why: string }[];
   /** 업무별 지시서(최신 기획서 final_prompt) 글자 수: Codex·Claude 추정에 쓴다 */
   promptChars?: Record<string, number>;
 }
