@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byProject, customRange, dailyOf, estimateTokens, loggedTokens, rangeIso, rangeOf, summarize, usageText, type UsageInput } from './usageStats';
+import { byProject, customRange, dailyOf, estimateTokens, kindsOf, loggedTokens, rangeIso, rangeOf, summarize, usageText, type UsageInput } from './usageStats';
 
 // 2026-11-18(수) 10시 KST
 const now = new Date('2026-11-18T01:00:00Z');
@@ -27,8 +27,8 @@ const input: UsageInput = {
     { taskId: 't1', source: 'claude_session_auto', summary: '버튼 고침\n쓴 토큰: 12,345', diff: 'x'.repeat(300), testLog: '', createdAt: at('2026-11-18T09:00') },
     { taskId: 't1', source: 'codex_linear_auto', summary: 's'.repeat(30), diff: 'd'.repeat(270), testLog: '', createdAt: at('2026-11-18T09:00') },
   ],
-  tasks: [{ id: 't1', title: '버튼 색', projectId: 'p1' }],
-  projects: [{ id: 'p1', name: 'MinSnakey' }],
+  tasks: [{ id: 't1', title: '버튼 색', projectId: 'p1', type: 'dev' }],
+  projects: [{ id: 'p1', name: 'MinSnakey' }, { id: 'p2', name: 'Valumin' }],
   promptChars: { t1: 300 },
 };
 
@@ -89,7 +89,18 @@ describe('사용량 한 계산', () => {
     expect(daily).toHaveLength(7);
     expect(daily[1].rows.studioB).toEqual({ n: 1, amount: 5000 });
     expect(daily.reduce((a, d) => a + d.rows.studioA.amount, 0)).toBe(week.find((x) => x.id === 'studioA')!.amount);
-    expect(byProject(input, rangeOf('week', now))).toEqual([{ name: 'MinSnakey', claude: 1, codex: 1 }, { name: '지운·시험 업무', claude: 0, codex: 1 }]);
+    // 내 프로젝트 목록 그대로(0회 포함), 지운 것은 맨 아래
+    expect(byProject(input, rangeOf('week', now)).map((p) => [p.name, p.claude, p.codex, p.tokens])).toEqual([
+      ['MinSnakey', 1, 1, 12345 + estimateTokens(300 + 30 + 270)],
+      ['Valumin', 0, 0, 0],
+      ['지운 프로젝트·업무', 0, 1, 0],
+    ]);
+    expect(byProject({ ...input, runs: [], results: [] }, rangeOf('week', now)).map((p) => p.name)).toEqual(['MinSnakey', 'Valumin']);
+    // 모든 에이전트의 한 일 종류
+    const kinds = kindsOf(input, rangeOf('week', now));
+    expect(kinds.map((k) => k.name)).toEqual(['Claude', 'Codex', 'Studio A', 'Studio B', 'Tavily', 'Firecrawl']);
+    expect(kinds.find((k) => k.id === 'codex')!.kinds.map((x) => [x.label, x.n])).toEqual([['개발', 1], ['지운·시험 업무', 1]]);
+    expect(kinds.find((k) => k.id === 'firecrawl')!.kinds.map((x) => x.label)).toEqual(['본문 읽기', '검색']);
   });
 
   it('쓴 토큰 줄 읽기', () => {

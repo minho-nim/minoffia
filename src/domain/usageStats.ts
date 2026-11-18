@@ -48,7 +48,7 @@ export interface UsageInput {
   calls: UsageCall[];
   runs: UsageRunRow[];
   results: UsageResult[];
-  tasks: { id: string; title: string; projectId: string }[];
+  tasks: { id: string; title: string; projectId: string; type?: string }[];
   projects: { id: string; name: string }[];
   /** 업무별 지시서(최신 기획서 final_prompt) 글자 수: Codex·Claude 추정에 쓴다 */
   promptChars?: Record<string, number>;
@@ -253,18 +253,55 @@ export function dailyOf(input: UsageInput, r: Range): { day: string; rows: Recor
   });
 }
 
-/** 프로젝트별 Claude·Codex 횟수(통계) */
-export function byProject(input: UsageInput, r: Range): { name: string; claude: number; codex: number }[] {
-  const out = new Map<string, { name: string; claude: number; codex: number }>();
+/** 일 종류 이름(Claude·Codex: 업무 종류) */
+const TASK_KIND: Record<string, string> = { planning: '기획·설계', dev: '개발', design: 'UI·디자인', prototype: '프로토타입', research: '리서치', qa: '검수·QA' };
+
+/** 에이전트마다 한 일 종류별 횟수·양(통계 '무슨 일에 썼나', v0.7.90 소유자 "각각 모든 에이전트가 표시되게").
+ *  Studio = 일 종류(질문·웹 조사·기획서…), Claude·Codex = 업무 종류(개발·디자인…), 검색 = 검색·본문 읽기 */
+export function kindsOf(input: UsageInput, r: Range): { id: UsageAgentId; name: string; unit: 'token' | 'credit'; n: number; amount: number; source: TokenSource; kinds: WorkLine[] }[] {
+  return summarize(input, r).map((row) => {
+    if (row.id !== 'claude' && row.id !== 'codex') return { ...row, kinds: row.work };
+    const kinds = new Map<string, WorkLine>();
+    const kindOf = (taskId: string | null) => {
+      const t = input.tasks.find((x) => x.id === taskId);
+      return t ? TASK_KIND[t.type ?? ''] ?? '기타 업무' : '지운·시험 업무';
+    };
+    for (const run of input.runs) {
+      if (run.agent !== row.id || !inRange(run.createdAt, r)) continue;
+      const label = kindOf(run.taskId);
+      const line = kinds.get(label) ?? { key: label, label, n: 0, tokens: 0 };
+      line.n += 1;
+      kinds.set(label, line);
+    }
+    for (const x of input.results) {
+      if (agentOfSource(x.source) !== row.id || !inRange(x.createdAt, r)) continue;
+      const label = kindOf(x.taskId);
+      const line = kinds.get(label) ?? { key: label, label, n: 0, tokens: 0 };
+      line.tokens += resultTokens(x, input).tokens;
+      kinds.set(label, line);
+    }
+    return { ...row, kinds: [...kinds.values()].sort((a, b) => b.n - a.n || b.tokens - a.tokens) };
+  });
+}
+
+/** 프로젝트별 Claude·Codex 횟수·토큰(통계). 내 프로젝트 목록을 그대로(0회 포함, 순서도 목록대로) 쓰고,
+ *  지운 프로젝트·업무에 쓴 것은 맨 아래 한 줄(v0.7.90 소유자 "내 프로젝트들 리스트, 생성·삭제와 연동") */
+export function byProject(input: UsageInput, r: Range): { id: string; name: string; claude: number; codex: number; tokens: number; gone?: boolean }[] {
+  const lines = input.projects.map((p) => ({ id: p.id, name: p.name, claude: 0, codex: 0, tokens: 0 }));
+  const gone = { id: '-', name: '지운 프로젝트·업무', claude: 0, codex: 0, tokens: 0, gone: true };
+  const lineOf = (taskId: string | null) => {
+    const t = input.tasks.find((x) => x.id === taskId);
+    return (t && lines.find((l) => l.id === t.projectId)) || gone;
+  };
   for (const run of input.runs) {
     if ((run.agent !== 'claude' && run.agent !== 'codex') || !inRange(run.createdAt, r)) continue;
-    const t = input.tasks.find((x) => x.id === run.taskId);
-    const name = t ? input.projects.find((p) => p.id === t.projectId)?.name ?? '프로젝트 없음' : '지운·시험 업무';
-    const line = out.get(name) ?? { name, claude: 0, codex: 0 };
-    line[run.agent] += 1;
-    out.set(name, line);
+    lineOf(run.taskId)[run.agent] += 1;
   }
-  return [...out.values()].sort((a, b) => b.claude + b.codex - (a.claude + a.codex));
+  for (const x of input.results) {
+    if (!agentOfSource(x.source) || !inRange(x.createdAt, r)) continue;
+    lineOf(x.taskId).tokens += resultTokens(x, input).tokens;
+  }
+  return gone.claude + gone.codex + gone.tokens > 0 ? [...lines, gone] : lines;
 }
 
 /** 짧은 숫자(1.2k) */
