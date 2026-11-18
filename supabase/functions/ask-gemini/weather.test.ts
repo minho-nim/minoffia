@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { skyOf, weatherAnswer, weatherAsk, weatherText } from './weather';
+import { WEATHER_RE } from '../../../src/domain/weather';
+import { cleanWhere, skyOf, WEATHER, weatherAnswer, weatherAsk, weatherText } from './weather';
 
 const forecast = {
   current: { temperature_2m: 4.6, weather_code: 0 },
@@ -14,8 +15,11 @@ const forecast = {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 describe('날씨 질문(v0.7.68)', () => {
-  it('날씨 말을 알아보고, 곳이 없으면 서울', () => {
-    expect(weatherAsk('오늘날씨')).toEqual({ place: '서울', day: 0 });
+  it('앱과 서버의 날씨 말 규칙이 같다', () => {
+    expect(WEATHER.source).toBe(WEATHER_RE.source);
+  });
+  it('날씨 말을 알아보고, 곳이 없으면 null(설정·현재 위치로)', () => {
+    expect(weatherAsk('오늘날씨')).toEqual({ place: null, day: 0 });
     expect(weatherAsk('부산 내일 날씨 어때?')).toEqual({ place: '부산', day: 1 });
     expect(weatherAsk('@Tavily 제주도 모레 비 와?')).toEqual({ place: '제주도', day: 2 });
     expect(weatherAsk('대전의 기온 알려줘')).toEqual({ place: '대전', day: 0 });
@@ -43,17 +47,43 @@ describe('날씨 질문(v0.7.68)', () => {
   });
   it('표에 있는 곳은 위치 찾기 없이 예보 한 번만 부른다', async () => {
     const urls: string[] = [];
-    const got = await weatherAnswer({ place: '부산', day: 0 }, async (u) => (urls.push(u), json(forecast)));
+    const got = await weatherAnswer({ place: '부산', day: 0 }, null, async (u) => (urls.push(u), json(forecast)));
     expect(urls).toHaveLength(1);
     expect(urls[0]).toContain('latitude=35.1796');
     expect(got?.answer).toMatch(/^부산 날씨\n오늘 11\/18/);
     expect(urls[0]).toContain('forecast_days=7');
   });
   it('모르는 곳은 위치 찾기, 못 찾으면 서울, 예보 실패면 null', async () => {
-    const got = await weatherAnswer({ place: '제주도', day: 0 }, async (u) => (u.includes('geocoding') ? json({ results: [{ name: '제주도', latitude: 33.4, longitude: 126.5 }] }) : json(forecast)));
+    const got = await weatherAnswer({ place: '제주도', day: 0 }, null, async (u) => (u.includes('geocoding') ? json({ results: [{ name: '제주도', latitude: 33.4, longitude: 126.5 }] }) : json(forecast)));
     expect(got?.place).toBe('제주도');
-    const none = await weatherAnswer({ place: '어딘가', day: 0 }, async (u) => (u.includes('geocoding') ? json({}) : json(forecast)));
+    const none = await weatherAnswer({ place: '어딘가', day: 0 }, null, async (u) => (u.includes('geocoding') ? json({}) : json(forecast)));
     expect(none?.place).toBe('서울');
-    expect(await weatherAnswer({ place: '서울', day: 0 }, async () => json({}, 500))).toBeNull();
+    expect(await weatherAnswer({ place: '서울', day: 0 }, null, async () => json({}, 500))).toBeNull();
+  });
+  it('곳 정하기: 질문 > 설정 지역 > 현재 위치(동네 이름) > 서울, 표 숫자도 함께', async () => {
+    const urls: string[] = [];
+    const run = async (u: string) => {
+      urls.push(u);
+      if (u.includes('nominatim')) return json({ address: { city: '성남시', borough: '분당구' } });
+      return json(forecast);
+    };
+    const here = await weatherAnswer({ place: null, day: 0 }, { lat: 37.38, lon: 127.12 }, run);
+    expect(here?.place).toBe('성남시 분당구');
+    expect(urls.some((u) => u.includes('latitude=37.38'))).toBe(true);
+    expect(here?.data.days).toHaveLength(7);
+    expect(here?.data.days[1]).toEqual({ date: '2026-11-19', wd: '목', sky: '비', lo: 3, hi: 9, rain: 70 });
+    expect(here?.data.now).toEqual({ temp: 5, sky: '맑음' });
+    expect((await weatherAnswer({ place: null, day: 0 }, { place: '부산' }, run))?.place).toBe('부산');
+    expect((await weatherAnswer({ place: '대구', day: 0 }, { place: '부산' }, run))?.place).toBe('대구');
+    expect((await weatherAnswer({ place: null, day: 0 }, null, run))?.place).toBe('서울');
+    const noName = await weatherAnswer({ place: null, day: 0 }, { lat: 37.5, lon: 127 }, async (u) => (u.includes('nominatim') ? json({}, 500) : json(forecast)));
+    expect(noName?.place).toBe('현재 위치');
+  });
+  it('앱이 보낸 위치는 범위·모양을 확인하고 좌표는 약 1km로 줄인다', () => {
+    expect(cleanWhere({ lat: 37.38123, lon: 127.11987 })).toEqual({ lat: 37.38, lon: 127.12 });
+    expect(cleanWhere({ place: ' 부산 ' })).toEqual({ place: '부산' });
+    expect(cleanWhere({ lat: 200, lon: 0 })).toBeNull();
+    expect(cleanWhere({ place: '<script>' })).toBeNull();
+    expect(cleanWhere('x')).toBeNull();
   });
 });

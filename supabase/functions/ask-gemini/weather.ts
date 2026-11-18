@@ -1,8 +1,9 @@
 // 날씨 질문(v0.7.68, 소유자 "오늘날씨 → AI 날씨 기사로 답함"): 웹 검색은 날씨 값을 못 준다.
-// 날씨는 Open-Meteo(무료·키 없음)에서 숫자를 받아 규칙으로 답한다(모델 호출 0). 곳을 못 찾으면 서울.
+// 날씨는 Open-Meteo(무료·키 없음)에서 숫자를 받아 규칙으로 답한다(모델 호출 0).
+// v0.7.70: 곳을 말하지 않으면 앱 설정(지역 이름 또는 현재 위치) → 그것도 없으면 서울. 답은 표로 그릴 숫자(data)도 함께 보낸다.
 
-/** 날씨를 묻는 말인지 */
-const WEATHER = /날씨|기온|몇\s?도|우산|(비|눈)\s?(와|오|올|내리)|일기\s?예보/;
+/** 날씨를 묻는 말인지(앱 src/domain/weather.ts의 WEATHER_RE와 같아야 한다, 동기화 시험 있음) */
+export const WEATHER = /날씨|기온|몇\s?도|우산|(비|눈)\s?(와|오|올|내리)|일기\s?예보/;
 
 /** 자주 묻는 곳은 좌표를 바로 쓴다(위치 찾기 호출 아낌) */
 const CITY: Record<string, [number, number]> = {
@@ -18,7 +19,8 @@ const CITY: Record<string, [number, number]> = {
 const DROP = /@\S+|오늘|내일|모레|지금|현재|이번\s?주|날씨|기온|일기\s?예보|몇\s?도|우산|챙겨야|필요해?|(비|눈)\s?(와|오|올|내리)\S*|어때\S*|어떄\S*|알려\S*|좀|요|\?|!|\./g;
 
 export interface WeatherAsk {
-  place: string;
+  /** 질문에 적힌 곳(없으면 null → 설정·현재 위치·서울 순) */
+  place: string | null;
   /** 0 오늘, 1 내일, 2 모레 */
   day: 0 | 1 | 2;
 }
@@ -32,7 +34,7 @@ export function weatherAsk(text: string): WeatherAsk | null {
     .split(/\s+/)
     .map((w) => w.replace(/(특별시|광역시|시|의|에|은|는|쪽|지역)$/, ''))
     .find((w) => /^[가-힣A-Za-z]{2,12}$/.test(w));
-  return { place: word ?? '서울', day };
+  return { place: word ?? null, day };
 }
 
 /** WMO 날씨 코드 → 쉬운 말 */
@@ -56,6 +58,39 @@ interface Forecast {
 const DAY_WORD = ['오늘', '내일', '모레'];
 const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 const round = (n: number | undefined) => (typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : null);
+
+export interface WeatherDay {
+  date: string;
+  wd: string;
+  sky: string;
+  lo: number;
+  hi: number;
+  rain: number | null;
+}
+export interface WeatherData {
+  place: string;
+  now: { temp: number; sky: string } | null;
+  days: WeatherDay[];
+}
+
+/** 예보 → 표에 그릴 숫자(7일, 빠진 날은 뺀다) */
+export function weatherData(place: string, f: Forecast): WeatherData | null {
+  const d = f.daily;
+  const days: WeatherDay[] = [];
+  for (let i = 0; i < (d?.time?.length ?? 0); i++) {
+    const hi = round(d?.temperature_2m_max?.[i]);
+    const lo = round(d?.temperature_2m_min?.[i]);
+    const code = d?.weather_code?.[i];
+    const time = d?.time?.[i];
+    if (hi === null || lo === null || typeof code !== 'number' || !time) continue;
+    const rain = d?.precipitation_probability_max?.[i];
+    days.push({ date: time, wd: WEEKDAY[new Date(`${time}T00:00:00Z`).getUTCDay()], sky: skyOf(code), lo, hi, rain: typeof rain === 'number' ? Math.round(rain) : null });
+  }
+  if (!days.length) return null;
+  const t = round(f.current?.temperature_2m);
+  const c = f.current?.weather_code;
+  return { place, now: t !== null ? { temp: t, sky: typeof c === 'number' ? skyOf(c) : '' } : null, days };
+}
 
 /** 하루 한 줄: '11/19 목 · 비 · 3°~9° · 비 70%' (숫자가 빠지면 null) */
 function dayLine(f: Forecast, i: number): string | null {
@@ -88,10 +123,11 @@ export function weatherText(place: string, _day: 0 | 1 | 2, f: Forecast): string
 }
 
 type Fetch = (url: string) => Promise<Response>;
-const get: Fetch = (url) => fetch(url, { signal: AbortSignal.timeout(8_000) });
+// Nominatim 이용 규칙: 앱 이름을 User-Agent로 밝힌다
+const get: Fetch = (url) => fetch(url, { headers: { 'User-Agent': 'minoffia-weather/1.0' }, signal: AbortSignal.timeout(8_000) });
 
 /** 곳 이름 → 좌표(표에 없으면 Open-Meteo 위치 찾기) */
-async function locate(place: string, run: Fetch): Promise<{ name: string; lat: number; lon: number } | null> {
+async function locate(place: string, run: Fetch): Promise<Spot | null> {
   const known = CITY[place];
   if (known) return { name: place, lat: known[0], lon: known[1] };
   const res = await run(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(place)}&count=1&language=ko&format=json`);
@@ -100,21 +136,62 @@ async function locate(place: string, run: Fetch): Promise<{ name: string; lat: n
   return top && typeof top.latitude === 'number' && typeof top.longitude === 'number' ? { name: top.name || place, lat: top.latitude, lon: top.longitude } : null;
 }
 
+/** 좌표 → 동네 이름(OpenStreetMap Nominatim, 무료·키 없음). 못 찾으면 '현재 위치' */
+async function areaName(lat: number, lon: number, run: Fetch): Promise<string> {
+  try {
+    const res = await run(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14&accept-language=ko`);
+    if (!res.ok) return '현재 위치';
+    const a = ((await res.json()) as { address?: Record<string, string> }).address ?? {};
+    const name = [a.city || a.county || a.province || a.state, a.borough || a.city_district || a.suburb || a.quarter].filter(Boolean).join(' ');
+    return name || '현재 위치';
+  } catch {
+    return '현재 위치';
+  }
+}
+
+export interface Spot {
+  name: string;
+  lat: number;
+  lon: number;
+}
+/** 앱이 보내는 기준 곳(v0.7.70): 설정한 지역 이름 또는 현재 위치(약 1km로 줄인 좌표) */
+export type Where = { place: string } | { lat: number; lon: number };
+
+/** 받은 where를 믿을 수 있는 값으로만(범위 밖·이상한 값은 버림) */
+export function cleanWhere(raw: unknown): Where | null {
+  const w = raw as { place?: unknown; lat?: unknown; lon?: unknown } | null;
+  if (!w || typeof w !== 'object') return null;
+  if (typeof w.place === 'string' && /^[가-힣A-Za-z0-9 ]{2,20}$/.test(w.place.trim())) return { place: w.place.trim() };
+  const lat = Number(w.lat);
+  const lon = Number(w.lon);
+  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return { lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100 };
+  return null;
+}
+
 export const WEATHER_SOURCE = 'https://open-meteo.com/';
+const SEOUL: Spot = { name: '서울', lat: CITY['서울'][0], lon: CITY['서울'][1] };
+
+/** 곳 정하기: 질문에 적힌 곳 > 설정한 지역 > 현재 위치 > 서울 */
+async function pick(ask: WeatherAsk, where: Where | null, run: Fetch): Promise<Spot> {
+  if (ask.place) return (await locate(ask.place, run)) ?? SEOUL;
+  if (where && 'place' in where) return (await locate(where.place, run)) ?? SEOUL;
+  if (where) return { name: await areaName(where.lat, where.lon, run), lat: where.lat, lon: where.lon };
+  return SEOUL;
+}
 
 /** 날씨 답(못 받으면 null → 평소처럼 웹 조사) */
-export async function weatherAnswer(ask: WeatherAsk, run: Fetch = get): Promise<{ answer: string; place: string } | null> {
+export async function weatherAnswer(ask: WeatherAsk, where: Where | null = null, run: Fetch = get): Promise<{ answer: string; place: string; data: WeatherData } | null> {
   try {
-    let spot = await locate(ask.place, run);
-    // 곳 이름으로 잘못 뽑힌 말이면 서울로
-    if (!spot) spot = { name: '서울', lat: CITY['서울'][0], lon: CITY['서울'][1] };
+    const spot = await pick(ask, where, run);
     const url =
       `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}` +
       '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=7';
     const res = await run(url);
     if (!res.ok) return null;
-    const text = weatherText(spot.name, ask.day, (await res.json()) as Forecast);
-    return text ? { answer: text, place: spot.name } : null;
+    const f = (await res.json()) as Forecast;
+    const text = weatherText(spot.name, ask.day, f);
+    const data = weatherData(spot.name, f);
+    return text && data ? { answer: text, place: spot.name, data } : null;
   } catch {
     return null;
   }

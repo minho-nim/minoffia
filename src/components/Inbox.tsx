@@ -4,6 +4,8 @@ import { FormPopup } from './FormPopup';
 import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
+import { WEATHER_RE, weatherWhereBody, type WeatherData } from '../domain/weather';
+import { WeatherCard } from './WeatherCard';
 import { answerSlot, asksSearch, insertMention, mentionOptions, mentionQuery, searchEngineOf } from '../domain/mention';
 import { setResearchPhase } from '../office/webResearch';
 import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
@@ -60,6 +62,8 @@ interface Msg {
   projects?: string[];
   /** 조사 답의 출처(v0.4.61) */
   sources?: Source[];
+  /** 날씨 답의 표 숫자(v0.7.70): 있으면 글 대신 표로 그린다 */
+  weather?: WeatherData;
   /** 업무 접수 확인 카드(v0.4.58): 한 메시지에 업무가 여럿이어도 카드마다 따로 접수·취소한다 */
   offer?: Offer;
   /** 함께 보낸 첨부(v0.4.89): 이름과 작은 미리보기(누르면 크게). 원본은 이 화면에서만 기억한다 */
@@ -140,7 +144,7 @@ interface Props {
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
     opts?: AskOptions,
-  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number }>;
+  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number; weather?: WeatherData }>;
   /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
   geminiAway?: boolean;
   /** Claude 웹 조사(v0.7.11): 웹 검색(Tavily·Firecrawl)이 안 됐을 때 'Claude에게 찾아보기'. Supabase 모드·Claude 근무일 때만 */
@@ -1493,6 +1497,11 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           ...(answerSlot(text) ? { slot: answerSlot(text)! } : {}),
           ...(research && searchEngineOf(text) ? { engine: searchEngineOf(text)! } : {}),
         };
+        // 날씨(v0.7.70): 설정한 지역 또는 현재 위치를 기준으로(질문에 곳을 적으면 그 곳이 먼저, 서버가 정함)
+        if (research && !demoResearch && images.length === 0 && WEATHER_RE.test(text)) {
+          const where = await weatherWhereBody();
+          if (where) opts.where = where;
+        }
         // 업무 카드에서 '대화로 묻기'로 시작한 질문이면 그 업무의 지금 상태를 참고로 붙인다(화면에는 안 보임)
         const focus = focusTask.current;
         const focusedTask = focus && text.trim().startsWith(focus.prefix) ? snap.tasks.find((t) => t.id === focus.taskId) : undefined;
@@ -1529,7 +1538,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           const sources = got.sources ?? [];
           // 날씨(v0.7.68)는 Open-Meteo 숫자로 규칙 답(Gemini 안 씀)
           const via = got.engine === 'Open-Meteo' ? 'Open-Meteo 날씨 자료 · 규칙으로 답함' : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
-          if (via || sources.length) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}) } : m)));
+          if (via || sources.length || got.weather) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}), ...(got.weather ? { weather: got.weather } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {
             // 한 메시지에 여러 개: 질문은 위 말풍선에 모아 답하고, 업무는 카드마다 따로 접수 확인한다.
@@ -1779,6 +1788,8 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
                     );
                   })()}
                 </div>
+              ) : m.weather ? (
+                <WeatherCard data={m.weather} />
               ) : m.text ? (
                 <p>{m.text}</p>
               ) : (

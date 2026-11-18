@@ -7,6 +7,7 @@ import type { DesignDraft } from '../domain/designDraft';
 import type { AgentAssignment, Approval, Deployment, PmPlan, PrCheck, ResultPackage, ResultReview, RevisionRequest, TaskSpec } from '../domain/workflow-types';
 import type { ChatEntry } from '../domain/devlog';
 import { cleanSources, type Source } from '../domain/research';
+import { cleanWeather } from '../domain/weather';
 import { searchCreditsOf, searchTodayOf } from '../domain/searchCredits';
 import type { OfficeStore, ResultInboxItem } from './store';
 import { parseHealth } from '../domain/healthText';
@@ -1033,7 +1034,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
           const b = await res.json().catch(() => ({}));
           if (res.ok && b?.ok && b.answer) {
             onDelta(b.answer);
-            return { answer: b.answer as string, keySlot: b.keySlot as number, sources: cleanSources(b.sources), engine: typeof b.engine === 'string' ? (b.engine as string) : undefined, pages: Number(b.pages) || 0 };
+            return { answer: b.answer as string, keySlot: b.keySlot as number, sources: cleanSources(b.sources), engine: typeof b.engine === 'string' ? (b.engine as string) : undefined, pages: Number(b.pages) || 0, weather: cleanWeather(b.weather) ?? undefined };
           }
           throw new Error(b?.error ?? `Gemini가 답하지 못했습니다(HTTP ${res.status}).`);
         }
@@ -1085,7 +1086,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         throw new Error(message);
       }
       if (!data?.ok || !data.answer) throw new Error(data?.error ?? 'Gemini가 답하지 못했습니다.');
-      return { answer: data.answer as string, keySlot: data.keySlot as number, sources: cleanSources(data.sources), engine: typeof data.engine === 'string' ? (data.engine as string) : undefined, pages: Number(data.pages) || 0 };
+      return { answer: data.answer as string, keySlot: data.keySlot as number, sources: cleanSources(data.sources), engine: typeof data.engine === 'string' ? (data.engine as string) : undefined, pages: Number(data.pages) || 0, weather: cleanWeather(data.weather) ?? undefined };
     },
     async readLink(taskId, url) {
       const { data, error } = await client.functions.invoke('fetch-link', { body: { taskId, url } });

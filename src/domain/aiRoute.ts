@@ -16,6 +16,8 @@ export interface AskOptions {
   slot?: 1 | 2;
   /** 웹 조사에서 먼저 쓸 검색(@Firecrawl이면 firecrawl, v0.7.53). 없으면 Tavily 먼저 */
   engine?: 'tavily' | 'firecrawl';
+  /** 날씨 기준 곳(v0.7.70): 설정한 지역 이름 또는 현재 위치(약 1km로 줄인 좌표) */
+  where?: { place: string } | { lat: number; lon: number };
 }
 
 export interface Routed {
