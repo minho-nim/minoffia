@@ -212,6 +212,8 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   const [to, setTo] = useState(today);
   const [measure, setMeasure] = useState<'n' | 'amount'>('n');
   const [tip, setTip] = useState<string | null>(null);
+  // 무슨 일에 썼나 보기(v0.7.92 소유자 "토글로 에이전트별 보기·업무별 보기")
+  const [workView, setWorkView] = useState<'work' | 'agent'>('work');
   const range = useMemo(() => (period === 'custom' ? customRange(from, to) : rangeOf(period, new Date(), offset)), [period, offset, from, to]);
   const input = useUsageInput(store, snap, range);
   const rows = useMemo(() => summarize(input, range), [input, range]);
@@ -261,6 +263,11 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   }
   const work = [...workMap.values()].sort((a, b) => b.total - a.total);
   const wmax = Math.max(1, ...work.map((w) => w.total));
+  // 에이전트별: 에이전트마다 한 줄(그 색), 아래에 한 일 종류를 짧게
+  const byAgent = kinds
+    .filter((k) => series.some((s) => s.id === k.id))
+    .map((k) => ({ id: k.id, name: k.name, total: measure === 'n' ? k.n : k.amount, lines: k.kinds.map((x) => ({ label: x.label, v: measure === 'n' ? x.n : x.tokens })).filter((x) => x.v > 0) }));
+  const amax = Math.max(1, ...byAgent.map((a) => a.total));
   return (
     <div className="viz usage-stats">
       <div className="usage-stats-ctrl">
@@ -380,7 +387,32 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
       </section>
 
       <section className="usage-chart">
-        <h4>무슨 일에 썼나</h4>
+        <div className="usage-chart-head">
+          <h4>무슨 일에 썼나</h4>
+          <div className="seg" role="group" aria-label="무슨 일에 썼나 보기">
+            <button type="button" aria-pressed={workView === 'work'} onClick={() => setWorkView('work')}>
+              업무별
+            </button>
+            <button type="button" aria-pressed={workView === 'agent'} onClick={() => setWorkView('agent')}>
+              에이전트별
+            </button>
+          </div>
+        </div>
+        {workView === 'agent' ? (
+          <div className="usage-hbars">
+            {byAgent.map((a) => (
+              <div key={a.id} className="usage-hb-wrap">
+                <div className={`usage-hb${a.total ? '' : ' is-zero'}`}>
+                  <span>{a.name}</span>
+                  <span className="bar">{a.total > 0 && <span style={{ width: `${(a.total / amax) * 100}%`, background: COLOR[a.id] }} />}</span>
+                  <span className="v">{fmt(a.total)}</span>
+                </div>
+                {a.lines.length > 0 && <p className="usage-hb-note">{a.lines.map((l) => `${l.label} ${fmt(l.v)}`).join(' · ')}</p>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
         <ul className="usage-legend">
           {series.map((s) => (
             <li key={s.id}>
@@ -405,6 +437,8 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
           </div>
         ) : (
           <p className="muted small">이 기간에 한 일이 없어요.</p>
+        )}
+          </>
         )}
       </section>
 
