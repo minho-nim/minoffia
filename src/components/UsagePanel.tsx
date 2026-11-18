@@ -245,6 +245,8 @@ export function UsagePanel({ rows, actionsSkipped = [], period, onPeriod, range,
 
 const COLOR: Record<UsageAgentId, string> = { claude: 'var(--viz-1)', codex: 'var(--viz-2)', studioA: 'var(--viz-3)', studioB: 'var(--viz-4)', search: 'var(--viz-5)', firecrawl: 'var(--viz-6)', ci: 'var(--viz-7)' };
 
+const WD_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
+
 /** 통계 보기: 고른 기간의 날짜별 사용, 에이전트마다 한 일, 내 프로젝트별 */
 function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   // v0.7.93 소유자 "통계에 처음 들어갈 땐 주간·횟수"
@@ -361,7 +363,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
             <button type="button" aria-label="이전" onClick={() => setOffset((o) => o - 1)}>
               ◀
             </button>
-            <b>{range.label}</b>
+            <b>{period === 'week' ? `${dayLabel(range.from)}(${WD_SHORT[new Date(`${range.from}T00:00:00Z`).getUTCDay()]}) ~ ${dayLabel(range.to)}(${WD_SHORT[new Date(`${range.to}T00:00:00Z`).getUTCDay()]})` : range.label}</b>
             <button type="button" aria-label="다음" disabled={offset >= 0} onClick={() => setOffset((o) => Math.min(0, o + 1))}>
               ▶
             </button>
