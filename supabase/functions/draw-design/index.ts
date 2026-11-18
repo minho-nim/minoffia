@@ -69,8 +69,13 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DRAWING_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'drawing').eq('ok', true).gte('created_at', kstMidnight);
-  if ((count ?? 0) + 4 > cap) return reply(429, { ok: false, error: `오늘 시안 그리기 한도(Gemini ${cap}회)에 닿았어요. 내일 다시 그릴 수 있어요.` });
+  // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 한 번에 키마다 2회(A 키는 시안 A만)라 2회가 남지 않은 키는 이번에 쉬고, 그 시안은 다른 키가 대신 그리지 않는다
+  const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'drawing').eq('ok', true).gte('created_at', kstMidnight);
+  const usedBy = [1, 2].map((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length);
+  usedBy.forEach((n, i) => {
+    if (n + 2 > cap) keys[i] = '';
+  });
+  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 시안 그리기 한도(키마다 Gemini ${cap}회)에 닿았어요. 내일 다시 그릴 수 있어요.` });
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (away.has('studioA')) keys[0] = '';

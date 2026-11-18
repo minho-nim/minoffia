@@ -75,8 +75,13 @@ Deno.serve(async (req) => {
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'design').gte('created_at', kstMidnight);
-  if ((count ?? 0) >= DAILY_CAP) return reply(429, { ok: false, error: `오늘 디자인 기준 초안을 ${DAILY_CAP}번 썼어요. 내일 다시 해 주세요.` });
+  // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛴다
+  const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'design').gte('created_at', kstMidnight);
+  const usedBy = [1, 2].map((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length);
+  usedBy.forEach((n, i) => {
+    if (n >= DAILY_CAP) keys[i] = '';
+  });
+  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 디자인 기준 초안을 키마다 ${DAILY_CAP}번씩 썼어요. 내일 다시 해 주세요.` });
 
   const tree = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers: { ...gh(token), Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
   if (!tree?.ok) return reply(502, { ok: false, error: `저장소 파일 목록을 읽지 못했습니다(GitHub ${tree?.status ?? '응답 없음'}).` });
