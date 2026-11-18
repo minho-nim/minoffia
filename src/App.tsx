@@ -38,6 +38,7 @@ import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
 import { WeatherWhereSetting } from './components/WeatherWhereSetting';
+import { applyAccountWeatherPlace } from './domain/weather';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
 import type { PendingImage } from './components/Attachments';
@@ -207,6 +208,23 @@ export function App() {
       window.clearInterval(t);
     };
   }, [store]);
+  // 계정 설정 '날씨 지역'(v0.7.71): 로그인하면 계정 값을 받아 이 기기 사본을 맞춘다(설정 칸도 다시 그림)
+  const [weatherSynced, setWeatherSynced] = useState(0);
+  useEffect(() => {
+    if (!store?.weatherPlace || !session) return;
+    let alive = true;
+    store.weatherPlace.get().then(
+      (p) => {
+        if (!alive) return;
+        applyAccountWeatherPlace(p);
+        setWeatherSynced((n) => n + 1);
+      },
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [store, session?.user.id]);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [handoff, setHandoff] = useState<string | null>(null);
   const handoffRef = useRef<HTMLTextAreaElement>(null);
@@ -2709,7 +2727,7 @@ export function App() {
               </div>
               <div className="settings-box">
                 <h3>날씨 지역</h3>
-                <WeatherWhereSetting />
+                <WeatherWhereSetting key={weatherSynced} onSave={store.weatherPlace ? (p) => store.weatherPlace!.set(p) : undefined} />
               </div>
               {store.keyStatus && (
                 <div className="settings-box">

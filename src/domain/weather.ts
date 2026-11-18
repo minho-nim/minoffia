@@ -32,11 +32,19 @@ export function cleanWeather(raw: unknown): WeatherData | null {
   return { place: w.place.slice(0, 40), now, days };
 }
 
-/** 설정 '날씨 지역': 현재 위치(here) 또는 지역 이름(place). 이 기기에만 저장 */
+/** 설정 '날씨 지역': 현재 위치(here) 또는 지역 이름(place).
+ * v0.7.71: 계정에 저장(owner_settings, 아이폰·PC 같이). 이 기기에도 사본을 두어 앱을 열자마자 쓴다(로컬 데모는 사본만). */
 export type WeatherWhere = { mode: 'here' } | { mode: 'place'; place: string };
 const KEY = 'minoffia.weatherWhere';
+let cached: WeatherWhere | null = null;
+
+/** 계정 값(서버의 weather_place, 비면 현재 위치)을 받아 이 기기 사본을 맞춘다 */
+export function applyAccountWeatherPlace(place: string | null) {
+  saveWeatherWhere(place ? { mode: 'place', place } : { mode: 'here' });
+}
 
 export function readWeatherWhere(): WeatherWhere {
+  if (cached) return cached;
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as WeatherWhere | null;
     if (v?.mode === 'place' && typeof v.place === 'string' && v.place.trim()) return { mode: 'place', place: v.place.trim() };
@@ -47,6 +55,7 @@ export function readWeatherWhere(): WeatherWhere {
 }
 
 export function saveWeatherWhere(w: WeatherWhere) {
+  cached = w;
   try {
     localStorage.setItem(KEY, JSON.stringify(w));
   } catch {

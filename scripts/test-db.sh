@@ -35,6 +35,7 @@ run supabase/tests/99_push_steps.sql
 run supabase/tests/99_project_wiki.sql
 run supabase/tests/99_b_waits.sql
 run supabase/tests/99_agent_leave.sql
+run supabase/tests/99_owner_settings.sql
 run supabase/tests/99_project_rules.sql
 run supabase/tests/99_result_reviews.sql
 run supabase/tests/99_claude_research.sql

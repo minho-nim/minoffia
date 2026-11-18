@@ -1,15 +1,20 @@
-// 설정 '날씨 지역'(v0.7.70, 소유자 "현재 내 위치 기준 + 지역 설정을 따로"): 현재 위치(기본) 또는 지역 이름. 이 기기에만 저장.
+// 설정 '날씨 지역'(v0.7.70, 소유자 "현재 내 위치 기준 + 지역 설정을 따로"): 현재 위치(기본) 또는 지역 이름.
+// v0.7.71: 계정에 저장(onSave, 아이폰·PC 같이). 로컬 데모는 이 기기에만.
 // 질문에 곳을 적으면("부산 날씨") 그 곳이 먼저다. 현재 위치를 못 받으면(거절 등) 서울.
 import { useState } from 'react';
 import { currentSpot, readWeatherWhere, saveWeatherWhere, validPlace, type WeatherWhere } from '../domain/weather';
 
-export function WeatherWhereSetting() {
+export function WeatherWhereSetting({ onSave }: { onSave?: (place: string | null) => Promise<void> }) {
   const [where, setWhere] = useState<WeatherWhere>(readWeatherWhere);
   const [place, setPlace] = useState(where.mode === 'place' ? where.place : '');
   const [note, setNote] = useState('');
-  const choose = (w: WeatherWhere) => {
+  const choose = (w: WeatherWhere, done?: string) => {
     setWhere(w);
     saveWeatherWhere(w);
+    if (!onSave) return done && setNote(done);
+    onSave(w.mode === 'place' ? w.place : null)
+      .then(() => done && setNote(`${done} 계정에 저장했어요(다른 기기도 같이).`))
+      .catch((e) => setNote(`계정에 저장하지 못했어요: ${(e as Error).message}. 이 기기에는 적용됐어요.`));
   };
   const tryHere = () => {
     choose({ mode: 'here' });
@@ -19,8 +24,7 @@ export function WeatherWhereSetting() {
   const savePlace = () => {
     const p = place.trim();
     if (!validPlace(p)) return setNote('지역 이름은 2~20자 한글·영문으로 적어 주세요(예: 부산, 분당).');
-    choose({ mode: 'place', place: p });
-    setNote(`날씨를 물으면 '${p}' 기준으로 답해요.`);
+    choose({ mode: 'place', place: p }, `날씨를 물으면 '${p}' 기준으로 답해요.`);
   };
   return (
     <div className="weather-where">

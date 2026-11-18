@@ -698,6 +698,16 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const res = await invoke('archify-result', { taskId, revision });
       return { started: Boolean(res.started || res.ready) };
     },
+    weatherPlace: {
+      async get() {
+        const { data, error } = await client.from('owner_settings').select('weather_place').maybeSingle();
+        if (error) throw new Error(error.message);
+        return (data?.weather_place as string | null | undefined) ?? null;
+      },
+      async set(place) {
+        check(await client.from('owner_settings').upsert({ weather_place: place, updated_at: new Date().toISOString() }));
+      },
+    },
     async keyStatus() {
       const data = await invoke('key-status', {});
       return Array.isArray(data.keys) ? (data.keys as import('./store').KeyStatus[]) : [];
