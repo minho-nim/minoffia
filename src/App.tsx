@@ -2727,7 +2727,7 @@ export function App() {
               </div>
               <div className="settings-box">
                 <h3>날씨 지역</h3>
-                <WeatherWhereSetting key={weatherSynced} onSave={store.weatherPlace ? (p) => store.weatherPlace!.set(p) : undefined} />
+                <WeatherWhereSetting key={weatherSynced} onSave={store.weatherPlace ? (p) => store.weatherPlace!.set(p) : undefined} areaName={store.areaName ? (spot) => store.areaName!(spot) : undefined} />
               </div>
               {store.keyStatus && (
                 <div className="settings-box">

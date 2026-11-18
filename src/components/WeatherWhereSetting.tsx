@@ -1,13 +1,32 @@
 // 설정 '날씨 지역'(v0.7.70, 소유자 "현재 내 위치 기준 + 지역 설정을 따로"): 현재 위치(기본) 또는 지역 이름.
 // v0.7.71: 계정에 저장(onSave, 아이폰·PC 같이). 로컬 데모는 이 기기에만.
 // 질문에 곳을 적으면("부산 날씨") 그 곳이 먼저다. 현재 위치를 못 받으면(거절 등) 서울.
+// v0.7.73 소유자 "위치 새로고침 아이콘": '현재 위치' 옆에 지금 기준 동네와 확인 시각, ↻(위치를 새로 받고 동네 이름 다시 찾기).
 import { useState } from 'react';
-import { currentSpot, readWeatherWhere, saveWeatherWhere, validPlace, type WeatherWhere } from '../domain/weather';
+import { agoText, currentSpot, readHereSeen, readWeatherWhere, saveHereSeen, saveWeatherWhere, validPlace, type WeatherWhere } from '../domain/weather';
 
-export function WeatherWhereSetting({ onSave }: { onSave?: (place: string | null) => Promise<void> }) {
+export function WeatherWhereSetting({ onSave, areaName }: { onSave?: (place: string | null) => Promise<void>; areaName?: (spot: { lat: number; lon: number }) => Promise<string> }) {
   const [where, setWhere] = useState<WeatherWhere>(readWeatherWhere);
   const [place, setPlace] = useState(where.mode === 'place' ? where.place : '');
   const [note, setNote] = useState('');
+  const [seen, setSeen] = useState(readHereSeen);
+  const [busy, setBusy] = useState(false);
+  /** 위치를 새로 받고(휴대폰이 기억한 위치 말고) 동네 이름을 다시 찾는다 */
+  const refreshHere = async () => {
+    if (busy) return;
+    setBusy(true);
+    setNote('위치를 확인하는 중…');
+    const spot = await currentSpot(8000, true);
+    if (!spot) {
+      setBusy(false);
+      return setNote('위치를 받지 못했어요. 휴대폰 설정에서 이 앱(브라우저)의 위치 허용을 켜 주세요. 그전까지는 서울로 답해요.');
+    }
+    const name = areaName ? await areaName(spot).catch(() => '현재 위치') : '현재 위치';
+    saveHereSeen(name);
+    setSeen(readHereSeen());
+    setBusy(false);
+    setNote(`날씨를 물으면 '${name}' 근처로 답해요.`);
+  };
   const choose = (w: WeatherWhere, done?: string) => {
     setWhere(w);
     saveWeatherWhere(w);
@@ -18,8 +37,7 @@ export function WeatherWhereSetting({ onSave }: { onSave?: (place: string | null
   };
   const tryHere = () => {
     choose({ mode: 'here' });
-    setNote('위치를 확인하는 중…');
-    void currentSpot().then((s) => setNote(s ? '현재 위치를 받았어요. 날씨를 물으면 이 근처로 답해요.' : '위치를 받지 못했어요. 휴대폰 설정에서 이 앱(브라우저)의 위치 허용을 켜 주세요. 그전까지는 서울로 답해요.'));
+    void refreshHere();
   };
   const savePlace = () => {
     const p = place.trim();
@@ -32,6 +50,16 @@ export function WeatherWhereSetting({ onSave }: { onSave?: (place: string | null
         <input type="radio" name="weather-where" id="weather-where-here" checked={where.mode === 'here'} onChange={tryHere} />
         현재 위치
       </label>
+      {where.mode === 'here' && (
+        <p className="weather-where-here">
+          <span>{seen ? `${seen.name} · ${agoText(seen.at)} 확인` : '아직 확인 전'}</span>
+          <button type="button" className="icon-btn weather-where-sync" onClick={() => void refreshHere()} disabled={busy} aria-label="현재 위치 다시 확인" title="현재 위치 다시 확인">
+            <span aria-hidden="true" className={busy ? 'is-spinning' : undefined}>
+              ↻
+            </span>
+          </button>
+        </p>
+      )}
       <div className="weather-where-row">
         <label>
           <input type="radio" name="weather-where" id="weather-where-place" checked={where.mode === 'place'} onChange={() => validPlace(place) && choose({ mode: 'place', place: place.trim() })} />

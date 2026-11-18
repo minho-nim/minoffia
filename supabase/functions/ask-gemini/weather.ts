@@ -202,7 +202,7 @@ async function locate(place: string, run: Fetch): Promise<Spot | null> {
 }
 
 /** 좌표 → 동네 이름(OpenStreetMap Nominatim, 무료·키 없음). 못 찾으면 '현재 위치' */
-async function areaName(lat: number, lon: number, run: Fetch): Promise<string> {
+export async function areaName(lat: number, lon: number, run: Fetch = get): Promise<string> {
   try {
     const res = await run(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14&accept-language=ko`);
     if (!res.ok) return '현재 위치';
