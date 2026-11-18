@@ -35,7 +35,7 @@ export const shortTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}
 
 /**
  * 오늘 Gemini 성공 호출 횟수·실제 토큰(v0.7.77 소유자 "에이전트 탭 토큰이랑 오늘 사용량 토큰이 안 맞아").
- * 오늘 사용량(합계)과 에이전트 탭(Studio A = 1번 키, B = 2번 키)이 같은 계산을 쓴다. 웹 조사 종합도 센다.
+ * 에이전트 탭 Studio A = 1번 키, B = 2번 키(v0.7.82부터 오늘 사용량에는 Gemini 줄 없음). 웹 조사 종합도 센다.
  */
 export function geminiToday(calls: AiCall[], now: Date = new Date(), slot?: 1 | 2) {
   const todays = calls.filter((c) => today(c.createdAt, now) && (slot === undefined || c.keySlot === slot));
@@ -58,7 +58,7 @@ function gemini(calls: AiCall[], now: Date, slot: 1 | 2): QuotaInfo {
   const mine = geminiToday(calls, now, slot);
   const last = mine.todays[mine.todays.length - 1];
   // v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 서버 하루 상한도 키마다 따로(질문 40·이미지 20씩). 다 쓴 키는 건너뛰고 다른 키가 답한다
-  const detail = `${slot}번 키 오늘 성공 ${mine.text}(질문 ${mine.question}/${GEMINI_QUESTION_CAP}·웹 조사 ${mine.research}·이미지 ${mine.image}/${GEMINI_IMAGE_CAP}, 상한은 키마다 따로). 두 키 합계 ${all.text}는 오늘 사용량의 Gemini와 같다. 무료 한도 숫자는 Google이 계정마다 정한다.`;
+  const detail = `${slot}번 키 오늘 성공 ${mine.text}(질문 ${mine.question}/${GEMINI_QUESTION_CAP}·웹 조사 ${mine.research}·이미지 ${mine.image}/${GEMINI_IMAGE_CAP}, 상한은 키마다 따로). 두 키 합계 ${all.text}. 무료 한도 숫자는 Google이 계정마다 정한다.`;
   if (last && !last.ok && last.httpStatus === 429) return { state: 'exhausted', label: '오늘 소진', detail: `이 키의 마지막 호출이 무료 한도(429)에 걸렸다. ${detail}` };
   if (mine.question >= GEMINI_QUESTION_CAP && mine.image >= GEMINI_IMAGE_CAP) return { state: 'exhausted', label: '오늘 소진', detail };
   return { state: 'available', label: mine.text, detail };

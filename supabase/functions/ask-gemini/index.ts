@@ -4,7 +4,7 @@
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
 import { areaName, cleanWhere, MET_SOURCE, WEATHER_SOURCE, weatherAnswer, weatherAsk } from './weather.ts';
-import { deepSearch, failMessage, searchCredits, searchText, WEB_RULE, webContext as toContext } from './websearch.ts';
+import { deepSearch, failMessage, isHit, searchCredits, searchText, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { geminiFetch } from './gemini-fallback.ts';
@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
     // v0.7.62: 여러 줄을 한 번에 넣을 때 칸 구성이 같아야 한다(빠진 칸은 NULL이 되어 NOT NULL 칸에서 통째로 실패했다)
     const row = (provider: string, model: string, ok: boolean, status: number, results: number, error: string) => ({ owner_id: user.id, provider, purpose: 'research', key_slot: null, ok, http_status: status || null, model, prompt_chars: question.length, answer_chars: results, error: error.slice(0, 300) });
     const rows = [
-      ...tries.map((t) => row(t.engine, 'search', t === hit, t.status, t.results.length, t === hit ? '' : t.error || '결과 없음')),
+      ...tries.map((t) => row(t.engine, 'search', isHit(t, hit), t.status, t.results.length, isHit(t, hit) ? '' : t.error || '결과 없음')),
       ...Array.from({ length: pages }, () => row('firecrawl', 'scrape', true, 200, 1, '')),
       ...scrapeFails.map((f) => row('firecrawl', 'scrape', false, f.status, 0, f.error || '본문 없음')),
     ];
@@ -277,7 +277,7 @@ Deno.serve(async (req) => {
       const { error: logError } = await admin.from('ai_calls').insert(rows);
       if (logError) console.log(JSON.stringify({ fn: 'ask-gemini', usageLog: 'fail', error: logError.message }));
     }
-    for (const t of tries.filter((t) => t !== hit)) console.log(JSON.stringify({ fn: 'ask-gemini', search: t.engine, fail: true, status: t.status, error: t.error }));
+    for (const t of tries.filter((t) => !isHit(t, hit))) console.log(JSON.stringify({ fn: 'ask-gemini', search: t.engine, fail: true, status: t.status, error: t.error }));
     if (!hit) return reply(502, { ok: false, status: tries.at(-1)?.status ?? 0, error: failMessage(tries) });
     webContext = toContext(hit.results);
     searchEngine = hit.engine === 'tavily' ? 'Tavily' : 'Firecrawl';

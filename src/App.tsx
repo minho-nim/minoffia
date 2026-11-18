@@ -59,7 +59,6 @@ import { canTransition } from './domain/status';
 import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/types';
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
-import { geminiToday } from './domain/quota';
 import { receiveWorkflowInbox } from './workflow/receiveInbox';
 import { preparePlanImport } from './workflow/planImport';
 import { createResultReviewer } from './workflow/resultReview';
@@ -568,8 +567,6 @@ export function App() {
   const stageRef = useRef({ mini: false, tiny: false });
   /** 얇은 머리 보이기(큰 머리가 화면 밖일 때) */
   const [barOn, setBarOn] = useState(false);
-  /** 얇은 머리의 '사용량 보기'로 큰 머리 내용을 펼쳐 본다(v0.5.31 소유자) */
-  const [usageOpen, setUsageOpen] = useState(false);
   /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
   const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
   /** 업무 카드의 어느 칸으로 갈지(내 차례 '보기'·카드의 ?표시, v0.4.86) */
@@ -601,7 +598,6 @@ export function App() {
     // 얇은 머리: 내리기 시작하는 순간 그 자리에서 큰 머리가 얇은 머리로 바뀐다(머리가 화면과 같이 올라가 보이지 않게, v0.5.32 소유자).
     const bar = window.scrollY > 2;
     setBarOn(bar);
-    if (!bar) setUsageOpen(false);
     const now = stageRef.current;
     // v0.6.81 소유자 "사무실 펴지는 반응이 느려": 맨 위에 닿으면 기다리지 않고 바로 편다(맨 위라 글이 밀려 흔들릴 일이 없다)
     if (window.scrollY <= 2) return set(false, false);
@@ -717,7 +713,7 @@ export function App() {
   if (client && !session && !trying) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
 
-  // 오늘 사용량(큰 머리와 얇은 머리의 '사용량 보기'가 같이 쓴다)
+  // 오늘 사용량(설정 탭에만, v0.7.82: 큰 머리·얇은 머리의 사용량은 뺐다)
   const searchRow = (engine: 'tavily' | 'firecrawl') => {
     const live = liveCredits?.[engine] ?? null;
     const used = live ? live.used : (snap.searchCredits?.[engine] ?? 0);
@@ -753,21 +749,7 @@ export function App() {
           </li>
         );
       })}
-      {store.mode === 'supabase' && (
-        <li title="Gemini 무료 API를 부른 횟수와 실제 토큰(오늘, 성공만, 웹 조사 포함). A는 1번 키, B는 2번 키이고 에이전트 탭 Studio A·B와 같은 값입니다. 하루 상한은 서버가 관리합니다.">
-          <span>Gemini</span>
-          <span className="num">
-            {(() => {
-              // 에이전트 탭 Studio A·B와 같은 계산(v0.7.77): 합계 = A + B
-              const calls = snap.aiCalls ?? [];
-              const all = geminiToday(calls);
-              const a = geminiToday(calls, undefined, 1);
-              const b = geminiToday(calls, undefined, 2);
-              return all.calls ? `${all.text} (A ${a.calls}회·B ${b.calls}회)` : all.text;
-            })()}
-          </span>
-        </li>
-      )}
+      {/* Gemini 횟수·토큰은 에이전트 탭 Studio A·B에만(v0.7.82 소유자 "제미나이 토큰은 ㄴㄴ 스튜디오만 냅둬") */}
       {/* v0.7.57 소유자 "오늘 사용량에 올린 거 맞음?": 체험에서도 보이게(체험은 0) */}
       {searchRow('tavily')}
       {searchRow('firecrawl')}
@@ -2076,7 +2058,6 @@ export function App() {
           {store.mode === 'supabase' && <PushToggle store={store} />}
           <ThemeToggle />
         </div>
-        {usageList}
       </header>
       {/* 체험 띠(v0.7.7): 휴대폰에서도 보이게 머리 아래에. 체험 업무 시작·끝내기 */}
       {store.mode === 'local' && (
@@ -2109,33 +2090,9 @@ export function App() {
         {/* 지금 주고받는 장면(v0.7.62): 웹 조사·업무 넘겨주기가 있을 때만. 작은 사무실이 머리 오른쪽에 붙으면 그 자리를 비워 둔다 */}
         {barOn && <FlowStrip workflow={snap.workflow} />}
         {docked && <span className="bar-office-slot" aria-hidden="true" />}
-        {/* 큰 머리 내용(연결·알림·사용량)을 펼쳐 본다(v0.5.31) */}
-        <button type="button" className={`bar-btn bar-btn-usage${usageOpen ? ' is-on' : ''}`} tabIndex={barOn ? 0 : -1} aria-expanded={usageOpen} onClick={() => setUsageOpen((v) => !v)}>
-          사용량 보기
-        </button>
         {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
         <ThemeToggle tabbable={barOn} />
       </div>
-      {usageOpen && barOn && (
-        <>
-          <div className="usage-pop-backdrop" onClick={() => setUsageOpen(false)} aria-hidden="true" />
-          <div className="usage-pop" role="dialog" aria-label="오늘 사용량">
-            {store.mode === 'local' ? (
-              <span className="mode mode-local">로컬 데모 · 이 기기에만 저장</span>
-            ) : (
-              <span className="mode mode-cloud">
-                Supabase 동기화 · {session?.user.email}
-                <button type="button" className="link-btn" onClick={() => void client?.auth.signOut()}>
-                  로그아웃
-                </button>
-              </span>
-            )}
-            {store.mode === 'supabase' && <PushToggle store={store} />}
-            {usageList}
-          </div>
-        </>
-      )}
-
       {officePop && (
         <FormPopup wide title={officePop === 'role' ? '역할 지도' : '클라우드 관계도'} onClose={() => setOfficePop(null)}>
           {renderOffice(officePop)}
