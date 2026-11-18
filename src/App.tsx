@@ -172,6 +172,16 @@ export function App() {
   const pendingTask = useRef<string | null>(typeof location !== 'undefined' ? new URLSearchParams(location.search).get('task') : null);
   // v0.4.16(소유자): 대화(입력창)와 업무 목록을 탭으로 나눈다. 처음은 대화.
   const [tab, setTab] = useState<Tab>('chat');
+  // v0.7.76 소유자 "대화를 제외한 탭은 탭 이동한 뒤에는 맨 위가 보여야": 탭을 옮기면 맨 위부터(대화는 그대로 아래 대화가 보이게).
+  // 특정 업무·프로젝트로 가는 이동은 그 뒤에 따로 내려 준다(setTimeout으로 나중에 실행되어 이것보다 우선)
+  const firstTab = useRef(true);
+  useLayoutEffect(() => {
+    if (firstTab.current) {
+      firstTab.current = false;
+      return;
+    }
+    if (tab !== 'chat') window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [tab]);
   const [filter, setFilter] = useState<Filter>('open');
   // 업무 탭 프로젝트 칩(v0.4.18): 'all' 또는 프로젝트 id. 마지막 선택은 이 기기에 기억한다.
   const [projectFilter, setProjectFilterState] = useState<string>(() => {
