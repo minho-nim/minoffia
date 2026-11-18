@@ -8202,3 +8202,7 @@ html.popup-open .project-sections > details[open] * {
 .usage-table table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 .usage-table th, .usage-table td { padding: 4px 8px; text-align: right; font-family: var(--font-mono); border-bottom: 1px dashed var(--line); white-space: nowrap; }
 .usage-table th:first-child, .usage-table td:first-child { text-align: left; }
+
+/* 통계 기간 캘린더(v0.7.85) */
+.usage-dates { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.usage-dates input { font: inherit; font-size: 14px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }

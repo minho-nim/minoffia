@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byProject, dailyOf, estimateTokens, loggedTokens, rangeIso, rangeOf, summarize, usageText, type UsageInput } from './usageStats';
+import { byProject, customRange, dailyOf, estimateTokens, loggedTokens, rangeIso, rangeOf, summarize, usageText, type UsageInput } from './usageStats';
 
 // 2026-11-18(수) 10시 KST
 const now = new Date('2026-11-18T01:00:00Z');
@@ -40,6 +40,16 @@ describe('기간', () => {
     expect(rangeOf('month', now)).toMatchObject({ from: '2026-11-01', to: '2026-11-30', label: '2026년 11월' });
     expect(rangeOf('month', now, -11)).toMatchObject({ from: '2025-12-01', to: '2025-12-31' });
     expect(rangeIso(rangeOf('day', now))).toEqual({ fromIso: '2026-11-17T15:00:00.000Z', toIso: '2026-11-18T15:00:00.000Z' });
+  });
+});
+
+describe('캘린더로 고른 기간', () => {
+  it('끝일은 오늘까지, 거꾸로 고르면 바꾸고, 366일까지', () => {
+    expect(customRange('2026-11-03', '2026-11-10', now)).toEqual({ from: '2026-11-03', to: '2026-11-10', label: '11월 3일 ~ 11월 10일' });
+    expect(customRange('2026-11-10', '2026-11-03', now)).toMatchObject({ from: '2026-11-03', to: '2026-11-10' });
+    expect(customRange('2026-11-01', '2026-12-31', now)).toMatchObject({ to: '2026-11-18' });
+    expect(customRange('2024-01-01', '2026-11-18', now)).toMatchObject({ from: '2025-11-18', label: '2025년 11월 18일 ~ 11월 18일' });
+    expect(customRange('', 'x', now)).toMatchObject({ from: '2026-11-18', to: '2026-11-18', label: '11월 18일' });
   });
 });
 
