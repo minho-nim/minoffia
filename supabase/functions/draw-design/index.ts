@@ -2,6 +2,7 @@
 // (A = 요청을 빠짐없이, B = 단계를 줄여 단순하게), 서로 상대 시안을 같은 항목(요청 반영·쓰기 쉬움·휴대폰 화면·단순함)으로 평가한다.
 // 결과는 design_drafts에 기획서 버전마다 한 번만 넣는다(이미 있으면 그대로 돌려줌). 고르기는 앱이 design_picks에 넣는다.
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않고, 한쪽만 되면 그 키로 둘 다 한다.
+import { keyBlock, keyWhy, type KeyWhy } from './keyBlock.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildDesignReviewPrompt, buildDrawPrompt, DESIGN_REVIEW_SYSTEM, DRAW_STYLE, DRAW_SYSTEM, parseDesignReview, parseDraw, type DesignReview, type DrawWho } from './designDraft.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
@@ -72,15 +73,15 @@ Deno.serve(async (req) => {
   // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 한 번에 키마다 2회(A 키는 시안 A만)라 2회가 남지 않은 키는 이번에 쉬고, 그 시안은 다른 키가 대신 그리지 않는다
   const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'drawing').eq('ok', true).gte('created_at', kstMidnight);
   const usedBy = [1, 2].map((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length);
-  usedBy.forEach((n, i) => {
-    if (n + 2 > cap) keys[i] = '';
-  });
-  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 시안 그리기 한도(키마다 Gemini ${cap}회)에 닿았어요. 내일 다시 그릴 수 있어요.` });
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
-  if (away.has('studioA')) keys[0] = '';
-  if (away.has('studioB')) keys[1] = '';
-  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
+  // 키마다 이유(v0.7.87): 키 없음·휴가·오늘 상한 다 씀. 둘 다 못 쓰면 이유를 그대로 알린다
+  const why = [0, 1].map((i) => keyWhy(keys[i], usedBy[i] + 2 > cap, away.has(i ? 'studioB' : 'studioA'))) as [KeyWhy, KeyWhy];
+  why.forEach((w, i) => {
+    if (w !== 'ok') keys[i] = '';
+  });
+  const blocked = keyBlock(why, `시안 그리기 Gemini ${cap}회`, '내일 다시 그릴 수 있어요.');
+  if (blocked) return reply(blocked.status, { ok: false, ...(blocked.leave ? { leave: true } : {}), error: blocked.error });
 
   const model = env('GEMINI_DRAW_MODEL') || env('GEMINI_MODEL') || DEFAULT_MODEL;
   const project = task.projects as unknown as { name?: string; design_md?: string } | null;
