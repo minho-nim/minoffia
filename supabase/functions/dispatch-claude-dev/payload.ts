@@ -5,6 +5,14 @@ import { BASE_RULES, rulesAsk, rulesSection } from './projectRules.ts';
 import { devGuide } from './devHabits.ts';
 
 /** CLAUDE.md를 알아서 만들거나 맞춘다(v0.4.75). 앱 src/domain/handoffV2.ts의 CLAUDE_MD_SYNC와 같은 문장(시험이 확인) */
+/** 쓴 토큰 세기(v0.7.84 소유자 "토큰은 서비스 숫자로"): Claude Code가 세션마다 남기는 기록(~/.claude/projects/*.jsonl)의 usage를 더한다. 같은 메시지는 한 번만, 캐시 읽기는 뺀다 */
+const TOKEN_COUNT_JS = [
+  'const fs=require(\'fs\'),p=require(\'path\'),os=require(\'os\');const fl=[];const walk=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const q=p.join(d,e.name);if(e.isDirect',
+  'ory())walk(q);else if(q.endsWith(\'.jsonl\'))fl.push(q)}};try{walk(p.join(os.homedir(),\'.claude\',\'projects\'))}catch{}fl.sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs);con',
+  'st seen=new Map();if(fl[0])for(const l of fs.readFileSync(fl[0],\'utf8\').split(\'\\n\')){try{const m=JSON.parse(l).message;if(m&&m.usage)seen.set(m.id||seen.size,(m.usage.input_tokens|',
+  '|0)+(m.usage.output_tokens||0)+(m.usage.cache_creation_input_tokens||0))}catch{}}let t=0;for(const v of seen.values())t+=v;console.log(t||\'\')',
+].join('');
+
 export const CLAUDE_MD_SYNC =
   '- 저장소 루트에 CLAUDE.md가 없으면 만들고(위 "이 프로젝트에서 지켜야 할 것" 목록을 같은 제목의 절로), 있으면 그 절만 위 목록과 이번에 새로 적는 것에 맞춘다(절이 없으면 파일 끝에 추가). CLAUDE.md의 다른 부분은 바꾸지 않고, 이 변경도 같은 작업 브랜치에 함께 넣는다.';
 
@@ -88,6 +96,10 @@ export function buildDevPayload(p: DevPayloadInput): string {
     '',
     '## 마지막 메시지(결과 보고, AI Office 결과 패키지로 옮긴다)',
     '1. 요약(한두 줄) 2. 바뀐 파일 목록 3. `git diff main...HEAD` 전체 4. 시험 명령과 결과 그대로 5. 남은 문제',
+    '',
+    '## 쓴 토큰(요약 맨 끝 한 줄)',
+    '결과를 보내기 직전에 아래를 한 번 실행해 이 세션이 쓴 토큰(입력·출력·캐시 쓰기, 캐시 읽기 제외)을 센다. 숫자가 나오면 요약 맨 끝에 "쓴 토큰: <숫자>" 한 줄을 적고, 빈 줄이면 적지 않는다(지어내지 않는다).',
+    `node -e "${TOKEN_COUNT_JS}"`,
     ...(p.submit
       ? [
           '',

@@ -1,0 +1,431 @@
+// 사용량(v0.7.84 소유자 "같은 기준의 사용량, 무슨 일 했는지, 일간·주간·월간 토글, 통계 보기 화면").
+// 설정 탭에 두고, 에이전트 탭 칩은 App이 같은 줄(usageRows)을 받아 숫자만 쓴다. 계산은 domain/usageStats 하나.
+import { useEffect, useMemo, useState } from 'react';
+import type { OfficeStore } from '../data/store';
+import type { Snapshot } from '../domain/types';
+import type { Credits } from '../domain/searchCredits';
+import { FREE_MONTHLY } from '../domain/searchCredits';
+import { AGENT_BY_ID } from '../domain/agents';
+import { GEMINI_QUESTION_CAP } from '../domain/quota';
+import {
+  byProject,
+  dailyOf,
+  daysOf,
+  rangeIso,
+  rangeOf,
+  shortNum,
+  SOURCE_LABEL,
+  summarize,
+  USAGE_AGENTS,
+  usageText,
+  type Period,
+  type Range,
+  type UsageAgentId,
+  type UsageInput,
+  type UsageRow,
+} from '../domain/usageStats';
+import { FormPopup } from './FormPopup';
+
+const PERIOD_KEY = 'usagePeriod';
+export function readPeriod(): Period {
+  try {
+    const v = localStorage.getItem(PERIOD_KEY);
+    return v === 'week' || v === 'month' ? v : 'day';
+  } catch {
+    return 'day';
+  }
+}
+export function savePeriod(p: Period) {
+  try {
+    localStorage.setItem(PERIOD_KEY, p);
+  } catch {
+    /* 기기 저장이 막혀도 화면은 그대로 */
+  }
+}
+
+/** 기간의 기록을 읽어 계산 재료로 만든다(서버가 있으면 그 기간만 읽고, 없으면 스냅샷 최근 7일) */
+export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: Range): UsageInput {
+  const [remote, setRemote] = useState<Pick<UsageInput, 'calls' | 'runs'> | null>(null);
+  const fresh = `${range.from}:${range.to}:${snap.aiCalls?.length ?? 0}:${snap.usage.length}:${snap.workflow.results.length}:${snap.searchToday?.tavily ?? 0}:${snap.searchToday?.firecrawl ?? 0}`;
+  useEffect(() => {
+    if (!store?.usageRange) return;
+    let live = true;
+    const { fromIso, toIso } = rangeIso(range);
+    store
+      .usageRange(fromIso, toIso)
+      .then((x) => live && setRemote(x))
+      .catch(() => live && setRemote(null));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, fresh]);
+  return useMemo(() => {
+    const latest = new Map<string, { revision: number; chars: number }>();
+    for (const s of snap.workflow.specs) {
+      const cur = latest.get(s.taskId);
+      if (!cur || s.revision > cur.revision) latest.set(s.taskId, { revision: s.revision, chars: (s.finalPrompt ?? '').length });
+    }
+    const base = {
+      results: snap.workflow.results.map((r) => ({ taskId: r.taskId, source: r.source, summary: r.summary, diff: r.diff, testLog: r.testLog, createdAt: r.createdAt })),
+      tasks: snap.tasks.map((t) => ({ id: t.id, title: t.title, projectId: t.projectId })),
+      projects: snap.projects.map((p) => ({ id: p.id, name: p.name })),
+      promptChars: Object.fromEntries([...latest].map(([k, v]) => [k, v.chars])),
+    };
+    if (remote) return { ...remote, ...base };
+    return {
+      ...base,
+      calls: (snap.aiCalls ?? []).map((c) => ({ provider: 'gemini', keySlot: c.keySlot, purpose: c.purpose, model: '', ok: c.ok, tokens: c.tokens ?? null, createdAt: c.createdAt })),
+      runs: snap.usage.map((r) => ({ agent: r.agent, taskId: r.taskId, createdAt: r.createdAt })),
+    };
+  }, [remote, snap]);
+}
+
+const CAP: Partial<Record<UsageAgentId, number>> = {
+  claude: AGENT_BY_ID.claude.dailyCap ?? 20,
+  codex: AGENT_BY_ID.codex.dailyCap ?? 6,
+  studioA: GEMINI_QUESTION_CAP,
+  studioB: GEMINI_QUESTION_CAP,
+};
+/** 막대에 쓰는 '상한과 비교할 수': Studio는 질문(서버 상한 기준), 나머지는 횟수 */
+const meterUsed = (row: UsageRow) => (row.id === 'studioA' || row.id === 'studioB' ? row.work.find((w) => w.key === 'question')?.n ?? 0 : row.n);
+
+type Live = { tavily: Credits | null; firecrawl: Credits | null } | null;
+
+export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCredits, store, snap }: {
+  rows: UsageRow[];
+  period: Period;
+  onPeriod: (p: Period) => void;
+  range: Range;
+  liveCredits: Live;
+  /** 이번 달 앱이 센 크레딧(서비스 숫자와 견주기) */
+  monthCredits?: { tavily: number; firecrawl: number };
+  store: OfficeStore;
+  snap: Snapshot;
+}) {
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const [stats, setStats] = useState(false);
+  const toggle = (id: string) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  return (
+    <div className="usage-panel">
+      <div className="usage-head">
+        <h3>사용량</h3>
+        <div className="seg" role="group" aria-label="사용량 기간">
+          {(['day', 'week', 'month'] as Period[]).map((p) => (
+            <button key={p} type="button" aria-pressed={period === p} onClick={() => onPeriod(p)}>
+              {p === 'day' ? '일간' : p === 'week' ? '주간' : '월간'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="usage-range">{range.label}</p>
+      <ul className="usage-rows">
+        {rows.map((row) => {
+          const cap = period === 'day' ? CAP[row.id] : undefined;
+          const used = meterUsed(row);
+          const isOpen = open.has(row.id);
+          const engine = row.id === 'search' ? 'tavily' : row.id === 'firecrawl' ? 'firecrawl' : null;
+          const live = engine ? liveCredits?.[engine] ?? null : null;
+          const appMonth = engine ? monthCredits?.[engine] ?? 0 : 0;
+          return (
+            <li key={row.id} className={cap && used >= cap ? 'is-full' : ''}>
+              <button type="button" className="usage-row" aria-expanded={isOpen} onClick={() => toggle(row.id)}>
+                <span className="usage-name">{row.name}</span>
+                <span className={`usage-meter${cap ? '' : ' is-none'}`} aria-hidden="true">
+                  <span style={{ width: `${cap ? Math.min(100, (used / cap) * 100) : 0}%` }} />
+                </span>
+                <span className="usage-num">{usageText(row)}</span>
+                <span className="usage-tri" aria-hidden="true">
+                  {isOpen ? '▼' : '▶'}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="usage-detail">
+                  {row.work.length ? (
+                    <ul>
+                      {row.work.map((w) => (
+                        <li key={w.key}>
+                          <span>{w.label}</span>
+                          <span>
+                            {w.n}회{row.unit === 'credit' ? ` · 크레딧 ${w.tokens}` : w.tokens || row.id.startsWith('studio') ? ` · ${row.source === 'est' ? '약 ' : ''}${shortNum(w.tokens)} 토큰` : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted small">이 기간에 한 일이 없어요.</p>
+                  )}
+                  <p className="muted small">
+                    {row.unit === 'credit' ? '크레딧: 앱 기록(검색 1번 = Tavily 1, Firecrawl 찾기 2·본문 1)' : `토큰: ${SOURCE_LABEL[row.source]}`} · 횟수: 앱 기록
+                    {cap ? ` · 오늘 상한 ${row.id.startsWith('studio') ? `질문 ${cap}회(키마다)` : `${cap}회`}` : ''}
+                  </p>
+                  {engine && (
+                    <p className="muted small">
+                      이번 달 {live ? `서비스: ${live.used.toLocaleString('ko-KR')} / ${live.limit.toLocaleString('ko-KR')} 사용` : `서비스 숫자 없음 · 무료 ${FREE_MONTHLY[engine].toLocaleString('ko-KR')}`} · 앱 기록 {appMonth.toLocaleString('ko-KR')}
+                      {live && live.used < appMonth ? ' — 서비스 숫자가 앱 기록보다 적어요(확인 중)' : ''}
+                    </p>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="usage-foot">
+        <button type="button" className="usage-stats-btn" onClick={() => setStats(true)}>
+          통계 보기 ▸
+        </button>
+      </p>
+      {stats && (
+        <FormPopup wide title="사용량 통계" onClose={() => setStats(false)}>
+          <UsageStats store={store} snap={snap} />
+        </FormPopup>
+      )}
+    </div>
+  );
+}
+
+const COLOR: Record<UsageAgentId, string> = { claude: 'var(--viz-1)', codex: 'var(--viz-2)', studioA: 'var(--viz-3)', studioB: 'var(--viz-4)', search: 'var(--viz-5)', firecrawl: 'var(--viz-6)' };
+
+/** 통계 보기: 고른 주·달의 날짜별 사용, 한 일, 프로젝트 */
+function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
+  const [period, setPeriod] = useState<'week' | 'month'>('month');
+  const pick = (p: 'week' | 'month') => {
+    setPeriod(p);
+    setOffset(0);
+  };
+  const [offset, setOffset] = useState(0);
+  const [measure, setMeasure] = useState<'n' | 'amount'>('n');
+  const [tip, setTip] = useState<string | null>(null);
+  const range = useMemo(() => rangeOf(period, new Date(), offset), [period, offset]);
+  const input = useUsageInput(store, snap, range);
+  const rows = useMemo(() => summarize(input, range), [input, range]);
+  const daily = useMemo(() => dailyOf(input, range), [input, range]);
+  const projects = useMemo(() => byProject(input, range), [input, range]);
+  const series = USAGE_AGENTS.filter((a) => measure === 'n' || a.unit === 'token');
+  const val = (d: (typeof daily)[number], id: UsageAgentId) => (measure === 'n' ? d.rows[id].n : d.rows[id].amount);
+  const fmt = (v: number) => (measure === 'n' ? `${v}` : shortNum(v));
+  const total = rows.filter((r) => series.some((s) => s.id === r.id)).reduce((a, r) => a + (measure === 'n' ? r.n : r.amount), 0);
+  const top = [...rows].filter((r) => series.some((s) => s.id === r.id)).sort((a, b) => (measure === 'n' ? b.n - a.n : b.amount - a.amount))[0];
+  const busiest = daily.reduce<{ day: string; v: number }>((best, d) => {
+    const v = series.reduce((a, s) => a + val(d, s.id), 0);
+    return v > best.v ? { day: d.day, v } : best;
+  }, { day: '', v: 0 });
+  const dayLabel = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10))}`;
+  // 날짜별 쌓은 막대
+  const W = 640, H = 220, L = 42, R = 8, T = 10, B = 26;
+  const totals = daily.map((d) => series.reduce((a, s) => a + val(d, s.id), 0));
+  const rawMax = Math.max(1, ...totals);
+  const step = measure === 'n' ? (rawMax > 40 ? 20 : rawMax > 20 ? 10 : 5) : rawMax > 200000 ? 100000 : rawMax > 60000 ? 25000 : 10000;
+  const max = Math.ceil(rawMax / step) * step;
+  const y = (v: number) => T + (H - T - B) * (1 - v / max);
+  const bw = (W - L - R) / Math.max(1, daily.length);
+  const barW = Math.max(6, Math.min(22, bw * 0.6));
+  const studio = (['studioA', 'studioB'] as const).map((id) => rows.find((r) => r.id === id)!);
+  const workKeys = [...new Set(studio.flatMap((r) => r.work.map((w) => w.key)))];
+  const work = workKeys
+    .map((key) => ({ key, label: studio.flatMap((r) => r.work).find((w) => w.key === key)!.label, a: studio[0].work.find((w) => w.key === key), b: studio[1].work.find((w) => w.key === key) }))
+    .map((x) => ({ ...x, av: measure === 'n' ? x.a?.n ?? 0 : x.a?.tokens ?? 0, bv: measure === 'n' ? x.b?.n ?? 0 : x.b?.tokens ?? 0 }))
+    .sort((p, q) => q.av + q.bv - (p.av + p.bv));
+  const wmax = Math.max(1, ...work.map((w) => w.av + w.bv));
+  const pmax = Math.max(1, ...projects.map((p) => p.claude + p.codex));
+  return (
+    <div className="viz usage-stats">
+      <div className="usage-stats-ctrl">
+        <div className="seg" role="group" aria-label="통계 기간">
+          {(['week', 'month'] as const).map((p) => (
+            <button key={p} type="button" aria-pressed={period === p} onClick={() => pick(p)}>
+              {p === 'week' ? '주' : '월'}
+            </button>
+          ))}
+        </div>
+        <div className="usage-pager">
+          <button type="button" aria-label="이전" onClick={() => setOffset((o) => o - 1)}>
+            ◀
+          </button>
+          <b>{range.label}</b>
+          <button type="button" aria-label="다음" disabled={offset >= 0} onClick={() => setOffset((o) => Math.min(0, o + 1))}>
+            ▶
+          </button>
+        </div>
+        <div className="seg" role="group" aria-label="무엇을 셀까">
+          <button type="button" aria-pressed={measure === 'n'} onClick={() => setMeasure('n')}>
+            횟수
+          </button>
+          <button type="button" aria-pressed={measure === 'amount'} onClick={() => setMeasure('amount')}>
+            토큰
+          </button>
+        </div>
+      </div>
+      <div className="usage-figs">
+        <div>
+          <span>{measure === 'n' ? '사용 횟수 합계' : '토큰 합계'}</span>
+          <b>{measure === 'n' ? total : shortNum(total)}</b>
+        </div>
+        <div>
+          <span>가장 많이 쓴 AI</span>
+          <b>{top && (measure === 'n' ? top.n : top.amount) ? top.name : '—'}</b>
+        </div>
+        <div>
+          <span>가장 바빴던 날</span>
+          <b>{busiest.day ? dayLabel(busiest.day) : '—'}</b>
+        </div>
+      </div>
+      <div className="usage-chart">
+        <h4>{measure === 'n' ? '날짜별 사용 횟수' : '날짜별 토큰'}</h4>
+        <p className="muted small">{measure === 'n' ? '모든 AI의 사용 횟수(앱 기록). 막대를 누르면 그날 숫자.' : 'Studio는 Google이 알려 준 토큰, Claude는 세션 기록, Codex는 추정. 검색 크레딧은 횟수에서.'}</p>
+        <ul className="usage-legend">
+          {series.map((s) => (
+            <li key={s.id}>
+              <i style={{ background: COLOR[s.id] }} />
+              {s.name}
+            </li>
+          ))}
+        </ul>
+        <div className="usage-svg">
+          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="날짜별 사용">
+            {Array.from({ length: max / step + 1 }, (_, i) => i * step).map((v) => (
+              <g key={v}>
+                <line className="grid" x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
+                <text x={L - 6} y={y(v) + 4} textAnchor="end">
+                  {fmt(v)}
+                </text>
+              </g>
+            ))}
+            {daily.map((d, i) => {
+              const cx = L + bw * i + bw / 2;
+              let acc = 0;
+              const segs = series.map((s) => ({ s, v: val(d, s.id) })).filter((x) => x.v > 0);
+              const showDay = daily.length <= 7 || i % 3 === 0 || i === daily.length - 1;
+              return (
+                <g key={d.day}>
+                  {segs.map(({ s, v }, j) => {
+                    const y1 = y(acc + v), y0 = y(acc);
+                    acc += v;
+                    const h = Math.max(1, y0 - y1 - (j < segs.length - 1 ? 2 : 0));
+                    return <rect key={s.id} x={cx - barW / 2} y={y0 - h} width={barW} height={h} rx={j === segs.length - 1 ? 3 : 0} fill={COLOR[s.id]} />;
+                  })}
+                  {showDay && (
+                    <text x={cx} y={H - 8} textAnchor="middle">
+                      {Number(d.day.slice(8, 10))}
+                    </text>
+                  )}
+                  <rect x={L + bw * i} y={T} width={bw} height={H - T - B} fill="transparent" onClick={() => setTip(tip === d.day ? null : d.day)} onMouseEnter={() => setTip(d.day)}>
+                    <title>{`${dayLabel(d.day)} ${series.map((s) => `${s.name} ${fmt(val(d, s.id))}`).join(', ')}`}</title>
+                  </rect>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        {tip && (
+          <div className="usage-tip">
+            <b>{dayLabel(tip)}</b>
+            {series.map((s) => (
+              <span key={s.id}>
+                <i style={{ background: COLOR[s.id] }} />
+                {s.name} {fmt(val(daily.find((d) => d.day === tip)!, s.id))}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="usage-cols">
+        <div className="usage-chart">
+          <h4>무슨 일에 썼나 · Studio</h4>
+          <ul className="usage-legend">
+            <li>
+              <i style={{ background: COLOR.studioA }} />
+              Studio A
+            </li>
+            <li>
+              <i style={{ background: COLOR.studioB }} />
+              Studio B
+            </li>
+          </ul>
+          {work.length ? (
+            <div className="usage-hbars">
+              {work.map((w) => (
+                <div key={w.key} className="usage-hb">
+                  <span>{w.label}</span>
+                  <span className="bar">
+                    {w.av > 0 && <span style={{ width: `${(w.av / wmax) * 100}%`, background: COLOR.studioA }} title={`Studio A ${fmt(w.av)}`} />}
+                    {w.bv > 0 && <span style={{ width: `${(w.bv / wmax) * 100}%`, background: COLOR.studioB }} title={`Studio B ${fmt(w.bv)}`} />}
+                  </span>
+                  <span className="v">{fmt(w.av + w.bv)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted small">이 기간에 Studio가 한 일이 없어요.</p>
+          )}
+        </div>
+        <div className="usage-chart">
+          <h4>어느 프로젝트에 썼나 · Claude·Codex</h4>
+          <ul className="usage-legend">
+            <li>
+              <i style={{ background: COLOR.claude }} />
+              Claude
+            </li>
+            <li>
+              <i style={{ background: COLOR.codex }} />
+              Codex
+            </li>
+          </ul>
+          {projects.length ? (
+            <div className="usage-hbars">
+              {projects.map((p) => (
+                <div key={p.name} className="usage-hb">
+                  <span>{p.name}</span>
+                  <span className="bar">
+                    {p.claude > 0 && <span style={{ width: `${(p.claude / pmax) * 100}%`, background: COLOR.claude }} title={`Claude ${p.claude}회`} />}
+                    {p.codex > 0 && <span style={{ width: `${(p.codex / pmax) * 100}%`, background: COLOR.codex }} title={`Codex ${p.codex}회`} />}
+                  </span>
+                  <span className="v">
+                    {p.claude} · {p.codex}회
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted small">이 기간에 Claude·Codex 업무가 없어요.</p>
+          )}
+        </div>
+      </div>
+      <details className="usage-table">
+        <summary>표로 보기</summary>
+        <div className="usage-table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>날짜</th>
+                {series.map((s) => (
+                  <th key={s.id}>{s.name}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {daily.map((d) => (
+                <tr key={d.day}>
+                  <td>{dayLabel(d.day)}</td>
+                  {series.map((s) => (
+                    <td key={s.id}>{fmt(val(d, s.id))}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      <p className="muted small">
+        {daysOf(range).length}일 · 기록 기준 한국 시각.{range.from < '2026-11-09' ? ' 11월 9일 전 Gemini 기록에는 토큰이 없어요.' : ''}
+      </p>
+    </div>
+  );
+}

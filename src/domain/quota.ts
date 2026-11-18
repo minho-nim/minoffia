@@ -41,7 +41,8 @@ export function geminiToday(calls: AiCall[], now: Date = new Date(), slot?: 1 | 
   const todays = calls.filter((c) => today(c.createdAt, now) && (slot === undefined || c.keySlot === slot));
   const ok = todays.filter((c) => c.ok);
   const tokens = ok.reduce((n, c) => n + (c.tokens ?? 0), 0);
-  const count = (p: string) => ok.filter((c) => (p === 'question' ? c.purpose !== 'image' && c.purpose !== 'research' : c.purpose === p)).length;
+  // v0.7.84: 질문은 purpose question만(기획서 초안·채점·위키는 따로, 서버 질문 상한과 같은 기준)
+  const count = (p: string) => ok.filter((c) => c.purpose === p).length;
   return {
     todays,
     calls: ok.length,

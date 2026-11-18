@@ -7,6 +7,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { appendDecisions, cleanWiki, diffFiles, wikiPrompt, WIKI_SYSTEM, type TaskFacts } from './wiki.ts';
 import { geminiFetch } from './gemini-fallback.ts';
+import { tokensOf } from './geminiTokens.ts';
 
 const MODEL = 'gemini-3.5-flash-lite';
 const DAILY_CAP = 40;
@@ -74,7 +75,7 @@ async function callGemini(admin: Admin, ownerId: string, text: string): Promise<
     const data = res ? await res.json().catch(() => ({})) : {};
     const out = ((data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('');
     const body = cleanWiki(out);
-    await admin.from('ai_calls').insert({ owner_id: ownerId, provider: 'gemini', purpose: 'wiki', key_slot: k.slot, ok: Boolean(body), http_status: res?.status ?? null, model: MODEL, prompt_chars: text.length, answer_chars: out.length, ...(body ? {} : { error: '위키 형식이 맞지 않음' }) });
+    await admin.from('ai_calls').insert({ owner_id: ownerId, provider: 'gemini', purpose: 'wiki', key_slot: k.slot, ok: Boolean(body), http_status: res?.status ?? null, model: MODEL, prompt_chars: text.length, answer_chars: out.length, ...tokensOf(data), ...(body ? {} : { error: '위키 형식이 맞지 않음' }) });
     if (body) return { body, judge: k.judge };
   }
   return null;
