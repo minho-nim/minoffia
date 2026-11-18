@@ -8262,3 +8262,8 @@ html.popup-open .project-sections > details[open] * {
 .usage-svg-wrap { position: relative; }
 .usage-svg-wrap > .usage-tip { position: absolute; top: 0; right: 0; max-width: min(320px, 100%); margin: 0; z-index: 2; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); cursor: pointer; border: 1px solid var(--line); }
 @media (max-width: 420px) { .usage-dates input { width: 7.6em; font-size: 13px; } .usage-stats-ctrl { column-gap: 8px; } }
+
+/* Actions를 못 읽은 저장소 안내(v0.7.94) */
+.usage-skipped { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); font-size: 13px; display: grid; gap: 4px; }
+.usage-skipped b { color: var(--warn); }
+.usage-skipped p { margin: 0; overflow-wrap: anywhere; }

@@ -50,3 +50,11 @@ export function reposToRead(projectRepos: (string | null)[]): string[] {
   for (const r of projectRepos) if (r && /^[\w.-]+\/[\w.-]+$/.test(r)) set.add(r);
   return [...set].filter((r) => r.toLowerCase() !== 'minho-nim/minlab');
 }
+
+/** 못 읽은 이유(쉬운 말): 401 토큰 문제, 403·404 저장소가 토큰에 없거나 Actions 읽기 권한이 없음 */
+export function skipWhy(status: number): string {
+  if (status === 401) return 'GitHub 토큰이 만료됐거나 틀렸어요(AI 키 상태 확인)';
+  if (status === 403 || status === 404) return '토큰에 이 저장소의 Actions: Read 권한이 없어요(GitHub 토큰 설정에서 저장소·권한 추가)';
+  if (status === 0) return 'GitHub에 닿지 못했어요(잠시 뒤 다시)';
+  return `GitHub 오류 ${status}`;
+}

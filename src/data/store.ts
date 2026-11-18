@@ -202,7 +202,7 @@ export interface OfficeStore {
   /** 사용량 기간 읽기(v0.7.84): ai_calls·usage_runs의 [fromIso, toIso) 기록. 없으면 화면이 스냅샷(최근 7일)으로 센다 */
   usageRange?(fromIso: string, toIso: string): Promise<{ calls: import('../domain/usageStats').UsageCall[]; runs: import('../domain/usageStats').UsageRunRow[] }>;
   /** GitHub Actions 실행 기록(v0.7.93): 저장소·워크플로·분. 서버 actions-usage */
-  actionsUsage?(fromIso: string, toIso: string): Promise<NonNullable<import('../domain/usageStats').UsageInput['actions']>>;
+  actionsUsage?(fromIso: string, toIso: string): Promise<{ runs: NonNullable<import('../domain/usageStats').UsageInput['actions']>; skipped: { repo: string; why: string }[] }>;
   /** 웹 검색 남은 크레딧(서비스 사용량 API, 막혀 있으면 null, v0.7.53) */
   searchCredits?(): Promise<{ tavily: import('../domain/searchCredits').Credits | null; firecrawl: import('../domain/searchCredits').Credits | null }>;
   askGemini(

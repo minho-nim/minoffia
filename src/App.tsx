@@ -2672,7 +2672,7 @@ export function App() {
           {(tab === 'settings' || tab === 'team') && (
             <section className="settings" aria-label="설정">
               <div className="settings-box">
-                <UsagePanel rows={usageRows} period={usagePeriod} onPeriod={setUsagePeriod} range={usageRangeNow} liveCredits={liveCredits} monthCredits={snap.searchCredits} store={store} snap={snap} />
+                <UsagePanel rows={usageRows} actionsSkipped={usageInput.actionsSkipped} period={usagePeriod} onPeriod={setUsagePeriod} range={usageRangeNow} liveCredits={liveCredits} monthCredits={snap.searchCredits} store={store} snap={snap} />
               </div>
               {/* v0.6.44 소유자: 팀 관리를 프로젝트 순서 앞으로, 키 상태는 따로, 알림·화면은 작은 칸 둘로 */}
               <div className="settings-box">

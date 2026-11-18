@@ -65,21 +65,21 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, fresh]);
   // GitHub Actions(v0.7.93): GitHub API를 아끼려고 기간마다 10분 동안 다시 읽지 않는다(기록이 바뀌어도)
-  const [actions, setActions] = useState<{ key: string; runs: NonNullable<UsageInput['actions']> } | null>(null);
+  const [actions, setActions] = useState<{ key: string; runs: NonNullable<UsageInput['actions']>; skipped: NonNullable<UsageInput['actionsSkipped']> } | null>(null);
   useEffect(() => {
     if (!store?.actionsUsage) return;
     const hit = actionsCache.get(rangeKey);
     if (hit && Date.now() - hit.at < 10 * 60_000) {
-      setActions({ key: rangeKey, runs: hit.runs });
+      setActions({ key: rangeKey, runs: hit.runs, skipped: hit.skipped });
       return;
     }
     let live = true;
     const { fromIso, toIso } = rangeIso(range);
     store
       .actionsUsage(fromIso, toIso)
-      .then((runs) => {
-        actionsCache.set(rangeKey, { at: Date.now(), runs });
-        if (live) setActions({ key: rangeKey, runs });
+      .then(({ runs, skipped }) => {
+        actionsCache.set(rangeKey, { at: Date.now(), runs, skipped });
+        if (live) setActions({ key: rangeKey, runs, skipped });
       })
       .catch(() => undefined);
     return () => {
@@ -98,6 +98,7 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
       tasks: snap.tasks.map((t) => ({ id: t.id, title: t.title, projectId: t.projectId, type: t.type })),
       projects: snap.projects.map((p) => ({ id: p.id, name: p.name, repo: p.repo })),
       actions: actions && actions.key === rangeKey ? actions.runs : [],
+      actionsSkipped: actions && actions.key === rangeKey ? actions.skipped : [],
       promptChars: Object.fromEntries([...latest].map(([k, v]) => [k, v.chars])),
     };
     // 고른 기간의 기록이 도착하기 전에는 이전 기간 숫자 대신 스냅샷(최근 7일)으로 센다
@@ -109,7 +110,22 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
     };
   }, [remote, snap, rangeKey, actions]);
 }
-const actionsCache = new Map<string, { at: number; runs: NonNullable<UsageInput['actions']> }>();
+/** Actions를 못 읽은 저장소 안내(v0.7.94 소유자 "권한 같은 게 필요할 때"): 숫자가 왜 비는지와 고칠 곳 */
+function SkippedNote({ skipped }: { skipped: { repo: string; why: string }[] }) {
+  const byWhy = new Map<string, string[]>();
+  for (const s of skipped) byWhy.set(s.why, [...(byWhy.get(s.why) ?? []), s.repo.replace(/^minho-nim\//, '')]);
+  return (
+    <div className="usage-skipped" role="note">
+      <b>GitHub Actions를 못 읽은 저장소 {skipped.length}개</b>
+      {[...byWhy].map(([why, repos]) => (
+        <p key={why}>
+          {repos.join(', ')} — {why}
+        </p>
+      ))}
+    </div>
+  );
+}
+const actionsCache = new Map<string, { at: number; runs: NonNullable<UsageInput['actions']>; skipped: NonNullable<UsageInput['actionsSkipped']> }>();
 
 const CAP: Partial<Record<UsageAgentId, number>> = {
   claude: AGENT_BY_ID.claude.dailyCap ?? 20,
@@ -122,8 +138,10 @@ const meterUsed = (row: UsageRow) => (row.id === 'studioA' || row.id === 'studio
 
 type Live = { tavily: Credits | null; firecrawl: Credits | null } | null;
 
-export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCredits, store, snap }: {
+export function UsagePanel({ rows, actionsSkipped = [], period, onPeriod, range, liveCredits, monthCredits, store, snap }: {
   rows: UsageRow[];
+  /** Actions를 못 읽은 저장소(권한 등, v0.7.94) */
+  actionsSkipped?: { repo: string; why: string }[];
   period: Period;
   onPeriod: (p: Period) => void;
   range: Range;
@@ -195,6 +213,7 @@ export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCr
                     {row.unit === 'minute' ? `GitHub 실행 기록. 한도(한 달 2,000분)에 드는 비공개 저장소 ${row.billed ?? 0}분, 공개 저장소는 무료` : row.unit === 'credit' ? '크레딧: 앱 기록(검색 1번 = Tavily 1, Firecrawl 찾기 2·본문 1, 실패해도 서비스에 닿은 요청은 셈)' : `토큰: ${SOURCE_LABEL[row.source]}`}{row.unit === 'minute' ? '' : ' · 횟수: 앱 기록'}
                     {cap ? ` · 오늘 상한 ${row.id.startsWith('studio') ? `질문 ${cap}회(키마다)` : `${cap}회`}` : ''}
                   </p>
+                  {row.id === 'ci' && actionsSkipped.length > 0 && <SkippedNote skipped={actionsSkipped} />}
                   {engine && (
                     <p className="muted small">
                       이번 달 {live ? `서비스: 남은 ${leftOf(live).toLocaleString('ko-KR')}${live.remaining !== undefined && live.remaining > live.limit ? `(보너스 포함, 요금제 ${live.limit.toLocaleString('ko-KR')})` : ` / ${live.limit.toLocaleString('ko-KR')}`} · 사용 ${Math.max(live.used, appMonth).toLocaleString('ko-KR')}` : `서비스 숫자 없음 · 무료 ${FREE_MONTHLY[engine].toLocaleString('ko-KR')}`} · 앱 기록 {appMonth.toLocaleString('ko-KR')}
@@ -354,6 +373,8 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
           <b>{busiest.day ? dayLabel(busiest.day) : '—'}</b>
         </div>
       </div>
+
+      {(input.actionsSkipped ?? []).length > 0 && <SkippedNote skipped={input.actionsSkipped ?? []} />}
 
       <section className="usage-chart">
         <h4>{measure === 'n' ? '날짜별 사용 횟수' : '날짜별 토큰'}</h4>
