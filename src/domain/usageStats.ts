@@ -6,7 +6,7 @@
  *   없으면(Codex 포함) 지시서·결과 글자 수로 추정. Tavily·Firecrawl은 토큰이 아니라 크레딧.
  */
 import { kstDay } from './usage';
-import { searchCreditsOf } from './searchCredits';
+import { billable, searchCreditsOf } from './searchCredits';
 
 export type UsageAgentId = 'claude' | 'codex' | 'studioA' | 'studioB' | 'search' | 'firecrawl';
 export const USAGE_AGENTS: { id: UsageAgentId; name: string; unit: 'token' | 'credit' }[] = [
@@ -25,6 +25,8 @@ export interface UsageCall {
   purpose: string;
   model: string;
   ok: boolean;
+  /** 공급자 응답 코드(검색 크레딧: 실패해도 도착한 요청은 센다) */
+  status?: number | null;
   tokens: number | null;
   createdAt: string;
 }
@@ -174,7 +176,8 @@ function resultTokens(x: UsageResult, input: UsageInput): { tokens: number; logg
 
 /** 기간의 AI별 사용량 */
 export function summarize(input: UsageInput, r: Range): UsageRow[] {
-  const calls = input.calls.filter((c) => c.ok && inRange(c.createdAt, r));
+  // Studio 토큰은 성공만, 검색 크레딧은 서비스에 도착한 요청 모두(v0.7.88)
+  const calls = input.calls.filter((c) => inRange(c.createdAt, r) && (c.ok || ((c.provider === 'tavily' || c.provider === 'firecrawl') && billable(c))));
   const taskTitle = (id: string | null) => {
     const t = input.tasks.find((x) => x.id === id);
     if (!t) return '지운·시험 업무';
