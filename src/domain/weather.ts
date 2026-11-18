@@ -67,7 +67,7 @@ export function saveWeatherWhere(w: WeatherWhere) {
 export const validPlace = (s: string) => /^[가-힣A-Za-z0-9 ]{2,20}$/.test(s.trim());
 
 /** 현재 위치(약 1km로 줄여 보냄). 거절·시간 초과·지원 안 함이면 null → 서버가 서울로 */
-export function currentSpot(timeout = 8000): Promise<{ lat: number; lon: number } | null> {
+export function currentSpot(timeout = 5000): Promise<{ lat: number; lon: number } | null> {
   return new Promise((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(

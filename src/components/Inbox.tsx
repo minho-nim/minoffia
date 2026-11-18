@@ -1526,7 +1526,8 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           try {
             got = await onAskGemini(ask, history.slice(-6), encoded, livePut, opts).finally(() => setResearchPhase(null));
           } catch (e) {
-            if (!research) throw e;
+            // 날씨는 웹 조사·Gemini로 다시 묻지 않는다(날씨 값을 모름, v0.7.72)
+            if (!research || WEATHER_RE.test(text)) throw e;
             // 웹 검색(Tavily·Firecrawl)이 안 되면(휴가·무료 사용량 끝 등) 검색 없이 한 번 더 묻는다.
             set('');
             got = await onAskGemini(ask, history.slice(-6), encoded, put, { ...opts, research: false });
@@ -1537,7 +1538,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           const raw = got.answer;
           const sources = got.sources ?? [];
           // 날씨(v0.7.68)는 Open-Meteo 숫자로 규칙 답(Gemini 안 씀)
-          const via = got.engine === 'Open-Meteo' ? 'Open-Meteo 날씨 자료 · 규칙으로 답함' : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
+          const via = got.weather ? `${got.engine ?? '날씨'} 자료 · 규칙으로 답함` : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
           if (via || sources.length || got.weather) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}), ...(got.weather ? { weather: got.weather } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {
