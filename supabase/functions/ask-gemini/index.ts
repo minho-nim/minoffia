@@ -3,7 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
-import { cleanWhere, MET_SOURCE, WEATHER_SOURCE, weatherAnswer, weatherAsk } from './weather.ts';
+import { areaName, cleanWhere, MET_SOURCE, WEATHER_SOURCE, weatherAnswer, weatherAsk } from './weather.ts';
 import { deepSearch, failMessage, searchCredits, searchText, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
@@ -191,13 +191,19 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean; slot?: number; engine?: string; usage?: boolean; where?: unknown };
+  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean; slot?: number; engine?: string; usage?: boolean; where?: unknown; areaOf?: unknown };
   try {
     body = await req.json();
   } catch {
     return reply(400, { ok: false, error: '요청 본문이 JSON이 아닙니다.' });
   }
   // 팀 관리 '남은 크레딧 확인'(v0.7.53): 각 서비스 사용량 API만 읽는다(검색·Gemini는 부르지 않음)
+  // 설정 '날씨 지역' ↻(v0.7.73): 좌표 → 동네 이름만(OpenStreetMap, AI 없음, 좌표는 기록 안 함)
+  if (body.areaOf) {
+    const w = cleanWhere(body.areaOf);
+    if (!w || 'place' in w) return reply(400, { ok: false, error: '위치 값이 올바르지 않아요.' });
+    return reply(200, { ok: true, name: await areaName(w.lat, w.lon) });
+  }
   if (body.usage === true) return reply(200, { ok: true, credits: await searchCredits({ tavily: env('TAVILY_API_KEY'), firecrawl: env('FIRECRAWL_API_KEY') }) });
   const question = (body.question ?? '').trim();
   if (!question || question.length > MAX_QUESTION) return reply(400, { ok: false, error: `질문은 1~${MAX_QUESTION}자여야 합니다.` });

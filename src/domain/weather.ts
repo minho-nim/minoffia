@@ -67,13 +67,13 @@ export function saveWeatherWhere(w: WeatherWhere) {
 export const validPlace = (s: string) => /^[가-힣A-Za-z0-9 ]{2,20}$/.test(s.trim());
 
 /** 현재 위치(약 1km로 줄여 보냄). 거절·시간 초과·지원 안 함이면 null → 서버가 서울로 */
-export function currentSpot(timeout = 5000): Promise<{ lat: number; lon: number } | null> {
+export function currentSpot(timeout = 5000, fresh = false): Promise<{ lat: number; lon: number } | null> {
   return new Promise((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: Math.round(p.coords.latitude * 100) / 100, lon: Math.round(p.coords.longitude * 100) / 100 }),
       () => resolve(null),
-      { enableHighAccuracy: false, maximumAge: 30 * 60_000, timeout },
+      { enableHighAccuracy: false, maximumAge: fresh ? 0 : 30 * 60_000, timeout },
     );
   });
 }
@@ -93,4 +93,30 @@ export function demoWeather(now: Date): WeatherData {
     return { date: d.toISOString().slice(0, 10), wd: WD[d.getDay()], sky, lo, hi, rain };
   });
   return { place: '체험 · 서울', now: { temp: 5, sky: '맑음' }, days };
+}
+
+/** 마지막으로 확인한 현재 위치 이름과 시각(설정 ↻, 이 기기에만) */
+const SEEN = 'minoffia.weatherHereSeen';
+export function readHereSeen(): { name: string; at: string } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(SEEN) ?? 'null') as { name?: unknown; at?: unknown } | null;
+    return v && typeof v.name === 'string' && typeof v.at === 'string' ? { name: v.name, at: v.at } : null;
+  } catch {
+    return null;
+  }
+}
+export function saveHereSeen(name: string, at = new Date().toISOString()) {
+  try {
+    localStorage.setItem(SEEN, JSON.stringify({ name, at }));
+  } catch {
+    /* 못 저장해도 화면에는 보인다 */
+  }
+}
+/** '방금'·'5분 전'·'3시간 전'·'2일 전' */
+export function agoText(iso: string, now = Date.now()): string {
+  const m = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
+  if (m < 1) return '방금';
+  if (m < 60) return `${m}분 전`;
+  if (m < 1440) return `${Math.round(m / 60)}시간 전`;
+  return `${Math.round(m / 1440)}일 전`;
 }

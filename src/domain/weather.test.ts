@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAccountWeatherPlace, cleanWeather, demoWeather, readWeatherWhere, validPlace } from './weather';
+import { agoText, applyAccountWeatherPlace, cleanWeather, demoWeather, readWeatherWhere, validPlace } from './weather';
 
 describe('날씨 표 숫자(v0.7.70)', () => {
   it('서버 표 숫자를 확인하고 이상한 날은 뺀다', () => {
@@ -20,5 +20,12 @@ describe('날씨 표 숫자(v0.7.70)', () => {
     expect(readWeatherWhere()).toEqual({ mode: 'place', place: '분당' });
     applyAccountWeatherPlace(null);
     expect(readWeatherWhere()).toEqual({ mode: 'here' });
+  });
+  it('확인 시각을 쉬운 말로(v0.7.73)', () => {
+    const now = Date.parse('2026-11-18T10:00:00Z');
+    expect(agoText('2026-11-18T09:59:40Z', now)).toBe('방금');
+    expect(agoText('2026-11-18T09:50:00Z', now)).toBe('10분 전');
+    expect(agoText('2026-11-18T07:00:00Z', now)).toBe('3시간 전');
+    expect(agoText('2026-11-16T10:00:00Z', now)).toBe('2일 전');
   });
 });

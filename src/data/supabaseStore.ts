@@ -698,6 +698,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const res = await invoke('archify-result', { taskId, revision });
       return { started: Boolean(res.started || res.ready) };
     },
+    async areaName(spot) {
+      const data = await invoke('ask-gemini', { areaOf: spot });
+      return typeof data.name === 'string' && data.name ? (data.name as string) : '현재 위치';
+    },
     weatherPlace: {
       async get() {
         const { data, error } = await client.from('owner_settings').select('weather_place').maybeSingle();
