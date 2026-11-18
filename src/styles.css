@@ -4627,39 +4627,6 @@ a.project-site {
 }
 
 
-/* 얇은 머리의 '사용량 보기'(v0.5.31 소유자): 큰 머리 내용을 얇은 머리 바로 아래에 펼친다(바깥을 누르면 닫힘) */
-.usage-pop,
-.usage-pop-backdrop {
-  display: none;
-}
-@media (max-width: 1039px) {
-  .usage-pop-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 58;
-    background: rgba(20, 14, 8, 0.35);
-  }
-  .usage-pop {
-    position: fixed;
-    top: calc(var(--mini-h) + env(safe-area-inset-top, 0px));
-    left: 0;
-    right: 0;
-    z-index: 59;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 12px;
-    padding: 10px max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px));
-    background: var(--brown);
-    color: var(--brown-ink);
-    box-shadow: 0 8px 14px -8px rgba(0, 0, 0, 0.5);
-  }
-  .usage-pop .usage {
-    flex-basis: 100%;
-  }
-}
-
 /* 머리가 스크롤과 같이 움직여 보이지 않게(v0.5.32 소유자): 얇은 머리는 미끄러져 내려오지 않고 그 자리에 바로 나타난다 */
 @media (max-width: 1039px) {
   .topbar-mini {
@@ -5815,11 +5782,9 @@ a.project-site {
     opacity: 0.92;
   }
   /* 설정 탭으로 옮긴 것은 휴대폰 머리에서 뺀다(사용량·밝기·연결) */
-  .topbar .usage,
   .topbar .mode,
   .topbar .push-toggle,
-  .topbar-mini .theme-toggle,
-  .topbar-mini .bar-btn-usage {
+  .topbar-mini .theme-toggle {
     display: none;
   }
 }
@@ -7925,7 +7890,6 @@ html.popup-open .project-sections > details[open] * {
     z-index: 455;
     pointer-events: auto;
   }
-  .topbar-mini.is-tiny .bar-btn-usage,
   .topbar-mini.is-tiny .topbar-project,
   .topbar-mini.is-tiny .theme-toggle {
     display: none;

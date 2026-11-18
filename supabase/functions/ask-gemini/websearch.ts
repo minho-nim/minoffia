@@ -96,6 +96,11 @@ export async function webSearch(keys: { tavily: string; firecrawl: string }, que
   return { hit: null, tries };
 }
 
+/** 이 시도가 답으로 쓴 검색인가(v0.7.82): deepSearch는 본문을 붙인 새 객체를 돌려줘 t === hit 비교가 늘 거짓이었다(성공한 Tavily가 '결과 없음'으로 기록됨) */
+export function isHit(t: SearchOutcome, hit: SearchOutcome | null): boolean {
+  return hit !== null && t.engine === hit.engine;
+}
+
 /** 실패 안내(쉬운 한국어) */
 export function failMessage(tries: SearchOutcome[]): string {
   if (!tries.length) return '웹 검색 키(TAVILY_API_KEY·FIRECRAWL_API_KEY)가 없어 웹 검색을 못 해요.';

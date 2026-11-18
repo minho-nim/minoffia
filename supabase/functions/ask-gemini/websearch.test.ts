@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BODY_MAX, deepSearch, failMessage, outOfCredit, parseFirecrawl, parseScrape, parseTavily, pickPages, searchText, webContext, webQuery, webSearch, WEB_RULE, type SearchOutcome } from './websearch';
+import { BODY_MAX, deepSearch, failMessage, isHit, outOfCredit, parseFirecrawl, parseScrape, parseTavily, pickPages, searchText, webContext, webQuery, webSearch, WEB_RULE, type SearchOutcome } from './websearch';
 
 describe('웹 조사 검색(v0.7.51~ Tavily → Firecrawl)', () => {
   it('검색어 정리', () => {
@@ -61,6 +61,16 @@ describe('3단계 조사: 알짜 2개 본문(v0.7.52)', () => {
     expect(res.pages).toBe(1);
     expect(res.hit?.results[0]).toMatchObject({ url: 'https://a.com', body: '본문A' });
     expect(res.scrapeFails).toEqual([{ url: 'https://b.com', status: 402, error: 'credit' }]);
+  });
+  it('본문을 붙여도 성공한 검색으로 기록된다(v0.7.82: 운영에서 성공한 Tavily 6건이 결과 없음으로 기록됨)', async () => {
+    const res = await deepSearch({ tavily: 'k', firecrawl: 'k' }, 'q', {
+      tavily: async () => ({ ok: true, engine: 'tavily', results: [r('https://a.com', 0.9), r('https://b.com', 0.8)], status: 200, error: '' }),
+      firecrawl: async () => { throw new Error('x'); },
+      scrape: async () => ({ ok: true, body: '본문', status: 200, error: '' }),
+    });
+    expect(res.tries[0]).not.toBe(res.hit); // 새 객체라 === 비교는 거짓
+    expect(isHit(res.tries[0], res.hit)).toBe(true);
+    expect(isHit(res.tries[0], null)).toBe(false);
   });
   it('Firecrawl 키가 없으면 본문 없이 요약만', async () => {
     let scraped = 0;
