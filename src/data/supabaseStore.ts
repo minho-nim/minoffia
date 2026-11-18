@@ -700,7 +700,7 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     async areaName(spot) {
       const data = await invoke('ask-gemini', { areaOf: spot });
-      return typeof data.name === 'string' && data.name ? (data.name as string) : '현재 위치';
+      return typeof data.name === 'string' ? (data.name as string) : '';
     },
     weatherPlace: {
       async get() {
