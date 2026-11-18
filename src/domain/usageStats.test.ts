@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byProject, customRange, dailyOf, estimateTokens, kindsOf, loggedTokens, rangeIso, rangeOf, summarize, usageText, type UsageInput } from './usageStats';
+import { byProject, customRange, dailyOf, estimateTokens, groupOf, kindsOf, loggedTokens, rangeIso, rangeOf, summarize, usageText, type UsageInput } from './usageStats';
 
 // 2026-11-18(수) 10시 KST
 const now = new Date('2026-11-18T01:00:00Z');
@@ -40,6 +40,26 @@ describe('기간', () => {
     expect(rangeOf('month', now)).toMatchObject({ from: '2026-11-01', to: '2026-11-30', label: '2026년 11월' });
     expect(rangeOf('month', now, -11)).toMatchObject({ from: '2025-12-01', to: '2025-12-31' });
     expect(rangeIso(rangeOf('day', now))).toEqual({ fromIso: '2026-11-17T15:00:00.000Z', toIso: '2026-11-18T15:00:00.000Z' });
+  });
+});
+
+describe('무슨 일에 썼나 큰 갈래(v0.7.95)', () => {
+  it('7개로 묶는다', () => {
+    expect(groupOf('studioA', 'question', '질문')).toBe('대화·질문');
+    expect(groupOf('studioB', 'research', '웹 조사')).toBe('웹 조사');
+    expect(groupOf('firecrawl', 'scrape', '본문 읽기')).toBe('웹 조사');
+    expect(groupOf('studioA', 'plan', '기획서 초안')).toBe('기획·디자인');
+    expect(groupOf('studioB', 'review', '결과 채점')).toBe('검토·채점');
+    expect(groupOf('studioA', 'wiki', '위키 정리')).toBe('정리·기타');
+    expect(groupOf('codex', '개발', '개발')).toBe('개발');
+    expect(groupOf('claude', 'UI·디자인', 'UI·디자인')).toBe('기획·디자인');
+    expect(groupOf('claude', '지운·시험 업무', '지운·시험 업무')).toBe('정리·기타');
+    expect(groupOf('ci', 'PR 검사(verify)', 'PR 검사(verify)')).toBe('검사·배포');
+    expect(groupOf('ci', '운영 배포(release)', '운영 배포(release)')).toBe('검사·배포');
+    expect(groupOf('ci', '결과 화면 찍기', '결과 화면 찍기')).toBe('검사·배포');
+    expect(groupOf('ci', 'UI 코드 검사 넣기', 'UI 코드 검사 넣기')).toBe('정리·기타');
+    expect(groupOf('ci', '옵시디언 버전 노트', '옵시디언 버전 노트')).toBe('정리·기타');
+    expect(groupOf('ci', '스킬 넣기', '스킬 넣기')).toBe('정리·기타');
   });
 });
 

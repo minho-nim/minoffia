@@ -10,7 +10,10 @@ import { GEMINI_QUESTION_CAP } from '../domain/quota';
 import {
   byProject,
   customRange,
+  groupOf,
   kindsOf,
+  WORK_GROUPS,
+  type WorkGroup,
   dailyOf,
   daysOf,
   rangeIso,
@@ -259,11 +262,14 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   const [tip, setTip] = useState<string | null>(null);
   // 무슨 일에 썼나 보기(v0.7.92 소유자 "토글로 에이전트별 보기·업무별 보기")
   const [workView, setWorkView] = useState<'work' | 'agent'>('work');
+  // 큰 갈래 안의 세부(v0.7.95 소유자 "설명은 따로 자세히 버튼 안에")
+  const [workDetail, setWorkDetail] = useState(false);
   const range = useMemo(() => (period === 'custom' ? customRange(from, to) : rangeOf(period, new Date(), offset)), [period, offset, from, to]);
   const input = useUsageInput(store, snap, range);
   const rows = useMemo(() => summarize(input, range), [input, range]);
   // 날짜별 막대는 오늘까지만(이번 달·주의 남은 날은 빈 막대라 뺀다)
-  const daily = useMemo(() => dailyOf(input, range.to > today ? { ...range, to: today } : range), [input, range, today]);
+  // v0.7.95 소유자 "주간·월간은 1주·1달이 전부 보이게": 오늘 뒤 날짜도 빈 막대로 둔다
+  const daily = useMemo(() => dailyOf(input, range), [input, range]);
   const kinds = useMemo(() => kindsOf(input, range), [input, range]);
   const projects = useMemo(() => byProject(input, range), [input, range]);
   const series = USAGE_AGENTS.filter((a) => measure === 'n' || a.unit === 'token');
@@ -294,27 +300,38 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   const tipDay = tip ? daily.find((d) => d.day === tip) : undefined;
   const pmax = Math.max(1, ...projects.map((p) => p.claude + p.codex + p.ci));
   // 무슨 일에 썼나(v0.7.91 소유자 "원래 디자인이 좋음"): 일 종류마다 막대 한 줄, 에이전트는 색으로 쌓는다(모든 에이전트)
-  const workMap = new Map<string, { label: string; parts: { id: UsageAgentId; name: string; v: number }[]; total: number }>();
-  // 줄은 횟수가 있는 일로 정하고(토글을 바꿔도 줄 수·순서가 같아 흔들리지 않게, v0.7.93) 값만 바꾼다
+  // 업무별(v0.7.95): 7개 큰 갈래로 묶는다. 줄은 횟수가 있는 갈래로 정해 토글을 바꿔도 줄 수·순서가 같게(v0.7.93), 세부는 '자세히'
+  const workMap = new Map<string, { label: string; parts: { id: UsageAgentId; name: string; v: number }[]; total: number; subs: Map<string, number> }>();
   const order = new Map<string, number>();
   for (const k of kinds) {
     for (const x of k.kinds) {
       if (!x.n) continue;
-      order.set(x.label, (order.get(x.label) ?? 0) + x.n);
-      const line = workMap.get(x.label) ?? { label: x.label, parts: [], total: 0 };
+      const g = groupOf(k.id, x.key, x.label);
+      order.set(g, (order.get(g) ?? 0) + x.n);
+      const line = workMap.get(g) ?? { label: g, parts: [], total: 0, subs: new Map<string, number>() };
       const v = measure === 'n' ? x.n : series.some((s) => s.id === k.id) ? x.tokens : 0;
-      if (v) line.parts.push({ id: k.id, name: k.name, v });
+      if (v) {
+        const part = line.parts.find((p) => p.id === k.id);
+        if (part) part.v += v;
+        else line.parts.push({ id: k.id, name: k.name, v });
+        const sub = `${x.label}(${k.name})`;
+        line.subs.set(sub, (line.subs.get(sub) ?? 0) + v);
+      }
       line.total += v;
-      workMap.set(x.label, line);
+      workMap.set(g, line);
     }
   }
-  const work = [...workMap.values()].sort((a, b) => (order.get(b.label) ?? 0) - (order.get(a.label) ?? 0));
+  const work = [...workMap.values()].sort((a, b) => (order.get(b.label) ?? 0) - (order.get(a.label) ?? 0) || WORK_GROUPS.indexOf(a.label as WorkGroup) - WORK_GROUPS.indexOf(b.label as WorkGroup));
   const wmax = Math.max(1, ...work.map((w) => w.total));
-  // 에이전트별: 에이전트마다 한 줄(그 색), 아래에 한 일 종류를 짧게
-  // 에이전트별: 모든 에이전트 줄을 늘 보인다(토큰 보기에서 토큰이 없는 Tavily·Firecrawl·Actions는 '—')
+  // 에이전트별: 모든 에이전트 줄을 늘 보인다(토큰 보기에서 토큰이 없는 Tavily·Firecrawl·Actions는 '—'). 아래 글은 큰 갈래, '자세히'면 세부
   const byAgent = kinds.map((k) => {
     const has = series.some((s) => s.id === k.id);
-    return { id: k.id, name: k.name, has, total: !has ? 0 : measure === 'n' ? k.n : k.amount, lines: k.kinds.map((x) => ({ label: x.label, v: measure === 'n' ? x.n : x.tokens })).filter((x) => has && x.v > 0) };
+    const grouped = new Map<string, number>();
+    for (const x of k.kinds) {
+      const v = measure === 'n' ? x.n : x.tokens;
+      if (has && v > 0) grouped.set(workDetail ? x.label : groupOf(k.id, x.key, x.label), (grouped.get(workDetail ? x.label : groupOf(k.id, x.key, x.label)) ?? 0) + v);
+    }
+    return { id: k.id, name: k.name, has, total: !has ? 0 : measure === 'n' ? k.n : k.amount, lines: [...grouped].map(([label, v]) => ({ label, v })).sort((p, q) => q.v - p.v) };
   });
   const amax = Math.max(1, ...byAgent.map((a) => a.total));
   return (
@@ -450,6 +467,9 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
               에이전트별
             </button>
           </div>
+          <button type="button" className="usage-detail-btn" aria-pressed={workDetail} onClick={() => setWorkDetail((v) => !v)}>
+            {workDetail ? '자세히 ▲' : '자세히 ▼'}
+          </button>
         </div>
         {workView === 'agent' ? (
           <div className="usage-hbars">
@@ -477,7 +497,8 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
         {work.length ? (
           <div className="usage-hbars">
             {work.map((w) => (
-              <div key={w.label} className="usage-hb">
+              <div key={w.label} className="usage-hb-wrap">
+              <div className="usage-hb">
                 <span title={w.label}>{w.label}</span>
                 <span className="bar">
                   {w.parts.map((p) => (
@@ -485,6 +506,15 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
                   ))}
                 </span>
                 <span className="v">{fmt(w.total)}</span>
+              </div>
+              {workDetail && w.subs.size > 0 && (
+                <p className="usage-hb-note">
+                  {[...w.subs]
+                    .sort((p, q) => q[1] - p[1])
+                    .map(([label, v]) => `${label} ${fmt(v)}`)
+                    .join(' · ')}
+                </p>
+              )}
               </div>
             ))}
           </div>

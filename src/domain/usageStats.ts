@@ -336,6 +336,28 @@ export function byProject(input: UsageInput, r: Range): { id: string; name: stri
   return used(gone) + gone.tokens > 0 ? [...sorted, g] : sorted;
 }
 
+/** 무슨 일에 썼나 큰 갈래(v0.7.95 소유자 "분류가 너무 많아"): 7개로 묶고 세부는 '자세히'에서 */
+export const WORK_GROUPS = ['대화·질문', '웹 조사', '기획·디자인', '개발', '검토·채점', '검사·배포', '정리·기타'] as const;
+export type WorkGroup = (typeof WORK_GROUPS)[number];
+const CHECK_DEPLOY = /verify|검사|배포|화면 확인|화면 찍기|PR 열기/;
+/** 한 일(에이전트·키·이름) → 큰 갈래 */
+export function groupOf(agent: UsageAgentId, key: string, label: string): WorkGroup {
+  if (agent === 'search' || agent === 'firecrawl') return '웹 조사';
+  if (agent === 'ci') return CHECK_DEPLOY.test(label) && !/넣기/.test(label) ? '검사·배포' : '정리·기타';
+  if (agent === 'studioA' || agent === 'studioB') {
+    if (key === 'question' || key === 'image') return '대화·질문';
+    if (key === 'research') return '웹 조사';
+    if (key === 'plan' || key === 'pm' || key === 'design' || key === 'drawing' || key === 'prototype') return '기획·디자인';
+    if (key === 'review') return '검토·채점';
+    return '정리·기타';
+  }
+  // Claude·Codex: 업무 종류
+  if (label === '개발' || label === '프로토타입') return '개발';
+  if (label === '기획·설계' || label === 'UI·디자인') return '기획·디자인';
+  if (label === '검수·QA' || label === '리서치') return '검토·채점';
+  return '정리·기타';
+}
+
 /** 짧은 숫자(1.2k) */
 export const shortNum = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
 
