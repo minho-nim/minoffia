@@ -200,6 +200,8 @@ export async function deepSearch(
 export interface Credits {
   used: number;
   limit: number;
+  /** 서비스가 알려 준 남은 크레딧(보너스 포함, v0.7.89). 있으면 화면은 이 값을 남은 것으로 쓴다 */
+  remaining?: number;
 }
 /** Tavily /usage 답 → 이번 달 사용·한도(계정 기준, 없으면 키 기준) */
 export function parseTavilyUsage(data: unknown): Credits | null {
@@ -208,12 +210,14 @@ export function parseTavilyUsage(data: unknown): Credits | null {
   const limit = Number(d?.account?.plan_limit ?? d?.key?.limit);
   return Number.isFinite(used) && Number.isFinite(limit) && limit > 0 ? { used, limit } : null;
 }
-/** Firecrawl /v2/team/credit-usage 답 → 사용·한도(남은 것 = 한도 − 사용) */
+/** Firecrawl /v2/team/credit-usage 답 → 사용·한도·남은 것.
+ * v0.7.89 원인: 계정에 보너스 크레딧이 있으면 남은 것(1,009)이 요금제(1,000)보다 커서 '한도 − 남은 것'이 음수 → 0 사용으로 보였다.
+ * 남은 것은 서비스 값 그대로 넘기고, 쓴 양은 앱이 앱 기록과 견줘 정한다(trustCredits) */
 export function parseFirecrawlUsage(data: unknown): Credits | null {
   const d = (data as { data?: { remainingCredits?: unknown; remaining_credits?: unknown; planCredits?: unknown; plan_credits?: unknown } })?.data;
   const remaining = Number(d?.remainingCredits ?? d?.remaining_credits);
   const plan = Number(d?.planCredits ?? d?.plan_credits);
-  return Number.isFinite(remaining) && Number.isFinite(plan) && plan > 0 ? { used: Math.max(0, plan - remaining), limit: plan } : null;
+  return Number.isFinite(remaining) && Number.isFinite(plan) && plan > 0 ? { used: Math.max(0, plan - remaining), limit: plan, remaining } : null;
 }
 async function getJson(url: string, key: string): Promise<unknown> {
   const res = await fetch(url, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(6_000) }).catch(() => null);

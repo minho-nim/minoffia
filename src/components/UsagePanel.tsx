@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { OfficeStore } from '../data/store';
 import type { Snapshot } from '../domain/types';
 import type { Credits } from '../domain/searchCredits';
-import { FREE_MONTHLY } from '../domain/searchCredits';
+import { FREE_MONTHLY, leftOf } from '../domain/searchCredits';
 import { AGENT_BY_ID } from '../domain/agents';
 import { GEMINI_QUESTION_CAP } from '../domain/quota';
 import {
@@ -171,8 +171,8 @@ export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCr
                   </p>
                   {engine && (
                     <p className="muted small">
-                      이번 달 {live ? `서비스: ${live.used.toLocaleString('ko-KR')} / ${live.limit.toLocaleString('ko-KR')} 사용` : `서비스 숫자 없음 · 무료 ${FREE_MONTHLY[engine].toLocaleString('ko-KR')}`} · 앱 기록 {appMonth.toLocaleString('ko-KR')}
-                      {live && live.used < appMonth ? ' — 서비스 숫자가 앱 기록보다 적어 앱 기록으로 셉니다' : ''}
+                      이번 달 {live ? `서비스: 남은 ${leftOf(live).toLocaleString('ko-KR')}${live.remaining !== undefined && live.remaining > live.limit ? `(보너스 포함, 요금제 ${live.limit.toLocaleString('ko-KR')})` : ` / ${live.limit.toLocaleString('ko-KR')}`} · 사용 ${Math.max(live.used, appMonth).toLocaleString('ko-KR')}` : `서비스 숫자 없음 · 무료 ${FREE_MONTHLY[engine].toLocaleString('ko-KR')}`} · 앱 기록 {appMonth.toLocaleString('ko-KR')}
+                      {live && live.used < appMonth ? ' — 서비스가 쓴 양을 알려 주지 않아(보너스 크레딧) 앱 기록으로 셉니다' : ''}
                     </p>
                   )}
                 </div>

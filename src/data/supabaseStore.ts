@@ -745,8 +745,10 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       const data = await invoke('ask-gemini', { usage: true });
       const c = (data.credits ?? {}) as Record<string, unknown>;
       const one = (v: unknown) => {
-        const x = v as { used?: unknown; limit?: unknown } | null;
-        return x && Number.isFinite(Number(x.used)) && Number(x.limit) > 0 ? { used: Number(x.used), limit: Number(x.limit) } : null;
+        const x = v as { used?: unknown; limit?: unknown; remaining?: unknown } | null;
+        if (!x || !Number.isFinite(Number(x.used)) || !(Number(x.limit) > 0)) return null;
+        const remaining = x.remaining === undefined || x.remaining === null ? NaN : Number(x.remaining);
+        return { used: Number(x.used), limit: Number(x.limit), ...(Number.isFinite(remaining) ? { remaining } : {}) };
       };
       return { tavily: one(c.tavily), firecrawl: one(c.firecrawl) };
     },

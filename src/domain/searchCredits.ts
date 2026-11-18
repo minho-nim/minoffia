@@ -34,16 +34,20 @@ export function searchTodayOf(rows: { provider: string; model: string; created_a
 export interface Credits {
   used: number;
   limit: number;
+  /** 서비스가 알려 준 남은 크레딧(보너스 포함, v0.7.89) */
+  remaining?: number;
 }
+/** 남은 크레딧: 서비스 값이 있으면 그것(보너스 포함), 없으면 한도 − 사용 */
+export const leftOf = (c: Credits) => c.remaining ?? Math.max(0, c.limit - c.used);
 /** 서비스 숫자가 앱 기록보다 적으면 믿지 않는다(v0.7.88: Firecrawl 사용량 API가 0을 답했지만 대시보드는 16) → 앱 기록으로 */
 export function trustCredits(live: Credits | null | undefined, app: number | undefined): Credits | null {
   if (!live) return null;
-  return app !== undefined && live.used < app ? { used: app, limit: live.limit } : live;
+  return app !== undefined && live.used < app ? { ...live, used: app } : live;
 }
 /** 화면 한 줄: 실제 숫자가 있으면 "남은 크레딧 n / 한도", 없으면 "약 n / 1,000 사용(추정)" */
 export function creditLine(engine: 'tavily' | 'firecrawl', used: number | undefined, live: Credits | null | undefined): string {
   const fmt = (n: number) => n.toLocaleString('ko-KR');
-  if (live) return `이번 달 남은 크레딧 ${fmt(Math.max(0, live.limit - live.used))} / ${fmt(live.limit)}`;
+  if (live) return `이번 달 남은 크레딧 ${fmt(leftOf(live))}${live.remaining !== undefined && live.remaining > live.limit ? `(보너스 포함, 요금제 ${fmt(live.limit)})` : ` / ${fmt(live.limit)}`}`;
   if (used === undefined) return '사용 기록 없음';
   return `이번 달 남은 크레딧 약 ${fmt(Math.max(0, FREE_MONTHLY[engine] - used))} / ${fmt(FREE_MONTHLY[engine])}(추정)`;
 }
