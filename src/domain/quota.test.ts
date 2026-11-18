@@ -21,7 +21,7 @@ describe('quotaFor', () => {
   it('Gemini: 성공 횟수를 용도별로 세고, 오늘 마지막이 429면 소진', () => {
     const s: Snapshot = { ...base, aiCalls: [call(true, 'question'), call(true, 'image'), call(false, 'question')] };
     expect(quotaFor('studioA', s, now)).toMatchObject({ state: 'available', label: '2회' });
-    expect(quotaFor('studioA', s, now).detail).toContain('질문 1·웹 조사 0·이미지 1');
+    expect(quotaFor('studioA', s, now).detail).toContain('질문 1/40·웹 조사 0·이미지 1/20');
     const limited: Snapshot = { ...base, aiCalls: [call(true, 'question', 200, 2), call(false, 'question', 429, 2)] };
     expect(quotaFor('studioB', limited, now).state).toBe('exhausted');
     expect(quotaFor('studioA', limited, now).state).toBe('available');
@@ -43,6 +43,14 @@ describe('quotaFor', () => {
     expect(quotaFor('search', s, now).label).toBe('남은 약 990');
     expect(quotaFor('search', s, now, { tavily: { used: 120, limit: 1000 }, firecrawl: null }).label).toBe('남은 880');
     expect(quotaFor('firecrawl', s, now, { tavily: null, firecrawl: { used: 500, limit: 500 } })).toMatchObject({ state: 'exhausted', label: '이번 달 소진' });
+  });
+
+  it('상한은 키마다 따로: A가 질문·이미지를 다 써도 B는 사용 가능', () => {
+    const many = (n: number, purpose: string, slot: 1 | 2) => Array.from({ length: n }, () => call(true, purpose, 200, slot));
+    const s: Snapshot = { ...base, aiCalls: [...many(40, 'question', 1), ...many(20, 'image', 1), call(true, 'question', 200, 2)] };
+    expect(quotaFor('studioA', s, now).state).toBe('exhausted');
+    expect(quotaFor('studioB', s, now)).toMatchObject({ state: 'available', label: '1회' });
+    expect(quotaFor('studioB', s, now).detail).toContain('질문 1/40');
   });
 
   it('셀 수 없는 AI는 알 수 없음', () => {

@@ -226,9 +226,15 @@ Deno.serve(async (req) => {
   const purpose = research ? 'research' : 'question';
   const cap = research ? Number.POSITIVE_INFINITY : Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', purpose).eq('ok', true).gte('created_at', kstMidnight);
-  if ((count ?? 0) >= cap) {
-    return reply(429, { ok: false, error: research ? `오늘 웹 조사 ${cap}회를 모두 썼습니다.` : `오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
+  // 하루 상한은 키마다 따로 센다(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛰고 다른 키가 답한다.
+  const full = new Set<number>();
+  if (Number.isFinite(cap)) {
+    const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', purpose).eq('ok', true).gte('created_at', kstMidnight);
+    for (const slot of [1, 2]) if ((usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length >= cap) full.add(slot);
+  }
+  const usable = [0, 1].filter((i) => keys[i] && !full.has(i + 1));
+  if (!usable.length) {
+    return reply(429, { ok: false, error: `오늘 Gemini 질문을 키마다 ${cap}회씩 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   }
 
   // 웹 조사 3단계(v0.7.52): ① Tavily로 찾기(안 되면 Firecrawl 검색) ② 알짜 2개를 Firecrawl로 본문 ③ Gemini가 종합. 자료는 질문 뒤에만 붙인다.
@@ -304,6 +310,8 @@ Deno.serve(async (req) => {
   if (away.has('studioA')) keys[0] = '';
   if (away.has('studioB')) keys[1] = '';
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
+  for (const slot of full) keys[slot - 1] = '';
+  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `근무 중인 Studio의 오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
   // @StudioB(v0.6.24, 소유자 "제미나이도 각각 태그"): B를 먼저, 안 되면 A가 대신 답한다. 기본은 A 먼저.
   const order = body.slot === 2 ? [1, 0] : [0, 1];
   for (const tryModel of models) {

@@ -104,14 +104,17 @@ Deno.serve(async (req) => {
 
   const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_IMAGE_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin
+  // 하루 상한은 키마다 따로 센다(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛴다.
+  const { data: usedRows } = await admin
     .from('ai_calls')
-    .select('id', { count: 'exact', head: true })
+    .select('key_slot')
     .eq('owner_id', user.id)
     .eq('purpose', 'image')
     .eq('ok', true)
     .gte('created_at', kstMidnight);
-  if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 이미지·문서 분석 ${cap}회를 모두 썼습니다.` });
+  const full = [1, 2].filter((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length >= cap);
+  for (const slot of full) keys[slot - 1] = '';
+  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 이미지·문서 분석을 키마다 ${cap}회씩 모두 썼습니다.` });
 
   const file = await admin.storage.from('attachments').download(att.storage_path);
   if (file.error || !file.data) return reply(500, { ok: false, error: '저장된 파일을 읽지 못했습니다.' });
