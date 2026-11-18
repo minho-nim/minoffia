@@ -97,8 +97,13 @@ Deno.serve(async (req) => {
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_PLAN_DAILY_CAP')) || DEFAULT_DAILY_CAP);
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-  const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'plan').eq('ok', true).gte('created_at', kstMidnight);
-  if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Gemini 기획서 초안 ${cap}회를 모두 썼습니다. ChatGPT로 기획하세요.` });
+  // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛴다
+  const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'plan').eq('ok', true).gte('created_at', kstMidnight);
+  const usedBy = [1, 2].map((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length);
+  usedBy.forEach((n, i) => {
+    if (n >= cap) keys[i] = '';
+  });
+  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 Gemini 기획서 초안을 키마다 ${cap}회씩 모두 썼습니다. ChatGPT로 기획하세요.` });
 
   // v0.4.57: 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것을 기획 요청 끝에 붙인다.
   const rules = rulesSection(await loadRules(userClient, task.project_id), '## 이 프로젝트에서 지켜야 할 것 (어기지 않는다)');

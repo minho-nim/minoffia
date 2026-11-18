@@ -108,8 +108,10 @@ Deno.serve(async (req) => {
   if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요.' });
 
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
+  // v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 예약 함수(claim_gemini_pm)는 키를 정하기 전에 합계로 세므로 근무 중인 키 수만큼 상한을 곱한다.
+  // shortcut: 합계 상한(키마다 정확히는 아님, 예약 함수 안 상한 20도 그대로), 키마다 정확히 세야 하면 예약 함수에 키 번호를 받는 마이그레이션
   const { data: claim, error: claimError } = await admin.rpc('claim_gemini_pm', {
-    p_task: task.id, p_owner: user.id, p_spec: spec.revision, p_cap: cap, p_model: model,
+    p_task: task.id, p_owner: user.id, p_spec: spec.revision, p_cap: cap * keys.filter(Boolean).length, p_model: model,
   });
   if (claimError) return reply(500, { ok: false, error: `계획 예약 실패: ${claimError.message}` });
   const reservation = Array.isArray(claim) ? claim[0] : claim;

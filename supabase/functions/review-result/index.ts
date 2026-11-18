@@ -244,11 +244,12 @@ Deno.serve(async (req) => {
     if (away.has('studioB')) keys[1] = '';
     const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_REVIEW_DAILY_CAP')) || DEFAULT_DAILY_CAP);
     const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
-    const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);
+    // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정): A 채점은 A 키, B 채점은 B 키만 쓰므로 한쪽이 다 써도 다른 쪽은 채점한다
+    const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);
     const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
     // 화면·디자인 업무면 디자인 채점 기준과 프로젝트 디자인 기준을 붙인다(v0.5.56, 호출 수 그대로)
     const prompt = `${reviewMaterial()}${designReviewSection(`${spec.final_prompt ?? ''}\n${spec.change_scope ?? ''}`, String((task.projects as unknown as { design_md?: string } | null)?.design_md ?? ''))}`;
-    let used = count ?? 0;
+    const used = [1, 2].map((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length);
     const repoName = String((task.projects as unknown as { repo: string | null } | null)?.repo ?? '');
     const canReadFiles = repoName.includes('/') && repoName.toLowerCase() !== 'minho-nim/minlab';
     // 파일 요청(v0.5.52): 첫 채점에서만 "이 파일이 필요해"를 허용하고, 서버가 GitHub에서 읽어 한 번만 다시 묻는다.
@@ -256,7 +257,7 @@ Deno.serve(async (req) => {
       let filesAsked = false;
       const run = async (text: string, allowFiles: boolean): Promise<{ score: Score; slot: number } | null> => {
         for (const i of order) {
-          if (!keys[i] || used >= cap) continue;
+          if (!keys[i] || used[i] >= cap) continue;
           let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
           try {
             r = await callGemini(keys[i], model, allowFiles ? `${text}\n\n${NEED_FILES_ASK}` : text);
@@ -268,9 +269,9 @@ Deno.serve(async (req) => {
           const parsed = raw ? requireRunEvidence(raw, String(result.test_log ?? '')) : null;
           const need = !parsed && allowFiles && r.status === 200 ? parseNeedFiles(r.text) : null;
           await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'review', key_slot: i + 1, ok: Boolean(parsed || need), http_status: r.status || null, model, prompt_chars: text.length, answer_chars: r.text.length, ...(r.tokens ?? {}), ...(parsed || need ? {} : { error: (r.message || '점수 형식이 맞지 않음').slice(0, 300) }) });
-          used += parsed || need ? 1 : 0;
+          used[i] += parsed || need ? 1 : 0;
           if (parsed) return { score: parsed, slot: i };
-          if (need && used < cap) {
+          if (need && used[i] < cap) {
             filesAsked = true;
             const files = await Promise.all(need.map(async (path) => ({ path, text: await readRepoFile(repoName, path) })));
             return run(withFiles(text, files), false);
@@ -280,7 +281,7 @@ Deno.serve(async (req) => {
         return null;
       };
       const got = await run(`${prompt}\n\n${PERSPECTIVE_NOTE[who]}`, canReadFiles);
-      if (!got) return panelEntry(who, `Gemini ${who}`, null, used >= cap ? '오늘 채점 한도에 닿음' : !keys[who === 'A' ? 0 : 1] ? `Studio ${who} 휴가·키 없음(다른 Studio가 대신 채점하지 않음)` : '점수를 받지 못함(키·응답 확인)');
+      if (!got) return panelEntry(who, `Gemini ${who}`, null, used[who === 'A' ? 0 : 1] >= cap ? `오늘 Studio ${who} 채점 한도(${cap}회)에 닿음` : !keys[who === 'A' ? 0 : 1] ? `Studio ${who} 휴가·키 없음(다른 Studio가 대신 채점하지 않음)` : '점수를 받지 못함(키·응답 확인)');
       return panelEntry(who, `Gemini · Studio ${got.slot === 0 ? 'A' : 'B'}${filesAsked ? ' · 파일 확인' : ''}`, got.score);
     };
     // v0.7.57 소유자 "Gemini가 같은 일을 하거나 서로 교차하는 건 넘기지 않는 게 맞음": A 자리는 Studio A 키만, B 자리는 Studio B 키만(한쪽이 막히면 그 자리는 빠짐으로 남긴다. 같은 키 안의 예비 모델은 그대로)
