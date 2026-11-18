@@ -290,7 +290,7 @@ export function AgentRoster({
                 reviews={snap.workflow.reviews ?? []}
                 aiCalls={snap.aiCalls ?? []}
                 serverMode={serverMode}
-                quota={quotaFor(a.id, snap)}
+                quota={quotaFor(a.id, snap, undefined, liveCredits)}
                 limit={
                   KIND_OF[a.id]
                     ? {
@@ -309,7 +309,7 @@ export function AgentRoster({
             </section>
           );
         }
-        const q = quotaFor(a.id, snap);
+        const q = quotaFor(a.id, snap, undefined, liveCredits);
         return (
           <button key={a.id} type="button" className="agent-row" onClick={() => onSelect(a.id)} aria-label={`${a.name} 펼치기`}>
             <img className={`agent-row-portrait${spriteFor(a, 'stand').art ? ' is-art' : ''}`} src={spriteFor(a, 'stand').src} alt="" />
