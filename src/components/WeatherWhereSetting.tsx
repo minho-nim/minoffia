@@ -2,7 +2,7 @@
 // v0.7.71: 계정에 저장(onSave, 아이폰·PC 같이). 로컬 데모는 이 기기에만.
 // 질문에 곳을 적으면("부산 날씨") 그 곳이 먼저다. 현재 위치를 못 받으면(거절 등) 서울.
 // v0.7.73 소유자 "위치 새로고침 아이콘": '현재 위치' 옆에 지금 기준 동네와 확인 시각, ↻(위치를 새로 받고 동네 이름 다시 찾기).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { agoText, currentSpot, readHereSeen, readWeatherWhere, saveHereSeen, saveWeatherWhere, validPlace, type WeatherWhere } from '../domain/weather';
 
 export function WeatherWhereSetting({ onSave, areaName }: { onSave?: (place: string | null) => Promise<void>; areaName?: (spot: { lat: number; lon: number }) => Promise<string> }) {
@@ -21,7 +21,7 @@ export function WeatherWhereSetting({ onSave, areaName }: { onSave?: (place: str
       setBusy(false);
       return setNote('위치를 받지 못했어요. 휴대폰 설정에서 이 앱(브라우저)의 위치 허용을 켜 주세요. 그전까지는 서울로 답해요.');
     }
-    const name = areaName ? await areaName(spot).catch(() => '현재 위치') : '현재 위치';
+    const name = areaName ? await areaName(spot).catch(() => '이 근처') : '체험 위치';
     saveHereSeen(name);
     setSeen(readHereSeen());
     setBusy(false);
@@ -35,6 +35,20 @@ export function WeatherWhereSetting({ onSave, areaName }: { onSave?: (place: str
       .then(() => done && setNote(`${done} 계정에 저장했어요(다른 기기도 같이).`))
       .catch((e) => setNote(`계정에 저장하지 못했어요: ${(e as Error).message}. 이 기기에는 적용됐어요.`));
   };
+  // 위치 허용이 이미 돼 있으면 설정을 열 때 이름을 바로 맞춘다(30분 넘었거나 처음일 때만, 허용 창은 띄우지 않음)
+  useEffect(() => {
+    if (where.mode !== 'here' || (seen && Date.now() - new Date(seen.at).getTime() < 30 * 60_000)) return;
+    let alive = true;
+    navigator.permissions
+      ?.query({ name: 'geolocation' as PermissionName })
+      .then((st) => alive && st.state === 'granted' && void refreshHere())
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+    // 처음 열 때 한 번만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const tryHere = () => {
     choose({ mode: 'here' });
     void refreshHere();
@@ -46,20 +60,24 @@ export function WeatherWhereSetting({ onSave, areaName }: { onSave?: (place: str
   };
   return (
     <div className="weather-where">
-      <label className="weather-where-row">
-        <input type="radio" name="weather-where" id="weather-where-here" checked={where.mode === 'here'} onChange={tryHere} />
-        현재 위치
-      </label>
-      {where.mode === 'here' && (
-        <p className="weather-where-here">
-          <span>{seen ? `${seen.name} · ${agoText(seen.at)} 확인` : '아직 확인 전'}</span>
-          <button type="button" className="icon-btn weather-where-sync" onClick={() => void refreshHere()} disabled={busy} aria-label="현재 위치 다시 확인" title="현재 위치 다시 확인">
-            <span aria-hidden="true" className={busy ? 'is-spinning' : undefined}>
-              ↻
-            </span>
-          </button>
-        </p>
-      )}
+      {/* v0.7.74 소유자 "현재 위치 옆에 어딘지도 딱": 같은 줄에 동네 이름 · 확인 시각 · ↻ */}
+      <div className="weather-where-row">
+        <label>
+          <input type="radio" name="weather-where" id="weather-where-here" checked={where.mode === 'here'} onChange={tryHere} />
+          현재 위치
+        </label>
+        {where.mode === 'here' && (
+          <>
+            <b className="weather-where-name">{busy ? '확인 중…' : seen ? seen.name : '확인 전'}</b>
+            {seen && !busy && <span className="weather-where-ago">{agoText(seen.at)}</span>}
+            <button type="button" className="weather-where-sync" onClick={() => void refreshHere()} disabled={busy} aria-label="현재 위치 다시 확인" title="현재 위치 다시 확인">
+              <span aria-hidden="true" className={busy ? 'is-spinning' : undefined}>
+                ↻
+              </span>
+            </button>
+          </>
+        )}
+      </div>
       <div className="weather-where-row">
         <label>
           <input type="radio" name="weather-where" id="weather-where-place" checked={where.mode === 'place'} onChange={() => validPlace(place) && choose({ mode: 'place', place: place.trim() })} />
