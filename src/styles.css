@@ -3621,9 +3621,9 @@ a.project-site {
   overflow-wrap: anywhere;
 }
 
-.inbox-sources li::before {
-  content: '출처 ';
+.inbox-sources .src-no {
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 미배정 캐릭터(팀 관리, 2026-11-02) */

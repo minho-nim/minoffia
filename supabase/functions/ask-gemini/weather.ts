@@ -54,22 +54,37 @@ interface Forecast {
 }
 
 const DAY_WORD = ['오늘', '내일', '모레'];
+const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 const round = (n: number | undefined) => (typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : null);
 
-/** 받은 숫자로 답 글을 만든다(규칙) */
-export function weatherText(place: string, day: 0 | 1 | 2, f: Forecast): string | null {
+/** 하루 한 줄: '11/19 목 · 비 · 3°~9° · 비 70%' (숫자가 빠지면 null) */
+function dayLine(f: Forecast, i: number): string | null {
   const d = f.daily;
-  const hi = round(d?.temperature_2m_max?.[day]);
-  const lo = round(d?.temperature_2m_min?.[day]);
-  const code = d?.weather_code?.[day];
-  if (hi === null || lo === null || typeof code !== 'number') return null;
-  const date = d?.time?.[day]?.slice(5).replace('-', '/') ?? '';
-  const rain = d?.precipitation_probability_max?.[day];
-  const lines = [`${place} ${DAY_WORD[day]}${date ? `(${date})` : ''} 날씨: ${skyOf(code)}, 최저 ${lo}° / 최고 ${hi}°${typeof rain === 'number' ? `, 비·눈 올 확률 ${Math.round(rain)}%` : ''}.`];
+  const hi = round(d?.temperature_2m_max?.[i]);
+  const lo = round(d?.temperature_2m_min?.[i]);
+  const code = d?.weather_code?.[i];
+  const time = d?.time?.[i];
+  if (hi === null || lo === null || typeof code !== 'number' || !time) return null;
+  const rain = d?.precipitation_probability_max?.[i];
+  const wd = WEEKDAY[new Date(`${time}T00:00:00Z`).getUTCDay()];
+  return `${time.slice(5).replace('-', '/')} ${wd} · ${skyOf(code)} · ${lo}°~${hi}°${typeof rain === 'number' ? ` · 비·눈 ${Math.round(rain)}%` : ''}${typeof rain === 'number' && rain >= 50 ? ' ☂' : ''}`;
+}
+
+/** 받은 숫자로 답 글을 만든다(규칙). v0.7.69 소유자 "오늘 내일 모레 알려주고 1주일": 늘 오늘·내일·모레 + 그 뒤 4일 */
+export function weatherText(place: string, _day: 0 | 1 | 2, f: Forecast): string | null {
+  const first = dayLine(f, 0);
+  if (!first) return null;
+  const lines = [`${place} 날씨`];
   const now = round(f.current?.temperature_2m);
-  if (day === 0 && now !== null) lines.push(`지금 ${now}°${typeof f.current?.weather_code === 'number' ? ` · ${skyOf(f.current.weather_code)}` : ''}.`);
-  if (typeof rain === 'number' && rain >= 50) lines.push('우산을 챙기세요.');
-  return lines.join(' ');
+  lines.push(`오늘 ${first}${now !== null ? ` (지금 ${now}°${typeof f.current?.weather_code === 'number' ? ` ${skyOf(f.current.weather_code)}` : ''})` : ''}`);
+  for (const i of [1, 2]) {
+    const l = dayLine(f, i);
+    if (l) lines.push(`${DAY_WORD[i]} ${l}`);
+  }
+  const rest = [3, 4, 5, 6].map((i) => dayLine(f, i)).filter(Boolean) as string[];
+  if (rest.length) lines.push('', '이번 주 남은 날', ...rest);
+  if ([0, 1, 2].some((i) => (f.daily?.precipitation_probability_max?.[i] ?? 0) >= 50)) lines.push('', '☂ 표시 날은 우산을 챙기세요.');
+  return lines.join('\n');
 }
 
 type Fetch = (url: string) => Promise<Response>;
@@ -95,7 +110,7 @@ export async function weatherAnswer(ask: WeatherAsk, run: Fetch = get): Promise<
     if (!spot) spot = { name: '서울', lat: CITY['서울'][0], lon: CITY['서울'][1] };
     const url =
       `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}` +
-      '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=3';
+      '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=7';
     const res = await run(url);
     if (!res.ok) return null;
     const text = weatherText(spot.name, ask.day, (await res.json()) as Forecast);
