@@ -3,7 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
-import { WEATHER_SOURCE, weatherAnswer, weatherAsk } from './weather.ts';
+import { cleanWhere, WEATHER_SOURCE, weatherAnswer, weatherAsk } from './weather.ts';
 import { deepSearch, failMessage, searchCredits, searchText, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
   if (!user) return reply(401, { ok: false, error: '로그인이 필요합니다.' });
   if ((user.email ?? '').toLowerCase() !== ownerEmail) return reply(403, { ok: false, error: '소유자 계정만 쓸 수 있습니다.' });
 
-  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean; slot?: number; engine?: string; usage?: boolean };
+  let body: { question?: string; history?: Turn[]; images?: InlineImage[]; stream?: boolean; route?: { projects?: string[] }; project?: ProjectInfo; research?: boolean; slot?: number; engine?: string; usage?: boolean; where?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -237,9 +237,11 @@ Deno.serve(async (req) => {
   // 날씨(v0.7.68): 웹 검색은 날씨 값을 못 준다 → Open-Meteo(무료·키 없음) 숫자로 규칙 답(모델 0). 못 받으면 평소처럼 웹 조사
   const wx = research && images.length === 0 ? weatherAsk(question) : null;
   if (wx) {
-    const w = await weatherAnswer(wx);
-    console.log(JSON.stringify({ fn: 'ask-gemini', weather: w ? 'ok' : 'fail', day: wx.day }));
-    if (w) return reply(200, { ok: true, answer: w.answer, keySlot: 0, sources: [{ title: `Open-Meteo 날씨 예보(${w.place})`, uri: WEATHER_SOURCE }], engine: 'Open-Meteo' });
+    // 위치(좌표)는 기록에 남기지 않는다(어떤 기준을 썼는지만)
+    const where = cleanWhere(body.where);
+    const w = await weatherAnswer(wx, where);
+    console.log(JSON.stringify({ fn: 'ask-gemini', weather: w ? 'ok' : 'fail', basis: wx.place ? 'asked' : where ? ('place' in where ? 'setting' : 'here') : 'default' }));
+    if (w) return reply(200, { ok: true, answer: w.answer, keySlot: 0, sources: [{ title: `Open-Meteo 날씨 예보(${w.place})`, uri: WEATHER_SOURCE }], engine: 'Open-Meteo', weather: w.data });
   }
   if (research) {
     // 휴가(v0.7.53): Tavily·Firecrawl 둘 다 휴가면 검색 없이, 하나만이면 그 키를 빼고 남은 쪽만 쓴다

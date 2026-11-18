@@ -37,6 +37,7 @@ import { SKILLS_REPO, skillUsage, toSkillView } from './domain/skills';
 import { ProjectOrder } from './components/ProjectOrder';
 import { ProjectViews } from './components/ProjectViews';
 import { KeyStatusList } from './components/KeyStatusList';
+import { WeatherWhereSetting } from './components/WeatherWhereSetting';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm, type TaskDraft } from './components/TaskForm';
 import type { PendingImage } from './components/Attachments';
@@ -2705,6 +2706,10 @@ export function App() {
                   <h3>화면</h3>
                   <ThemeToggle />
                 </div>
+              </div>
+              <div className="settings-box">
+                <h3>날씨 지역</h3>
+                <WeatherWhereSetting />
               </div>
               {store.keyStatus && (
                 <div className="settings-box">

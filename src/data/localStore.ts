@@ -10,6 +10,7 @@ import { EMPTY_WORKFLOW } from '../domain/workflow-types';
 import { sampleSnapshot } from './sample';
 import type { ChatEntry } from '../domain/devlog';
 import { newId, type OfficeStore } from './store';
+import { demoWeather, WEATHER_RE } from '../domain/weather';
 
 /** 첨부 묶음 버전: 결과 스크린샷은 결과 버전, 견본은 계획 버전 */
 const revOf = (a: { kind: string; resultRevision: number | null; planRevision?: number | null }) => (a.kind === 'prototype' ? a.planRevision ?? null : a.resultRevision);
@@ -456,6 +457,13 @@ export function createLocalStore(): OfficeStore {
     },
     // 체험(v0.7.60): 웹 조사 질문이면 실제 AI 없이 정해진 답을 천천히 보여 준다(사무실에서 Tavily·Firecrawl이 리서치실로 가는 연출을 볼 수 있게)
     async askGemini(_question, _history, _images, onDelta, opts) {
+      // 체험 날씨(v0.7.70): 실제 날씨를 부르지 않고 예시 숫자로 표를 보여 준다
+      if (opts?.research && WEATHER_RE.test(_question)) {
+        const weather = demoWeather(new Date());
+        const answer = `${weather.place} 날씨(체험 예시 숫자)`;
+        onDelta?.(answer);
+        return { answer, keySlot: 0, engine: 'Open-Meteo', weather };
+      }
       if (!opts?.research) throw new Error('로컬 데모에서는 Gemini에 물을 수 없습니다. ChatGPT로 복사해 물어보세요.');
       const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
       await wait(9000);
