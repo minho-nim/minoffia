@@ -3,7 +3,7 @@
  * 공급자의 남은 토큰은 알 수 없다. 이 오피스가 기록한 횟수와 받은 한도 오류(429)로만 판단하고,
  * 셀 수 없는 AI(ChatGPT·Codex 등)는 '알 수 없음'으로 정직하게 둔다.
  */
-import { creditLine, FREE_MONTHLY, type Credits } from './searchCredits';
+import { creditLine, FREE_MONTHLY, leftOf, type Credits } from './searchCredits';
 import { AGENT_BY_ID } from './agents';
 import type { AgentId, AiCall, Snapshot } from './types';
 import { kstDay, runsToday } from './usage';
@@ -91,7 +91,7 @@ export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date(),
       const real = live?.[engine] ?? null;
       const used = real ? real.used : snap.searchCredits?.[engine];
       const limit = real ? real.limit : FREE_MONTHLY[engine];
-      const left = used === undefined ? null : limit - used;
+      const left = real ? leftOf(real) : used === undefined ? null : limit - used;
       const what = engine === 'tavily' ? 'Tavily: 1단계 찾기(검색 1번 = 1크레딧)' : 'Firecrawl: 2단계 본문 읽기(본문 1개 = 1, 찾기 대신 = 2크레딧)';
       const line = creditLine(engine, real ? undefined : used, real);
       if (left !== null && left <= 0) return { state: 'exhausted', label: real ? '이번 달 소진' : '이번 달 소진(추정)', detail: `${what}. ${line}.` };

@@ -100,7 +100,9 @@ describe('남은 크레딧 읽기(v0.7.53)', () => {
     expect(parseTavilyUsage({ account: { plan_usage: 40, plan_limit: 1000 } })).toEqual({ used: 40, limit: 1000 });
     expect(parseTavilyUsage({ key: { usage: 3, limit: 1000 } })).toEqual({ used: 3, limit: 1000 });
     expect(parseTavilyUsage({})).toBeNull();
-    expect(parseFirecrawlUsage({ success: true, data: { remainingCredits: 990, planCredits: 1000 } })).toEqual({ used: 10, limit: 1000 });
+    expect(parseFirecrawlUsage({ success: true, data: { remainingCredits: 990, planCredits: 1000 } })).toEqual({ used: 10, limit: 1000, remaining: 990 });
+    // v0.7.89 운영: 보너스 크레딧이 있으면 남은 것 > 요금제 → 쓴 양은 0으로 나오고 남은 것은 그대로
+    expect(parseFirecrawlUsage({ data: { remainingCredits: 1009, planCredits: 1000 } })).toEqual({ used: 0, limit: 1000, remaining: 1009 });
     expect(parseFirecrawlUsage({ data: {} })).toBeNull();
   });
 });

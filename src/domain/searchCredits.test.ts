@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { creditLine, searchCreditsOf, trustCredits } from './searchCredits';
+import { creditLine, leftOf, searchCreditsOf, trustCredits } from './searchCredits';
 
 describe('웹 검색 크레딧(v0.7.53)', () => {
   it('직접 센 추정: Tavily 검색 1, Firecrawl 검색 2·본문 1', () => {
@@ -36,5 +36,16 @@ describe('크레딧이 빠지는 요청·서비스 숫자 믿기(v0.7.88)', () =
     expect(trustCredits({ used: 0, limit: 1000 }, 12)).toEqual({ used: 12, limit: 1000 });
     expect(trustCredits({ used: 9, limit: 1000 }, 6)).toEqual({ used: 9, limit: 1000 });
     expect(trustCredits(null, 6)).toBeNull();
+  });
+});
+
+describe('보너스 크레딧(v0.7.89)', () => {
+  it('남은 것은 서비스 값(1,009), 쓴 양은 앱 기록(12)', () => {
+    const live = { used: 0, limit: 1000, remaining: 1009 };
+    const t = trustCredits(live, 12)!;
+    expect(t).toEqual({ used: 12, limit: 1000, remaining: 1009 });
+    expect(leftOf(t)).toBe(1009);
+    expect(creditLine('firecrawl', 12, t)).toBe('이번 달 남은 크레딧 1,009(보너스 포함, 요금제 1,000)');
+    expect(leftOf({ used: 9, limit: 1000 })).toBe(991);
   });
 });

@@ -567,6 +567,10 @@ export function App() {
     }
   };
   const stageRef = useRef({ mini: false, tiny: false });
+  // v0.7.89 소유자 "다른 탭에서 대화로 넘어오거나 처음 켜질 때 기본 화면은 큰 사무실, 채팅은 맨 아래":
+  // 대화에 들어오면 사무실을 큰 크기로 위에 붙여 두고(pinned) 채팅은 맨 아래로 내린다. 손으로 스크롤하면 원래처럼 줄어든다.
+  const pinRef = useRef(true);
+  const [pinned, setPinned] = useState(true);
   /** 얇은 머리 보이기(큰 머리가 화면 밖일 때) */
   const [barOn, setBarOn] = useState(false);
   /** 펼친 업무 카드(v0.4.21): 기본은 접힘(한 줄), 누르거나 다른 곳에서 업무로 오면 펼친다 */
@@ -600,6 +604,7 @@ export function App() {
     // 얇은 머리: 내리기 시작하는 순간 그 자리에서 큰 머리가 얇은 머리로 바뀐다(머리가 화면과 같이 올라가 보이지 않게, v0.5.32 소유자).
     const bar = window.scrollY > 2;
     setBarOn(bar);
+    if (pinRef.current) return set(false, false);
     const now = stageRef.current;
     // v0.6.81 소유자 "사무실 펴지는 반응이 느려": 맨 위에 닿으면 기다리지 않고 바로 편다(맨 위라 글이 밀려 흔들릴 일이 없다)
     if (window.scrollY <= 2) return set(false, false);
@@ -630,11 +635,31 @@ export function App() {
   useEffect(() => {
     const onScroll = () => checkMini();
     window.addEventListener('scroll', onScroll, { passive: true });
+    // 손으로 스크롤하면(터치·휠·키) 큰 사무실 고정을 풀고 원래 규칙(내리면 작아짐)으로
+    const unpin = () => {
+      if (!pinRef.current) return;
+      pinRef.current = false;
+      setPinned(false);
+      checkMini(true);
+    };
+    const onKey = (e: KeyboardEvent) => ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key) && !(e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')) && unpin();
+    window.addEventListener('touchmove', unpin, { passive: true });
+    window.addEventListener('wheel', unpin, { passive: true });
+    window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('touchmove', unpin);
+      window.removeEventListener('wheel', unpin);
+      window.removeEventListener('keydown', onKey);
       window.clearTimeout(settleTimer.current);
     };
   }, [checkMini]);
+  // 대화 탭에 들어올 때마다 다시 큰 사무실로 고정, 다른 탭에서는 풀기
+  useLayoutEffect(() => {
+    pinRef.current = tab === 'chat';
+    setPinned(tab === 'chat');
+    checkMini(true);
+  }, [tab, checkMini]);
   // Gemini 질문 서버를 앱을 열 때·다시 볼 때 미리 깨운다(v0.4.38). 입력창을 누르자마자 보내도 깨어나기(약 2초)를 기다리지 않게.
   useEffect(() => {
     if (!store || store.mode !== 'supabase') return;
@@ -2073,7 +2098,7 @@ export function App() {
         </FormPopup>
       )}
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
-      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''} tab-${tab === 'skills' ? 'settings tab-skills' : tab}`}>
+      <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${pinned && tab === 'chat' ? ' is-pinned' : ''} tab-${tab === 'skills' ? 'settings tab-skills' : tab}`}>
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
         {/* 오른쪽 아래 '…'(v0.6.77 소유자 "위치는 오른쪽 아래, 위로 열림, 대화·에이전트 탭에서는 사무실이 2단으로 열리게"): 모든 탭 */}
         {(
