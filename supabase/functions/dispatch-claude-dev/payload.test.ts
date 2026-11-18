@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { CLAUDE_MD_SYNC as APP_SYNC, codexBranch } from '../../../src/domain/handoffV2';
 import { buildDevPayload, CLAUDE_MD_SYNC, claudeBranch } from './payload';
 
@@ -41,6 +45,22 @@ describe('Claude 보조 개발 지시문', () => {
 
   it('브랜치 규칙은 Codex와 같은 모양(ai/<도구>/)', () => {
     expect(claudeBranch(input.taskId, 'W1').replace('ai/claude/', '')).toBe(codexBranch({ id: input.taskId } as never, 'W1').replace('ai/codex/', ''));
+  });
+
+  it('쓴 토큰 세기 명령: 최근 세션 기록의 usage를 메시지마다 한 번, 캐시 읽기 빼고 더한다(v0.7.84)', () => {
+    const line = buildDevPayload(input).split('\n').find((l) => l.startsWith('node -e "'))!;
+    expect(line).toBeTruthy();
+    const js = line.slice('node -e "'.length, -1);
+    const home = mkdtempSync(join(tmpdir(), 'tok-'));
+    const dir = join(home, '.claude', 'projects', 'x');
+    mkdirSync(dir, { recursive: true });
+    const msg = (id: string, i: number, o: number, cw: number, cr: number) => JSON.stringify({ message: { id, usage: { input_tokens: i, output_tokens: o, cache_creation_input_tokens: cw, cache_read_input_tokens: cr } } });
+    // 같은 메시지 m1이 두 줄(스트리밍) → 한 번만. 캐시 읽기 9999는 뺀다
+    writeFileSync(join(dir, 's.jsonl'), [msg('m1', 10, 5, 100, 9999), msg('m1', 10, 5, 100, 9999), msg('m2', 20, 30, 0, 9999), 'not json', JSON.stringify({ type: 'user' })].join('\n'));
+    const out = execFileSync(process.execPath, ['-e', js], { env: { ...process.env, HOME: home, USERPROFILE: home } }).toString().trim();
+    expect(out).toBe(String(10 + 5 + 100 + 20 + 30));
+    const empty = mkdtempSync(join(tmpdir(), 'tok-'));
+    expect(execFileSync(process.execPath, ['-e', js], { env: { ...process.env, HOME: empty, USERPROFILE: empty } }).toString().trim()).toBe('');
   });
 
   it('결과 자동 저장: 제출표가 있으면 보내는 방법을 붙이고, 없으면 붙이지 않는다', () => {

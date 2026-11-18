@@ -8139,3 +8139,66 @@ html.popup-open .project-sections > details[open] * {
     animation: none;
   }
 }
+
+/* 사용량(v0.7.84): 설정 탭 한 장 + 통계 보기 팝업. 차트 색은 dataviz 기본 순서(검증함) */
+.viz { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100; --viz-5: #e87ba4; --viz-6: #008300; }
+.usage-panel { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100; --viz-5: #e87ba4; --viz-6: #008300; }
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) .viz { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; --viz-6: #0ca30c; }
+}
+:root[data-theme='dark'] .viz { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; --viz-6: #0ca30c; }
+.usage-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.usage-head h3 { margin: 0; }
+.usage-range { margin: 6px 0 2px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+.usage-rows { list-style: none; margin: 0; padding: 0; }
+.usage-rows > li + li { border-top: 1px dashed var(--line); }
+.usage-row { width: 100%; display: grid; grid-template-columns: 6.6em minmax(0, 1fr) auto 1em; align-items: center; gap: 10px; padding: 9px 2px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.usage-name { font-weight: 600; }
+.usage-meter { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.usage-meter > span { display: block; height: 100%; background: var(--ok); }
+.usage-meter.is-none { visibility: hidden; }
+.usage-rows li.is-full .usage-meter > span { background: var(--danger); }
+.usage-num { font-family: var(--font-mono); font-size: 13.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usage-tri { color: var(--muted); font-size: 10px; }
+.usage-detail { margin: 0 0 10px; padding: 10px 12px; background: var(--surface-2); border-radius: 10px; display: grid; gap: 6px; }
+.usage-detail ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 13.5px; }
+.usage-detail li { display: flex; justify-content: space-between; gap: 12px; }
+.usage-detail li span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.usage-detail li span:last-child { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.usage-detail p { margin: 0; }
+.usage-foot { margin: 8px 0 0; display: flex; justify-content: flex-end; }
+.usage-stats-btn { font: inherit; font-size: 13px; font-weight: 700; border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.usage-stats { display: grid; gap: 16px; min-width: 0; }
+.usage-stats > * { min-width: 0; }
+.usage-stats-ctrl { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+.usage-pager { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.usage-pager button { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; width: 30px; height: 30px; cursor: pointer; }
+.usage-pager button:disabled { opacity: 0.35; cursor: default; }
+.usage-figs { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.usage-figs > div { padding: 8px 10px; border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.usage-figs span { display: block; font-size: 11.5px; color: var(--muted); }
+.usage-figs b { font-family: var(--font-mono); font-size: 17px; font-weight: 500; overflow-wrap: anywhere; }
+.usage-chart h4 { margin: 0 0 2px; font-size: 14.5px; }
+.usage-chart > p { margin: 0 0 6px; }
+.usage-legend { display: flex; flex-wrap: wrap; gap: 3px 12px; list-style: none; margin: 0 0 6px; padding: 0; font-size: 12px; color: var(--muted); }
+.usage-legend i, .usage-tip i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.usage-svg { overflow-x: auto; }
+.usage-svg svg { display: block; width: 100%; min-width: 320px; height: auto; }
+.usage-svg text { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.usage-svg .grid { stroke: var(--line); stroke-width: 1; }
+.usage-tip { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); font-size: 12.5px; font-family: var(--font-mono); }
+.usage-tip b { width: 100%; font-family: var(--font-body); }
+.usage-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .usage-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.usage-cols > * { min-width: 0; }
+.usage-hbars { display: grid; gap: 6px; }
+.usage-hb { display: grid; grid-template-columns: 7.6em minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; }
+.usage-hb > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-hb .bar { display: flex; gap: 2px; height: 12px; min-width: 0; }
+.usage-hb .bar > span { height: 100%; border-radius: 3px; min-width: 2px; }
+.usage-hb .v { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.usage-table summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--accent); }
+.usage-table-scroll { overflow-x: auto; margin-top: 6px; }
+.usage-table table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.usage-table th, .usage-table td { padding: 4px 8px; text-align: right; font-family: var(--font-mono); border-bottom: 1px dashed var(--line); white-space: nowrap; }
+.usage-table th:first-child, .usage-table td:first-child { text-align: left; }

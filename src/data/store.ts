@@ -199,6 +199,8 @@ export interface OfficeStore {
   draftSpec(taskId: string, text: string): Promise<{ revision: number; intent: string }>;
   /** 질문 전에 Gemini 질문 서버를 미리 깨운다(입력창을 누를 때, Gemini는 부르지 않음, v0.4.23) */
   warmGemini?(): void;
+  /** 사용량 기간 읽기(v0.7.84): ai_calls·usage_runs의 [fromIso, toIso) 기록. 없으면 화면이 스냅샷(최근 7일)으로 센다 */
+  usageRange?(fromIso: string, toIso: string): Promise<{ calls: import('../domain/usageStats').UsageCall[]; runs: import('../domain/usageStats').UsageRunRow[] }>;
   /** 웹 검색 남은 크레딧(서비스 사용량 API, 막혀 있으면 null, v0.7.53) */
   searchCredits?(): Promise<{ tavily: import('../domain/searchCredits').Credits | null; firecrawl: import('../domain/searchCredits').Credits | null }>;
   askGemini(

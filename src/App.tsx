@@ -45,7 +45,7 @@ import type { PendingImage } from './components/Attachments';
 import { WorkflowPanel, type WorkflowActions } from './components/WorkflowPanel';
 import { createLocalStore, resetLocalDemo } from './data/localStore';
 import { newId, type InboxState, type OfficeStore } from './data/store';
-import { AGENT_BY_ID, AGENTS } from './domain/agents';
+import { AGENT_BY_ID } from './domain/agents';
 import { attachmentsOf, isImage, isRaster, moved, sha256OfBytes, type AttachmentKind } from './domain/attachments';
 import { buildHandoff } from './domain/handoff';
 import { buildCodexHandoff, buildGptPackage, buildPrototypeHandoff, codexBranch } from './domain/handoffV2';
@@ -59,7 +59,8 @@ import { canTransition } from './domain/status';
 import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/types';
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
-import { GEMINI_QUESTION_CAP, geminiToday, quotaFor } from './domain/quota';
+import { rangeOf, summarize, type Period } from './domain/usageStats';
+import { readPeriod, savePeriod, UsagePanel, useUsageInput } from './components/UsagePanel';
 import { receiveWorkflowInbox } from './workflow/receiveInbox';
 import { preparePlanImport } from './workflow/planImport';
 import { createResultReviewer } from './workflow/resultReview';
@@ -81,7 +82,7 @@ import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
 import { installPopupClose } from './components/popupClose';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
-import { FREE_MONTHLY, type Credits } from './domain/searchCredits';
+import { type Credits } from './domain/searchCredits';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'skills' | 'settings';
 type Filter = 'open' | 'all' | TaskStatus | 'st:working' | 'st:turn' | 'st:stuck';
@@ -710,65 +711,19 @@ export function App() {
         .catch(() => undefined);
     }
   }, [store, snap.tasks, snap.workflow]);
+  // 사용량(v0.7.84): 설정 탭 사용량과 에이전트 탭 칩이 같은 기간·같은 계산을 쓴다
+  const [usagePeriod, setUsagePeriodState] = useState<Period>(readPeriod);
+  const setUsagePeriod = (p: Period) => {
+    setUsagePeriodState(p);
+    savePeriod(p);
+  };
+  const usageDay = kstDay();
+  const usageRangeNow = useMemo(() => rangeOf(usagePeriod), [usagePeriod, usageDay]);
+  const usageInput = useUsageInput(store, snap, usageRangeNow);
+  const usageRows = useMemo(() => summarize(usageInput, usageRangeNow), [usageInput, usageRangeNow]);
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session && !trying) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
-
-  // 오늘 사용량(설정 탭에만, v0.7.82: 큰 머리·얇은 머리의 사용량은 뺐다)
-  const searchRow = (engine: 'tavily' | 'firecrawl') => {
-    const live = liveCredits?.[engine] ?? null;
-    const used = live ? live.used : (snap.searchCredits?.[engine] ?? 0);
-    const limit = live ? live.limit : FREE_MONTHLY[engine];
-    const name = engine === 'tavily' ? 'Tavily' : 'Firecrawl';
-    return (
-      <li key={engine} className={used >= limit ? 'is-full' : ''} title={`${name}: 오늘 ${engine === 'tavily' ? '검색' : '검색·본문'} ${snap.searchToday?.[engine] ?? 0}회. 이번 달 크레딧 ${used}/${limit}${live ? '(서비스가 알려 준 실제 값)' : '(앱이 센 추정: 서비스가 사용량을 알려 주지 않음)'}.`}>
-        <span>{name}</span>
-        <span className="meter" aria-hidden="true">
-          <span style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} />
-        </span>
-        <span className="num">
-          {live ? '' : '약 '}
-          {used.toLocaleString('ko-KR')}/{limit.toLocaleString('ko-KR')}
-        </span>
-      </li>
-    );
-  };
-  const usageList = (
-    <ul className="usage" aria-label="오늘 등록된 실행 횟수">
-      {AGENTS.filter((a) => a.dailyCap !== null).map((a) => {
-        // v0.7.83 소유자 "제미나이는 없애고 스튜디오로 전부 대체": Studio A·B 줄은 그 키의 Gemini 횟수·토큰(에이전트 탭과 같은 값). 하루 상한은 키마다 질문 40·이미지 20
-        if (a.id === 'studioA' || a.id === 'studioB') {
-          const q = quotaFor(a.id, snap);
-          const g = geminiToday(snap.aiCalls ?? [], undefined, a.id === 'studioA' ? 1 : 2);
-          return (
-            <li key={a.id} className={q.state === 'exhausted' ? 'is-full' : ''} title={q.detail}>
-              <span>{a.name}</span>
-              <span className="meter" aria-hidden="true">
-                <span style={{ width: `${Math.min(100, (g.question / GEMINI_QUESTION_CAP) * 100)}%` }} />
-              </span>
-              <span className="num">{g.text}</span>
-            </li>
-          );
-        }
-        const used = runsToday(snap.usage, a.id);
-        const cap = a.dailyCap ?? 0;
-        return (
-          <li key={a.id} className={used >= cap ? 'is-full' : ''}>
-            <span>{a.name}</span>
-            <span className="meter" aria-hidden="true">
-              <span style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} />
-            </span>
-            <span className="num">
-              {used}/{cap}
-            </span>
-          </li>
-        );
-      })}
-      {/* v0.7.57 소유자 "오늘 사용량에 올린 거 맞음?": 체험에서도 보이게(체험은 0) */}
-      {searchRow('tavily')}
-      {searchRow('firecrawl')}
-    </ul>
-  );
 
   /** 업무 취소(v0.6.50): 끝나지 않은 AI 작업은 '실패(소유자 취소)'로 멈추고 업무는 취소 단계로. 서버도 취소한 업무는 더 시작하지 않는다. */
   const cancelTask = (task: Task) =>
@@ -2629,6 +2584,7 @@ export function App() {
               snap={snap}
               onLinearProbe={store.mode === 'supabase' ? () => store.linearProbe() : undefined}
               liveCredits={liveCredits}
+              usageRows={usageRows}
               onSetLimit={(kind, n) => void mutate(() => store.setAgentLimit(kind, n), `동시 작업 상한을 ${n}개로 바꿨습니다.`)}
               selected={selected}
               onSelect={(id) => setSelected(id)}
@@ -2686,8 +2642,7 @@ export function App() {
           {(tab === 'settings' || tab === 'team') && (
             <section className="settings" aria-label="설정">
               <div className="settings-box">
-                <h3>오늘 사용량</h3>
-                {usageList}
+                <UsagePanel rows={usageRows} period={usagePeriod} onPeriod={setUsagePeriod} range={usageRangeNow} liveCredits={liveCredits} monthCredits={snap.searchCredits} store={store} snap={snap} />
               </div>
               {/* v0.6.44 소유자: 팀 관리를 프로젝트 순서 앞으로, 키 상태는 따로, 알림·화면은 작은 칸 둘로 */}
               <div className="settings-box">

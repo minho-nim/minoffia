@@ -727,6 +727,19 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
         await invoke('notes', { action: 'remove', project, task: task ?? '' });
       },
     },
+    // 사용량 기간 읽기(v0.7.84): 고른 일·주·월의 기록만(모델 호출 0). 글·토큰 외 내용은 읽지 않는다
+    async usageRange(fromIso, toIso) {
+      const [calls, runs] = await Promise.all([
+        client.from('ai_calls').select('provider, key_slot, purpose, model, ok, prompt_tokens, answer_tokens, thinking_tokens, created_at').gte('created_at', fromIso).lt('created_at', toIso).order('created_at').limit(5000),
+        client.from('usage_runs').select('agent, task_id, created_at').gte('created_at', fromIso).lt('created_at', toIso).order('created_at').limit(5000),
+      ]);
+      check(calls);
+      check(runs);
+      return {
+        calls: (calls.data ?? []).map((r: Row) => ({ provider: String(r.provider ?? 'gemini'), keySlot: (r.key_slot as 1 | 2 | null) ?? null, purpose: String(r.purpose ?? ''), model: String(r.model ?? ''), ok: Boolean(r.ok), tokens: callTokens(r), createdAt: String(r.created_at) })),
+        runs: (runs.data ?? []).map((r: Row) => ({ agent: String(r.agent), taskId: (r.task_id as string | null) ?? null, createdAt: String(r.created_at) })),
+      };
+    },
     async searchCredits() {
       const data = await invoke('ask-gemini', { usage: true });
       const c = (data.credits ?? {}) as Record<string, unknown>;

@@ -219,10 +219,26 @@ async function getJson(url: string, key: string): Promise<unknown> {
   const res = await fetch(url, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(6_000) }).catch(() => null);
   return res?.ok ? await res.json().catch(() => null) : null;
 }
-export async function searchCredits(keys: { tavily: string; firecrawl: string }): Promise<{ tavily: Credits | null; firecrawl: Credits | null }> {
+/** 받은 사용량 응답의 숫자 칸만(키·글은 빼고) 로그용으로 */
+export function usageShape(data: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  const walk = (v: unknown, path: string, depth: number) => {
+    if (depth > 3 || v === null || typeof v !== 'object') return;
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      const p = path ? `${path}.${k}` : k;
+      if (typeof x === 'number') out[p] = x;
+      else walk(x, p, depth + 1);
+    }
+  };
+  walk(data, '', 0);
+  return out;
+}
+export async function searchCredits(keys: { tavily: string; firecrawl: string }, log?: (e: Record<string, unknown>) => void): Promise<{ tavily: Credits | null; firecrawl: Credits | null }> {
   const [t, f] = await Promise.all([
     keys.tavily ? getJson('https://api.tavily.com/usage', keys.tavily) : null,
     keys.firecrawl ? getJson('https://api.firecrawl.dev/v2/team/credit-usage', keys.firecrawl) : null,
   ]);
+  // v0.7.84 소유자 "Firecrawl 확인은 직접": 서비스가 준 숫자 칸을 그대로 남겨 앱 기록과 견준다(숫자만)
+  log?.({ credits: 'raw', tavily: t ? usageShape(t) : null, firecrawl: f ? usageShape(f) : null });
   return { tavily: t ? parseTavilyUsage(t) : null, firecrawl: f ? parseFirecrawlUsage(f) : null };
 }

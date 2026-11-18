@@ -9,6 +9,7 @@ import type { LinearProbe } from '../data/store';
 import { ADAPTER_STATE_LABEL, ADAPTERS, geminiAdapter } from '../domain/adapters';
 import { AGENT_BY_ID, AGENTS, MODE_LABEL } from '../domain/agents';
 import { quotaFor, QUOTA_STATE_LABEL, type QuotaInfo } from '../domain/quota';
+import { usageText, type UsageRow } from '../domain/usageStats';
 import { creditLine, type Credits } from '../domain/searchCredits';
 import { limitFor, MAX_AGENT_LIMIT } from '../domain/concurrency';
 import type { AgentKind } from '../domain/workflow-types';
@@ -255,9 +256,12 @@ export function AgentRoster({
   onSetLimit,
   onLinearProbe,
   liveCredits,
+  usageRows,
 }: {
   onLinearProbe?: () => Promise<LinearProbe>;
   liveCredits?: { tavily: Credits | null; firecrawl: Credits | null } | null;
+  /** 설정 탭 사용량과 같은 줄(v0.7.84): 칩 숫자를 이것으로 */
+  usageRows?: UsageRow[];
   snap: Snapshot;
   onSetLimit: (kind: AgentKind, n: number) => void;
   selected: AgentId | null;
@@ -265,6 +269,11 @@ export function AgentRoster({
   onOpenTask: (task: Task) => void;
   serverMode: boolean;
 }) {
+  // 칩 숫자는 설정 탭 사용량과 같은 값(v0.7.84 소유자 "에이전트마다 붙은 초록 칩에 설정의 토큰량"). 상태 색(소진 등)은 그대로
+  const withUsage = (id: AgentId, q: QuotaInfo): QuotaInfo => {
+    const u = usageRows?.find((r) => r.id === id);
+    return u ? { ...q, label: usageText(u) } : q;
+  };
   const speechMap = speechFor(snap.tasks, snap.workflow, snap.leave ?? []);
   const scene = buildScene(snap.tasks, snap.workflow.assignments);
   const markOf = (id: AgentId) => markFor(id, scene, speechMap);
@@ -290,7 +299,7 @@ export function AgentRoster({
                 reviews={snap.workflow.reviews ?? []}
                 aiCalls={snap.aiCalls ?? []}
                 serverMode={serverMode}
-                quota={quotaFor(a.id, snap, undefined, liveCredits)}
+                quota={withUsage(a.id, quotaFor(a.id, snap, undefined, liveCredits))}
                 limit={
                   KIND_OF[a.id]
                     ? {
@@ -309,7 +318,7 @@ export function AgentRoster({
             </section>
           );
         }
-        const q = quotaFor(a.id, snap, undefined, liveCredits);
+        const q = withUsage(a.id, quotaFor(a.id, snap, undefined, liveCredits));
         return (
           <button key={a.id} type="button" className="agent-row" onClick={() => onSelect(a.id)} aria-label={`${a.name} 펼치기`}>
             <img className={`agent-row-portrait${spriteFor(a, 'stand').art ? ' is-art' : ''}`} src={spriteFor(a, 'stand').src} alt="" />

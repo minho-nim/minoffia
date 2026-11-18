@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BODY_MAX, deepSearch, failMessage, isHit, outOfCredit, parseFirecrawl, parseScrape, parseTavily, pickPages, searchText, webContext, webQuery, webSearch, WEB_RULE, type SearchOutcome } from './websearch';
+import { BODY_MAX, deepSearch, failMessage, isHit, usageShape, outOfCredit, parseFirecrawl, parseScrape, parseTavily, pickPages, searchText, webContext, webQuery, webSearch, WEB_RULE, type SearchOutcome } from './websearch';
 
 describe('웹 조사 검색(v0.7.51~ Tavily → Firecrawl)', () => {
   it('검색어 정리', () => {
@@ -136,5 +136,12 @@ describe('검색어 만들기(v0.7.65)', () => {
   it('새 질문이면 앞 질문을 붙이지 않는다', () => {
     expect(searchText('서울 내일 날씨 알려줘요', [{ role: 'user', text: '무료 AI 서비스' }])).toBe('서울 내일 날씨 알려줘요');
     expect(searchText('아까 그거', [])).toBe('아까 그거');
+  });
+});
+
+describe('사용량 응답 숫자만 남기기(v0.7.84)', () => {
+  it('글·키는 빼고 숫자 칸만 경로로', () => {
+    expect(usageShape({ success: true, data: { remainingCredits: 990, planCredits: 1000, billingPeriodStart: '2026-11-01' }, key: 'fc-secret' })).toEqual({ 'data.remainingCredits': 990, 'data.planCredits': 1000 });
+    expect(usageShape(null)).toEqual({});
   });
 });
