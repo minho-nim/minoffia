@@ -5,12 +5,12 @@ import { BASE_RULES, rulesAsk, rulesSection } from './projectRules.ts';
 import { devGuide } from './devHabits.ts';
 
 /** CLAUDE.md를 알아서 만들거나 맞춘다(v0.4.75). 앱 src/domain/handoffV2.ts의 CLAUDE_MD_SYNC와 같은 문장(시험이 확인) */
-/** 쓴 토큰 세기(v0.7.84 소유자 "토큰은 서비스 숫자로"): Claude Code가 세션마다 남기는 기록(~/.claude/projects/*.jsonl)의 usage를 더한다. 같은 메시지는 한 번만, 캐시 읽기는 뺀다 */
+/** 쓴 토큰 세기(v0.7.84, v0.7.87 하위 작업 기록까지): 클라우드 루틴은 업무마다 새 컴퓨터라 ~/.claude/projects 아래 기록(*.jsonl, 하위 작업 파일 포함)이 모두 이 업무 것이다. 모두 더하고, 같은 메시지는 한 번만, 캐시 읽기는 뺀다 */
 const TOKEN_COUNT_JS = [
   'const fs=require(\'fs\'),p=require(\'path\'),os=require(\'os\');const fl=[];const walk=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const q=p.join(d,e.name);if(e.isDirect',
-  'ory())walk(q);else if(q.endsWith(\'.jsonl\'))fl.push(q)}};try{walk(p.join(os.homedir(),\'.claude\',\'projects\'))}catch{}fl.sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs);con',
-  'st seen=new Map();if(fl[0])for(const l of fs.readFileSync(fl[0],\'utf8\').split(\'\\n\')){try{const m=JSON.parse(l).message;if(m&&m.usage)seen.set(m.id||seen.size,(m.usage.input_tokens|',
-  '|0)+(m.usage.output_tokens||0)+(m.usage.cache_creation_input_tokens||0))}catch{}}let t=0;for(const v of seen.values())t+=v;console.log(t||\'\')',
+  'ory())walk(q);else if(q.endsWith(\'.jsonl\'))fl.push(q)}};try{walk(p.join(os.homedir(),\'.claude\',\'projects\'))}catch{}const seen=new Map();for(const f of fl)for(const l of fs.readFile',
+  'Sync(f,\'utf8\').split(\'\\n\')){try{const m=JSON.parse(l).message;if(m&&m.usage)seen.set(m.id||(f+seen.size),(m.usage.input_tokens||0)+(m.usage.output_tokens||0)+(m.usage.cache_creatio',
+  'n_input_tokens||0))}catch{}}let t=0;for(const v of seen.values())t+=v;console.log(t||\'\')',
 ].join('');
 
 export const CLAUDE_MD_SYNC =

@@ -1,6 +1,7 @@
 // Gemini 기획서 초안(무료): 업무의 "기획 요청" 문서를 Gemini에 한 번 보내고, 답을 기획서 새 버전(planner gemini_draft)으로 저장한다.
 // 소유자 결정(2026-10-30): 기본은 Gemini 초안, 어렵거나 중요한 업무만 ChatGPT(수동)로 넘긴다. 사용자는 초안을 보고 A 승인·수정 요청만 한다.
 // 키는 secrets(GEMINI_API_KEY = A·Studio A, GEMINI_API_KEY2 = B·Studio B)에만 있다. 글은 저장하지 않고 횟수·길이만 ai_calls(purpose plan)에 남긴다.
+import { keyBlock, keyWhy, type KeyWhy } from './keyBlock.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { autoTitle, DRAFT_SYSTEM, parseDraft } from './draft.ts';
 import { loadRules, rulesSection, saveRules } from './projectRules.ts';
@@ -100,10 +101,6 @@ Deno.serve(async (req) => {
   // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛴다
   const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'plan').eq('ok', true).gte('created_at', kstMidnight);
   const usedBy = [1, 2].map((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length);
-  usedBy.forEach((n, i) => {
-    if (n >= cap) keys[i] = '';
-  });
-  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 Gemini 기획서 초안을 키마다 ${cap}회씩 모두 썼습니다. ChatGPT로 기획하세요.` });
 
   // v0.4.57: 앞선 업무에서 AI가 적어 둔 이 프로젝트의 지켜야 할 것을 기획 요청 끝에 붙인다.
   const rules = rulesSection(await loadRules(userClient, task.project_id), '## 이 프로젝트에서 지켜야 할 것 (어기지 않는다)');
@@ -127,9 +124,13 @@ Deno.serve(async (req) => {
   // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
-  if (away.has('studioA')) keys[0] = '';
-  if (away.has('studioB')) keys[1] = '';
-  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
+  // 키마다 이유(v0.7.87): 키 없음·휴가·오늘 상한 다 씀. 둘 다 못 쓰면 이유를 그대로 알린다
+  const why = [0, 1].map((i) => keyWhy(keys[i], usedBy[i] >= cap, away.has(i ? 'studioB' : 'studioA'))) as [KeyWhy, KeyWhy];
+  why.forEach((w, i) => {
+    if (w !== 'ok') keys[i] = '';
+  });
+  const blocked = keyBlock(why, `기획서 초안 ${cap}회`, 'ChatGPT로 기획하세요.');
+  if (blocked) return reply(blocked.status, { ok: false, ...(blocked.leave ? { leave: true } : {}), error: blocked.error });
   // v0.7.64 소유자 "API 두 개(서로 다른 계정)니까 나눠서": 업무 쪽은 Studio B 키 먼저, 막히면 A(대화 쪽은 A 먼저)
   for (const [i, key] of ([1, 0] as const).map((j) => [j, keys[j]] as const)) {
     if (!key) continue;

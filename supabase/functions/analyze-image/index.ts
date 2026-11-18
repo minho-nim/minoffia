@@ -2,6 +2,7 @@
 // v0.3.2~0.3.3: PDF·TXT·MD·CSV·JSON·HTML(10MB 이하)은 요약한다. DOCX·XLSX·PPTX는 글만 뽑아 보낸다. SVG·ZIP은 받지 않는다.
 // 같은 이미지(sha256)를 전에 분석했으면 Gemini를 부르지 않고 그 결과를 다시 쓴다.
 // 키 A가 한도·인증·서버 오류로 실패할 때만 B(예비)를 쓴다. 하루 상한을 넘으면 묻지 않는다.
+import { keyBlock, keyWhy, type KeyWhy } from './keyBlock.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import JSZip from 'npm:jszip@3.10.1';
 import { buildDocPrompt, buildPrompt, geminiMime, parseAnalysis, toBase64 } from './analysis.ts';
@@ -113,8 +114,6 @@ Deno.serve(async (req) => {
     .eq('ok', true)
     .gte('created_at', kstMidnight);
   const full = [1, 2].filter((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length >= cap);
-  for (const slot of full) keys[slot - 1] = '';
-  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 이미지·문서 분석을 키마다 ${cap}회씩 모두 썼습니다.` });
 
   const file = await admin.storage.from('attachments').download(att.storage_path);
   if (file.error || !file.data) return reply(500, { ok: false, error: '저장된 파일을 읽지 못했습니다.' });
@@ -136,9 +135,13 @@ Deno.serve(async (req) => {
   // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
-  if (away.has('studioA')) keys[0] = '';
-  if (away.has('studioB')) keys[1] = '';
-  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
+  // 키마다 이유(v0.7.87): 키 없음·휴가·오늘 상한 다 씀. 둘 다 못 쓰면 이유를 그대로 알린다
+  const why = [0, 1].map((i) => keyWhy(keys[i], full.includes(i + 1), away.has(i ? 'studioB' : 'studioA'))) as [KeyWhy, KeyWhy];
+  why.forEach((w, i) => {
+    if (w !== 'ok') keys[i] = '';
+  });
+  const blocked = keyBlock(why, `이미지·문서 분석 ${cap}회`, '내일 다시 분석해 주세요.');
+  if (blocked) return reply(blocked.status, { ok: false, ...(blocked.leave ? { leave: true } : {}), error: blocked.error });
   // v0.7.64 소유자 "API 두 개(서로 다른 계정)니까 나눠서": 업무 쪽은 Studio B 키 먼저, 막히면 A(대화 쪽은 A 먼저)
   for (const [i, key] of ([1, 0] as const).map((j) => [j, keys[j]] as const)) {
     if (!key) continue;

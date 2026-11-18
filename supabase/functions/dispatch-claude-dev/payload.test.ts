@@ -47,7 +47,7 @@ describe('Claude 보조 개발 지시문', () => {
     expect(claudeBranch(input.taskId, 'W1').replace('ai/claude/', '')).toBe(codexBranch({ id: input.taskId } as never, 'W1').replace('ai/codex/', ''));
   });
 
-  it('쓴 토큰 세기 명령: 최근 세션 기록의 usage를 메시지마다 한 번, 캐시 읽기 빼고 더한다(v0.7.84)', () => {
+  it('쓴 토큰 세기 명령: 모든 세션 기록(하위 작업 포함)의 usage를 메시지마다 한 번, 캐시 읽기 빼고 더한다(v0.7.84·87)', () => {
     const line = buildDevPayload(input).split('\n').find((l) => l.startsWith('node -e "'))!;
     expect(line).toBeTruthy();
     const js = line.slice('node -e "'.length, -1);
@@ -57,8 +57,12 @@ describe('Claude 보조 개발 지시문', () => {
     const msg = (id: string, i: number, o: number, cw: number, cr: number) => JSON.stringify({ message: { id, usage: { input_tokens: i, output_tokens: o, cache_creation_input_tokens: cw, cache_read_input_tokens: cr } } });
     // 같은 메시지 m1이 두 줄(스트리밍) → 한 번만. 캐시 읽기 9999는 뺀다
     writeFileSync(join(dir, 's.jsonl'), [msg('m1', 10, 5, 100, 9999), msg('m1', 10, 5, 100, 9999), msg('m2', 20, 30, 0, 9999), 'not json', JSON.stringify({ type: 'user' })].join('\n'));
+    // v0.7.87: 하위 작업 기록(다른 파일, 더 늦게 써짐)도 더한다
+    const sub = join(dir, 's', 'subagents');
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, 'agent-1.jsonl'), [msg('m3', 7, 3, 0, 9999), msg('m1', 10, 5, 100, 9999)].join('\n'));
     const out = execFileSync(process.execPath, ['-e', js], { env: { ...process.env, HOME: home, USERPROFILE: home } }).toString().trim();
-    expect(out).toBe(String(10 + 5 + 100 + 20 + 30));
+    expect(out).toBe(String(10 + 5 + 100 + 20 + 30 + 7 + 3));
     const empty = mkdtempSync(join(tmpdir(), 'tok-'));
     expect(execFileSync(process.execPath, ['-e', js], { env: { ...process.env, HOME: empty, USERPROFILE: empty } }).toString().trim()).toBe('');
   });

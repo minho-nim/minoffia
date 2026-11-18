@@ -3,6 +3,7 @@
 // 질문·답변 글은 저장하지 않고 횟수·길이만 ai_calls에 남긴다. 하루 상한을 넘으면 묻지 않는다.
 // 요청 형식: generativelanguage.googleapis.com v1beta generateContent(공식 문서는 이 작업 환경에서 열리지 않아
 // 운영에서 실제 호출로 확인한다. 모델은 GEMINI_MODEL secret으로 바꿀 수 있다).
+import { keyBlock, keyWhy, type KeyWhy } from './keyBlock.ts';
 import { areaName, cleanWhere, MET_SOURCE, WEATHER_SOURCE, weatherAnswer, weatherAsk } from './weather.ts';
 import { deepSearch, failMessage, isHit, searchCredits, searchText, WEB_RULE, webContext as toContext } from './websearch.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
@@ -232,10 +233,6 @@ Deno.serve(async (req) => {
     const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', purpose).eq('ok', true).gte('created_at', kstMidnight);
     for (const slot of [1, 2]) if ((usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length >= cap) full.add(slot);
   }
-  const usable = [0, 1].filter((i) => keys[i] && !full.has(i + 1));
-  if (!usable.length) {
-    return reply(429, { ok: false, error: `오늘 Gemini 질문을 키마다 ${cap}회씩 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
-  }
 
   // 웹 조사 3단계(v0.7.52): ① Tavily로 찾기(안 되면 Firecrawl 검색) ② 알짜 2개를 Firecrawl로 본문 ③ Gemini가 종합. 자료는 질문 뒤에만 붙인다.
   // 검색이 휴가·키 없음·실패면 여기서 알리고, 앱은 검색 없이 Gemini가 아는 범위로 다시 묻는다.
@@ -307,11 +304,13 @@ Deno.serve(async (req) => {
   }
   const started = Date.now();
   let last = { status: 0, message: '' };
-  if (away.has('studioA')) keys[0] = '';
-  if (away.has('studioB')) keys[1] = '';
-  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
-  for (const slot of full) keys[slot - 1] = '';
-  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `근무 중인 Studio의 오늘 Gemini 질문 ${cap}회를 모두 썼습니다. ChatGPT로 복사해 물어보세요.` });
+  // 키마다 이유(v0.7.87): 키 없음·휴가·오늘 상한 다 씀. 둘 다 못 쓰면 이유를 그대로 알린다
+  const why = [0, 1].map((i) => keyWhy(keys[i], full.has(i + 1), away.has(i ? 'studioB' : 'studioA'))) as [KeyWhy, KeyWhy];
+  why.forEach((w, i) => {
+    if (w !== 'ok') keys[i] = '';
+  });
+  const blocked = keyBlock(why, `질문 ${cap}회`, 'ChatGPT로 복사해 물어보세요.');
+  if (blocked) return reply(blocked.status, { ok: false, ...(blocked.leave ? { leave: true } : {}), error: blocked.error });
   // @StudioB(v0.6.24, 소유자 "제미나이도 각각 태그"): B를 먼저, 안 되면 A가 대신 답한다. 기본은 A 먼저.
   const order = body.slot === 2 ? [1, 0] : [0, 1];
   for (const tryModel of models) {

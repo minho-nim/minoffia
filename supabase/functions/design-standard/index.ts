@@ -1,6 +1,7 @@
 // 디자인 기준 문서 초안(v0.5.56, 소유자 목록 30번): 프로젝트 저장소의 스타일 파일(최대 8개)을 GitHub에서 읽어
 // Gemini(무료)에 한 번 보내고, 답을 projects.design_draft에 저장한다. 소유자가 앱에서 승인하면 design_md로 확정된다.
 // 키는 secrets(GEMINI_API_KEY·GEMINI_API_KEY2·GITHUB_REPO_TOKEN)에만. 사용 기록은 ai_calls(purpose design).
+import { keyBlock, keyWhy, type KeyWhy } from './keyBlock.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { cleanRefs, cleanStandard, REF_SYSTEM, STANDARD_SYSTEM, styleFiles } from './standard.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
@@ -78,10 +79,6 @@ Deno.serve(async (req) => {
   // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛴다
   const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'design').gte('created_at', kstMidnight);
   const usedBy = [1, 2].map((slot) => (usedRows ?? []).filter((r: { key_slot: number | null }) => r.key_slot === slot).length);
-  usedBy.forEach((n, i) => {
-    if (n >= DAILY_CAP) keys[i] = '';
-  });
-  if (!keys[0] && !keys[1]) return reply(429, { ok: false, error: `오늘 디자인 기준 초안을 키마다 ${DAILY_CAP}번씩 썼어요. 내일 다시 해 주세요.` });
 
   const tree = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers: { ...gh(token), Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
   if (!tree?.ok) return reply(502, { ok: false, error: `저장소 파일 목록을 읽지 못했습니다(GitHub ${tree?.status ?? '응답 없음'}).` });
@@ -112,9 +109,13 @@ Deno.serve(async (req) => {
   // 팀 관리 휴가(v0.7.9): 휴가인 Studio의 키는 쓰지 않는다(다른 Gemini 함수들과 같게)
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
-  if (away.has('studioA')) keys[0] = '';
-  if (away.has('studioB')) keys[1] = '';
-  if (!keys[0] && !keys[1]) return reply(503, { ok: false, leave: true, error: 'Studio A·B(Gemini)가 모두 휴가예요. 팀 관리에서 한 명을 근무로 돌려 주세요.' });
+  // 키마다 이유(v0.7.87): 키 없음·휴가·오늘 상한 다 씀. 둘 다 못 쓰면 이유를 그대로 알린다
+  const why = [0, 1].map((i) => keyWhy(keys[i], usedBy[i] >= DAILY_CAP, away.has(i ? 'studioB' : 'studioA'))) as [KeyWhy, KeyWhy];
+  why.forEach((w, i) => {
+    if (w !== 'ok') keys[i] = '';
+  });
+  const blocked = keyBlock(why, `디자인 기준 ${DAILY_CAP}번`, '내일 다시 해 주세요.');
+  if (blocked) return reply(blocked.status, { ok: false, ...(blocked.leave ? { leave: true } : {}), error: blocked.error });
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   const prompt = [
     `프로젝트: ${String(project.name ?? '').slice(0, 80)} (${repo})`,
