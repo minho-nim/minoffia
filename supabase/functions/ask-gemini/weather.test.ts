@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WEATHER_RE } from '../../../src/domain/weather';
-import { cleanWhere, fromMet, skyOf, skyOfMet, WEATHER, weatherAnswer, weatherAsk, weatherText } from './weather';
+import { areaName, cleanWhere, fromMet, nameFromNominatim, nameFromPhoton, skyOf, skyOfMet, WEATHER, weatherAnswer, weatherAsk, weatherText } from './weather';
 
 const forecast = {
   current: { temperature_2m: 4.6, weather_code: 0 },
@@ -64,7 +64,7 @@ describe('날씨 질문(v0.7.68)', () => {
     const urls: string[] = [];
     const run = async (u: string) => {
       urls.push(u);
-      if (u.includes('nominatim')) return json({ address: { city: '성남시', borough: '분당구' } });
+      if (u.includes('nominatim')) return json({ address: { city: '성남시', borough: '분당구', suburb: '분당' } });
       return json(forecast);
     };
     const here = await weatherAnswer({ place: null, day: 0 }, { lat: 37.38, lon: 127.12 }, run);
@@ -76,7 +76,7 @@ describe('날씨 질문(v0.7.68)', () => {
     expect((await weatherAnswer({ place: null, day: 0 }, { place: '부산' }, run))?.place).toBe('부산');
     expect((await weatherAnswer({ place: '대구', day: 0 }, { place: '부산' }, run))?.place).toBe('대구');
     expect((await weatherAnswer({ place: null, day: 0 }, null, run))?.place).toBe('서울');
-    const noName = await weatherAnswer({ place: null, day: 0 }, { lat: 37.5, lon: 127 }, async (u) => (u.includes('nominatim') ? json({}, 500) : json(forecast)));
+    const noName = await weatherAnswer({ place: null, day: 0 }, { lat: 37.5, lon: 127 }, async (u) => (u.includes('nominatim') || u.includes('photon') ? json({}, 500) : json(forecast)));
     expect(noName?.place).toBe('현재 위치');
   });
   it('앱이 보낸 위치는 범위·모양을 확인하고 좌표는 약 1km로 줄인다', () => {
@@ -105,5 +105,14 @@ describe('날씨 질문(v0.7.68)', () => {
     expect(logs[0]).toMatchObject({ weatherTry: 'Open-Meteo', status: 429 });
     expect(skyOfMet('lightsnowshowers_night')).toBe('눈');
     expect(fromMet('서울', {})).toBeNull();
+  });
+  it('동네 이름: Nominatim이 막히면 Photon, 동까지(v0.7.75)', async () => {
+    expect(nameFromNominatim({ address: { quarter: '수내동', suburb: '분당', borough: '분당구', city: '성남시', province: '경기도' } })).toBe('성남시 분당구 수내동');
+    expect(nameFromPhoton({ features: [{ properties: { locality: '수내동', district: '분당', city: '성남시' } }] })).toBe('성남시 분당 수내동');
+    const logs: Record<string, unknown>[] = [];
+    const name = await areaName(37.38, 127.12, async (u) => (u.includes('nominatim') ? json({}, 403) : json({ features: [{ properties: { locality: '수내동', district: '분당', city: '성남시' } }] })), (e) => logs.push(e));
+    expect(name).toBe('성남시 분당 수내동');
+    expect(logs[0]).toMatchObject({ areaTry: 'Nominatim', status: 403 });
+    expect(await areaName(1, 2, async () => json({}, 500))).toBe('');
   });
 });

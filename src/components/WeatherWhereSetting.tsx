@@ -21,11 +21,12 @@ export function WeatherWhereSetting({ onSave, areaName }: { onSave?: (place: str
       setBusy(false);
       return setNote('위치를 받지 못했어요. 휴대폰 설정에서 이 앱(브라우저)의 위치 허용을 켜 주세요. 그전까지는 서울로 답해요.');
     }
-    const name = areaName ? await areaName(spot).catch(() => '이 근처') : '체험 위치';
+    // 이름을 못 찾으면 '이름 못 찾음'(위치는 받았으니 날씨는 이 근처로 답한다)
+    const name = (areaName ? await areaName(spot).catch(() => '') : '체험 위치') || '이름 못 찾음';
     saveHereSeen(name);
     setSeen(readHereSeen());
     setBusy(false);
-    setNote(`날씨를 물으면 '${name}' 근처로 답해요.`);
+    setNote(name === '이름 못 찾음' ? '위치는 받았어요. 동네 이름은 찾지 못했지만 날씨는 이 근처로 답해요.' : `날씨를 물으면 '${name}' 근처로 답해요.`);
   };
   const choose = (w: WeatherWhere, done?: string) => {
     setWhere(w);

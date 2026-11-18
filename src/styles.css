@@ -5676,9 +5676,12 @@ a.project-site {
      작은 사무실 상태(is-mini)로 넘어오면 탭·칩이 없는 사무실 높이만큼 내려가 빈칸이 생겼다 */
   .layout.tab-tasks,
   .layout.tab-projects,
-  .layout.tab-team {
+  .layout.tab-team,
+  .layout.tab-settings {
     --stage-h: 0px;
   }
+  /* v0.7.75 소유자 "상단바 떨어져 자꾸": 설정·스킬 탭도 사무실이 머리 오른쪽에 접혀 붙는다(v0.7.63).
+     자리 높이를 0으로 두지 않아 탭 줄이 사무실 반 높이만큼 아래(193px)에 붙어 떠 있었다 */
 }
 /* ④ 업무 필터는 한 줄(옆으로 밀어 보기) */
 .filters-scroll {

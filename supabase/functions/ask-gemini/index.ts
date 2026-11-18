@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
   if (body.areaOf) {
     const w = cleanWhere(body.areaOf);
     if (!w || 'place' in w) return reply(400, { ok: false, error: '위치 값이 올바르지 않아요.' });
-    return reply(200, { ok: true, name: await areaName(w.lat, w.lon) });
+    return reply(200, { ok: true, name: await areaName(w.lat, w.lon, undefined, (e) => console.log(JSON.stringify({ fn: 'ask-gemini', ...e }))) });
   }
   if (body.usage === true) return reply(200, { ok: true, credits: await searchCredits({ tavily: env('TAVILY_API_KEY'), firecrawl: env('FIRECRAWL_API_KEY') }) });
   const question = (body.question ?? '').trim();

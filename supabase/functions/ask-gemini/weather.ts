@@ -201,17 +201,41 @@ async function locate(place: string, run: Fetch): Promise<Spot | null> {
   return top && typeof top.latitude === 'number' && typeof top.longitude === 'number' ? { name: top.name || place, lat: top.latitude, lon: top.longitude } : null;
 }
 
-/** 좌표 → 동네 이름(OpenStreetMap Nominatim, 무료·키 없음). 못 찾으면 '현재 위치' */
-export async function areaName(lat: number, lon: number, run: Fetch = get): Promise<string> {
-  try {
-    const res = await run(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14&accept-language=ko`);
-    if (!res.ok) return '현재 위치';
-    const a = ((await res.json()) as { address?: Record<string, string> }).address ?? {};
-    const name = [a.city || a.county || a.province || a.state, a.borough || a.city_district || a.suburb || a.quarter].filter(Boolean).join(' ');
-    return name || '현재 위치';
-  } catch {
-    return '현재 위치';
+/** Nominatim 주소 → '성남시 분당구 수내동' */
+export function nameFromNominatim(json: unknown): string {
+  const a = ((json as { address?: Record<string, string> })?.address ?? {}) as Record<string, string>;
+  const gu = a.borough || a.city_district;
+  return [a.city || a.county || a.province || a.state, gu, a.quarter || a.neighbourhood || a.village || (gu ? '' : a.suburb)].filter(Boolean).join(' ');
+}
+/** Photon 결과 → '성남시 분당 수내동' */
+export function nameFromPhoton(json: unknown): string {
+  const p = ((json as { features?: { properties?: Record<string, string> }[] })?.features?.[0]?.properties ?? {}) as Record<string, string>;
+  return [p.city || p.county || p.state, p.district, p.locality].filter(Boolean).join(' ');
+}
+
+/** 좌표 → 동네 이름(v0.7.75: Nominatim → 안 되면 Photon, 둘 다 OpenStreetMap 자료·무료·키 없음). 못 찾으면 ''. 좌표는 기록하지 않는다 */
+export async function areaName(lat: number, lon: number, run: Fetch = get, log: (e: Record<string, unknown>) => void = () => undefined): Promise<string> {
+  const tries: [string, string, (j: unknown) => string][] = [
+    ['Nominatim', `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=16&accept-language=ko`, nameFromNominatim],
+    ['Photon', `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&limit=1`, nameFromPhoton],
+  ];
+  for (const [who, url, read] of tries) {
+    const t0 = Date.now();
+    try {
+      const res = await run(url);
+      if (!res.ok) {
+        await res.body?.cancel();
+        log({ areaTry: who, status: res.status, ms: Date.now() - t0 });
+        continue;
+      }
+      const name = read(await res.json());
+      if (name) return name;
+      log({ areaTry: who, status: 200, empty: true, ms: Date.now() - t0 });
+    } catch (e) {
+      log({ areaTry: who, error: (e as Error).name, ms: Date.now() - t0 });
+    }
   }
+  return '';
 }
 
 export interface Spot {
@@ -238,10 +262,10 @@ export const MET_SOURCE = 'https://www.met.no/en';
 const SEOUL: Spot = { name: '서울', lat: CITY['서울'][0], lon: CITY['서울'][1] };
 
 /** 곳 정하기: 질문에 적힌 곳 > 설정한 지역 > 현재 위치 > 서울. 현재 위치의 동네 이름은 따로(예보와 동시에) 찾는다 */
-async function pick(ask: WeatherAsk, where: Where | null, run: Fetch): Promise<{ spot: Spot; name: Promise<string> | null }> {
+async function pick(ask: WeatherAsk, where: Where | null, run: Fetch, log: (e: Record<string, unknown>) => void): Promise<{ spot: Spot; name: Promise<string> | null }> {
   if (ask.place) return { spot: (await locate(ask.place, run).catch(() => null)) ?? SEOUL, name: null };
   if (where && 'place' in where) return { spot: (await locate(where.place, run).catch(() => null)) ?? SEOUL, name: null };
-  if (where) return { spot: { name: '현재 위치', lat: where.lat, lon: where.lon }, name: areaName(where.lat, where.lon, run) };
+  if (where) return { spot: { name: '현재 위치', lat: where.lat, lon: where.lon }, name: areaName(where.lat, where.lon, run, log).then((n) => n || '현재 위치') };
   return { spot: SEOUL, name: null };
 }
 
@@ -255,7 +279,7 @@ export interface WeatherResult {
 
 /** 날씨 답. Open-Meteo → 안 되면 MET Norway. 둘 다 안 되면 null(어디서 왜 안 됐는지 log로) */
 export async function weatherAnswer(ask: WeatherAsk, where: Where | null = null, run: Fetch = get, log: (e: Record<string, unknown>) => void = () => undefined): Promise<WeatherResult | null> {
-  const { spot, name } = await pick(ask, where, run);
+  const { spot, name } = await pick(ask, where, run, log);
   const tryOne = async (source: WeatherResult['source'], url: string, read: (place: string, json: unknown) => WeatherData | null) => {
     const t0 = Date.now();
     try {
