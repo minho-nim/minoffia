@@ -59,6 +59,7 @@ import { canTransition } from './domain/status';
 import type { AgentId, Project, Snapshot, Task, TaskStatus } from './domain/types';
 import { STATUS_LABEL } from './domain/types';
 import { kstDay, runsToday } from './domain/usage';
+import { geminiToday } from './domain/quota';
 import { receiveWorkflowInbox } from './workflow/receiveInbox';
 import { preparePlanImport } from './workflow/planImport';
 import { createResultReviewer } from './workflow/resultReview';
@@ -753,14 +754,16 @@ export function App() {
         );
       })}
       {store.mode === 'supabase' && (
-        <li title="Gemini 무료 API를 부른 횟수와 실제 토큰(오늘, 성공만). 하루 상한은 서버가 관리합니다.">
+        <li title="Gemini 무료 API를 부른 횟수와 실제 토큰(오늘, 성공만, 웹 조사 포함). A는 1번 키, B는 2번 키이고 에이전트 탭 Studio A·B와 같은 값입니다. 하루 상한은 서버가 관리합니다.">
           <span>Gemini</span>
           <span className="num">
             {(() => {
-              const today = (snap.aiCalls ?? []).filter((c) => c.ok && kstDay(new Date(c.createdAt)) === kstDay());
-              const tokens = today.reduce((n, c) => n + (c.tokens ?? 0), 0);
-              // 실제 토큰(v0.5.50): Gemini가 알려 준 값만 더한다. 없으면 횟수만
-              return tokens ? `${today.length}회 · ${tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens} 토큰` : `${today.length}회`;
+              // 에이전트 탭 Studio A·B와 같은 계산(v0.7.77): 합계 = A + B
+              const calls = snap.aiCalls ?? [];
+              const all = geminiToday(calls);
+              const a = geminiToday(calls, undefined, 1);
+              const b = geminiToday(calls, undefined, 2);
+              return all.calls ? `${all.text} (A ${a.calls}회·B ${b.calls}회)` : all.text;
             })()}
           </span>
         </li>

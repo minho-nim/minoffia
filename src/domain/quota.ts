@@ -30,15 +30,37 @@ export const QUOTA_STATE_LABEL: Record<QuotaState, string> = {
 
 const today = (iso: string, now: Date) => kstDay(new Date(iso)) === kstDay(now);
 
-function gemini(calls: AiCall[], now: Date): QuotaInfo {
-  const todays = calls.filter((c) => today(c.createdAt, now));
-  const q = todays.filter((c) => c.ok && c.purpose === 'question').length;
-  const img = todays.filter((c) => c.ok && c.purpose === 'image').length;
-  const last = todays[todays.length - 1];
-  const detail = `오늘 질문 ${q}/${GEMINI_QUESTION_CAP}회, 이미지 분석 ${img}/${GEMINI_IMAGE_CAP}회(서버 기본 상한). 무료 한도 숫자는 Google이 정한다.`;
-  if (last && !last.ok && last.httpStatus === 429) return { state: 'exhausted', label: '오늘 소진', detail: `마지막 호출이 무료 한도(429)에 걸렸다. ${detail}` };
-  if (q >= GEMINI_QUESTION_CAP && img >= GEMINI_IMAGE_CAP) return { state: 'exhausted', label: '오늘 소진', detail };
-  return { state: 'available', label: `질문 ${q}·이미지 ${img}`, detail };
+/** 토큰 수 짧게(1.2k) */
+export const shortTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
+
+/**
+ * 오늘 Gemini 성공 호출 횟수·실제 토큰(v0.7.77 소유자 "에이전트 탭 토큰이랑 오늘 사용량 토큰이 안 맞아").
+ * 오늘 사용량(합계)과 에이전트 탭(Studio A = 1번 키, B = 2번 키)이 같은 계산을 쓴다. 웹 조사 종합도 센다.
+ */
+export function geminiToday(calls: AiCall[], now: Date = new Date(), slot?: 1 | 2) {
+  const todays = calls.filter((c) => today(c.createdAt, now) && (slot === undefined || c.keySlot === slot));
+  const ok = todays.filter((c) => c.ok);
+  const tokens = ok.reduce((n, c) => n + (c.tokens ?? 0), 0);
+  const count = (p: string) => ok.filter((c) => (p === 'question' ? c.purpose !== 'image' && c.purpose !== 'research' : c.purpose === p)).length;
+  return {
+    todays,
+    calls: ok.length,
+    tokens,
+    question: count('question'),
+    research: count('research'),
+    image: count('image'),
+    text: tokens ? `${ok.length}회 · ${shortTokens(tokens)} 토큰` : `${ok.length}회`,
+  };
+}
+
+function gemini(calls: AiCall[], now: Date, slot: 1 | 2): QuotaInfo {
+  const all = geminiToday(calls, now);
+  const mine = geminiToday(calls, now, slot);
+  const last = mine.todays[mine.todays.length - 1];
+  const detail = `${slot}번 키 오늘 성공 ${mine.text}(질문 ${mine.question}·웹 조사 ${mine.research}·이미지 ${mine.image}). 두 키 합계 ${all.text}는 오늘 사용량의 Gemini와 같다. 서버 기본 상한은 두 키 합쳐 질문 ${GEMINI_QUESTION_CAP}회·이미지 ${GEMINI_IMAGE_CAP}회, 무료 한도 숫자는 Google이 정한다.`;
+  if (last && !last.ok && last.httpStatus === 429) return { state: 'exhausted', label: '오늘 소진', detail: `이 키의 마지막 호출이 무료 한도(429)에 걸렸다. ${detail}` };
+  if (all.question >= GEMINI_QUESTION_CAP && all.image >= GEMINI_IMAGE_CAP) return { state: 'exhausted', label: '오늘 소진', detail };
+  return { state: 'available', label: mine.text, detail };
 }
 
 export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date()): QuotaInfo {
@@ -52,8 +74,9 @@ export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date())
       return { state: 'available', label: `${used}/${cap}회`, detail: `오늘 Claude PM 전달 ${used}회(상한 ${cap}). Claude Pro 전체 사용량은 알 수 없다.` };
     }
     case 'studioA':
+      return gemini(snap.aiCalls ?? [], now, 1);
     case 'studioB':
-      return gemini(snap.aiCalls ?? [], now);
+      return gemini(snap.aiCalls ?? [], now, 2);
     case 'mina':
       return { state: 'unknown', label: '알 수 없음', detail: 'ChatGPT Plus 사용량은 앱에서 알 수 없다(수동 인계, 추가 비용 없음).' };
     case 'codex':
