@@ -8245,3 +8245,9 @@ html.popup-open .project-sections > details[open] * {
 .usage-stats .usage-hb.is-zero { color: var(--muted); }
 .usage-stats .usage-hbars { gap: 8px; }
 .usage-tip { line-height: 1.6; }
+
+/* 무슨 일에 썼나 보기 토글(v0.7.92) */
+.usage-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.usage-hb-wrap { display: grid; gap: 2px; }
+.usage-hb-note { margin: 0 0 2px calc(7.2em + 10px); font-size: 12px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 420px) { .usage-hb-note { margin-left: 0; } }
