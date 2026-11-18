@@ -82,7 +82,7 @@ import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
 import { installPopupClose } from './components/popupClose';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
-import { type Credits } from './domain/searchCredits';
+import { trustCredits, type Credits } from './domain/searchCredits';
 
 type Tab = 'chat' | 'tasks' | 'projects' | 'agent' | 'team' | 'skills' | 'settings';
 type Filter = 'open' | 'all' | TaskStatus | 'st:working' | 'st:turn' | 'st:stuck';
@@ -721,6 +721,11 @@ export function App() {
   const usageRangeNow = useMemo(() => rangeOf(usagePeriod), [usagePeriod, usageDay]);
   const usageInput = useUsageInput(store, snap, usageRangeNow);
   const usageRows = useMemo(() => summarize(usageInput, usageRangeNow), [usageInput, usageRangeNow]);
+  // 검색 크레딧(v0.7.88): 서비스 숫자가 앱 기록보다 적으면(Firecrawl API가 0을 답함) 앱 기록으로
+  const trustedCredits = useMemo(
+    () => (liveCredits ? { tavily: trustCredits(liveCredits.tavily, snap.searchCredits?.tavily), firecrawl: trustCredits(liveCredits.firecrawl, snap.searchCredits?.firecrawl) } : null),
+    [liveCredits, snap.searchCredits],
+  );
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session && !trying) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
@@ -2583,7 +2588,7 @@ export function App() {
             <AgentRoster
               snap={snap}
               onLinearProbe={store.mode === 'supabase' ? () => store.linearProbe() : undefined}
-              liveCredits={liveCredits}
+              liveCredits={trustedCredits}
               usageRows={usageRows}
               onSetLimit={(kind, n) => void mutate(() => store.setAgentLimit(kind, n), `동시 작업 상한을 ${n}개로 바꿨습니다.`)}
               selected={selected}

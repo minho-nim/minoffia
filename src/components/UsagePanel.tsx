@@ -166,13 +166,13 @@ export function UsagePanel({ rows, period, onPeriod, range, liveCredits, monthCr
                     <p className="muted small">이 기간에 한 일이 없어요.</p>
                   )}
                   <p className="muted small">
-                    {row.unit === 'credit' ? '크레딧: 앱 기록(검색 1번 = Tavily 1, Firecrawl 찾기 2·본문 1)' : `토큰: ${SOURCE_LABEL[row.source]}`} · 횟수: 앱 기록
+                    {row.unit === 'credit' ? '크레딧: 앱 기록(검색 1번 = Tavily 1, Firecrawl 찾기 2·본문 1, 실패해도 서비스에 닿은 요청은 셈)' : `토큰: ${SOURCE_LABEL[row.source]}`} · 횟수: 앱 기록
                     {cap ? ` · 오늘 상한 ${row.id.startsWith('studio') ? `질문 ${cap}회(키마다)` : `${cap}회`}` : ''}
                   </p>
                   {engine && (
                     <p className="muted small">
                       이번 달 {live ? `서비스: ${live.used.toLocaleString('ko-KR')} / ${live.limit.toLocaleString('ko-KR')} 사용` : `서비스 숫자 없음 · 무료 ${FREE_MONTHLY[engine].toLocaleString('ko-KR')}`} · 앱 기록 {appMonth.toLocaleString('ko-KR')}
-                      {live && live.used < appMonth ? ' — 서비스 숫자가 앱 기록보다 적어요(확인 중)' : ''}
+                      {live && live.used < appMonth ? ' — 서비스 숫자가 앱 기록보다 적어 앱 기록으로 셉니다' : ''}
                     </p>
                   )}
                 </div>
