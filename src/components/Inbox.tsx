@@ -4,7 +4,7 @@ import { FormPopup } from './FormPopup';
 import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
-import { WEATHER_RE, weatherWhereBody, type WeatherData } from '../domain/weather';
+import { saveHereSeen, WEATHER_RE, weatherWhereBody, type WeatherData } from '../domain/weather';
 import { WeatherCard } from './WeatherCard';
 import { answerSlot, asksSearch, insertMention, mentionOptions, mentionQuery, searchEngineOf } from '../domain/mention';
 import { setResearchPhase } from '../office/webResearch';
@@ -1539,6 +1539,8 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           const sources = got.sources ?? [];
           // 날씨(v0.7.68)는 Open-Meteo 숫자로 규칙 답(Gemini 안 씀)
           const via = got.weather ? `${got.engine ?? '날씨'} 자료 · 규칙으로 답함` : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
+          // 현재 위치 기준 날씨면 설정의 '현재 위치' 이름도 맞춘다(v0.7.74)
+          if (got.weather && opts.where && 'lat' in opts.where) saveHereSeen(got.weather.place);
           if (via || sources.length || got.weather) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}), ...(got.weather ? { weather: got.weather } : {}) } : m)));
           const all = route ? parseRoutedAll(raw) : null;
           if (all && all.items.length > 1) {

@@ -8119,18 +8119,15 @@ html.popup-open .project-sections > details[open] * {
   flex: 1 1 120px;
   min-width: 0;
 }
-/* 날씨 지역 ↻(v0.7.73): 지금 기준 동네·확인 시각과 다시 확인 */
-.weather-where-here {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 0 24px;
-  color: var(--muted);
-  font-size: 12.5px;
+/* 날씨 지역 ↻(v0.7.73, v0.7.74 같은 줄): 현재 위치 옆 동네 이름 · 확인 시각 · 다시 확인 */
+.weather-where-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
   min-width: 0;
 }
-.weather-where-here > span {
-  overflow-wrap: anywhere;
+.weather-where-ago {
+  color: var(--muted);
+  font-size: 12px;
 }
 .weather-where-sync {
   display: inline-grid;
