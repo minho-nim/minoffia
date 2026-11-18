@@ -462,8 +462,8 @@ export function App() {
       const pt = parseFloat(cs.paddingTop || '0');
       const w = r.width - pl - parseFloat(cs.paddingRight || '0');
       if (w <= 0) return;
-      // 붙어 있는(sticky) 무대는 고정된 높이(top)를 쓴다: 지금 스크롤 위치와 상관없이 접힌 뒤 자리
-      const top = (cs.position === 'sticky' ? parseFloat(cs.top || '0') : r.top) + pt;
+      // 붙어 있는(sticky)·고정(fixed)·맨 위 페이지에 붙은(absolute, v0.7.78) 무대는 정한 높이(top)를 쓴다: 지금 스크롤 위치와 상관없이 같은 자리
+      const top = (cs.position === 'sticky' || cs.position === 'fixed' || cs.position === 'absolute' ? parseFloat(cs.top || '0') : r.top) + pt;
       const left = r.left + pl;
       const s = 36 / (w * 0.747);
       const bar = document.querySelector<HTMLElement>('.topbar-mini');

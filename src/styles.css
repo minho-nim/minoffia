@@ -7910,6 +7910,14 @@ html.popup-open .project-sections > details[open] * {
     padding: 0;
     pointer-events: none;
   }
+  /* v0.7.78 소유자 "스크롤 맨 위로 갈 때 사무실도 올라가"(아이폰): 큰 머리가 보이는 맨 위에서는 사무실을 화면에 고정하지 않고
+     페이지에 붙여 큰 머리와 같이 움직인다(튕기는 스크롤에서 따로 놀지 않게). 얇은 머리가 나오면(is-mini) 그 오른쪽에 고정 */
+  .layout:not(.is-mini).tab-tasks > .stage.is-docked:not(.is-peek):not(.is-hold),
+  .layout:not(.is-mini).tab-projects > .stage.is-docked:not(.is-peek):not(.is-hold),
+  .layout:not(.is-mini).tab-team > .stage.is-docked:not(.is-peek):not(.is-hold),
+  .layout:not(.is-mini).tab-settings > .stage.is-docked:not(.is-peek):not(.is-hold) {
+    position: absolute;
+  }
   .layout.tab-tasks > .stage.is-docked.is-peek,
   .layout.tab-projects > .stage.is-docked.is-peek,
   .layout.tab-team > .stage.is-docked.is-peek,
