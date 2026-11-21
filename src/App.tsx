@@ -332,6 +332,8 @@ export function App() {
 
   // 입력창 대화가 다른 기기에서 바뀌면 올려서 Inbox가 바로 다시 받게 한다.
   const [inboxTick, setInboxTick] = useState(0);
+  /** 사용 기록(ai_calls)이 바뀐 횟수(v0.7.97): 사용량만 다시 읽는 신호 */
+  const [usageTick, setUsageTick] = useState(0);
   useEffect(() => {
     if (!store) return;
     void reload();
@@ -341,6 +343,11 @@ export function App() {
     const unsubscribe = store.subscribe?.((table) => {
       if (table === 'inbox_state') {
         setInboxTick((n) => n + 1);
+        return;
+      }
+      // 사용 기록(ai_calls, v0.7.97)은 화면 전체를 다시 읽지 않고 사용량만(질문·검색마다 오므로 가볍게)
+      if (table === 'ai_calls') {
+        setUsageTick((n) => n + 1);
         return;
       }
       window.clearTimeout(timer);
@@ -744,7 +751,7 @@ export function App() {
   };
   const usageDay = kstDay();
   const usageRangeNow = useMemo(() => rangeOf(usagePeriod), [usagePeriod, usageDay]);
-  const usageInput = useUsageInput(store, snap, usageRangeNow);
+  const usageInput = useUsageInput(store, snap, usageRangeNow, usageTick);
   const usageRows = useMemo(() => summarize(usageInput, usageRangeNow), [usageInput, usageRangeNow]);
   // 검색 크레딧(v0.7.88): 서비스 숫자가 앱 기록보다 적으면(Firecrawl API가 0을 답함) 앱 기록으로
   const trustedCredits = useMemo(
@@ -2672,7 +2679,7 @@ export function App() {
           {(tab === 'settings' || tab === 'team') && (
             <section className="settings" aria-label="설정">
               <div className="settings-box">
-                <UsagePanel rows={usageRows} actionsSkipped={usageInput.actionsSkipped} period={usagePeriod} onPeriod={setUsagePeriod} range={usageRangeNow} liveCredits={liveCredits} monthCredits={snap.searchCredits} store={store} snap={snap} />
+                <UsagePanel rows={usageRows} usageTick={usageTick} actionsSkipped={usageInput.actionsSkipped} period={usagePeriod} onPeriod={setUsagePeriod} range={usageRangeNow} liveCredits={liveCredits} monthCredits={snap.searchCredits} store={store} snap={snap} />
               </div>
               {/* v0.6.44 소유자: 팀 관리를 프로젝트 순서 앞으로, 키 상태는 따로, 알림·화면은 작은 칸 둘로 */}
               <div className="settings-box">

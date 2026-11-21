@@ -4,9 +4,30 @@ import { useEffect, useState } from 'react';
 import type { KeyStatus } from '../data/store';
 
 const day = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
+/** v0.7.97 소유자 "순서·모두 한 줄로": 사용량 목록과 같은 순서, 짧은 이름 한 줄(긴 설명은 누르면) */
+const ORDER = ['CLAUDE_ROUTINE_TOKEN', 'LINEAR_API_KEY', 'GEMINI_API_KEY', 'GEMINI_API_KEY2', 'TAVILY_API_KEY', 'FIRECRAWL_API_KEY', 'GITHUB_REPO_TOKEN', 'GITHUB_ACTIONS_TOKEN'];
+const SHORT: Record<string, string> = {
+  CLAUDE_ROUTINE_TOKEN: 'Claude 루틴',
+  LINEAR_API_KEY: 'Codex (Linear)',
+  GEMINI_API_KEY: 'Studio A (Gemini)',
+  GEMINI_API_KEY2: 'Studio B (Gemini)',
+  TAVILY_API_KEY: 'Tavily',
+  FIRECRAWL_API_KEY: 'Firecrawl',
+  GITHUB_REPO_TOKEN: 'GitHub 저장소',
+  GITHUB_ACTIONS_TOKEN: 'GitHub Actions',
+};
+export const sortKeys = <T extends { secret: string }>(keys: T[]) => [...keys].sort((a, b) => (ORDER.indexOf(a.secret) + 1 || 99) - (ORDER.indexOf(b.secret) + 1 || 99));
+/** 오른쪽 짧은 상태 */
+function shortState(k: KeyStatus, left: number | null): string {
+  if (!k.set) return '없음';
+  if (k.works === false) return '거절됨';
+  if (left !== null) return left <= 0 ? '만료' : `D-${left}`;
+  return k.works ? '정상' : '들어 있음';
+}
 
 export function KeyStatusList({ load }: { load: () => Promise<KeyStatus[]> }) {
   const [keys, setKeys] = useState<KeyStatus[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState('');
   const refresh = () => {
     setError('');
@@ -27,11 +48,11 @@ export function KeyStatusList({ load }: { load: () => Promise<KeyStatus[]> }) {
       {error && <p className="task-error">{error}</p>}
       {!keys && !error && <p className="muted small">확인하는 중…</p>}
       {keys && (
-        <ul>
-          {keys.map((k) => {
+        <ul className="key-rows">
+          {sortKeys(keys).map((k) => {
             const left = k.expiresAt ? day(k.expiresAt) : null;
             const level = !k.set || k.works === false || (left !== null && left <= 3) ? 'is-bad' : left !== null && left <= 14 ? 'is-warn' : 'is-ok';
-            const state = !k.set
+            const full = !k.set
               ? '없음 — 이 기능이 멈춰요'
               : k.works === false
                 ? k.secret.startsWith('GITHUB') ? 'GitHub가 거절함(만료·권한 확인)' : '거절됨(키 확인)'
@@ -40,10 +61,18 @@ export function KeyStatusList({ load }: { load: () => Promise<KeyStatus[]> }) {
                   : k.works
                     ? '정상 · 만료일 없음'
                     : '들어 있음(만료일은 알 수 없음)';
+            const isOpen = open === k.secret;
             return (
               <li key={k.secret} className={level}>
-                <span>{k.name}</span>
-                <b>{state}</b>
+                <button type="button" className="key-row" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : k.secret)}>
+                  <span className="key-name">{SHORT[k.secret] ?? k.name}</span>
+                  <b>{shortState(k, left)}</b>
+                </button>
+                {isOpen && (
+                  <p className="key-more">
+                    {k.name} · {full} · <code>{k.secret}</code>
+                  </p>
+                )}
               </li>
             );
           })}

@@ -50,10 +50,11 @@ export function savePeriod(p: Period) {
 }
 
 /** 기간의 기록을 읽어 계산 재료로 만든다(서버가 있으면 그 기간만 읽고, 없으면 스냅샷 최근 7일) */
-export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: Range): UsageInput {
+/** tick: 사용 기록이 바뀐 신호(실시간, v0.7.97). actionsFresh: 바뀌면 Actions 10분 보관을 건너뛰고 새로 읽는다(통계 열기·새로 고침) */
+export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: Range, tick = 0, actionsFresh = 0): UsageInput {
   const [remote, setRemote] = useState<(Pick<UsageInput, 'calls' | 'runs'> & { key: string }) | null>(null);
   const rangeKey = `${range.from}:${range.to}`;
-  const fresh = `${range.from}:${range.to}:${snap.aiCalls?.length ?? 0}:${snap.usage.length}:${snap.workflow.results.length}:${snap.searchToday?.tavily ?? 0}:${snap.searchToday?.firecrawl ?? 0}`;
+  const fresh = `${range.from}:${range.to}:${tick}:${snap.aiCalls?.length ?? 0}:${snap.usage.length}:${snap.workflow.results.length}:${snap.searchToday?.tavily ?? 0}:${snap.searchToday?.firecrawl ?? 0}`;
   useEffect(() => {
     if (!store?.usageRange) return;
     let live = true;
@@ -72,7 +73,7 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
   useEffect(() => {
     if (!store?.actionsUsage) return;
     const hit = actionsCache.get(rangeKey);
-    if (hit && Date.now() - hit.at < 10 * 60_000) {
+    if (hit && !actionsFresh && Date.now() - hit.at < 10 * 60_000) {
       setActions({ key: rangeKey, runs: hit.runs, skipped: hit.skipped });
       return;
     }
@@ -89,7 +90,7 @@ export function useUsageInput(store: OfficeStore | null, snap: Snapshot, range: 
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, rangeKey]);
+  }, [store, rangeKey, actionsFresh]);
   return useMemo(() => {
     const latest = new Map<string, { revision: number; chars: number }>();
     for (const s of snap.workflow.specs) {
@@ -141,8 +142,9 @@ const meterUsed = (row: UsageRow) => (row.id === 'studioA' || row.id === 'studio
 
 type Live = { tavily: Credits | null; firecrawl: Credits | null } | null;
 
-export function UsagePanel({ rows, actionsSkipped = [], period, onPeriod, range, liveCredits, monthCredits, store, snap }: {
+export function UsagePanel({ rows, usageTick = 0, actionsSkipped = [], period, onPeriod, range, liveCredits, monthCredits, store, snap }: {
   rows: UsageRow[];
+  usageTick?: number;
   /** Actions를 못 읽은 저장소(권한 등, v0.7.94) */
   actionsSkipped?: { repo: string; why: string }[];
   period: Period;
@@ -236,7 +238,7 @@ export function UsagePanel({ rows, actionsSkipped = [], period, onPeriod, range,
       </p>
       {stats && (
         <FormPopup wide title="사용량 통계" onClose={() => setStats(false)}>
-          <UsageStats store={store} snap={snap} />
+          <UsageStats store={store} snap={snap} tick={usageTick} />
         </FormPopup>
       )}
     </div>
@@ -246,9 +248,12 @@ export function UsagePanel({ rows, actionsSkipped = [], period, onPeriod, range,
 const COLOR: Record<UsageAgentId, string> = { claude: 'var(--viz-1)', codex: 'var(--viz-2)', studioA: 'var(--viz-3)', studioB: 'var(--viz-4)', search: 'var(--viz-5)', firecrawl: 'var(--viz-6)', ci: 'var(--viz-7)' };
 
 const WD_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
+const AI_AGENTS = USAGE_AGENTS.filter((a) => a.id !== 'ci');
 
 /** 통계 보기: 고른 기간의 날짜별 사용, 에이전트마다 한 일, 내 프로젝트별 */
-function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
+function UsageStats({ store, snap, tick = 0 }: { store: OfficeStore; snap: Snapshot; tick?: number }) {
+  // 통계를 열 때·새로 고침을 누를 때 Actions를 새로 읽는다(v0.7.97)
+  const [actionsFresh, setActionsFresh] = useState(() => Date.now());
   // v0.7.93 소유자 "통계에 처음 들어갈 땐 주간·횟수"
   const [period, setPeriod] = useState<'week' | 'month' | 'custom'>('week');
   const [offset, setOffset] = useState(0);
@@ -267,14 +272,15 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   // 큰 갈래 안의 세부(v0.7.95 소유자 "설명은 따로 자세히 버튼 안에")
   const [workDetail, setWorkDetail] = useState(false);
   const range = useMemo(() => (period === 'custom' ? customRange(from, to) : rangeOf(period, new Date(), offset)), [period, offset, from, to]);
-  const input = useUsageInput(store, snap, range);
+  const input = useUsageInput(store, snap, range, tick, actionsFresh);
   const rows = useMemo(() => summarize(input, range), [input, range]);
   // 날짜별 막대는 오늘까지만(이번 달·주의 남은 날은 빈 막대라 뺀다)
   // v0.7.95 소유자 "주간·월간은 1주·1달이 전부 보이게": 오늘 뒤 날짜도 빈 막대로 둔다
   const daily = useMemo(() => dailyOf(input, range), [input, range]);
   const kinds = useMemo(() => kindsOf(input, range), [input, range]);
   const projects = useMemo(() => byProject(input, range), [input, range]);
-  const series = USAGE_AGENTS.filter((a) => measure === 'n' || a.unit === 'token');
+  // v0.7.97 소유자 "깃허브 액션만 너무 많아 다른 게 거의 안 떠": 큰 막대·무슨 일에 썼나는 AI 에이전트만, Actions는 아래 따로(축도 따로)
+  const series = AI_AGENTS.filter((a) => measure === 'n' || a.unit === 'token');
   const val = (d: (typeof daily)[number], id: UsageAgentId) => (measure === 'n' ? d.rows[id].n : d.rows[id].amount);
   const fmt = (v: number) => (measure === 'n' ? `${v}` : shortNum(v));
   /** 횟수와 양을 함께(v0.7.90 소유자 "날짜별 횟수·토큰 다 표시"): 토큰 AI는 '3회 · 1.2k', 검색은 '3회 · 크레딧 3' */
@@ -300,12 +306,13 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   const bw = (W - L - R) / Math.max(1, daily.length);
   const barW = Math.max(6, Math.min(22, bw * 0.6));
   const tipDay = tip ? daily.find((d) => d.day === tip) : undefined;
-  const pmax = Math.max(1, ...projects.map((p) => p.claude + p.codex + p.ci));
+  const pmax = Math.max(1, ...projects.map((p) => p.claude + p.codex));
   // 무슨 일에 썼나(v0.7.91 소유자 "원래 디자인이 좋음"): 일 종류마다 막대 한 줄, 에이전트는 색으로 쌓는다(모든 에이전트)
   // 업무별(v0.7.95): 7개 큰 갈래로 묶는다. 줄은 횟수가 있는 갈래로 정해 토글을 바꿔도 줄 수·순서가 같게(v0.7.93), 세부는 '자세히'
   const workMap = new Map<string, { label: string; parts: { id: UsageAgentId; name: string; v: number }[]; total: number; subs: Map<string, number> }>();
   const order = new Map<string, number>();
   for (const k of kinds) {
+    if (k.id === 'ci') continue;
     for (const x of k.kinds) {
       if (!x.n) continue;
       const g = groupOf(k.id, x.key, x.label);
@@ -326,7 +333,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
   const work = [...workMap.values()].sort((a, b) => (order.get(b.label) ?? 0) - (order.get(a.label) ?? 0) || WORK_GROUPS.indexOf(a.label as WorkGroup) - WORK_GROUPS.indexOf(b.label as WorkGroup));
   const wmax = Math.max(1, ...work.map((w) => w.total));
   // 에이전트별: 모든 에이전트 줄을 늘 보인다(토큰 보기에서 토큰이 없는 Tavily·Firecrawl·Actions는 '—'). 아래 글은 큰 갈래, '자세히'면 세부
-  const byAgent = kinds.map((k) => {
+  const byAgent = kinds.filter((k) => k.id !== 'ci').map((k) => {
     const has = series.some((s) => s.id === k.id);
     const grouped = new Map<string, number>();
     for (const x of k.kinds) {
@@ -336,6 +343,18 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
     return { id: k.id, name: k.name, has, total: !has ? 0 : measure === 'n' ? k.n : k.amount, lines: [...grouped].map(([label, v]) => ({ label, v })).sort((p, q) => q.v - p.v) };
   });
   const amax = Math.max(1, ...byAgent.map((a) => a.total));
+  // GitHub Actions 따로(v0.7.97): 날짜별 작은 막대(횟수, 축 따로)·검사·배포/정리·기타·한도 대상 분
+  const ci = rows.find((r) => r.id === 'ci')!;
+  const ciKinds = kinds.find((k) => k.id === 'ci')?.kinds ?? [];
+  const ciGroups = (['검사·배포', '정리·기타'] as const).map((g) => {
+    const xs = ciKinds.filter((x) => groupOf('ci', x.key, x.label) === g);
+    return { g, n: xs.reduce((a, x) => a + x.n, 0), m: xs.reduce((a, x) => a + x.tokens, 0), xs };
+  });
+  const ciMax = Math.max(1, ...daily.map((d) => d.rows.ci.n));
+  const ciStep = ciMax > 40 ? 20 : ciMax > 20 ? 10 : 5;
+  const ciTop = Math.ceil(ciMax / ciStep) * ciStep;
+  const CH = 110;
+  const cy = (v: number) => T + (CH - T - B) * (1 - v / ciTop);
   return (
     <div className="viz usage-stats">
       <div className="usage-stats-ctrl">
@@ -393,13 +412,11 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
         </div>
       </div>
 
-      {(input.actionsSkipped ?? []).length > 0 && <SkippedNote skipped={input.actionsSkipped ?? []} />}
-
       <section className="usage-chart">
         <h4>{measure === 'n' ? '날짜별 사용 횟수' : '날짜별 토큰'}</h4>
         <p className="muted small">막대를 누르면 그날 AI마다 횟수·토큰(검색은 크레딧)이 나와요.</p>
         <ul className="usage-legend">
-          {USAGE_AGENTS.map((s) => (
+          {AI_AGENTS.map((s) => (
             <li key={s.id} className={series.some((x) => x.id === s.id) ? '' : 'is-off'}>
               <i style={{ background: COLOR[s.id] }} />
               {s.name}
@@ -437,7 +454,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
                     </text>
                   )}
                   <rect x={L + bw * i} y={T} width={bw} height={H - T - B} fill="transparent" onClick={() => setTip(tip === d.day ? null : d.day)}>
-                    <title>{`${dayLabel(d.day)} ${USAGE_AGENTS.map((s) => `${s.name} ${both(s.id, d.rows[s.id].n, d.rows[s.id].amount)}`).join(', ')}`}</title>
+                    <title>{`${dayLabel(d.day)} ${AI_AGENTS.map((s) => `${s.name} ${both(s.id, d.rows[s.id].n, d.rows[s.id].amount)}`).join(', ')}`}</title>
                   </rect>
                 </g>
               );
@@ -447,7 +464,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
         {tipDay && (
           <div className="usage-tip" onClick={() => setTip(null)}>
             <b>{dayLabel(tipDay.day)} 하루 ✕</b>
-            {USAGE_AGENTS.map((s) => (
+            {AI_AGENTS.map((s) => (
               <span key={s.id}>
                 <i style={{ background: COLOR[s.id] }} />
                 {s.name} {both(s.id, tipDay.rows[s.id].n, tipDay.rows[s.id].amount)}
@@ -489,7 +506,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
         ) : (
           <>
         <ul className="usage-legend">
-          {USAGE_AGENTS.map((s) => (
+          {AI_AGENTS.map((s) => (
             <li key={s.id} className={series.some((x) => x.id === s.id) ? '' : 'is-off'}>
               <i style={{ background: COLOR[s.id] }} />
               {s.name}
@@ -527,9 +544,63 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
         )}
       </section>
 
+      <section className="usage-chart usage-ci">
+        <div className="usage-chart-head">
+          <h4>GitHub Actions</h4>
+          <button type="button" className="usage-detail-btn" onClick={() => setActionsFresh(Date.now())}>
+            새로 고침
+          </button>
+        </div>
+        <p className="muted small">
+          {ci.n}회 · {ci.amount}분 · 한도(한 달 2,000분)에 드는 비공개 저장소 {ci.billed ?? 0}분. 공개 저장소는 무료예요.
+        </p>
+        {(input.actionsSkipped ?? []).length > 0 && <SkippedNote skipped={input.actionsSkipped ?? []} />}
+        <div className="usage-svg">
+          <svg viewBox={`0 0 ${W} ${CH}`} role="img" aria-label="날짜별 Actions 실행 횟수">
+            {[0, ciTop].map((v) => (
+              <g key={v}>
+                <line className="grid" x1={L} x2={W - R} y1={cy(v)} y2={cy(v)} />
+                <text x={L - 6} y={cy(v) + 4} textAnchor="end">
+                  {v}
+                </text>
+              </g>
+            ))}
+            {daily.map((d, i) => {
+              const v = d.rows.ci.n;
+              const cx = L + bw * i + bw / 2;
+              const every = Math.max(1, Math.ceil(daily.length / 10));
+              return (
+                <g key={d.day}>
+                  {v > 0 && <rect x={cx - barW / 2} y={cy(v)} width={barW} height={Math.max(1, cy(0) - cy(v))} rx={3} fill={COLOR.ci}><title>{`${dayLabel(d.day)} ${v}회 · ${d.rows.ci.amount}분`}</title></rect>}
+                  {(daily.length <= 7 || i % every === 0 || i === daily.length - 1) && (
+                    <text x={cx} y={CH - 8} textAnchor="middle">
+                      {crossMonth ? dayLabel(d.day) : Number(d.day.slice(8, 10))}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        <div className="usage-hbars">
+          {ciGroups.map((x) => (
+            <div key={x.g} className="usage-hb-wrap">
+              <div className={`usage-hb${x.n ? '' : ' is-zero'}`}>
+                <span>{x.g}</span>
+                <span className="bar">{x.n > 0 && <span style={{ width: `${(x.n / Math.max(1, ci.n)) * 100}%`, background: COLOR.ci }} />}</span>
+                <span className="v">
+                  {x.n}회 · {x.m}분
+                </span>
+              </div>
+              {workDetail && x.xs.length > 0 && <p className="usage-hb-note">{x.xs.map((w) => `${w.label} ${w.n}회`).join(' · ')}</p>}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="usage-chart">
         <h4>어느 프로젝트에 썼나</h4>
-        <p className="muted small">많이 쓴 순서, 같으면 내 프로젝트 목록 순서(만들거나 지우면 같이 바뀜). Claude·Codex 업무와 그 저장소의 Actions 실행. Studio·검색은 프로젝트를 남기지 않아 빠져요.</p>
+        <p className="muted small">Claude·Codex를 많이 쓴 순서, 같으면 Actions·내 프로젝트 목록 순서(만들거나 지우면 같이 바뀜). Studio·검색은 프로젝트를 남기지 않아 빠져요.</p>
         <ul className="usage-legend">
           <li>
             <i style={{ background: COLOR.claude }} />
@@ -539,22 +610,17 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
             <i style={{ background: COLOR.codex }} />
             Codex
           </li>
-          <li>
-            <i style={{ background: COLOR.ci }} />
-            GitHub Actions
-          </li>
         </ul>
         <div className="usage-hbars">
           {projects.map((p) => (
-            <div key={p.id} className={`usage-hb${p.claude + p.codex + p.ci ? '' : ' is-zero'}`}>
+            <div key={p.id} className={`usage-hb${p.claude + p.codex ? '' : ' is-zero'}`}>
               <span title={p.name}>{p.name}</span>
               <span className="bar">
                 {p.claude > 0 && <span style={{ width: `${(p.claude / pmax) * 100}%`, background: COLOR.claude }} title={`Claude ${p.claude}회`} />}
                 {p.codex > 0 && <span style={{ width: `${(p.codex / pmax) * 100}%`, background: COLOR.codex }} title={`Codex ${p.codex}회`} />}
-                {p.ci > 0 && <span style={{ width: `${(p.ci / pmax) * 100}%`, background: COLOR.ci }} title={`Actions ${p.ci}회`} />}
               </span>
               <span className="v">
-                {p.claude + p.codex + p.ci}회 · {p.tokens ? `약 ${shortNum(p.tokens)}` : '0'} 토큰
+                {p.claude + p.codex}회 · {p.tokens ? `약 ${shortNum(p.tokens)}` : '0'} 토큰{p.ci ? ` · Actions ${p.ci}` : ''}
               </span>
             </div>
           ))}
@@ -568,7 +634,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
             <thead>
               <tr>
                 <th>날짜</th>
-                {USAGE_AGENTS.map((s) => (
+                {AI_AGENTS.map((s) => (
                   <th key={s.id}>{s.name}</th>
                 ))}
               </tr>
@@ -577,7 +643,7 @@ function UsageStats({ store, snap }: { store: OfficeStore; snap: Snapshot }) {
               {daily.map((d) => (
                 <tr key={d.day}>
                   <td>{dayLabel(d.day)}</td>
-                  {USAGE_AGENTS.map((s) => (
+                  {AI_AGENTS.map((s) => (
                     <td key={s.id}>{d.rows[s.id].n || '—'}</td>
                   ))}
                 </tr>

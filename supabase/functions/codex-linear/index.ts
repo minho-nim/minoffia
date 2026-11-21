@@ -67,7 +67,7 @@ export function submitSection(taskId: string, token: string, url = `${env('SUPAB
 // deno-lint-ignore no-explicit-any
 async function serverText(admin: any, a: { task_id: string; plan_revision: number; work_item_id: string }): Promise<string> {
   const { data: t } = await admin.from('tasks').select('project_id, owner_id, skills, projects(repo)').eq('id', a.task_id).maybeSingle();
-  const { data: spec } = await admin.from('task_specs').select('revision, final_prompt, change_scope, preserve_constraints, test_criteria').eq('task_id', a.task_id).order('revision', { ascending: false }).limit(1).maybeSingle();
+  const { data: spec } = await admin.from('task_specs').select('revision, user_original_text, final_prompt, change_scope, preserve_constraints, test_criteria').eq('task_id', a.task_id).order('revision', { ascending: false }).limit(1).maybeSingle();
   const { data: plan } = await admin.from('pm_plans').select('target_base_revision, plan').eq('task_id', a.task_id).eq('plan_revision', a.plan_revision).maybeSingle();
   const item = ((plan?.plan as { work_items?: Record<string, unknown>[] } | undefined)?.work_items ?? []).find((w) => w.id === a.work_item_id);
   if (!t || !spec || !item) return '';
@@ -85,7 +85,7 @@ async function serverText(admin: any, a: { task_id: string; plan_revision: numbe
   return buildServerHandoff({
     taskId: a.task_id,
     repo: String((t.projects as { repo?: string } | null)?.repo ?? ''),
-    spec: { revision: spec.revision, final_prompt: `${spec.final_prompt ?? ''}${design}${wiki}`, change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '' },
+    spec: { revision: spec.revision, final_prompt: `${spec.final_prompt ?? ''}${design}${wiki}`, change_scope: spec.change_scope ?? '', preserve_constraints: spec.preserve_constraints ?? '', test_criteria: spec.test_criteria ?? '', user_original_text: String(spec.user_original_text ?? '') },
     item: { id: String(item.id), title: String(item.title ?? ''), goal: String(item.goal ?? ''), acceptance_tests: item.acceptance_tests as string[] | undefined, preserve_constraints: item.preserve_constraints as string[] | undefined },
     baseRevision: String(plan?.target_base_revision ?? ''),
     // 기본 규칙(모든 프로젝트)도 함께(v0.6.59: 서버가 시작한 Codex에는 프로젝트 규칙만 가고 기본 규칙이 빠져 있었다)

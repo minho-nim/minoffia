@@ -330,8 +330,9 @@ export function byProject(input: UsageInput, r: Range): { id: string; name: stri
     if (line) line.ci += 1;
   }
   // v0.7.93 소유자 "많이 쓴 순서가 기본, 아래로는 목록 순서": 쓴 것(횟수 합)이 큰 순서, 같으면(0회 포함) 목록 순서. 지운 것은 맨 아래
+  // v0.7.97: Actions가 많아 AI 사용이 묻히지 않게 Claude·Codex 합을 먼저, 같으면 Actions, 그다음 목록 순서
   const used = (l: { claude: number; codex: number; ci: number }) => l.claude + l.codex + l.ci;
-  const sorted = [...lines].sort((a, b) => used(b) - used(a) || a.order - b.order).map(({ repo: _r, order: _o, ...x }) => x);
+  const sorted = [...lines].sort((a, b) => b.claude + b.codex - (a.claude + a.codex) || b.ci - a.ci || a.order - b.order).map(({ repo: _r, order: _o, ...x }) => x);
   const { repo: _gr, order: _go, ...g } = gone;
   return used(gone) + gone.tokens > 0 ? [...sorted, g] : sorted;
 }

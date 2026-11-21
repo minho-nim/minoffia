@@ -28,10 +28,11 @@ describe('실시간 구독(v0.3.7)', () => {
     const off = store.subscribe!((t) => seen.push(t));
     expect(subscribed).toBe(true);
     expect([...handlers.keys()]).toEqual(expect.arrayContaining(['tasks', 'approvals', 'attachments', 'inbox_state', 'deployments']));
-    // 대화 기록·AI 호출 기록은 실시간으로 퍼뜨리지 않는다
+    // 대화 기록은 실시간으로 퍼뜨리지 않는다. AI 호출 기록(ai_calls)은 v0.7.97부터 실시간(앱은 사용량만 다시 읽음)
     expect(handlers.has('chat_messages')).toBe(false);
     expect(handlers.has('claude_research')).toBe(true);
-    expect(handlers.size).toBe(27);
+    expect(handlers.has('ai_calls')).toBe(true);
+    expect(handlers.size).toBe(28);
     handlers.get('approvals')!();
     expect(seen).toEqual(['approvals']);
     off();

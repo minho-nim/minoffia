@@ -7,6 +7,13 @@ import { devGuide } from './devHabits';
 import { BASE_RULES } from './baseRules';
 
 /** 개발 AI가 CLAUDE.md를 알아서 만들거나 맞추게 하는 한 줄(v0.4.75, 소유자 "다르면 맞춰줘, AI가 알아서"). 서버 dispatch-claude-dev/payload.ts에도 같은 문장 */
+/** 소유자 원문(v0.7.97 소유자 "개발 AI에 원문도 붙이기, 전화 게임 틈 막기"): 승인된 기획서가 기준이고 원문은 뜻 확인용. 기획서와 같거나 비면 넣지 않는다 */
+export function originalSection(original: string | undefined | null, finalPrompt = ''): string[] {
+  const t = (original ?? '').trim();
+  if (!t || finalPrompt.includes(t)) return [];
+  return ['', '## 소유자 원문 (참고용 — 승인된 기획서와 다르면 기획서를 따른다)', t.length > 2000 ? `${t.slice(0, 2000)}…` : t];
+}
+
 export const CLAUDE_MD_SYNC =
   '- 저장소 루트에 CLAUDE.md가 없으면 만들고(위 "이 프로젝트에서 지켜야 할 것" 목록을 같은 제목의 절로), 있으면 그 절만 위 목록과 이번에 새로 적는 것에 맞춘다(절이 없으면 파일 끝에 추가). CLAUDE.md의 다른 부분은 바꾸지 않고, 이 변경도 같은 작업 브랜치에 함께 넣는다.';
 
@@ -99,6 +106,7 @@ export function buildCodexHandoff(
     '## 승인된 기획서 (기획 승인, 수정 금지)',
     spec.finalPrompt,
     spec.changeScope ? `\n변경 범위: ${spec.changeScope}` : '',
+    ...originalSection(spec.userOriginalText, spec.finalPrompt),
     designHandoffSection(design),
     '',
     ...(images ? ['', '## 참고 자료 (사용자가 이 작업에 직접 첨부)', images] : []),
