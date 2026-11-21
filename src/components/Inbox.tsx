@@ -1,6 +1,7 @@
 import { characterUrl } from '../office/assets';
 import { createPortal } from 'react-dom';
 import { FormPopup } from './FormPopup';
+import { clarifyQuestions, withAnswers } from '../domain/clarify';
 import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
@@ -66,6 +67,8 @@ interface Msg {
   weather?: WeatherData;
   /** 업무 접수 확인 카드(v0.4.58): 한 메시지에 업무가 여럿이어도 카드마다 따로 접수·취소한다 */
   offer?: Offer;
+  /** 기획서 전에 되묻기(v0.7.97): 질문에 답하면 요청에 붙여 접수, [그냥 접수]면 그대로 */
+  clarify?: { text: string; projectId: string; context?: PriorChat; whole?: string; questions: string[]; state: 'open' | 'done' | 'dropped' };
   /** 함께 보낸 첨부(v0.4.89): 이름과 작은 미리보기(누르면 크게). 원본은 이 화면에서만 기억한다 */
   files?: { name: string; thumb?: string; key?: string }[];
 }
@@ -1106,7 +1109,30 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
     // 접수 카드로 받았으면 예전에 남은 선택 버튼(예: '사실은 업무 요청이에요')은 접는다.
     setPending(null);
     say('me', `${project.name} 맞아요${o.whole ? ` ('${short(o.text)}')` : ''}`, { projectId: project.id });
-    void run(() => create(o.text, project, o.context, o.whole));
+    askThenCreate(o.text, project, o.context, o.whole);
+  };
+  /** 기획서 전에 되묻기(v0.7.97 소유자 "리버스 프롬프팅"): 짧거나 모호하면 규칙으로 1~3개 묻고, 아니면 바로 접수(모델 호출 0) */
+  const askThenCreate = (text: string, project: Project, context?: PriorChat, whole?: string) => {
+    const questions = clarifyQuestions(text);
+    if (!questions.length) {
+      void run(() => create(text, project, context, whole));
+      return;
+    }
+    const id = mid();
+    clarifyRef.current = id;
+    setLog((l) => [...l, { id, from: 'office' as From, text: `접수 전에 ${questions.length}가지만 여쭐게요.\n${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n아래 입력창에 답을 쓰면 요청에 붙여서 접수해요.`, home: thread, clarify: { text, projectId: project.id, context, whole, questions, state: 'open' as const } }].slice(-KEEP));
+  };
+  /** 되묻기 카드를 닫고 접수(답이 있으면 붙여서) */
+  const clarifyRef = useRef<string | null>(null);
+  const finishClarify = (id: string, answer: string | null) => {
+    const m = log.find((x) => x.id === id);
+    const c = m?.clarify;
+    clarifyRef.current = null;
+    if (!c || c.state !== 'open') return;
+    setLog((l) => l.map((x) => (x.id === id && x.clarify ? { ...x, clarify: { ...x.clarify, state: answer === null ? 'dropped' : 'done' } } : x)));
+    const project = snap.projects.find((p) => p.id === c.projectId);
+    if (!project || answer === null) return;
+    void run(() => create(withAnswers(c.text, c.questions, answer), project, c.context, c.whole));
   };
 
   const askProject = (text: string, context?: PriorChat) => offerTask(text, [], context);
@@ -1132,6 +1158,12 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
       const to = replyTo;
       setReplyTo(null);
       sendReply(to, text);
+      return;
+    }
+    // 되묻기 카드가 열려 있으면 이 글을 답으로 붙여 접수한다(v0.7.97)
+    if (clarifyRef.current && log.some((x) => x.id === clarifyRef.current && x.clarify?.state === 'open')) {
+      say('me', text);
+      finishClarify(clarifyRef.current, text);
       return;
     }
     const sent = photos;
@@ -1232,7 +1264,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
       if (yn === 'yes') {
         const { text: original, project, context } = pending;
         setPending(null);
-        void run(() => create(original, project, context));
+        askThenCreate(original, project, context);
       } else {
         setShowOther(true);
         say('office', '그럼 어느 프로젝트인가요? 아래에서 고르세요.');
@@ -1413,7 +1445,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
     const context = 'context' in pending ? pending.context : undefined;
     setPending(null);
     say('me', `${project.name} 맞아요`, { projectId: project.id });
-    void run(() => create(text, project, context));
+    askThenCreate(text, project, context);
   };
 
   /** AI가 '업무'로 판단했을 때: AI가 고른 프로젝트(없으면 고른 칩·이름 맞추기)로 "이 프로젝트 맞아요?"를 묻는다 */
@@ -1750,6 +1782,11 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
                 <p className="inbox-head">
                   <b className="inbox-name">{sp.name}</b>
                   {sp.role && <span className="inbox-role">{sp.role}</span>}
+                  {sp.helpers?.map((h) => (
+                    <span key={h} className="inbox-helper">
+                      {h}
+                    </span>
+                  ))}
                   {t !== null && <time className="inbox-time">{clockLabel(t)}</time>}
                 </p>
               )}
@@ -1921,6 +1958,17 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
                   </span>
                 );
               })()}
+              {m.clarify?.state === 'open' && (
+                <span className="inbox-choices" role="group" aria-label="되묻기">
+                  <button type="button" className="btn btn-small" onClick={() => finishClarify(m.id, '')}>
+                    그냥 접수
+                  </button>
+                  <button type="button" className="btn btn-small btn-ghost" onClick={() => finishClarify(m.id, null)}>
+                    접수 안 함
+                  </button>
+                </span>
+              )}
+              {m.clarify && m.clarify.state !== 'open' && <span className="muted small inbox-offer-done">{m.clarify.state === 'done' ? '접수함' : '접수 안 함'}</span>}
               {m.offer && m.offer.state !== 'open' && <span className="muted small inbox-offer-done">{m.offer.state === 'done' ? '접수함' : '접수 안 함'}</span>}
               {m.created && m.taskId && onCancelTask && (() => {
                 const t = snap.tasks.find((x) => x.id === m.taskId);

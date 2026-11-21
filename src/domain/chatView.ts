@@ -8,6 +8,8 @@ export interface Speaker {
   name: string;
   /** 이름 옆 작은 표시(접수·기획·계획·개발·평가·검사·배포 등). 없으면 '' */
   role: string;
+  /** 함께 일한 쪽(작게, v0.7.97 소유자 "답한 에이전트에 실제 일한 에이전트를 함께"). 예: Tavily 검색, Firecrawl 본문 2 */
+  helpers?: string[];
 }
 
 export interface ChatMsgLike {
@@ -32,9 +34,16 @@ export function speakerOf(m: ChatMsgLike): Speaker {
   if (m.from === 'gemini') {
     const via = m.via ?? '';
     if (via.includes('Claude')) return { id: 'claude', name: 'Claude', role: '웹 조사' };
-    // 웹 조사(v0.7.51 Tavily·Firecrawl, 예전 기록은 Exa): "<엔진> 검색 + Gemini ·"
-    const web = /(\S+) 검색(?: \+ (?:본문 \d+개|요약만))? \+ Gemini/.exec(via);
-    if (web) return { id: web[1] === 'Firecrawl' ? 'firecrawl' : 'search', name: `${web[1]} + Gemini`, role: '웹 조사' };
+    // 웹 조사(v0.7.51 Tavily·Firecrawl, 예전 기록은 Exa): "<엔진> 검색 + 본문 n개 + Gemini · Studio A가 답함".
+    // v0.7.97: 답한 쪽은 Studio(얼굴·이름), 검색·본문 읽기는 함께 일한 쪽으로 작게
+    const web = /(\S+) 검색(?: \+ (본문 (\d+)개|요약만))? \+ Gemini/.exec(via);
+    if (web) {
+      const helpers = [`${web[1]} 검색`, ...(web[3] ? [`Firecrawl 본문 ${web[3]}`] : [])];
+      return via.includes('Studio B') ? { id: 'studioB', name: 'Gemini B', role: '웹 조사', helpers } : { id: 'studioA', name: 'Gemini A', role: '웹 조사', helpers };
+    }
+    // 날씨(v0.7.68): 모델 없이 규칙으로 답함 → 미니엉, 자료는 날씨 서버
+    const wx = /^(\S+(?: \S+)?) 자료 · 규칙으로 답함/.exec(via);
+    if (wx) return { ...MINA('날씨'), helpers: [wx[1]] };
     if (via.includes('Studio B')) return { id: 'studioB', name: 'Gemini B', role: '답변' };
     return { id: 'studioA', name: 'Gemini A', role: '답변' };
   }

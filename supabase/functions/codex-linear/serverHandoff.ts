@@ -1,9 +1,16 @@
 // 서버가 만드는 Codex 지시서(v0.6.28, 소유자 "앱을 닫아 둬도 진행"): 앱이 닫혀 있을 때 서버가 Codex에 맡길 때 쓴다.
 // 앱의 지시서(src/domain/handoffV2.ts buildCodexHandoff)에서 첨부·링크 설명을 뺀 같은 뼈대다(외부 의존 없음).
+/** 소유자 원문(v0.7.97 소유자 "개발 AI에 원문도 붙이기, 전화 게임 틈 막기"): 승인된 기획서가 기준이고 원문은 뜻 확인용. 기획서와 같거나 비면 넣지 않는다 */
+export function originalSection(original: string | undefined | null, finalPrompt = ''): string[] {
+  const t = (original ?? '').trim();
+  if (!t || finalPrompt.includes(t)) return [];
+  return ['', '## 소유자 원문 (참고용 — 승인된 기획서와 다르면 기획서를 따른다)', t.length > 2000 ? `${t.slice(0, 2000)}…` : t];
+}
+
 export interface ServerHandoffInput {
   taskId: string;
   repo: string;
-  spec: { revision: number; final_prompt: string; change_scope: string; preserve_constraints: string; test_criteria: string };
+  spec: { revision: number; final_prompt: string; change_scope: string; preserve_constraints: string; test_criteria: string; user_original_text?: string };
   item: { id: string; title: string; goal?: string; acceptance_tests?: string[]; preserve_constraints?: string[] };
   baseRevision?: string;
   rules: string[];
@@ -27,6 +34,7 @@ export function buildServerHandoff(i: ServerHandoffInput): string {
     '## 승인된 기획서 (기획 승인, 수정 금지)',
     i.spec.final_prompt,
     i.spec.change_scope ? `\n변경 범위: ${i.spec.change_scope}` : '',
+    ...originalSection(i.spec.user_original_text, i.spec.final_prompt),
     i.attachmentCount ? `\n(사용자가 첨부한 자료 ${i.attachmentCount}개는 AI Office 업무 카드에 있다. 지시서만으로 판단이 어려우면 멈추고 보고한다.)` : '',
     ...(i.rules.length ? ['', '## 이 프로젝트에서 지켜야 할 것', ...i.rules.map((r) => `- ${r}`)] : []),
     '',

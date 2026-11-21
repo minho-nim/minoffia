@@ -115,10 +115,10 @@ describe('사용량 한 계산', () => {
       ['Valumin', 0, 0, 0, 0],
       ['지운 프로젝트·업무', 0, 1, 0, 0],
     ]);
-    // 많이 쓴 순서가 먼저, 같으면 목록 순서(v0.7.93): Valumin 저장소 Actions 3회 → 맨 위
+    // v0.7.97: Claude·Codex 합이 먼저(MinSnakey 2), 같으면 Actions(Valumin 3 > 0), 그다음 목록 순서
     const acts = [1, 2, 3].map(() => ({ repo: 'minho-nim/Valumin', private: false, workflow: 'PR 검사(verify)', ok: true, createdAt: at('2026-11-18T09:00'), minutes: 2 }));
     const withActs = { ...input, projects: [{ id: 'p1', name: 'MinSnakey', repo: 'minho-nim/MinSnakey' }, { id: 'p2', name: 'Valumin', repo: 'minho-nim/Valumin' }], actions: acts };
-    expect(byProject(withActs, rangeOf('week', now)).map((p) => [p.name, p.ci])).toEqual([['Valumin', 3], ['MinSnakey', 0], ['지운 프로젝트·업무', 0]]);
+    expect(byProject(withActs, rangeOf('week', now)).map((p) => [p.name, p.ci])).toEqual([['MinSnakey', 0], ['Valumin', 3], ['지운 프로젝트·업무', 0]]);
     expect(byProject({ ...input, runs: [], results: [] }, rangeOf('week', now)).map((p) => p.name)).toEqual(['MinSnakey', 'Valumin']);
     // Actions 줄: 횟수·분, 한도에 드는 비공개 분
     const ci = summarize({ ...withActs, actions: [...acts, { ...acts[0], repo: 'minho-nim/TestRepo', private: true, minutes: 4 }] }, rangeOf('week', now)).find((x) => x.id === 'ci')!;

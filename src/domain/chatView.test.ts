@@ -5,10 +5,13 @@ describe('디스코드식 대화창', () => {
   it('말한 쪽을 실제 AI로', () => {
     expect(speakerOf({ id: '1', from: 'me', text: '' }).name).toBe('나');
     expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Gemini · Studio B가 답함' }).name).toBe('Gemini B');
-    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Exa 검색 + Gemini · Studio A가 답함' }).id).toBe('search');
-    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Firecrawl 검색 + Gemini · Studio B가 답함' }).name).toBe('Firecrawl + Gemini');
-    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Firecrawl 검색 + 본문 2개 + Gemini · Studio B가 답함' }).id).toBe('firecrawl');
-    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Tavily 검색 + 본문 2개 + Gemini · Studio A가 답함' }).name).toBe('Tavily + Gemini');
+    // v0.7.97: 웹 조사는 답한 Studio가 얼굴·이름, 검색·본문 읽기는 함께 일한 쪽(작게)
+    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Exa 검색 + Gemini · Studio A가 답함' })).toMatchObject({ id: 'studioA', helpers: ['Exa 검색'] });
+    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Firecrawl 검색 + Gemini · Studio B가 답함' })).toMatchObject({ id: 'studioB', name: 'Gemini B', helpers: ['Firecrawl 검색'] });
+    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Firecrawl 검색 + 본문 2개 + Gemini · Studio B가 답함' }).helpers).toEqual(['Firecrawl 검색', 'Firecrawl 본문 2']);
+    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Tavily 검색 + 본문 2개 + Gemini · Studio A가 답함' })).toMatchObject({ name: 'Gemini A', role: '웹 조사', helpers: ['Tavily 검색', 'Firecrawl 본문 2'] });
+    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Tavily 검색 + 요약만 + Gemini · Studio A가 답함' }).helpers).toEqual(['Tavily 검색']);
+    expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'MET Norway 자료 · 규칙으로 답함' })).toMatchObject({ id: 'mina', role: '날씨', helpers: ['MET Norway'] });
     expect(speakerOf({ id: '1', from: 'gemini', text: '', via: 'Claude가 웹에서 찾아 답함' }).id).toBe('claude');
     expect(speakerOf({ id: 'stage-t-1', from: 'office', text: "'x' → 개발 중\nClaude(W1)가 개발 중이에요.", stage: 'executing' }).name).toBe('Claude');
     expect(speakerOf({ id: 'stage-t-1', from: 'office', text: "'x' → 완료", stage: 'completed' }).name).toBe('미노');

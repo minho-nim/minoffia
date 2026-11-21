@@ -198,6 +198,8 @@ const REALTIME_TABLES = [
   'projects', 'tasks', 'usage_runs', 'task_specs', 'approvals', 'pm_plans', 'agent_assignments',
   'result_packages', 'revision_requests', 'attachments', 'link_refs', 'clarifications',
   'image_analyses', 'pr_checks', 'deployments', 'inbox_state', 'agent_limits', 'pm_plan_inbox', 'dev_result_inbox', 'pr_dispatches', 'agent_leave', 'project_rules', 'result_reviews', 'task_followups', 'claude_research', 'design_drafts', 'design_picks',
+  // v0.7.97(0066): 사용량 바로 반영. 앱은 이 표가 바뀌면 사용량만 다시 읽는다
+  'ai_calls',
 ];
 
 const toReview = (r: Row): ResultReview => ({

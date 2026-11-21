@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
   const project = task?.projects as unknown as { name: string; repo: string | null; preview_host: string | null } | null;
   const { data: spec } = await userClient
     .from('task_specs')
-    .select('revision, final_prompt, change_scope, preserve_constraints, test_criteria, size_hint')
+    .select('revision, user_original_text, final_prompt, change_scope, preserve_constraints, test_criteria, size_hint')
     .eq('task_id', a.task_id)
     .order('revision', { ascending: false })
     .limit(1)
@@ -170,6 +170,7 @@ Deno.serve(async (req) => {
     specRevision: spec.revision,
     planRevision: a.plan_revision,
     finalPrompt: `${spec.final_prompt}${design}`,
+    original: String(spec.user_original_text ?? ''),
     changeScope: spec.change_scope ?? '',
     preserveConstraints: spec.preserve_constraints ?? '',
     testCriteria: spec.test_criteria ?? '',
