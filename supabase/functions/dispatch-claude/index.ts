@@ -49,8 +49,8 @@ async function otherRepoContext(admin: any, ownerId: string, projectId: string, 
   ].filter(Boolean);
 }
 
-/** 코드 상한. CLAUDE_DAILY_CAP을 더 크게 줘도 이 값을 넘지 않는다. */
-const HARD_DAILY_CAP = 20;
+/** v0.7.98 소유자 "하루 상한 삭제": 기본은 상한 없음. 서버 설정 CLAUDE_DAILY_CAP을 주면 그 값으로 다시 막는다 */
+const NO_DAILY_CAP = 1_000_000;
 const reqLines = (t: string) => t.split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)]|R\d+[.)]?)\s*/i, '').trim()).filter(Boolean);
 const FIRE_TIMEOUT_MS = 20_000;
 /** 공식 문서 예시 버전. 2023-06-01 이후 모든 버전을 같은 동작으로 받는다. */
@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
   }
 
   // 5. 원자적 예약(A 승인 버전 확인 + 일일 상한 + 같은 버전 중복 전송 방지)
-  const cap = Math.min(HARD_DAILY_CAP, Number(env('CLAUDE_DAILY_CAP')) || HARD_DAILY_CAP);
+  const cap = Number(env('CLAUDE_DAILY_CAP')) || NO_DAILY_CAP;
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
   const { data: claim, error: claimError } = await admin.rpc('claim_claude_dispatch', {
     p_task: task.id,

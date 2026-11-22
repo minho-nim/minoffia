@@ -1,5 +1,10 @@
 # 변경 기록
 
+## 되묻기는 요청마다 AI가·Claude·Codex 하루 상한 삭제(v0.7.98) — 2026-11-22
+
+- 소유자 "대답 미니엉이 하는데? AI가 하는 거 아니었음? → 실제 업무에 각각 맞춰": 물을지는 규칙(clarifyQuestions)이 정하고, 질문은 Gemini가 그 요청에 맞게 1~3개 만든다(ask-gemini clarify 모드, 고정 지시 + 요청은 사용자 칸, 기록 purpose clarify '되묻기', 키마다 질문 상한과 같이). 말한 쪽도 실제로 만든 쪽으로: 'Gemini A·B · 되묻기'. Gemini가 안 되면(휴가·한도·데모) 규칙 질문을 미니엉이. 요청에 붙는 머리말은 '[접수 전 질문에 대한 답]'.
+- 소유자 "하루 상한 삭제": Claude 20회·Codex 6회 앱 상한을 없앴다(agents dailyCap null). 서버 dispatch-claude·dispatch-claude-dev·dispatch-claude-pr·ask-claude-research·review-result도 기본 상한 없음(서버 설정 CLAUDE_DAILY_CAP을 주면 그 값으로 다시 막음). 루틴 자체의 한도 오류(429)는 그대로 알린다. 사용량 칸의 Claude·Codex 막대는 상한이 없어 숨김.
+
 ## 사용량 바로 반영·Actions 분리·함께 일한 에이전트·비밀키 한 줄·원문 전달·되묻기(v0.7.97) — 2026-11-21
 
 - 사용량 바로 반영(소유자 "에이전트 사용량이 바로 표시가 안 됨"): Gemini·Tavily·Firecrawl 기록(ai_calls)이 실시간 대상이 아니라 다른 표가 바뀌거나 앱을 다시 열 때까지 그대로였다. 0066으로 실시간에 넣고, 이 표가 바뀌면 화면 전체가 아니라 사용량만 다시 읽는다. Actions는 통계를 열 때·'새로 고침'에서 10분 보관을 건너뛰고 새로 읽는다.

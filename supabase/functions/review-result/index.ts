@@ -19,7 +19,8 @@ const HARD_DAILY_CAP = 100;
 const DEFAULT_DAILY_CAP = 40;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 45_000;
-const CLAUDE_HARD_DAILY_CAP = 20;
+/** v0.7.98 소유자 "하루 상한 삭제": 기본은 상한 없음. 서버 설정 CLAUDE_DAILY_CAP을 주면 그 값으로 다시 막는다 */
+const NO_DAILY_CAP = 1_000_000;
 const FIRE_TIMEOUT_MS = 20_000;
 const ANTHROPIC_VERSION = '2026-10-21';
 const REVIEW_TICKET_HOURS = 6;
@@ -192,7 +193,7 @@ Deno.serve(async (req) => {
     // 이미 보낸 채점이 아직 살아 있으면 다시 보내지 않고 기다린다. 기한이 지났으면 Gemini로 넘어간다.
     const { data: sent } = await admin.from('plan_submit_tokens').select('expires_at').eq('task_id', taskId).eq('kind', 'review').eq('result_revision', revision).maybeSingle();
     if (sent) return new Date(sent.expires_at).getTime() > Date.now() ? { sessionUrl: null } : null;
-    const cap = Math.min(CLAUDE_HARD_DAILY_CAP, Number(env('CLAUDE_DAILY_CAP')) || CLAUDE_HARD_DAILY_CAP);
+    const cap = Number(env('CLAUDE_DAILY_CAP')) || NO_DAILY_CAP;
     const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
     const { count: used } = await admin.from('usage_runs').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('agent', 'claude').eq('kind', 'cloud').eq('day', day);
     if ((used ?? 0) >= cap) return null;

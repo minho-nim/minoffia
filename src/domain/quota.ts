@@ -68,12 +68,13 @@ function gemini(calls: AiCall[], now: Date, slot: 1 | 2): QuotaInfo {
 export function quotaFor(agent: AgentId, snap: Snapshot, now: Date = new Date(), live?: { tavily: Credits | null; firecrawl: Credits | null } | null): QuotaInfo {
   switch (agent) {
     case 'claude': {
-      const cap = AGENT_BY_ID.claude.dailyCap ?? 0;
+      // v0.7.98 소유자 "하루 상한 삭제": 앱 상한 없음(null). 루틴 한도 오류(429)만 본다
+      const cap = AGENT_BY_ID.claude.dailyCap;
       const used = runsToday(snap.usage, 'claude', now);
       const limited = snap.tasks.some((t) => t.dispatch.error?.includes('HTTP 429') && t.dispatch.at && today(t.dispatch.at, now));
-      if (used >= cap) return { state: 'exhausted', label: '오늘 소진', detail: `AI Office 상한 ${cap}회를 모두 썼다(내일 0시 KST 초기화).` };
+      if (cap !== null && used >= cap) return { state: 'exhausted', label: '오늘 소진', detail: `AI Office 상한 ${cap}회를 모두 썼다(내일 0시 KST 초기화).` };
       if (limited) return { state: 'exhausted', label: '시간당 한도', detail: '오늘 루틴 한도 오류(429)를 받았다. 1시간 뒤 다시 시도한다.' };
-      return { state: 'available', label: `${used}/${cap}회`, detail: `오늘 Claude PM 전달 ${used}회(상한 ${cap}). Claude Pro 전체 사용량은 알 수 없다.` };
+      return { state: 'available', label: cap === null ? `${used}회` : `${used}/${cap}회`, detail: `오늘 Claude 전달 ${used}회${cap === null ? '(앱 상한 없음)' : `(상한 ${cap})`}. Claude Pro 전체 사용량은 알 수 없다.` };
     }
     case 'studioA':
       return gemini(snap.aiCalls ?? [], now, 1);

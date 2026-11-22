@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_BY_ID } from './agents';
 import { classify, coverFor, routeTask } from './router';
 import type { UsageRun } from './types';
 import { kstDay } from './usage';
@@ -14,7 +13,7 @@ const run = (agent: UsageRun['agent'], i: number): UsageRun => ({
   createdAt: now.toISOString(),
 });
 /** Claude 하루 상한만큼 쓴 기록 */
-const claudeFull = () => Array.from({ length: AGENT_BY_ID.claude.dailyCap ?? 0 }, (_, i) => run('claude', i));
+const claudeFull = () => Array.from({ length: 50 }, (_, i) => run('claude', i));
 
 describe('classify', () => {
   it('키워드가 가장 많이 맞는 유형을 고른다', () => {
@@ -51,18 +50,11 @@ describe('routeTask', () => {
     expect(routeTask({ title: '새 아이디어', description: '', requestedType: 'auto' }, [], now).assignee).toBe('claude');
   });
 
-  it('1순위가 오늘 한도를 다 쓰면 다음 후보로 넘긴다', () => {
-    const usage = claudeFull();
-    const r = routeTask({ title: '아키텍처 설계', description: '', requestedType: 'auto' }, usage, now);
-    expect(r.assignee).toBe('codex');
-    expect(r.reason).toContain('한도 소진');
-  });
-
-  it('후보가 모두 한도면 1순위에 두고 내일 실행으로 표시한다', () => {
-    const usage = [...claudeFull(), ...Array.from({ length: AGENT_BY_ID.codex.dailyCap ?? 0 }, (_, i) => run('codex', 100 + i))];
+  it('Claude·Codex는 하루 상한이 없어(v0.7.98) 많이 써도 1순위 그대로', () => {
+    const usage = [...claudeFull(), ...Array.from({ length: 50 }, (_, i) => run('codex', 100 + i))];
     const r = routeTask({ title: '아키텍처 설계', description: '', requestedType: 'auto' }, usage, now);
     expect(r.assignee).toBe('claude');
-    expect(r.reason).toContain('내일');
+    expect(r.reason).not.toContain('한도 소진');
   });
 
   it('어제 실행은 오늘 한도에 들어가지 않는다', () => {

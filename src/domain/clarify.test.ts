@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clarifyQuestions, withAnswers } from './clarify';
+import { aiQuestions, clarifyQuestions, withAnswers } from './clarify';
 
 describe('기획서 전에 되묻기(v0.7.97)', () => {
   it('짧거나 모호하면 1~3개 묻는다', () => {
@@ -16,7 +16,15 @@ describe('기획서 전에 되묻기(v0.7.97)', () => {
     expect(clarifyQuestions('대화 탭에 음성 입력 버튼을 추가해서 누르면 받아쓰기 되게')).toEqual([]);
   });
   it('답을 요청 글 뒤에 붙인다(빈 답이면 그대로)', () => {
-    expect(withAnswers('이거 고쳐줘', ['무엇을?'], '대화 탭 입력창 높이')).toBe('이거 고쳐줘\n\n[미니엉 질문에 대한 답]\n- 무엇을?\n→ 대화 탭 입력창 높이');
+    expect(withAnswers('이거 고쳐줘', ['무엇을?'], '대화 탭 입력창 높이')).toBe('이거 고쳐줘\n\n[접수 전 질문에 대한 답]\n- 무엇을?\n→ 대화 탭 입력창 높이');
     expect(withAnswers('이거', ['무엇을?'], '  ')).toBe('이거');
+  });
+});
+
+describe('Gemini 되묻기 답 읽기(v0.7.98)', () => {
+  it('번호·글머리를 빼고 3개까지', () => {
+    expect(aiQuestions('1. 어느 화면인가요?\n2) 무엇이 안 되나요?\n- 원래는 어때야 하나요?\n· 네 번째?')).toEqual(['어느 화면인가요?', '무엇이 안 되나요?', '원래는 어때야 하나요?']);
+    expect(aiQuestions('')).toEqual([]);
+    expect(aiQuestions('a'.repeat(200))[0]).toHaveLength(120);
   });
 });

@@ -56,7 +56,7 @@ export const AGENTS: Agent[] = [
     mode: 'cloud',
     home: 'planning',
     skills: ['planning', 'dev', 'research'],
-    dailyCap: 20,
+    dailyCap: null, // v0.7.98 소유자 "하루 상한 삭제"
     note: '요청을 기획서와 작업으로 나눈다(PM). Codex가 못 하거나 휴가면 보조 개발을 하고, 올리기 승인 뒤 PR을 연다. Claude Pro 사용량을 쓰고 서버가 하루 20회로 제한한다.',
     sprite: 'person',
     palette: { hair: '#8a4b2d', skin: '#f3cfb1', shirt: '#d97757', pants: '#3d3a46', accent: '#fbe3d4' },
@@ -69,7 +69,7 @@ export const AGENTS: Agent[] = [
     mode: 'cloud',
     home: 'dev',
     skills: ['dev', 'planning'],
-    dailyCap: 6,
+    dailyCap: null, // v0.7.98 소유자 "하루 상한 삭제"
     note: 'Linear 업무로 받아 Codex 클라우드에서 개발·시험하고 결과를 미노피아로 보낸다. 시작 못 하면 서버가 Claude로 넘긴다.',
     sprite: 'person',
     palette: { hair: '#1c1f26', skin: '#e2b48f', shirt: '#2f9e7a', pants: '#2b3140', accent: '#c9f2e2' },

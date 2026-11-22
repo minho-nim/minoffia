@@ -6,7 +6,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildResearchPayload, RESEARCH_TICKET_HOURS } from './payload.ts';
 
-const CLAUDE_HARD_DAILY_CAP = 20;
+/** v0.7.98 소유자 "하루 상한 삭제": 기본은 상한 없음. 서버 설정 CLAUDE_DAILY_CAP을 주면 그 값으로 다시 막는다 */
+const NO_DAILY_CAP = 1_000_000;
 const FIRE_TIMEOUT_MS = 20_000;
 const ANTHROPIC_VERSION = '2026-10-21';
 
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
   // 같은 질문이 아직 기다리는 중이면 다시 보내지 않는다(중복 호출 막기)
   const { data: waiting } = await admin.from('claude_research').select('id, session_url').eq('owner_id', user.id).eq('question', question).eq('status', 'pending').gt('expires_at', new Date().toISOString()).limit(1);
   if (waiting?.length) return reply(200, { ok: true, id: waiting[0].id, sessionUrl: waiting[0].session_url ?? null, already: true });
-  const cap = Math.min(CLAUDE_HARD_DAILY_CAP, Number(env('CLAUDE_DAILY_CAP')) || CLAUDE_HARD_DAILY_CAP);
+  const cap = Number(env('CLAUDE_DAILY_CAP')) || NO_DAILY_CAP;
   const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
   const { count: used } = await admin.from('usage_runs').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('agent', 'claude').eq('kind', 'cloud').eq('day', day);
   if ((used ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Claude 사용 ${cap}회를 모두 썼어요. 내일 다시 찾아볼 수 있어요.` });

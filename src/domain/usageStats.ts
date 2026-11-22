@@ -134,6 +134,7 @@ export const WORK_LABEL: Record<string, string> = {
   design: '디자인 기준',
   pm: '개발 계획',
   prototype: '견본 만들기',
+  clarify: '되묻기',
 };
 export const workLabel = (purpose: string) => WORK_LABEL[purpose] ?? purpose;
 
@@ -346,7 +347,7 @@ export function groupOf(agent: UsageAgentId, key: string, label: string): WorkGr
   if (agent === 'search' || agent === 'firecrawl') return '웹 조사';
   if (agent === 'ci') return CHECK_DEPLOY.test(label) && !/넣기/.test(label) ? '검사·배포' : '정리·기타';
   if (agent === 'studioA' || agent === 'studioB') {
-    if (key === 'question' || key === 'image') return '대화·질문';
+    if (key === 'question' || key === 'image' || key === 'clarify') return '대화·질문';
     if (key === 'research') return '웹 조사';
     if (key === 'plan' || key === 'pm' || key === 'design' || key === 'drawing' || key === 'prototype') return '기획·디자인';
     if (key === 'review') return '검토·채점';
