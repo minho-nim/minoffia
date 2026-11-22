@@ -1,3 +1,4 @@
+import type { ChatThread } from './store';
 import { redoFeedback, ruleCheck, verdictOf } from '../domain/review';
 import { DESIGN_REFS } from '../domain/designRefs';
 import type { ResultReview } from '../domain/workflow-types';
@@ -100,6 +101,39 @@ export function createLocalStore(): OfficeStore {
     dropUnusedFiles();
   };
   return {
+    // 챗봇 지난 대화(v0.7.99): 데모는 이 기기에만
+    chatThreads: (() => {
+      const KEY = 'minoffia-demo:chat-threads:v1';
+      const all = (): ChatThread[] => {
+        try {
+          const v = JSON.parse(localStorage.getItem(KEY) ?? '[]');
+          return Array.isArray(v) ? v : [];
+        } catch {
+          return [];
+        }
+      };
+      const put = (xs: ChatThread[]) => {
+        try {
+          localStorage.setItem(KEY, JSON.stringify(xs.slice(0, 100)));
+        } catch {
+          /* 저장 공간이 모자라면 이번 화면에서만 */
+        }
+      };
+      return {
+        async list() {
+          return all().map(({ id, title, updatedAt }) => ({ id, title, updatedAt }));
+        },
+        async get(id: string) {
+          return all().find((t) => t.id === id) ?? null;
+        },
+        async save(t: ChatThread) {
+          put([{ ...t, updatedAt: new Date().toISOString() }, ...all().filter((x) => x.id !== t.id)]);
+        },
+        async remove(id: string) {
+          put(all().filter((x) => x.id !== id));
+        },
+      };
+    })(),
     mode: 'local',
     async load() {
       return state;
@@ -463,6 +497,12 @@ export function createLocalStore(): OfficeStore {
         const answer = `${weather.place} 날씨(체험 예시 숫자)`;
         onDelta?.(answer);
         return { answer, keySlot: 0, engine: 'Open-Meteo', weather };
+      }
+      // 체험 챗봇(v0.7.99): 실제 AI 없이 꾸밈(굵게·목록·표·코드) 예시 답
+      if (opts?.chat && !opts.research) {
+        const answer = `**체험 답이에요**(실제 AI 없음). 실제 앱에서는 Gemini가 앞 대화 30번을 기억하며 답해요.\n\n- 굵게·목록·표·코드로 보여 줘요\n- 지난 대화는 서버에 남아요\n\n| 항목 | 내용 |\n|---|---|\n| 받은 질문 | ${_question.replace(/[|\n]/g, ' ').slice(0, 40)} |\n| 앞 대화 | ${_history.length}마디 |\n\n\`\`\`ts\nconst hello = '미노피아';\n\`\`\``;
+        onDelta?.(answer);
+        return { answer, keySlot: opts.slot === 2 ? 2 : 1 };
       }
       if (!opts?.research) throw new Error('로컬 데모에서는 Gemini에 물을 수 없습니다. ChatGPT로 복사해 물어보세요.');
       const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));

@@ -7,8 +7,8 @@ import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { homepageStart } from './homepage.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
-const HARD_DAILY_CAP = 20;
-const DEFAULT_DAILY_CAP = 10;
+/** 상한 없음을 뜻하는 큰 수(DB 함수에 정수로 넘길 수 있게) */
+const NO_DAILY_CAP = 1_000_000;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const MAX_TEXT = 40_000;
 const TIMEOUT_MS = 90_000;
@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
   if ((existing ?? 0) > 0) return reply(409, { ok: false, error: '이 계획에는 이미 견본이 있습니다.' });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_PROTOTYPE_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+  // v0.7.99 소유자 "모두 상한은 없이": 기본 상한 없음. 서버 설정 GEMINI_PROTOTYPE_DAILY_CAP을 주면 그 값
+  const cap = Number(env('GEMINI_PROTOTYPE_DAILY_CAP')) || NO_DAILY_CAP;
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
   const { count } = await admin.from('ai_calls').select('id', { count: 'exact', head: true }).eq('owner_id', user.id).eq('purpose', 'prototype').eq('ok', true).gte('created_at', kstMidnight);
   if ((count ?? 0) >= cap) return reply(429, { ok: false, error: `오늘 Gemini 견본 ${cap}회를 모두 썼습니다. AI Studio 견본 지시서로 진행하세요.` });

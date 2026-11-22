@@ -15,8 +15,6 @@ import { designReviewSection } from './designReview.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
 // v0.7.8: 결과 하나에 Gemini 두 번(A·B)이라 상한도 두 배
-const HARD_DAILY_CAP = 100;
-const DEFAULT_DAILY_CAP = 40;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 45_000;
 /** v0.7.98 소유자 "하루 상한 삭제": 기본은 상한 없음. 서버 설정 CLAUDE_DAILY_CAP을 주면 그 값으로 다시 막는다 */
@@ -243,7 +241,8 @@ Deno.serve(async (req) => {
     const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
     if (away.has('studioA')) keys[0] = '';
     if (away.has('studioB')) keys[1] = '';
-    const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_REVIEW_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+    // v0.7.99 소유자 "모두 상한은 없이": 기본 상한 없음. 서버 설정 GEMINI_REVIEW_DAILY_CAP을 주면 그 값
+    const cap = Number(env('GEMINI_REVIEW_DAILY_CAP')) || NO_DAILY_CAP;
     const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
     // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정): A 채점은 A 키, B 채점은 B 키만 쓰므로 한쪽이 다 써도 다른 쪽은 채점한다
     const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'review').eq('ok', true).gte('created_at', kstMidnight);

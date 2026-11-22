@@ -8,8 +8,8 @@ import { buildDesignReviewPrompt, buildDrawPrompt, DESIGN_REVIEW_SYSTEM, DRAW_ST
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
-const HARD_DAILY_CAP = 40;
-const DEFAULT_DAILY_CAP = 16;
+/** 상한 없음을 뜻하는 큰 수(DB 함수에 정수로 넘길 수 있게) */
+const NO_DAILY_CAP = 1_000_000;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const DRAW_TIMEOUT_MS = 80_000;
 const REVIEW_TIMEOUT_MS = 40_000;
@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
   if (existing?.length) return reply(200, { ok: true, drafts: existing, cached: true });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_DRAWING_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+  // v0.7.99 소유자 "모두 상한은 없이": 기본 상한 없음. 서버 설정 GEMINI_DRAWING_DAILY_CAP을 주면 그 값
+  const cap = Number(env('GEMINI_DRAWING_DAILY_CAP')) || NO_DAILY_CAP;
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
   // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 한 번에 키마다 2회(A 키는 시안 A만)라 2회가 남지 않은 키는 이번에 쉬고, 그 시안은 다른 키가 대신 그리지 않는다
   const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'drawing').eq('ok', true).gte('created_at', kstMidnight);

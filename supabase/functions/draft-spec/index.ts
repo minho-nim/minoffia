@@ -10,8 +10,8 @@ import { codePaths, NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFile
 import { appMapSection } from './appMap.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
-const HARD_DAILY_CAP = 50;
-const DEFAULT_DAILY_CAP = 20;
+/** 상한 없음을 뜻하는 큰 수(DB 함수에 정수로 넘길 수 있게) */
+const NO_DAILY_CAP = 1_000_000;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const MAX_TEXT = 40_000;
 const TIMEOUT_MS = 40_000;
@@ -96,7 +96,8 @@ Deno.serve(async (req) => {
   if (!task) return reply(404, { ok: false, error: '업무를 찾을 수 없습니다.' });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_PLAN_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+  // v0.7.99 소유자 "모두 상한은 없이": 기본 상한 없음. 서버 설정 GEMINI_PLAN_DAILY_CAP을 주면 그 값
+  const cap = Number(env('GEMINI_PLAN_DAILY_CAP')) || NO_DAILY_CAP;
   const kstMidnight = new Date(Math.floor((Date.now() + 9 * 3600_000) / 86400_000) * 86400_000 - 9 * 3600_000).toISOString();
   // 하루 상한은 키마다 따로(v0.7.80 소유자 "제미나이 계산은 키마다 나눠": 키 A·B는 서로 다른 계정). 다 쓴 키는 건너뛴다
   const { data: usedRows } = await admin.from('ai_calls').select('key_slot').eq('owner_id', user.id).eq('purpose', 'plan').eq('ok', true).gte('created_at', kstMidnight);

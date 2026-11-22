@@ -8,8 +8,8 @@ import { loadRules } from './projectRules.ts';
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
-const HARD_DAILY_CAP = 20;
-const DEFAULT_DAILY_CAP = 10;
+/** 상한 없음을 뜻하는 큰 수(DB 함수에 정수로 넘길 수 있게) */
+const NO_DAILY_CAP = 1_000_000;
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 90_000;
 // 이 저장소의 옛 이름과 새 이름(미노피아로 바꾸는 동안 둘 다, v0.5.44)
@@ -100,7 +100,8 @@ Deno.serve(async (req) => {
   if (!aApproval) return reply(409, { ok: false, error: `기획서 v${spec.revision}의 기획 승인이 없습니다.` });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const cap = Math.min(HARD_DAILY_CAP, Number(env('GEMINI_PM_DAILY_CAP')) || DEFAULT_DAILY_CAP);
+  // v0.7.99 소유자 "모두 상한은 없이": 기본 상한 없음. 서버 설정 GEMINI_PM_DAILY_CAP을 주면 그 값
+  const cap = Number(env('GEMINI_PM_DAILY_CAP')) || NO_DAILY_CAP;
   const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
   const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
   if (away.has('studioA')) keys[0] = '';

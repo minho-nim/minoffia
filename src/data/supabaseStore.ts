@@ -1,3 +1,4 @@
+import type { ChatTurn } from './store';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_KEY, SUPABASE_URL } from '../lib/supabase';
 import { MIME_EXT, storageContentType, type Attachment, type ImageAnalysis } from '../domain/attachments';
@@ -704,6 +705,24 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     async areaName(spot) {
       const data = await invoke('ask-gemini', { areaOf: spot });
       return typeof data.name === 'string' ? (data.name as string) : '';
+    },
+    chatThreads: {
+      async list() {
+        const rows = check(await client.from('chat_threads').select('id, title, updated_at').order('updated_at', { ascending: false }).limit(200)) ?? [];
+        return (rows as Row[]).map((r) => ({ id: String(r.id), title: String(r.title), updatedAt: String(r.updated_at) }));
+      },
+      async get(id) {
+        const { data, error } = await client.from('chat_threads').select('*').eq('id', id).maybeSingle();
+        if (error) throw new Error(error.message);
+        if (!data) return null;
+        return { id: String(data.id), title: String(data.title), messages: Array.isArray(data.messages) ? (data.messages as ChatTurn[]) : [], updatedAt: String(data.updated_at) };
+      },
+      async save(t) {
+        check(await client.from('chat_threads').upsert({ id: t.id, title: t.title.slice(0, 200) || '새 대화', messages: t.messages, updated_at: new Date().toISOString() }));
+      },
+      async remove(id) {
+        check(await client.from('chat_threads').delete().eq('id', id));
+      },
     },
     weatherPlace: {
       async get() {
