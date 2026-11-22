@@ -39,3 +39,11 @@ delete from chat_threads;
 select pg_temp.check((select count(*) from chat_threads) = 0, 'owner deletes own thread');
 
 reset role;
+
+-- 0068: 되묻기·챗봇 사용량 기록이 purpose 검사에 막히지 않는다
+insert into auth.users (id, email) values ('22222222-2222-4222-8222-222222222222', 'p@example.invalid') on conflict do nothing;
+insert into ai_calls (owner_id, provider, purpose, key_slot, ok, model) values
+  ('22222222-2222-4222-8222-222222222222', 'gemini', 'clarify', 1, true, 'm'),
+  ('22222222-2222-4222-8222-222222222222', 'gemini', 'chat', 2, true, 'm');
+select pg_temp.check((select count(*) from ai_calls where purpose in ('clarify', 'chat')) = 2, 'clarify·chat 사용량 기록');
+delete from ai_calls where owner_id = '22222222-2222-4222-8222-222222222222';
