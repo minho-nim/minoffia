@@ -11,7 +11,8 @@ const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const TIMEOUT_MS = 40_000;
 const MAX_FILE = 12_000;
 const MAX_TOTAL = 40_000;
-const DAILY_CAP = 10;
+// v0.7.99 소유자 "모두 상한은 없이": 서버 설정 GEMINI_DESIGN_DAILY_CAP을 주면 그 값(키마다)
+const DAILY_CAP = Number(Deno.env.get('GEMINI_DESIGN_DAILY_CAP')) || 1_000_000;
 const MAX_REF = 7_000;
 // 참고 서비스 고정본이 있는 스킬 원본 저장소(design-reference 스킬)
 const SKILLS_REPO = 'minho-nim/minoffia-skills';

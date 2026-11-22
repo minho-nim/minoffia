@@ -6,7 +6,6 @@ import type { Snapshot } from '../domain/types';
 import type { Credits } from '../domain/searchCredits';
 import { FREE_MONTHLY, leftOf } from '../domain/searchCredits';
 import { AGENT_BY_ID } from '../domain/agents';
-import { GEMINI_QUESTION_CAP } from '../domain/quota';
 import {
   byProject,
   customRange,
@@ -135,8 +134,6 @@ const CAP: Partial<Record<UsageAgentId, number>> = {
   // v0.7.98 Claude·Codex 하루 상한 삭제: 상한이 다시 생기면 막대가 돌아온다
   ...(AGENT_BY_ID.claude.dailyCap !== null ? { claude: AGENT_BY_ID.claude.dailyCap } : {}),
   ...(AGENT_BY_ID.codex.dailyCap !== null ? { codex: AGENT_BY_ID.codex.dailyCap } : {}),
-  studioA: GEMINI_QUESTION_CAP,
-  studioB: GEMINI_QUESTION_CAP,
 };
 /** 막대에 쓰는 '상한과 비교할 수': Studio는 질문(서버 상한 기준), 나머지는 횟수 */
 const meterUsed = (row: UsageRow) => (row.id === 'studioA' || row.id === 'studioB' ? row.work.find((w) => w.key === 'question')?.n ?? 0 : row.n);

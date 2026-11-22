@@ -81,6 +81,7 @@ import { HealthCheck } from './components/HealthCheck';
 import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
 import { installPopupClose } from './components/popupClose';
+import { ChatBot } from './components/ChatBot';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 import { trustCredits, type Credits } from './domain/searchCredits';
 
@@ -196,6 +197,9 @@ export function App() {
   // 대화 탭 프로젝트(v0.4.24, 소유자 결정): 기본은 없음 = 일반 AI 질문 창(Claude·ChatGPT처럼).
   // 프로젝트 칩을 누르면 그 프로젝트 기준으로 묻고, 다시 누르면 일반 대화로 돌아간다. 업무 탭 필터와 따로 둔다.
   const [chatProject, setChatProject] = useState<string | null>(null);
+  // 챗봇 모드(v0.7.99): 업무 판단 없이 Gemini와 일반 대화. 프로젝트·기본을 고르면 빠진다.
+  const [chatBot, setChatBot] = useState(false);
+  useEffect(() => setChatBot(false), [chatProject]);
   const setProjectFilter = (id: string) => {
     setProjectFilterState(id);
     try {
@@ -2220,20 +2224,27 @@ export function App() {
           </nav>
 
           {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
-          {tab === 'chat' && snap.projects.length > 0 && (
+          {tab === 'chat' && (
             <div className={`filters filters-scroll project-chips chat-chips${chatChipsOpen ? '' : ' is-folded'}`} role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
               {/* 접기·펴기(v0.6.72 소유자 "대화의 프로젝트 나열은 꽉 찬 오른쪽 삼각형으로 접기 펴기"): 접으면 고른 것 하나만 */}
               <button type="button" className="chip-fold" aria-expanded={chatChipsOpen} aria-label={chatChipsOpen ? '프로젝트 목록 접기' : '프로젝트 목록 펴기'} onClick={() => setChatChipsOpen((v) => !v)}>
                 {chatChipsOpen ? '▼' : '▶'}
               </button>
               {/* 기본 대화창(일반 대화, v0.4.88 소유자): 늘 맨 앞에, 프로젝트를 안 고르면 이 창 */}
+              {/* 챗봇(v0.7.99): 접어도 늘 보이게 */}
+              <button type="button" className="chip chip-project chip-general" aria-pressed={chatBot} onClick={() => setChatBot(true)}>
+                챗봇
+              </button>
               {(chatChipsOpen || chatProjectId === null) && (
               <button
                 type="button"
                 className="chip chip-project chip-general"
-                aria-pressed={chatProjectId === null}
-                onClick={() => setChatProject(null)}
-                ref={chatProjectId === null ? (el) => el?.scrollIntoView({ inline: 'center', block: 'nearest' }) : undefined}
+                aria-pressed={chatProjectId === null && !chatBot}
+                onClick={() => {
+                  setChatProject(null);
+                  setChatBot(false);
+                }}
+                ref={chatProjectId === null && !chatBot ? (el) => el?.scrollIntoView({ inline: 'center', block: 'nearest' }) : undefined}
               >
                 기본
               </button>
@@ -2302,6 +2313,18 @@ export function App() {
 
           {/* 대화 탭: 탭을 바꿔도 대화·답 받기가 이어지게 늘 붙여 두고 숨기기만 한다 */}
           <div className="stack chat-tab" hidden={tab !== 'chat'}>
+            {chatBot && <ChatBot
+                store={store}
+                ask={async (q, history, images, onDelta, opts) => {
+                  try {
+                    return await store.askGemini(q, history, images, onDelta, opts);
+                  } finally {
+                    void store.load().then(setSnap, () => undefined);
+                  }
+                }}
+                canAsk={store.mode === 'supabase' ? !geminiAway : true} />}
+            {/* 챗봇일 때도 업무 대화는 붙여 두고 숨기기만(답 받기가 이어지게) */}
+            <div hidden={chatBot} style={chatBot ? undefined : { display: 'contents' }}>
               <Inbox
                 snap={snap}
                 canAskGemini={store.mode === 'supabase' && !geminiAway}
@@ -2382,6 +2405,7 @@ export function App() {
                 draft={draft}
                 echo={chatEcho}
               />
+            </div>
           </div>
 
           {tab === 'tasks' && (

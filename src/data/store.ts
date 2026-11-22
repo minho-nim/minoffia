@@ -133,6 +133,13 @@ export interface OfficeStore {
   linearProbe(): Promise<LinearProbe>;
   /** 서버 비밀 열쇠가 들어 있는지와 GitHub 토큰 만료일(값은 받지 않음, v0.5.38). 로컬 데모는 없음 */
   keyStatus?(): Promise<KeyStatus[]>;
+  /** 챗봇 지난 대화(v0.7.99 소유자 "지난 대화는 서버에"). 로컬 데모는 이 기기에 */
+  chatThreads?: {
+    list(): Promise<{ id: string; title: string; updatedAt: string }[]>;
+    get(id: string): Promise<ChatThread | null>;
+    save(thread: ChatThread): Promise<void>;
+    remove(id: string): Promise<void>;
+  };
   /** 계정 설정 '날씨 지역'(v0.7.71): null이면 현재 위치. 로컬 데모는 없음(이 기기 사본만) */
   weatherPlace?: { get(): Promise<string | null>; set(place: string | null): Promise<void> };
   /** 좌표 → 동네 이름(설정 '날씨 지역' ↻, v0.7.73). 로컬 데모는 없음 */
@@ -214,6 +221,23 @@ export interface OfficeStore {
     /** AI 먼저 판단(프로젝트 이름들)·고른 프로젝트 정보(v0.4.29) */
     opts?: AskOptions,
   ): Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number; weather?: import('../domain/weather').WeatherData }>;
+}
+
+/** 챗봇 모드 대화 한 마디(v0.7.99) */
+export interface ChatTurn {
+  role: 'user' | 'model';
+  text: string;
+  at: string;
+  /** 답한 키(A·B)와 함께 일한 쪽(웹 조사) */
+  by?: 'A' | 'B';
+  helpers?: string[];
+}
+/** 챗봇 모드 대화 한 줄기(서버 chat_threads, v0.7.99) */
+export interface ChatThread {
+  id: string;
+  title: string;
+  messages: ChatTurn[];
+  updatedAt: string;
 }
 
 /** Linear 연결 확인 결과(읽기만, v0.4.11) */

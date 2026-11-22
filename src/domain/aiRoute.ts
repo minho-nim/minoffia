@@ -20,6 +20,8 @@ export interface AskOptions {
   where?: { place: string } | { lat: number; lon: number };
   /** 되묻기(v0.7.98): 이 요청으로 기획서를 쓰기 전에 빠진 정보만 묻는 질문 1~3개를 만든다 */
   clarify?: boolean;
+  /** 챗봇 모드(v0.7.99): 업무 판단 없이 일반 대화(앞 대화 30번 기억) */
+  chat?: boolean;
 }
 
 export interface Routed {

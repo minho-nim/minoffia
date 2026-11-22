@@ -10,7 +10,8 @@ import { geminiFetch } from './gemini-fallback.ts';
 import { tokensOf } from './geminiTokens.ts';
 
 const MODEL = 'gemini-3.5-flash-lite';
-const DAILY_CAP = 40;
+// v0.7.99 소유자 "모두 상한은 없이": 서버 설정 GEMINI_WIKI_DAILY_CAP을 주면 그 값(키마다)
+const DAILY_CAP = Number(Deno.env.get('GEMINI_WIKI_DAILY_CAP')) || 1_000_000;
 const MAX_TASKS = 40;
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 const cors = {
