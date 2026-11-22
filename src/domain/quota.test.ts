@@ -11,11 +11,11 @@ const run = (i: number): UsageRun => ({ id: `r${i}`, agent: 'claude', taskId: nu
 describe('quotaFor', () => {
   const base = sampleSnapshot();
 
-  it('Claude: 기록한 횟수와 상한', () => {
+  it('Claude: 기록한 횟수, 하루 상한 없음(v0.7.98)', () => {
     const s: Snapshot = { ...base, usage: [run(1), run(2)] };
-    expect(quotaFor('claude', s, now)).toMatchObject({ state: 'available', label: '2/20회' });
-    const full: Snapshot = { ...base, usage: Array.from({ length: 20 }, (_, i) => run(i)) };
-    expect(quotaFor('claude', full, now).state).toBe('exhausted');
+    expect(quotaFor('claude', s, now)).toMatchObject({ state: 'available', label: '2회' });
+    const many: Snapshot = { ...base, usage: Array.from({ length: 50 }, (_, i) => run(i)) };
+    expect(quotaFor('claude', many, now).state).toBe('available');
   });
 
   it('Gemini: 성공 횟수를 용도별로 세고, 오늘 마지막이 429면 소진', () => {

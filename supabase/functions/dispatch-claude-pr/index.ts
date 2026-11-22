@@ -5,7 +5,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { buildPrPayload, claudeBranch, MAX_PR_DIFF } from './prPayload.ts';
 
-const HARD_DAILY_CAP = 20;
+/** v0.7.98 소유자 "하루 상한 삭제": 기본은 상한 없음. 서버 설정 CLAUDE_DAILY_CAP을 주면 그 값으로 다시 막는다 */
+const NO_DAILY_CAP = 1_000_000;
 const FIRE_TIMEOUT_MS = 20_000;
 const ANTHROPIC_VERSION = '2026-10-21';
 
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
   if (!allowed) return reply(403, { ok: false, error: '허용된 저장소의 프로젝트만 PR을 엽니다.' });
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const cap = Math.min(HARD_DAILY_CAP, Number(env('CLAUDE_DAILY_CAP')) || HARD_DAILY_CAP);
+  const cap = Number(env('CLAUDE_DAILY_CAP')) || NO_DAILY_CAP;
   const { data: claim, error: claimError } = await admin.rpc('claim_claude_pr', {
     p_task: task.id,
     p_owner: user.id,

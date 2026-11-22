@@ -26,5 +26,15 @@ export function clarifyQuestions(text: string): string[] {
 export function withAnswers(text: string, questions: string[], answer: string): string {
   const a = answer.trim();
   if (!a) return text;
-  return `${text.trim()}\n\n[미니엉 질문에 대한 답]\n${questions.map((q) => `- ${q}`).join('\n')}\n→ ${a}`;
+  return `${text.trim()}\n\n[접수 전 질문에 대한 답]\n${questions.map((q) => `- ${q}`).join('\n')}\n→ ${a}`;
+}
+
+/** Gemini가 만든 되묻기 답 → 질문 목록(번호·글머리 빼고, 많아야 3개, 너무 길면 자름) */
+export function aiQuestions(answer: string): string[] {
+  return answer
+    .split('\n')
+    .map((l) => l.replace(/^\s*(?:[-*•·]|\d+[.)])\s*/, '').trim())
+    .filter((l) => l.length >= 4)
+    .map((l) => (l.length > 120 ? `${l.slice(0, 119)}…` : l))
+    .slice(0, 3);
 }

@@ -132,8 +132,9 @@ function SkippedNote({ skipped }: { skipped: { repo: string; why: string }[] }) 
 const actionsCache = new Map<string, { at: number; runs: NonNullable<UsageInput['actions']>; skipped: NonNullable<UsageInput['actionsSkipped']> }>();
 
 const CAP: Partial<Record<UsageAgentId, number>> = {
-  claude: AGENT_BY_ID.claude.dailyCap ?? 20,
-  codex: AGENT_BY_ID.codex.dailyCap ?? 6,
+  // v0.7.98 Claude·Codex 하루 상한 삭제: 상한이 다시 생기면 막대가 돌아온다
+  ...(AGENT_BY_ID.claude.dailyCap !== null ? { claude: AGENT_BY_ID.claude.dailyCap } : {}),
+  ...(AGENT_BY_ID.codex.dailyCap !== null ? { codex: AGENT_BY_ID.codex.dailyCap } : {}),
   studioA: GEMINI_QUESTION_CAP,
   studioB: GEMINI_QUESTION_CAP,
 };

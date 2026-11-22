@@ -1,7 +1,7 @@
 import { characterUrl } from '../office/assets';
 import { createPortal } from 'react-dom';
 import { FormPopup } from './FormPopup';
-import { clarifyQuestions, withAnswers } from '../domain/clarify';
+import { aiQuestions, clarifyQuestions, withAnswers } from '../domain/clarify';
 import { clockLabel, continues, dayLabel, isGuideLine, noticeCard, shortSpecLine, speakerOf, timeOf, toneOf } from '../domain/chatView';
 import { taskContext } from '../domain/taskContext';
 import { VoiceInput } from './VoiceInput';
@@ -1118,9 +1118,24 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
       void run(() => create(text, project, context, whole));
       return;
     }
-    const id = mid();
-    clarifyRef.current = id;
-    setLog((l) => [...l, { id, from: 'office' as From, text: `접수 전에 ${questions.length}가지만 여쭐게요.\n${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n아래 입력창에 답을 쓰면 요청에 붙여서 접수해요.`, home: thread, clarify: { text, projectId: project.id, context, whole, questions, state: 'open' as const } }].slice(-KEEP));
+    // v0.7.98 소유자 "실제 업무에 각각 맞춰": 물을지는 규칙이 정하고, 질문은 Gemini가 이 요청에 맞게 만든다(안 되면 규칙 질문, 미니엉)
+    const post = (qs: string[], by: 'mina' | 1 | 2) => {
+      const id = mid();
+      clarifyRef.current = id;
+      const msg = `접수 전에 ${qs.length}가지만 여쭐게요.\n${qs.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n아래 입력창에 답을 쓰면 요청에 붙여서 접수해요.`;
+      setLog((l) => [...l, { id, from: (by === 'mina' ? 'office' : 'gemini') as From, ...(by === 'mina' ? {} : { via: `Gemini · Studio ${by === 2 ? 'B' : 'A'}가 되물음` }), text: msg, home: thread, clarify: { text, projectId: project.id, context, whole, questions: qs, state: 'open' as const } }].slice(-KEEP));
+    };
+    if (!canAskGemini || geminiAway) return post(questions, 'mina');
+    void run(async () => {
+      try {
+        const got = await onAskGemini(text, [], [], undefined, { clarify: true, project: projectContext(project, snap.tasks) });
+        const qs = aiQuestions(got.answer);
+        if (qs.length) return post(qs, got.keySlot === 2 ? 2 : 1);
+      } catch {
+        /* 한도·키 문제면 규칙 질문으로 */
+      }
+      post(questions, 'mina');
+    });
   };
   /** 되묻기 카드를 닫고 접수(답이 있으면 붙여서) */
   const clarifyRef = useRef<string | null>(null);

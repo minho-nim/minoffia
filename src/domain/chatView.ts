@@ -44,8 +44,9 @@ export function speakerOf(m: ChatMsgLike): Speaker {
     // 날씨(v0.7.68): 모델 없이 규칙으로 답함 → 미니엉, 자료는 날씨 서버
     const wx = /^(\S+(?: \S+)?) 자료 · 규칙으로 답함/.exec(via);
     if (wx) return { ...MINA('날씨'), helpers: [wx[1]] };
-    if (via.includes('Studio B')) return { id: 'studioB', name: 'Gemini B', role: '답변' };
-    return { id: 'studioA', name: 'Gemini A', role: '답변' };
+    const role = via.includes('되물음') ? '되묻기' : '답변';
+    if (via.includes('Studio B')) return { id: 'studioB', name: 'Gemini B', role };
+    return { id: 'studioA', name: 'Gemini A', role };
   }
   if (m.id.startsWith('act-')) return MINA('기록');
   if (m.id.startsWith('stale-')) return MINA('알림');

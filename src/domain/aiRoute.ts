@@ -18,6 +18,8 @@ export interface AskOptions {
   engine?: 'tavily' | 'firecrawl';
   /** 날씨 기준 곳(v0.7.70): 설정한 지역 이름 또는 현재 위치(약 1km로 줄인 좌표) */
   where?: { place: string } | { lat: number; lon: number };
+  /** 되묻기(v0.7.98): 이 요청으로 기획서를 쓰기 전에 빠진 정보만 묻는 질문 1~3개를 만든다 */
+  clarify?: boolean;
 }
 
 export interface Routed {
