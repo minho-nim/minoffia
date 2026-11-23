@@ -84,6 +84,9 @@ import { installPopupClose } from './components/popupClose';
 import { ChatBot } from './components/ChatBot';
 import { ChatDrawer } from './components/ChatDrawer';
 import type { ChatThreadInfo } from './data/store';
+import type { Parsed } from './domain/quickCommands';
+import { repeatedWork, skillRequest } from './domain/repeatWork';
+import { brainNotes, noteHash } from './domain/brainNotes';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 import { trustCredits, type Credits } from './domain/searchCredits';
 
@@ -159,6 +162,11 @@ const watchTabsHeight = heightWatcher('--tabs-h');
 const watchChipsHeight = heightWatcher('--chips-h');
 /** 마지막으로 보던 채팅(v0.8.1) */
 const LAST_CHAT_KEY = 'minoffia:chatbot:last-thread';
+const SKILL_SKIP_KEY = 'minoffia:skill-suggest:skip';
+/** 옵시디언 노트: 보낸 날·노트 지문·대화 고친 시각(v0.8.5) */
+const BRAIN_DAY_KEY = 'minoffia:brain:day';
+const BRAIN_HASH_KEY = 'minoffia:brain:hash';
+const BRAIN_CHAT_KEY = 'minoffia:brain:chats';
 
 /** 구조도 파일 목록 기억(앱을 켜 있는 동안) */
 const treeCache = new Map<string, { at: number; p: Promise<string[]> }>();
@@ -217,7 +225,41 @@ export function App() {
   const [chatTitle, setChatTitle] = useState('새 대화');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [threadList, setThreadList] = useState<ChatThreadInfo[] | null>(null);
+  // 같은 일 여러 번 → 스킬 제안(v0.8.5): '괜찮아요'·만든 묶음은 이 기기에 기억(다시 제안 안 함)
+  const [skillSkip, setSkillSkip] = useState<string[]>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(SKILL_SKIP_KEY) ?? '[]');
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  });
+  const skipSkill = (key: string) =>
+    setSkillSkip((xs) => {
+      const next = [...xs, key].slice(-200);
+      try {
+        localStorage.setItem(SKILL_SKIP_KEY, JSON.stringify(next));
+      } catch {
+        /* 이번 화면에서만 */
+      }
+      return next;
+    });
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  // 휴대폰 왼쪽 아래 ☰는 위 머리 줄(☰)이 화면에서 안 보일 때만(입력창을 가리지 않게)
+  const [headSeen, setHeadSeen] = useState(true);
+  const headIo = useRef<IntersectionObserver | null>(null);
+  const observeHead = useCallback((el: HTMLElement | null) => {
+    headIo.current?.disconnect();
+    headIo.current = null;
+    if (!el || typeof IntersectionObserver === 'undefined') return setHeadSeen(true);
+    const io = new IntersectionObserver(([e]) => setHeadSeen(e.isIntersecting), { threshold: 0.6 });
+    io.observe(el);
+    headIo.current = io;
+  }, []);
+  const chatHeadRef = useCallback((el: HTMLDivElement | null) => {
+    watchChipsHeight(el);
+    observeHead(el);
+  }, [observeHead]);
   // 대화 목록: 대화 탭을 처음 열 때·서랍을 열 때 서버에서 읽는다
   const chatThreadsApi = store?.chatThreads;
   useEffect(() => {
@@ -260,6 +302,37 @@ export function App() {
       /* 무시 */
     }
   }, []);
+  /** 빠른 명령(v0.8.5): 화면 이동·대화 열기만(승인·배포는 그 화면에서) */
+  const runCommand = (p: Parsed) => {
+    const go = (t: Tab) => setTab(t);
+    switch (p.cmd.id) {
+      case 'new':
+        return openBot(null, null);
+      case 'chat':
+        return p.project ? openBot(null, p.project.id) : setDrawerOpen(true);
+      case 'work':
+        return p.project ? openWork(p.project.id) : setDrawerOpen(true);
+      case 'turn':
+      case 'tasks':
+        return go('tasks');
+      case 'usage':
+        go('settings');
+        return void window.setTimeout(() => document.querySelector('.usage-panel')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 120);
+      case 'projects':
+        return go('projects');
+      case 'agent':
+        return go('agent');
+      case 'skills':
+        return go('skills');
+      case 'settings':
+        return go('settings');
+      case 'notes':
+        go('settings');
+        return void brainRef.current();
+      default:
+        return undefined;
+    }
+  };
   const openWork = (id: string | null) => {
     setChatProject(id);
     setChatMode('work');
@@ -318,6 +391,24 @@ export function App() {
     };
   }, [store, session?.user.id]);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  // 옵시디언 세컨드 브레인(v0.8.5): 바뀐 노트만 보관함에 올린다. 하루 한 번 앱을 열 때 저절로, 설정에서 지금 보내기
+  const [brainBusy, setBrainBusy] = useState(false);
+  const [brainMsg, setBrainMsg] = useState('');
+  const brainRef = useRef<() => Promise<void>>(async () => undefined);
+  const brainAuto = useRef(false);
+  useEffect(() => {
+    if (brainAuto.current || !store?.pushNotes || !session || !rawSnap.tasks.length) return;
+    let last = '';
+    try {
+      last = localStorage.getItem(BRAIN_DAY_KEY) ?? '';
+    } catch {
+      /* 무시 */
+    }
+    if (last === new Date().toISOString().slice(0, 10)) return;
+    brainAuto.current = true;
+    const t = window.setTimeout(() => void brainRef.current(), 5000);
+    return () => window.clearTimeout(t);
+  }, [store, session, rawSnap.tasks.length]);
   const [handoff, setHandoff] = useState<string | null>(null);
   const handoffRef = useRef<HTMLTextAreaElement>(null);
 
@@ -838,6 +929,55 @@ export function App() {
   if (booting) return <main className="boot">오피스를 여는 중…</main>;
   if (client && !session && !trying) return <Login client={client} />;
   if (!store) return <main className="boot">업무를 불러오는 중…</main>;
+  brainRef.current = async () => {
+    if (!store.pushNotes || brainBusy) return;
+    setBrainBusy(true);
+    setBrainMsg('노트를 모으는 중…');
+    const readJson = (k: string) => {
+      try {
+        const v = JSON.parse(localStorage.getItem(k) ?? '{}');
+        return v && typeof v === 'object' ? (v as Record<string, string>) : {};
+      } catch {
+        return {};
+      }
+    };
+    try {
+      const sentHash = readJson(BRAIN_HASH_KEY);
+      const chatSeen = readJson(BRAIN_CHAT_KEY);
+      const index = (await store.chatThreads?.list().catch(() => [])) ?? [];
+      const changedChats = index.filter((c) => chatSeen[c.id] !== c.updatedAt).slice(0, 60);
+      const chats = (await Promise.all(changedChats.map((c) => store.chatThreads!.get(c.id).catch(() => null)))).filter((x): x is NonNullable<typeof x> => Boolean(x));
+      const wikis = store.wiki
+        ? (await Promise.all(snap.projects.filter((p) => !p.sample).map(async (p) => ({ p, w: await store.wiki!.get(p.id).catch(() => null) })))).filter((x) => x.w).map(({ p, w }) => ({ projectId: p.id, body: w!.body, updatedAt: w!.updatedAt }))
+        : [];
+      const files = brainNotes({ projects: snap.projects, tasks: snap.tasks, workflow: snap.workflow, chats, chatIndex: index, wikis });
+      const changed = files.filter((f) => sentHash[f.path] !== noteHash(f.content));
+      let sent = 0;
+      for (let i = 0; i < changed.length; i += 150) {
+        const part = changed.slice(i, i + 150);
+        const r = await store.pushNotes(part);
+        sent += r.changed;
+        for (const f of part) sentHash[f.path] = noteHash(f.content);
+        try {
+          localStorage.setItem(BRAIN_HASH_KEY, JSON.stringify(sentHash));
+        } catch {
+          /* 다음에 다시 보냄 */
+        }
+      }
+      for (const c of chats) chatSeen[c.id] = c.updatedAt;
+      try {
+        localStorage.setItem(BRAIN_CHAT_KEY, JSON.stringify(chatSeen));
+        localStorage.setItem(BRAIN_DAY_KEY, new Date().toISOString().slice(0, 10));
+      } catch {
+        /* 무시 */
+      }
+      setBrainMsg(sent ? `옵시디언에 노트 ${sent}개를 올렸어요.` : '바뀐 노트가 없어요.');
+    } catch (e) {
+      setBrainMsg(`옵시디언에 올리지 못했어요: ${(e as Error).message}`);
+    } finally {
+      setBrainBusy(false);
+    }
+  };
 
   /** 업무 취소(v0.6.50): 끝나지 않은 AI 작업은 '실패(소유자 취소)'로 멈추고 업무는 취소 단계로. 서버도 취소한 업무는 더 시작하지 않는다. */
   const cancelTask = (task: Task) =>
@@ -2076,6 +2216,9 @@ export function App() {
     snap.projects.find((p) => (p.repo ?? '').toLowerCase() === SKILLS_REPO && !p.sample) ??
     snap.projects.find((p) => OFFICE_REPOS.includes((p.repo ?? '').toLowerCase()) && !p.sample) ??
     null;
+  const repeatGroup = repeatedWork(snap.tasks, new Date(), skillSkip)[0];
+  // 스킬 업무는 스킬 저장소(없으면 이 저장소) 프로젝트로, 둘 다 없으면(데모) 그 일을 가장 최근에 한 프로젝트로
+  const skillTarget = officeProject ?? (repeatGroup ? snap.projects.find((p) => p.id === repeatGroup.tasks[repeatGroup.tasks.length - 1].projectId) ?? null : null);
   // 구조도·앱 지도(프로젝트 탭과 업무 카드가 같이 쓴다, v0.6.45)
   // 구조도 파일 목록은 프로젝트마다 10분 동안 한 번만 읽는다(v0.6.72 소유자 "켤 때마다 로딩해야 돼?")
   const loadTree = (id: string) => {
@@ -2186,7 +2329,7 @@ export function App() {
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${pinned && tab === 'chat' ? ' is-pinned' : ''} tab-${tab === 'skills' ? 'settings tab-skills' : tab}`}>
         {/* 휴대폰 대화 탭: 왼쪽 아래 ☰(v0.8.1). 위 머리 줄이 스크롤로 안 보여도 대화 목록을 연다 */}
-        {tab === 'chat' && (
+        {tab === 'chat' && !headSeen && (
           <button type="button" className="office-dock-btn chat-menu-float" aria-label="대화 목록 열기" onClick={() => setDrawerOpen(true)}>
             ☰{turnsTotal > 0 && <span className="num num-turn">{turnsTotal}</span>}
           </button>
@@ -2305,7 +2448,7 @@ export function App() {
 
           {/* 대화 탭 머리(v0.8.1): ☰ 대화 목록 + 지금 대화 이름. 칩 줄 대신 왼쪽 서랍에서 고른다 */}
           {tab === 'chat' && (
-            <div className="project-chips chat-chips chat-head" ref={watchChipsHeight}>
+            <div className="project-chips chat-chips chat-head" ref={chatHeadRef}>
               <button type="button" className="chat-menu" aria-label="대화 목록 열기" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
                 <span aria-hidden>☰</span>
                 {turnsTotal > 0 && <span className="num num-turn">{turnsTotal}</span>}
@@ -2382,6 +2525,30 @@ export function App() {
 
           {/* 대화 탭: 탭을 바꿔도 대화·답 받기가 이어지게 늘 붙여 두고 숨기기만 한다 */}
           <div className="stack chat-tab" hidden={tab !== 'chat'}>
+            {repeatGroup && (
+              <div className="skill-suggest" role="status">
+                <span>
+                  같은 일을 최근 {repeatGroup.tasks.length}번 시키셨어요: <b>{repeatGroup.title}</b>. 스킬로 만들어 두면 AI가 다음부터 같은 방법으로 해요.
+                </span>
+                <span className="skill-suggest-row">
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    onClick={() => {
+                      if (!skillTarget) return;
+                      skipSkill(repeatGroup.key);
+                      openWork(skillTarget.id);
+                      setDraft((d) => ({ text: skillRequest(repeatGroup, (id) => snap.projects.find((p) => p.id === id)?.name ?? '프로젝트'), n: (d?.n ?? 0) + 1, send: true }));
+                    }}
+                  >
+                    스킬로 만들기
+                  </button>
+                  <button type="button" className="btn btn-small btn-ghost" onClick={() => skipSkill(repeatGroup.key)}>
+                    괜찮아요
+                  </button>
+                </span>
+              </div>
+            )}
             {chatMode === 'bot' && (
               <ChatBot
                 key={botSel.n}
@@ -2392,6 +2559,7 @@ export function App() {
                 onSaved={savedThread}
                 onTitle={setChatTitle}
                 onLoaded={(info) => setBotCurrent({ id: info.id, projectId: info.projectId })}
+                onCommand={runCommand}
                 onToTask={(text, pid) => {
                   openWork(pid);
                   setDraft((d) => ({ text, n: (d?.n ?? 0) + 1, send: true }));
@@ -2485,6 +2653,7 @@ export function App() {
                   return out.slice(0, 2);
                 }}
                 currentProject={chatProjectId ? (snap.projects.find((p) => p.id === chatProjectId) ?? null) : null}
+                onCommand={runCommand}
                 draft={draft}
                 echo={chatEcho}
               />
@@ -2809,6 +2978,16 @@ export function App() {
                   <ThemeToggle />
                 </div>
               </div>
+              {store.pushNotes && (
+                <div className="settings-box">
+                  <h3>옵시디언 노트</h3>
+                  <p className="muted small">업무(원문·기획서·결과·결정), 채팅, 위키를 노트 보관함(minoffia-notes)에 모아요. 하루 한 번 앱을 열 때 저절로, 바뀐 노트만. '내 메모'는 건드리지 않아요.</p>
+                  <button type="button" className="btn btn-small" disabled={brainBusy} onClick={() => void brainRef.current()}>
+                    {brainBusy ? '보내는 중…' : '지금 보내기'}
+                  </button>
+                  {brainMsg && <p className="small" role="status">{brainMsg}</p>}
+                </div>
+              )}
               <div className="settings-box">
                 <h3>날씨 지역</h3>
                 <WeatherWhereSetting key={weatherSynced} onSave={store.weatherPlace ? (p) => store.weatherPlace!.set(p) : undefined} areaName={store.areaName ? (spot) => store.areaName!(spot) : undefined} />

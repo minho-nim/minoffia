@@ -9,6 +9,7 @@ import { deepSearch, failMessage, isHit, searchCredits, searchText, WEB_RULE, we
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { geminiFetch } from './gemini-fallback.ts';
+import { VIDEO_RULE, youtubeUrl } from './youtube.ts';
 
 /** 코드 상한. GEMINI_DAILY_CAP을 더 크게 줘도 넘지 않는다(이미지 분석과 무료 한도를 나눠 쓴다). */
 // v0.8.1 소유자 "업무도 똑같이": 모든 일이 Flash 먼저, 안 되면 Lite(gemini-fallback.ts)
@@ -22,6 +23,7 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const TIMEOUT_MS = 25_000;
+const VIDEO_TIMEOUT_MS = 100_000;
 // 웹 조사 하루 상한은 없앴다(v0.7.52 소유자 "하루 상한은 일단 없애"). Tavily·Firecrawl 무료 크레딧이 끝나면 각 서비스가 막고, 그때는 요약만·검색 없이로 내려간다.
 const sourceList = (m: Map<string, string>) => [...m].map(([uri, title]) => ({ uri, title }));
 
@@ -136,16 +138,17 @@ const THINKING: Record<ThinkingMode, Record<string, unknown> | null> = {
 };
 
 // v0.7.10(소유자 2026-11-14 "Gemini 검색 연결은 삭제"): Google 검색 연결(google_search 도구)은 쓰지 않는다. 웹 조사는 Exa만.
-function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode, system: string, maxTokens = 2048) {
+function requestBody(question: string, history: Turn[], images: InlineImage[], mode: ThinkingMode, system: string, maxTokens = 2048, video: string | null = null) {
   const thinking = THINKING[mode];
   return JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: [
       ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-      { role: 'user', parts: [...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
+      { role: 'user', parts: [...(video ? [{ file_data: { file_uri: video } }] : []), ...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
     ],
     // 짧은 질문 답에는 '생각' 단계를 가장 적게 한다(빠르게, v0.4.15·v0.4.23). 모델이 설정을 모르면(400) 다음 설정으로 다시 묻는다.
-    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4, ...(thinking ? { thinkingConfig: thinking } : {}) },
+    // 영상은 낮은 화질로(1초 약 100토큰, 무료 분당 토큰 한도에 덜 걸리게, v0.8.3)
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4, ...(video ? { mediaResolution: 'MEDIA_RESOLUTION_LOW' } : {}), ...(thinking ? { thinkingConfig: thinking } : {}) },
   });
 }
 
@@ -155,14 +158,15 @@ export function thinkingOrder(model: string): ThinkingMode[] {
 }
 
 /** Gemini에 묻는다. stream이면 SSE 응답(Response)을 그대로 돌려주고, 아니면 글을 모아 돌려준다. */
-async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string, maxTokens = 2048) {
+async function openGemini(key: string, model: string, question: string, history: Turn[], images: InlineImage[], stream: boolean, system: string, maxTokens = 2048, video: string | null = null) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
   const call = (mode: ThinkingMode) =>
     geminiFetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(question, history, images, mode, system, maxTokens),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      body: requestBody(question, history, images, mode, system, maxTokens, video),
+      // 영상은 Gemini가 보는 데 시간이 걸린다(첫 글자까지 길게)
+      signal: AbortSignal.timeout(video ? VIDEO_TIMEOUT_MS : TIMEOUT_MS),
     });
   const order = thinkingOrder(model);
   let res: Response | null = null;
@@ -170,8 +174,8 @@ async function openGemini(key: string, model: string, question: string, history:
   for (const m of order) {
     mode = m;
     res = await call(m);
-    // 400이면(이 모델이 이 생각 설정을 모르는 경우 등) 다음 설정으로 다시 묻는다.
-    if (res.status !== 400 || m === order[order.length - 1]) break;
+    // 400이면(이 모델이 이 생각 설정을 모르는 경우 등) 다음 설정으로 다시 묻는다. 영상은 다시 보내면 또 영상을 보므로 멈춘다
+    if (res.status !== 400 || m === order[order.length - 1] || video) break;
     await res.body?.cancel();
   }
   return { res: res!, mode };
@@ -239,7 +243,9 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
-  const research = body.research === true;
+  // 유튜브 링크(v0.8.3): 영상째 Gemini에 넘긴다. 영상이 있으면 웹 조사는 하지 않는다(유튜브는 검색으로 내용을 못 읽음)
+  const video = typeof body.question === 'string' && body.clarify !== true ? youtubeUrl(body.question) : null;
+  const research = body.research === true && !video;
   // 되묻기(v0.7.98 소유자 "실제 업무에 각각 맞춰"): 접수 전에 이 요청에 맞는 질문 1~3개를 만든다. 웹 검색·위키 없이, 기록은 purpose clarify
   const clarify = body.clarify === true && !research && !chat;
   const purpose = research ? 'research' : clarify ? 'clarify' : chat ? 'chat' : 'question';
@@ -343,7 +349,7 @@ Deno.serve(async (req) => {
       let mode: ThinkingMode;
       let headMs = 0;
       try {
-        ({ res, mode } = await openGemini(key, model, (viaWeb ? question + webContext : question) + wikiContext, history, images, stream, system, chat ? 8192 : 2048));
+        ({ res, mode } = await openGemini(key, model, (viaWeb ? question + webContext : question) + wikiContext, history, images, stream, video ? system + VIDEO_RULE : system, chat || video ? 8192 : 2048, video));
         headMs = Date.now() - started;
       } catch (e) {
         last = { status: 0, message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
@@ -383,7 +389,7 @@ Deno.serve(async (req) => {
               }
               const note = total ? cutNote(finish) : '';
               if (note) controller.enqueue(enc.encode(JSON.stringify({ d: note }) + '\n'));
-              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, model: res.headers.get('x-gemini-model') || model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
+              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, model: res.headers.get('x-gemini-model') || model, ...(video ? { video: true } : {}), ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
             } catch (e) {
               controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
             } finally {
@@ -402,7 +408,7 @@ Deno.serve(async (req) => {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model: res.headers.get('x-gemini-model') || model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
         const found = new Map<string, string>(webFound);
-        return reply(200, { ok: true, answer: text, keySlot: slot, model: res.headers.get('x-gemini-model') || model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) });
+        return reply(200, { ok: true, answer: text, keySlot: slot, model: res.headers.get('x-gemini-model') || model, ...(video ? { video: true } : {}), ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) });
       }
       last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
       // 웹 조사는 모델·키마다 실패 이유를 남긴다(v0.6.3 소유자 "검색 한도가 실제로 걸린 건지"): 마지막 실패만 남아 원인을 몰랐다
@@ -412,8 +418,9 @@ Deno.serve(async (req) => {
     }
   }
   await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: null, ok: false, http_status: last.status || null, model, prompt_chars: question.length, error: last.message.slice(0, 300) });
-  const hint =
-    last.status === 429
+  const hint = video && (last.status === 400 || last.status === 403)
+    ? '이 유튜브 영상을 볼 수 없어요(비공개·일부 공개·연령 제한이거나 너무 긴 영상).'
+    : last.status === 429
       ? 'Gemini 무료 한도에 걸렸습니다.'
       : last.status === 401 || last.status === 403
         ? 'Gemini 키가 틀렸거나 권한이 없습니다.'

@@ -10,7 +10,11 @@ import type { Snapshot } from '../domain/types';
 import { triage } from '../domain/triage';
 import { projectContext } from '../domain/aiRoute';
 import { needsResearch } from '../domain/research';
-import { openInGemini, youtubeUrl, YT_NOTE } from '../domain/youtube';
+import { youtubeUrl } from '../domain/youtube';
+import { asksSearch } from '../domain/mention';
+import { parseCommand, type Parsed } from '../domain/quickCommands';
+import { CommandMenu } from './CommandMenu';
+import { openInGemini } from '../domain/geminiApp';
 import { parseMarkdown, type Inline } from '../domain/markdown';
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -109,6 +113,7 @@ export function ChatBot({
   onTitle,
   onLoaded,
   onToTask,
+  onCommand,
 }: {
   store: OfficeStore;
   ask: Ask;
@@ -124,6 +129,8 @@ export function ChatBot({
   onLoaded?: (info: ChatThreadInfo) => void;
   /** 업무로 접수: 그 프로젝트 업무 대화로 글을 넘긴다 */
   onToTask?: (text: string, projectId: string) => void;
+  /** 빠른 명령(v0.8.5): 화면 이동·대화 열기 */
+  onCommand?: (p: Parsed) => void;
 }) {
   const [thread, setThread] = useState<ChatThread>(() => fresh(projectId));
   const [loading, setLoading] = useState(Boolean(threadId));
@@ -186,11 +193,6 @@ export function ChatBot({
       update({ ...thread, title, messages: [...messages, { role: 'model', text: t.answer, at: new Date().toISOString(), by: 'office' }] });
       return;
     }
-    // 유튜브 링크(v0.8.4): API로 영상을 보내지 않고 Gemini 앱에서 요약(개발 요청이면 평소처럼)
-    if (youtubeUrl(text) && t.kind !== 'request') {
-      update({ ...thread, title, messages: [...messages, { role: 'model', text: YT_NOTE, at: new Date().toISOString(), by: 'office', yt: text }] });
-      return;
-    }
     setBusy(true);
     setLive('');
     setThread((x) => ({ ...x, title, messages }));
@@ -203,11 +205,12 @@ export function ChatBot({
       const history = base.filter((m) => m.by !== 'office').slice(-60).map((m) => ({ role: m.role, text: m.text }));
       const got = await ask(text, history, [], (soFar) => setLive(soFar), {
         chat: true,
-        research: needsResearch(text),
+        // 유튜브 링크(v0.8.3·v0.8.5)면 웹 조사 대신 Gemini가 영상을 직접 본다
+        research: !youtubeUrl(text) && (needsResearch(text) || asksSearch(text)),
         ...(slot ? { slot } : {}),
         ...(project ? { project: projectContext(project, snap.tasks) } : {}),
       });
-      const helpers = got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
+      const helpers = got.video ? ['YouTube 영상'] : got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
       const answer: ChatTurn = {
         role: 'model',
         text: got.answer,
@@ -221,7 +224,9 @@ export function ChatBot({
     } catch (e) {
       setError((e as Error).message || 'Gemini가 답하지 못했어요. 잠시 뒤 다시 보내 주세요.');
       // 답을 못 받아도 접수 제안은 남긴다(개발 요청이면 답이 없어도 접수할 수 있게)
-      const tail: ChatTurn[] = suggest ? [{ role: 'model', text: '답을 받지 못했어요.', at: new Date().toISOString(), by: 'office', suggest }] : [];
+      // 유튜브 요약이 안 되면(비공개·너무 긴 영상·한도) Gemini 앱에서 이어 하기 버튼
+      const yt = youtubeUrl(text) ? { yt: text } : {};
+      const tail: ChatTurn[] = suggest || youtubeUrl(text) ? [{ role: 'model', text: youtubeUrl(text) ? '여기서는 영상을 요약하지 못했어요. Gemini 앱에서 이어 할 수 있어요(부탁 글이 복사돼요).' : '답을 받지 못했어요.', at: new Date().toISOString(), by: 'office', ...(suggest ? { suggest } : {}), ...yt }] : [];
       update({ ...thread, title, messages: [...messages, ...tail] });
     } finally {
       setBusy(false);
@@ -229,9 +234,22 @@ export function ChatBot({
     }
   };
 
+  /** 빠른 명령이면 실행하고 true(/검색은 웹 조사로 묻기) */
+  const runCommand = (q: string): boolean => {
+    const p = q.trim().startsWith('/') ? parseCommand(q, snap.projects) : null;
+    if (!p) return false;
+    if (p.cmd.id === 'search') {
+      if (p.arg) void send(`@Tavily ${p.arg}`, thread.messages);
+      else setInput('/검색 ');
+      return true;
+    }
+    onCommand?.(p);
+    return true;
+  };
   const submit = () => {
     const q = input;
     setInput('');
+    if (runCommand(q)) return;
     void send(q, thread.messages);
   };
   /** 마지막 질문을 다시(같은 키 또는 다른 키로) */
@@ -289,7 +307,7 @@ export function ChatBot({
               {m.yt && (
                 <div className="chatbot-yt">
                   <button type="button" className="btn btn-small" onClick={() => openInGemini(m.yt!)}>
-                    Gemini 앱에서 요약
+                    Gemini 앱에서 이어 하기
                   </button>
                 </div>
               )}
@@ -345,6 +363,19 @@ export function ChatBot({
           submit();
         }}
       >
+        <CommandMenu
+          input={input}
+          projects={snap.projects}
+          onPick={(c) => {
+            if (c.run) {
+              setInput('');
+              runCommand(c.text);
+            } else {
+              setInput(c.text);
+              document.getElementById('chatbot-input')?.focus();
+            }
+          }}
+        />
         <textarea
           id="chatbot-input"
           value={input}
