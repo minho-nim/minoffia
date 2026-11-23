@@ -82,6 +82,8 @@ import { DesignStandard } from './components/DesignStandard';
 import { serviceLamps } from './domain/serviceLamps';
 import { installPopupClose } from './components/popupClose';
 import { ChatBot } from './components/ChatBot';
+import { ChatDrawer } from './components/ChatDrawer';
+import type { ChatThreadInfo } from './data/store';
 import { ciFixDone, ciFixWhy, nextAgent, PREF_LABEL, prefOf, quotaHit, reassignPlanText } from './domain/reassign';
 import { trustCredits, type Credits } from './domain/searchCredits';
 
@@ -155,6 +157,8 @@ function heightWatcher(name: string) {
 }
 const watchTabsHeight = heightWatcher('--tabs-h');
 const watchChipsHeight = heightWatcher('--chips-h');
+/** 마지막으로 보던 채팅(v0.8.1) */
+const LAST_CHAT_KEY = 'minoffia:chatbot:last-thread';
 
 /** 구조도 파일 목록 기억(앱을 켜 있는 동안) */
 const treeCache = new Map<string, { at: number; p: Promise<string[]> }>();
@@ -197,9 +201,81 @@ export function App() {
   // 대화 탭 프로젝트(v0.4.24, 소유자 결정): 기본은 없음 = 일반 AI 질문 창(Claude·ChatGPT처럼).
   // 프로젝트 칩을 누르면 그 프로젝트 기준으로 묻고, 다시 누르면 일반 대화로 돌아간다. 업무 탭 필터와 따로 둔다.
   const [chatProject, setChatProject] = useState<string | null>(null);
-  // 챗봇 모드(v0.7.99): 업무 판단 없이 Gemini와 일반 대화. 프로젝트·기본을 고르면 빠진다.
-  const [chatBot, setChatBot] = useState(false);
-  useEffect(() => setChatBot(false), [chatProject]);
+  // 대화 서랍(v0.8.1 소유자 "프로젝트별 채팅창 > 대화, 기본·챗봇 합치기"): 'bot' = 채팅(챗봇 대화, 프로젝트에 묶일 수 있음), 'work' = 프로젝트 업무 대화.
+  // 켜면 마지막으로 보던 채팅. 업무 대화는 프로젝트 '요청하기'·접수 제안·서랍에서 연다.
+  const [chatMode, setChatMode] = useState<'bot' | 'work'>('bot');
+  const [botSel, setBotSel] = useState<{ threadId: string | null; projectId: string | null; n: number }>(() => {
+    let id: string | null = null;
+    try {
+      id = localStorage.getItem(LAST_CHAT_KEY);
+    } catch {
+      /* 새 채팅으로 */
+    }
+    return { threadId: id, projectId: null, n: 0 };
+  });
+  const [botCurrent, setBotCurrent] = useState<{ id: string | null; projectId: string | null }>({ id: botSel.threadId, projectId: null });
+  const [chatTitle, setChatTitle] = useState('새 대화');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [threadList, setThreadList] = useState<ChatThreadInfo[] | null>(null);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  // 대화 목록: 대화 탭을 처음 열 때·서랍을 열 때 서버에서 읽는다
+  const chatThreadsApi = store?.chatThreads;
+  useEffect(() => {
+    if (tab !== 'chat' || !chatThreadsApi) return;
+    if (threadList !== null && !drawerOpen) return;
+    void chatThreadsApi.list().then(setThreadList, () => setThreadList((x) => x ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, drawerOpen, chatThreadsApi]);
+  // 휴대폰: 왼쪽 끝에서 오른쪽으로 끌면 서랍(아이폰 Safari는 뒤로 가기와 겹쳐 홈 화면 앱에서 확실)
+  useEffect(() => {
+    if (tab !== 'chat') return;
+    let x0 = -1;
+    let y0 = 0;
+    const start = (e: TouchEvent) => {
+      const t = e.touches[0];
+      x0 = t && t.clientX < 28 ? t.clientX : -1;
+      y0 = t?.clientY ?? 0;
+    };
+    const move = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (x0 < 0 || !t) return;
+      if (t.clientX - x0 > 60 && Math.abs(t.clientY - y0) < 40) {
+        x0 = -1;
+        setDrawerOpen(true);
+      }
+    };
+    document.addEventListener('touchstart', start, { passive: true });
+    document.addEventListener('touchmove', move, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', start);
+      document.removeEventListener('touchmove', move);
+    };
+  }, [tab]);
+  const savedThread = useCallback((info: ChatThreadInfo) => {
+    setThreadList((xs) => [info, ...(xs ?? []).filter((x) => x.id !== info.id)]);
+    setBotCurrent({ id: info.id, projectId: info.projectId });
+    try {
+      localStorage.setItem(LAST_CHAT_KEY, info.id);
+    } catch {
+      /* 무시 */
+    }
+  }, []);
+  const openWork = (id: string | null) => {
+    setChatProject(id);
+    setChatMode('work');
+  };
+  const openBot = (threadId: string | null, projectId: string | null) => {
+    setBotSel((b) => ({ threadId, projectId, n: b.n + 1 }));
+    setBotCurrent({ id: threadId, projectId });
+    setChatMode('bot');
+    setChatTitle('새 대화');
+    try {
+      if (threadId) localStorage.setItem(LAST_CHAT_KEY, threadId);
+      else localStorage.removeItem(LAST_CHAT_KEY);
+    } catch {
+      /* 무시 */
+    }
+  };
   const setProjectFilter = (id: string) => {
     setProjectFilterState(id);
     try {
@@ -502,9 +578,6 @@ export function App() {
   }, [tab]);
   const [picOpen, setPicOpen] = useState(false);
   const [directOpen, setDirectOpen] = useState(false);
-  // 대화 탭 프로젝트 칩 접기(v0.6.72). v0.7.47 소유자 "대화창에 프로젝트들은 기본으로 닫혀 있도록": 켤 때마다 접힌 채로 시작(고른 프로젝트 하나만 보임)
-  const [chatChipsOpen, setChatChipsOpenState] = useState(false);
-  const setChatChipsOpen = (f: (v: boolean) => boolean) => setChatChipsOpenState(f);
   // 스킬 탭의 '구조 보기'·'점검' 칸(v0.6.70): 열었을 때만 그린다
   const [skillMapsOpen, setSkillMapsOpen] = useState(false);
   const [skillCheckOpen, setSkillCheckOpen] = useState(false);
@@ -1994,6 +2067,7 @@ export function App() {
     const pid = snap.tasks.find((t) => t.id === it.taskId)?.projectId;
     if (pid) turnsByProject.set(pid, (turnsByProject.get(pid) ?? 0) + 1);
   }
+  const turnsTotal = [...turnsByProject.values()].reduce((a, b) => a + b, 0);
   // 프로젝트 칩은 한 줄로 옆으로 밀어 본다(v0.6.42 소유자 "한 줄로, 오른쪽으로 밀어서"). 순서는 설정 탭에서 바꾼다.
   const ordered = snap.projects;
   // 스킬 만들기·찾기를 접수할 프로젝트(v0.6.65): 스킬 원본 저장소(minoffia-skills) 프로젝트, 없으면 이 저장소(minoffia)
@@ -2029,7 +2103,7 @@ export function App() {
   // '구조 보기'와 '점검'을 나눈다(v0.6.70): 프로젝트 칸과 스킬 탭이 같은 모양
   // 점검 문제 '고치기 요청'(v0.6.95): 그 프로젝트 대화창으로 가서 입력칸에 써 둔다(보내기는 소유자가)
   const fixInChat = (p: Project) => (text: string) => {
-    setChatProject(p.id);
+    openWork(p.id);
     setTab('chat');
     setDraft((d) => ({ text, n: (d?.n ?? 0) + 1 }));
   };
@@ -2111,6 +2185,12 @@ export function App() {
       )}
       {peek && <div className="office-peek-backdrop" onClick={() => setPeek(false)} aria-hidden="true" />}
       <main className={`layout${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${pinned && tab === 'chat' ? ' is-pinned' : ''} tab-${tab === 'skills' ? 'settings tab-skills' : tab}`}>
+        {/* 휴대폰 대화 탭: 왼쪽 아래 ☰(v0.8.1). 위 머리 줄이 스크롤로 안 보여도 대화 목록을 연다 */}
+        {tab === 'chat' && (
+          <button type="button" className="office-dock-btn chat-menu-float" aria-label="대화 목록 열기" onClick={() => setDrawerOpen(true)}>
+            ☰{turnsTotal > 0 && <span className="num num-turn">{turnsTotal}</span>}
+          </button>
+        )}
         {/* 사무실을 숨긴 탭(휴대폰)에서만 보이는 버튼: 누르고 있는 동안 사무실이 뜬다 */}
         {/* 오른쪽 아래 '…'(v0.6.77 소유자 "위치는 오른쪽 아래, 위로 열림, 대화·에이전트 탭에서는 사무실이 2단으로 열리게"): 모든 탭 */}
         {(
@@ -2223,52 +2303,41 @@ export function App() {
             </button>
           </nav>
 
-          {/* 대화 탭 프로젝트 칩(v0.4.24): '모든 프로젝트' 없이 프로젝트만. 누르면 고르고 다시 누르면 풀린다(기본은 일반 대화). */}
+          {/* 대화 탭 머리(v0.8.1): ☰ 대화 목록 + 지금 대화 이름. 칩 줄 대신 왼쪽 서랍에서 고른다 */}
           {tab === 'chat' && (
-            <div className={`filters filters-scroll project-chips chat-chips${chatChipsOpen ? '' : ' is-folded'}`} role="group" aria-label="프로젝트(고르면 그 프로젝트 기준으로 대화)" ref={watchChipsHeight}>
-              {/* 접기·펴기(v0.6.72 소유자 "대화의 프로젝트 나열은 꽉 찬 오른쪽 삼각형으로 접기 펴기"): 접으면 고른 것 하나만 */}
-              <button type="button" className="chip-fold" aria-expanded={chatChipsOpen} aria-label={chatChipsOpen ? '프로젝트 목록 접기' : '프로젝트 목록 펴기'} onClick={() => setChatChipsOpen((v) => !v)}>
-                {chatChipsOpen ? '▼' : '▶'}
+            <div className="project-chips chat-chips chat-head" ref={watchChipsHeight}>
+              <button type="button" className="chat-menu" aria-label="대화 목록 열기" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
+                <span aria-hidden>☰</span>
+                {turnsTotal > 0 && <span className="num num-turn">{turnsTotal}</span>}
               </button>
-              {/* 기본 대화창(일반 대화, v0.4.88 소유자): 늘 맨 앞에, 프로젝트를 안 고르면 이 창 */}
-              {/* 챗봇(v0.7.99): 접어도 늘 보이게 */}
-              <button type="button" className="chip chip-project chip-general" aria-pressed={chatBot} onClick={() => setChatBot(true)}>
-                챗봇
+              <b className="chat-head-title">
+                {chatMode === 'work'
+                  ? `${chatProjectId ? (snap.projects.find((p) => p.id === chatProjectId)?.name ?? '') : '예전 기본 대화'} · 업무 대화`
+                  : `${botCurrent.projectId ? `${snap.projects.find((p) => p.id === botCurrent.projectId)?.name ?? ''} · ` : ''}${chatTitle}`}
+              </b>
+              <button type="button" className="btn btn-small btn-ghost" onClick={() => openBot(null, chatMode === 'work' ? chatProjectId : botCurrent.projectId)}>
+                새 대화
               </button>
-              {(chatChipsOpen || chatProjectId === null) && (
-              <button
-                type="button"
-                className="chip chip-project chip-general"
-                aria-pressed={chatProjectId === null && !chatBot}
-                onClick={() => {
-                  setChatProject(null);
-                  setChatBot(false);
-                }}
-                ref={chatProjectId === null && !chatBot ? (el) => el?.scrollIntoView({ inline: 'center', block: 'nearest' }) : undefined}
-              >
-                기본
-              </button>
-              )}
-              {ordered.map((p) => {
-                const n = turnsByProject.get(p.id) ?? 0;
-                const on = chatProjectId === p.id;
-                if (!chatChipsOpen && !on) return null;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="chip chip-project"
-                    aria-pressed={on}
-                    onClick={() => setChatProject(p.id)}
-                    // 프로젝트에서 '요청하기'로 넘어오면 고른 칩이 보이게 가운데로(v0.4.66)
-                    ref={on ? (el) => el?.scrollIntoView({ inline: 'center', block: 'nearest' }) : undefined}
-                  >
-                    {p.name}
-                    {n > 0 && <span className="num num-turn">{n}</span>}
-                  </button>
-                );
-              })}
             </div>
+          )}
+          {tab === 'chat' && (
+            <ChatDrawer
+              open={drawerOpen}
+              onClose={closeDrawer}
+              sel={chatMode === 'work' ? { kind: 'work', projectId: chatProjectId } : { kind: 'bot', threadId: botCurrent.id, projectId: botCurrent.projectId }}
+              onPick={(sel) => (sel.kind === 'work' ? openWork(sel.projectId) : openBot(sel.threadId, sel.projectId))}
+              threads={threadList}
+              onRemove={(id) => {
+                void store.chatThreads?.remove(id).then(() => {
+                  setThreadList((xs) => (xs ?? []).filter((x) => x.id !== id));
+                  if (chatMode === 'bot' && botCurrent.id === id) openBot(null, botCurrent.projectId);
+                }, (e) => say('error', `대화를 지우지 못했어요: ${(e as Error).message}`));
+              }}
+              projects={ordered}
+              tasks={snap.tasks}
+              turnsByProject={turnsByProject}
+              hasLegacy
+            />
           )}
 
           {/* 업무 탭 프로젝트 칩(v0.4.18~). 고르면 내 차례·업무가 그 프로젝트 기준 */}
@@ -2313,8 +2382,20 @@ export function App() {
 
           {/* 대화 탭: 탭을 바꿔도 대화·답 받기가 이어지게 늘 붙여 두고 숨기기만 한다 */}
           <div className="stack chat-tab" hidden={tab !== 'chat'}>
-            {chatBot && <ChatBot
+            {chatMode === 'bot' && (
+              <ChatBot
+                key={botSel.n}
                 store={store}
+                snap={snap}
+                threadId={botSel.threadId}
+                projectId={botSel.projectId}
+                onSaved={savedThread}
+                onTitle={setChatTitle}
+                onLoaded={(info) => setBotCurrent({ id: info.id, projectId: info.projectId })}
+                onToTask={(text, pid) => {
+                  openWork(pid);
+                  setDraft((d) => ({ text, n: (d?.n ?? 0) + 1, send: true }));
+                }}
                 ask={async (q, history, images, onDelta, opts) => {
                   try {
                     return await store.askGemini(q, history, images, onDelta, opts);
@@ -2322,9 +2403,11 @@ export function App() {
                     void store.load().then(setSnap, () => undefined);
                   }
                 }}
-                canAsk={store.mode === 'supabase' ? !geminiAway : true} />}
-            {/* 챗봇일 때도 업무 대화는 붙여 두고 숨기기만(답 받기가 이어지게) */}
-            <div hidden={chatBot} style={chatBot ? undefined : { display: 'contents' }}>
+                canAsk={store.mode === 'supabase' ? !geminiAway : true}
+              />
+            )}
+            {/* 채팅일 때도 업무 대화는 붙여 두고 숨기기만(답 받기·알림이 이어지게) */}
+            <div hidden={chatMode !== 'work'} style={chatMode !== 'work' ? undefined : { display: 'contents' }}>
               <Inbox
                 snap={snap}
                 canAskGemini={store.mode === 'supabase' && !geminiAway}
@@ -2341,7 +2424,7 @@ export function App() {
                     : undefined
                 }
                 onWarmGemini={() => store.warmGemini?.()}
-                onLinkProject={(id) => setChatProject(id)}
+                onLinkProject={(id) => openWork(id)}
                 onCreateTask={(d, images) => addTask(d, images)}
                 onCreateProject={(name) => saveProject({ name, repo: null, description: '입력창에서 만든 프로젝트' })}
                 onAskGemini={async (q, history, images, onDelta, opts) => {
@@ -2504,7 +2587,7 @@ export function App() {
                     })()}
                     onAsk={(task) => {
                       // 그 업무의 프로젝트 대화창으로 가고, 보낼 때 업무 상태를 참고로 붙인다(v0.5.1)
-                      setChatProject(task.projectId);
+                      openWork(task.projectId);
                       setTab('chat');
                       setDraft((d) => ({ text: `'${task.title}' 업무: `, n: (d?.n ?? 0) + 1, taskId: task.id }));
                     }}
@@ -2590,7 +2673,7 @@ export function App() {
               tasks={snap.tasks}
               turnsByProject={turnsByProject}
               onAsk={(id) => {
-                setChatProject(id);
+                openWork(id);
                 setTab('chat');
                 setDraft((d) => ({ text: '', n: (d?.n ?? 0) + 1 }));
               }}
@@ -2695,7 +2778,7 @@ export function App() {
               onSend={(text) => {
                 if (!officeProject) return;
                 // 스킬 업무는 이 저장소(minoffia) 프로젝트 대화창에서 접수한다(결과는 늘 PR·올리기 승인). 입력 창에서 쓴 글을 바로 보낸다(v0.6.57)
-                setChatProject(officeProject.id);
+                openWork(officeProject.id);
                 setTab('chat');
                 setDraft((d) => ({ text, n: (d?.n ?? 0) + 1, send: true }));
               }}

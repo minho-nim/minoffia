@@ -8,7 +8,7 @@ import { requestRedoOnServer } from './redo.ts';
 import { parseScreen, screenDecision, screenFeedback, screenPrompt, SCREEN_SYSTEM, type ScreenReview } from './screen.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
-const MODEL = 'gemini-3.5-flash-lite';
+const MODEL = 'gemini-3.5-flash';
 const MAX_AUTO_REDO = 2; // review-result/rubric.ts와 같게
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();
 const reply = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

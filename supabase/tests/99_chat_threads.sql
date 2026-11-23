@@ -47,3 +47,24 @@ insert into ai_calls (owner_id, provider, purpose, key_slot, ok, model) values
   ('22222222-2222-4222-8222-222222222222', 'gemini', 'chat', 2, true, 'm');
 select pg_temp.check((select count(*) from ai_calls where purpose in ('clarify', 'chat')) = 2, 'clarify·chat 사용량 기록');
 delete from ai_calls where owner_id = '22222222-2222-4222-8222-222222222222';
+
+-- 0069: 대화를 본인 프로젝트에만 묶을 수 있고, 프로젝트를 지우면 대화도 지워진다
+insert into auth.users (id, email) values ('11111111-1111-4111-8111-111111111111', 'o@example.invalid') on conflict do nothing;
+insert into projects (id, owner_id, name) values
+  ('c0690000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', '내 프로젝트'),
+  ('c0690000-0000-4000-8000-000000000002', '22222222-2222-4222-8222-222222222222', '남 프로젝트');
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
+insert into chat_threads (id, title, project_id) values ('c0690000-0000-4000-8000-0000000000a1', '프로젝트 대화', 'c0690000-0000-4000-8000-000000000001');
+select pg_temp.check((select project_id from chat_threads where id = 'c0690000-0000-4000-8000-0000000000a1') = 'c0690000-0000-4000-8000-000000000001', 'own project thread');
+do $$ begin
+  begin
+    insert into chat_threads (title, project_id) values ('x', 'c0690000-0000-4000-8000-000000000002');
+    raise exception 'other project should fail';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+select pg_temp.check(true, 'cannot attach to other owner project');
+reset role;
+delete from projects where id = 'c0690000-0000-4000-8000-000000000001';
+select pg_temp.check((select count(*) from chat_threads where id = 'c0690000-0000-4000-8000-0000000000a1') = 0, 'project delete removes threads');
+delete from projects where id = 'c0690000-0000-4000-8000-000000000002';

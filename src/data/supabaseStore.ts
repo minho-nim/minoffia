@@ -708,17 +708,17 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
     },
     chatThreads: {
       async list() {
-        const rows = check(await client.from('chat_threads').select('id, title, updated_at').order('updated_at', { ascending: false }).limit(200)) ?? [];
-        return (rows as Row[]).map((r) => ({ id: String(r.id), title: String(r.title), updatedAt: String(r.updated_at) }));
+        const rows = check(await client.from('chat_threads').select('id, title, updated_at, project_id').order('updated_at', { ascending: false }).limit(300)) ?? [];
+        return (rows as Row[]).map((r) => ({ id: String(r.id), title: String(r.title), updatedAt: String(r.updated_at), projectId: r.project_id ? String(r.project_id) : null }));
       },
       async get(id) {
         const { data, error } = await client.from('chat_threads').select('*').eq('id', id).maybeSingle();
         if (error) throw new Error(error.message);
         if (!data) return null;
-        return { id: String(data.id), title: String(data.title), messages: Array.isArray(data.messages) ? (data.messages as ChatTurn[]) : [], updatedAt: String(data.updated_at) };
+        return { id: String(data.id), title: String(data.title), messages: Array.isArray(data.messages) ? (data.messages as ChatTurn[]) : [], updatedAt: String(data.updated_at), projectId: data.project_id ? String(data.project_id) : null };
       },
       async save(t) {
-        check(await client.from('chat_threads').upsert({ id: t.id, title: t.title.slice(0, 200) || '새 대화', messages: t.messages, updated_at: new Date().toISOString() }));
+        check(await client.from('chat_threads').upsert({ id: t.id, title: t.title.slice(0, 200) || '새 대화', messages: t.messages, project_id: t.projectId ?? null, updated_at: new Date().toISOString() }));
       },
       async remove(id) {
         check(await client.from('chat_threads').delete().eq('id', id));

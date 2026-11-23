@@ -135,7 +135,7 @@ export interface OfficeStore {
   keyStatus?(): Promise<KeyStatus[]>;
   /** 챗봇 지난 대화(v0.7.99 소유자 "지난 대화는 서버에"). 로컬 데모는 이 기기에 */
   chatThreads?: {
-    list(): Promise<{ id: string; title: string; updatedAt: string }[]>;
+    list(): Promise<ChatThreadInfo[]>;
     get(id: string): Promise<ChatThread | null>;
     save(thread: ChatThread): Promise<void>;
     remove(id: string): Promise<void>;
@@ -229,10 +229,12 @@ export interface ChatTurn {
   text: string;
   at: string;
   /** 답한 키(A·B)와 함께 일한 쪽(웹 조사) */
-  by?: 'A' | 'B';
+  by?: 'A' | 'B' | 'office';
   /** 실제로 답한 모델(v0.8.0: 챗봇은 Flash 먼저, 안 되면 Lite) */
   model?: string;
   helpers?: string[];
+  /** 업무로 접수 제안(v0.8.1): 대화 중 개발 요청으로 보이면. 접수하면 그 업무 대화로 넘긴다 */
+  suggest?: { candidates: string[]; state: 'open' | 'sent' | 'dismissed'; projectId?: string };
 }
 /** 챗봇 모드 대화 한 줄기(서버 chat_threads, v0.7.99) */
 export interface ChatThread {
@@ -240,7 +242,10 @@ export interface ChatThread {
   title: string;
   messages: ChatTurn[];
   updatedAt: string;
+  /** 묶인 프로젝트(v0.8.1, 없으면 프로젝트 없는 채팅) */
+  projectId?: string | null;
 }
+export type ChatThreadInfo = { id: string; title: string; updatedAt: string; projectId: string | null };
 
 /** Linear 연결 확인 결과(읽기만, v0.4.11) */
 export interface KeyStatus {
