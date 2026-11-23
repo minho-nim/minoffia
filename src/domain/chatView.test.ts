@@ -67,10 +67,3 @@ describe('디스코드식 대화창', () => {
     expect(shortSpecLine(`기획서 v2: ${'가'.repeat(100)}`).length).toBe(90);
   });
 });
-
-describe('유튜브 영상 답(v0.8.3)', () => {
-  it('함께 일한 쪽에 YouTube 영상', () => {
-    expect(speakerOf({ id: 'g1', from: 'gemini', text: '', via: 'Gemini · Studio B가 답함 · YouTube 영상' })).toMatchObject({ name: 'Gemini B', helpers: ['YouTube 영상'] });
-    expect(speakerOf({ id: 'g2', from: 'gemini', text: '', via: 'Gemini · Studio A가 답함' }).helpers).toBeUndefined();
-  });
-});

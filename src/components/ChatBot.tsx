@@ -10,7 +10,6 @@ import type { Snapshot } from '../domain/types';
 import { triage } from '../domain/triage';
 import { projectContext } from '../domain/aiRoute';
 import { needsResearch } from '../domain/research';
-import { youtubeUrl } from '../domain/youtube';
 import { parseMarkdown, type Inline } from '../domain/markdown';
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -198,11 +197,11 @@ export function ChatBot({
       const history = base.filter((m) => m.by !== 'office').slice(-60).map((m) => ({ role: m.role, text: m.text }));
       const got = await ask(text, history, [], (soFar) => setLive(soFar), {
         chat: true,
-        research: !youtubeUrl(text) && needsResearch(text),
+        research: needsResearch(text),
         ...(slot ? { slot } : {}),
         ...(project ? { project: projectContext(project, snap.tasks) } : {}),
       });
-      const helpers = got.video ? ['YouTube 영상'] : got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
+      const helpers = got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
       const answer: ChatTurn = {
         role: 'model',
         text: got.answer,

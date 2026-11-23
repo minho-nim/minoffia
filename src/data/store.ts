@@ -220,7 +220,7 @@ export interface OfficeStore {
     onDelta?: (soFar: string) => void,
     /** AI 먼저 판단(프로젝트 이름들)·고른 프로젝트 정보(v0.4.29) */
     opts?: AskOptions,
-  ): Promise<{ answer: string; keySlot: number; model?: string; video?: boolean; sources?: Source[]; engine?: string; pages?: number; weather?: import('../domain/weather').WeatherData }>;
+  ): Promise<{ answer: string; keySlot: number; model?: string; sources?: Source[]; engine?: string; pages?: number; weather?: import('../domain/weather').WeatherData }>;
 }
 
 /** 챗봇 모드 대화 한 마디(v0.7.99) */
