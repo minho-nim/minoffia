@@ -11,6 +11,7 @@ import { appMapSection } from './appMap.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 import { deepSearch, isHit, webContext } from './websearch.ts';
 import { SPEC_WEB_RULE, specNeedsWeb, specQuery } from './specResearch.ts';
+import { PAST_RULE, pastSection, type PastTask } from './pastTasks.ts';
 
 /** 상한 없음을 뜻하는 큰 수(DB 함수에 정수로 넘길 수 있게) */
 const NO_DAILY_CAP = 1_000_000;
@@ -146,8 +147,38 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ fn: 'draft-spec', web: 'error', error: (e as Error).message }));
     }
   }
-  const system = web ? DRAFT_SYSTEM + SPEC_WEB_RULE : DRAFT_SYSTEM;
-  const firstAsk = files.length ? `${prompt}\n\n[저장소 코드 파일 목록(이름만)]\n${files.join('\n')}${appMap ? `\n\n${appMap}` : ''}\n\n${NEED_FILES_ASK}${web}` : `${prompt}${web}`;
+  // 비슷한 지난 업무(v0.8.9): 같은 프로젝트의 먼저 만든 업무 중 글자가 비슷한 것 3개까지(DB 함수, 본인 것만)
+  let past = '';
+  try {
+    const { data: sim } = await userClient.rpc('similar_tasks', { p_task: task.id, p_limit: 3 });
+    const rows = (sim ?? []) as { id: string; title: string; score: number }[];
+    if (rows.length) {
+      const ids = rows.map((r) => r.id);
+      const [{ data: results }, { data: revs }, { data: reviews }] = await Promise.all([
+        userClient.from('result_packages').select('task_id, revision, summary, remaining_issues').in('task_id', ids).order('revision', { ascending: false }),
+        userClient.from('revision_requests').select('task_id, feedback').in('task_id', ids),
+        userClient.from('result_reviews').select('task_id, result_revision, score').in('task_id', ids).order('result_revision', { ascending: false }),
+      ]);
+      const items: PastTask[] = rows.map((r) => {
+        const res = (results ?? []).find((x: { task_id: string }) => x.task_id === r.id) as { summary?: string; remaining_issues?: string } | undefined;
+        const rv = (reviews ?? []).find((x: { task_id: string }) => x.task_id === r.id) as { score?: { fixes?: string[]; violations?: string[] } | null } | undefined;
+        return {
+          title: r.title,
+          score: Number(r.score) || 0,
+          summary: String(res?.summary ?? ''),
+          remaining: String(res?.remaining_issues ?? ''),
+          feedback: (revs ?? []).filter((x: { task_id: string }) => x.task_id === r.id).map((x: { feedback: string }) => String(x.feedback ?? '')),
+          fixes: [...(rv?.score?.violations ?? []), ...(rv?.score?.fixes ?? [])].map(String),
+        };
+      });
+      past = pastSection(items);
+      console.log(JSON.stringify({ fn: 'draft-spec', past: items.length }));
+    }
+  } catch (e) {
+    console.log(JSON.stringify({ fn: 'draft-spec', past: 'error', error: (e as Error).message }));
+  }
+  const system = (web ? DRAFT_SYSTEM + SPEC_WEB_RULE : DRAFT_SYSTEM) + (past ? PAST_RULE : '');
+  const firstAsk = files.length ? `${prompt}\n\n[저장소 코드 파일 목록(이름만)]\n${files.join('\n')}${appMap ? `\n\n${appMap}` : ''}\n\n${NEED_FILES_ASK}${web}${past}` : `${prompt}${web}${past}`;
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   let last = { status: 0, message: '' };
   // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
@@ -169,7 +200,7 @@ Deno.serve(async (req) => {
       if (need) {
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'plan', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: firstAsk.length, answer_chars: r.text.length, ...(r.tokens ?? {}) });
         const got = await Promise.all(need.filter((p) => files.includes(p)).map(async (path) => ({ path, text: await readRepoFile(repo, path) })));
-        r = await callGemini(key, model, withFiles(prompt, got.length ? got : need.map((path) => ({ path, text: null }))) + web, system);
+        r = await callGemini(key, model, withFiles(prompt, got.length ? got : need.map((path) => ({ path, text: null }))) + web + past, system);
       }
     } catch (e) {
       r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };

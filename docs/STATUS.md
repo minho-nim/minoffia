@@ -1,6 +1,6 @@
 # 현재 상태 · 2026-11-18
 
-소스 버전은 package.json(지금 v0.8.8). 운영 사이트 minlab-ai-office.pages.dev는 v0.8.7까지 배포(2026-11-23). v0.8.8(앱·review-result)은 배포 대기. /portfolio = 포트폴리오, /demo = 데모판(예시 데이터·이 기기만·클라우드·AI 안 씀, '체험 업무 시작'으로 승인 3번 흐름 체험), / = 소유자 앱(로그인). 운영 Supabase에는 마이그레이션 0069까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
+소스 버전은 package.json(지금 v0.8.9). 운영 사이트 minlab-ai-office.pages.dev는 v0.8.8까지 배포(2026-11-23). /portfolio = 포트폴리오, /demo = 데모판(예시 데이터·이 기기만·클라우드·AI 안 씀, '체험 업무 시작'으로 승인 3번 흐름 체험), / = 소유자 앱(로그인). 운영 Supabase에는 마이그레이션 0069까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
 
 ## 소유자 결정(현재 기준)
 
@@ -25,6 +25,7 @@
 
 - Flash(v0.8.0~0.8.1): 무료 등급에서 gemini-3.5-flash가 실제로 답하는지(챗봇 답 옆 'Flash', 사용 기록 model), 429·예비 모델 내려감이 늘지 않는지. 업무 쪽도 Flash라 무료 한도가 빨리 찰 수 있음.
 - 옵시디언 노트(v0.8.5): 서버 함수 notes-push가 쓰는 토큰(NOTES_REPO_TOKEN, 없으면 GITHUB_REPO_TOKEN)에 minoffia-notes 쓰기 권한이 있는지 배포 뒤 '지금 보내기'로 확인. 없으면 소유자가 Supabase 비밀값에 NOTES_REPO_TOKEN(이 저장소 Contents 읽기·쓰기만)을 넣는다.
+- 비슷한 지난 업무(v0.8.9): 유사도 기준 0.12가 너무 넓거나 좁은지 실제 업무로 확인(draft-spec 로그 past 개수). 의미 검색(Gemini 임베딩+pgvector)은 2단계.
 - 옵시디언 Bases(v0.8.7): 한글 속성 이름(note["상태"]) 표가 실제 옵시디언에서 잘 보이는지 확인 안 함. 대시보드 바깥 지표 칸(MetricCard)은 블로그·유튜브 자동화를 붙일 때 채운다.
 - 확인할 숫자(v0.8.6): 규칙이라 '3단계'처럼 사실이 아닌 숫자도 잡을 수 있음(너무 자주 뜨면 규칙 줄이기). 유튜브 fps 0.1을 모델이 받는지(400이면 설정 없이 다시).
 - 유튜브 요약(v0.8.5): 실제 영상으로 확인 안 함. 긴 영상 한도, mediaResolution을 모델이 받는지.
