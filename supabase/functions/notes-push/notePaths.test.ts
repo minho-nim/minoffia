@@ -12,6 +12,11 @@ describe('노트 경로 검사(v0.8.5)', () => {
     expect(okPath('대시보드/업무.base')).toBe(true);
     expect(okPath('대시보드/한눈에.md')).toBe(true);
     expect(okPath('미노피아/업무 목록.md')).toBe(true);
+    expect(okPath('미노피아/지식.md')).toBe(true);
+    expect(okPath('미노피아/대화/2026-11-21.md')).toBe(true);
+    expect(okPath('결정/2026-11.md')).toBe(true);
+    expect(okPath('주간/2026-W48.md')).toBe(true);
+    expect(okPath('아이디어/2026-11-21 블로그.md')).toBe(true);
     expect(okPath('미노피아/업무.base')).toBe(false);
     expect(okPath('대시보드/../x.base')).toBe(false);
   });
@@ -41,8 +46,8 @@ describe('앱이 만드는 노트 경로는 서버가 모두 허락', () => {
     const tasks = [{ id: 't', projectId: 'p', title: '로그인: "버튼" 색?', status: 'queued', assignee: 'claude', createdAt: '2026-11-20T01:00:00Z' }] as never;
     const chats = [{ id: 'c1xxxxxx', title: '질문/답', updatedAt: '2026-11-21T00:00:00Z', projectId: 'p', messages: [{ role: 'user', text: 'a', at: '2026-11-21T00:00:00Z' }, { role: 'model', text: 'b', at: '2026-11-21T00:00:01Z', sources: [{ title: 'Tesla: Q2/실적?', uri: 'https://www.cnbc.com/x' }] }] }, { id: 'c2yyyyyy', title: '.숨김', updatedAt: '2026-11-21T00:00:00Z', projectId: null, messages: [{ role: 'user', text: 'b', at: '2026-11-21T00:00:00Z' }] }] as never;
     const files = brainNotes({ projects, tasks, workflow: EMPTY_WORKFLOW, chats, chatIndex: chats, wikis: [{ projectId: 'p', body: 'x', updatedAt: '2026-11-21T00:00:00Z' }] });
-    expect(files.length).toBe(12);
-    expect(checkFiles(files)).toHaveLength(12);
+    expect(files.length).toBe(15);
+    expect(checkFiles(files)).toHaveLength(15);
     expect(files.some((f) => f.path === '자료/cnbc.com Tesla Q2 실적.md')).toBe(true);
   });
 });
