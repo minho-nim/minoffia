@@ -169,6 +169,7 @@ const SKILL_SKIP_KEY = 'minoffia:skill-suggest:skip';
 const BRAIN_DAY_KEY = 'minoffia:brain:day';
 const BRAIN_HASH_KEY = 'minoffia:brain:hash';
 const BRAIN_CHAT_KEY = 'minoffia:brain:chats';
+const BRAIN_AT_KEY = 'minoffia:brain:at';
 
 /** 구조도 파일 목록 기억(앱을 켜 있는 동안) */
 const treeCache = new Map<string, { at: number; p: Promise<string[]> }>();
@@ -403,6 +404,11 @@ export function App() {
   const [brainBusy, setBrainBusy] = useState(false);
   const [brainMsg, setBrainMsg] = useState('');
   const brainRef = useRef<() => Promise<void>>(async () => undefined);
+  // 화면 기록을 읽은 시각(대시보드 '기준 시각', v0.8.7)
+  const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (rawSnap !== EMPTY) setLoadedAt(new Date().toISOString());
+  }, [rawSnap]);
   const brainAuto = useRef(false);
   useEffect(() => {
     if (brainAuto.current || !store?.pushNotes || !session || !rawSnap.tasks.length) return;
@@ -976,6 +982,7 @@ export function App() {
       try {
         localStorage.setItem(BRAIN_CHAT_KEY, JSON.stringify(chatSeen));
         localStorage.setItem(BRAIN_DAY_KEY, new Date().toISOString().slice(0, 10));
+        localStorage.setItem(BRAIN_AT_KEY, new Date().toISOString());
       } catch {
         /* 무시 */
       }
@@ -2232,6 +2239,28 @@ export function App() {
               close();
               runCommand({ cmd: { id: 'usage', word: '사용량', alias: [], desc: '' }, arg: '' });
             }}
+            loadedAt={loadedAt}
+            onRefresh={() => void store.load().then(setSnap, () => undefined)}
+            actions={usageInput.actions}
+            brain={
+              store.pushNotes
+                ? {
+                    at: (() => {
+                      try {
+                        return localStorage.getItem(BRAIN_AT_KEY);
+                      } catch {
+                        return null;
+                      }
+                    })(),
+                    tasks: snap.tasks.filter((t) => !t.sample).length,
+                    chats: threadList?.length ?? null,
+                    wikis: snap.projects.filter((p) => !p.sample).length,
+                    busy: brainBusy,
+                    msg: brainMsg,
+                    onSend: () => void brainRef.current(),
+                  }
+                : undefined
+            }
           />
   );
   const turnsByProject = new Map<string, number>();

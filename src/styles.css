@@ -8514,3 +8514,28 @@ html.popup-open .project-sections > details[open] * {
 .results-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-empty { padding: 20px; }
 .chat-menu { margin-right: 6px; }
+
+/* 대시보드 더하기(v0.8.7): 기준 시각·자동 작업·이번 달 활동·세컨드 브레인 */
+.dash-stamp { margin: 0; display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 12px; color: var(--muted); }
+.dash-stamp.is-stale { color: var(--warn); }
+.dash-jobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.dash-jobs li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dash-jobs small { flex: none; color: var(--muted); font-size: 11px; }
+.dash-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.dash-dot.is-ok { background: var(--ok); }
+.dash-dot.is-warn { background: var(--warn); }
+.dash-dot.is-bad { background: var(--danger); }
+.dash-cal { width: 100%; max-width: 360px; border-collapse: separate; border-spacing: 3px; font-size: 11px; }
+.dash-cal th { color: var(--muted); font-weight: 500; }
+.dash-cal td { padding: 0; text-align: center; }
+.dash-cal i { display: block; height: 26px; line-height: 26px; border-radius: 6px; font-style: normal; color: var(--muted); background: var(--surface-2); border: 1.5px solid transparent; }
+.dash-cal i.lv-1 { background: color-mix(in srgb, var(--accent) 30%, var(--surface-2)); color: var(--ink); }
+.dash-cal i.lv-2 { background: color-mix(in srgb, var(--accent) 60%, var(--surface-2)); color: var(--ink); }
+.dash-cal i.lv-3 { background: var(--accent); color: var(--accent-ink); }
+.dash-cal i.has-deploy { border-color: var(--ok); }
+.dash-cal td.is-today i { outline: 2px solid var(--ink); outline-offset: -1px; }
+.dash-brain { margin: 0 0 2px; font-size: 13px; }
+.dash-card h3 small { font-weight: 400; font-size: 11px; }
+.dash-metric { text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+.dash-metric:disabled { cursor: default; }
+.dash-metric small.is-stale { color: var(--warn); }
