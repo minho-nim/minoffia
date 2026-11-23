@@ -11,7 +11,7 @@ import { triage } from '../domain/triage';
 import { projectContext } from '../domain/aiRoute';
 import { needsResearch } from '../domain/research';
 import { youtubeUrl } from '../domain/youtube';
-import { asksSearch } from '../domain/mention';
+import { answerSlot, asksSearch, insertMention, mentionOptions, mentionQuery, searchEngineOf } from '../domain/mention';
 import { parseCommand, type Parsed } from '../domain/quickCommands';
 import { CommandMenu } from './CommandMenu';
 import { VoiceInput } from './VoiceInput';
@@ -145,6 +145,8 @@ export function ChatBot({
   onLoaded,
   onToTask,
   onCommand,
+  onNewProject,
+  onWarm,
 }: {
   store: OfficeStore;
   ask: Ask;
@@ -162,11 +164,22 @@ export function ChatBot({
   onToTask?: (text: string, projectId: string) => void;
   /** 빠른 명령(v0.8.5): 화면 이동·대화 열기 */
   onCommand?: (p: Parsed) => void;
+  /** "새 프로젝트 만들어줘"(v0.8.14): 기본 업무 대화로 넘겨 평소처럼 만든다 */
+  onNewProject?: (text: string) => void;
+  /** 입력칸을 누르면 Gemini 서버를 미리 깨운다(첫 답이 빨라짐) */
+  onWarm?: () => void;
 }) {
   const [thread, setThread] = useState<ChatThread>(() => fresh(projectId));
   const [loading, setLoading] = useState(Boolean(threadId));
   const [input, setInput] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
+  // @로 답할 AI 고르기(v0.8.14, 업무 대화와 같게): 채팅에서는 Studio A·B·Tavily·Firecrawl만
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
+  const mentionList = mention ? mentionOptions(mention.query).filter((o) => !['Claude', 'Codex'].includes(o.tag)) : [];
+  const readMention = (el: HTMLTextAreaElement) => setMention(el.selectionStart === el.selectionEnd ? mentionQuery(el.value, el.selectionStart) : null);
+  // 멈추기: 기다리던 답을 버린다(이 번호가 바뀌면 늦게 온 답은 무시)
+  const turnNo = useRef(0);
+  const warmed = useRef(false);
   const [photoError, setPhotoError] = useState('');
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState('');
@@ -235,6 +248,13 @@ export function ChatBot({
       update({ ...thread, title, messages: [...messages, { role: 'model', text: t.answer, at: new Date().toISOString(), by: 'office' }] });
       return;
     }
+    // "새 프로젝트 만들어줘"(v0.8.14): 기본 업무 대화가 이름을 묻고 만든다(채팅에서 하던 그대로)
+    if (t.kind === 'new_project' && onNewProject && !files.length) {
+      update({ ...thread, title, messages: [...messages, { role: 'model', text: '새 프로젝트는 업무 대화(기본)에서 만들어요. 그쪽으로 넘길게요.', at: new Date().toISOString(), by: 'office' }] });
+      onNewProject(text);
+      return;
+    }
+    const myTurn = ++turnNo.current;
     setBusy(true);
     setLive('');
     setThread((x) => ({ ...x, title, messages }));
@@ -249,14 +269,17 @@ export function ChatBot({
       // 날씨(v0.8.13 소유자 "오늘 날씨 물어봤어, Open-Meteo 검색이 됐어"): 업무 대화처럼 설정한 지역·현재 위치를 보내고 표로 보인다
       const wantsWeather = !files.length && WEATHER_RE.test(text);
       const where = wantsWeather ? await weatherWhereBody().catch(() => undefined) : undefined;
-      const got = await ask(text, history, images, (soFar) => setLive(soFar), {
+      const got = await ask(text, history, images, (soFar) => myTurn === turnNo.current && setLive(soFar), {
         ...(where ? { where } : {}),
         chat: true,
         // 유튜브 링크(v0.8.3·v0.8.5)면 웹 조사 대신 Gemini가 영상을 직접 본다
         research: !youtubeUrl(text) && (needsResearch(text) || asksSearch(text)),
-        ...(slot ? { slot } : {}),
+        // @StudioA·@StudioB면 그 키 먼저, @Firecrawl이면 Firecrawl로 먼저 찾기
+        ...(slot ?? answerSlot(text) ? { slot: (slot ?? answerSlot(text))! } : {}),
+        ...(searchEngineOf(text) ? { engine: searchEngineOf(text)! } : {}),
         ...(project ? { project: projectContext(project, snap.tasks) } : {}),
       });
+      if (myTurn !== turnNo.current) return;
       if (got.weather && where && 'lat' in where) saveHereSeen(got.weather.place);
       const helpers = got.weather ? [`${got.engine ?? 'Open-Meteo'} 날씨`] : got.video ? ['YouTube 영상'] : got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
       const answer: ChatTurn = {
@@ -273,6 +296,7 @@ export function ChatBot({
       };
       update({ ...thread, title, messages: [...messages, answer], updatedAt: new Date().toISOString() });
     } catch (e) {
+      if (myTurn !== turnNo.current) return;
       setError((e as Error).message || 'Gemini가 답하지 못했어요. 잠시 뒤 다시 보내 주세요.');
       // 답을 못 받아도 접수 제안은 남긴다(개발 요청이면 답이 없어도 접수할 수 있게)
       // 유튜브 요약이 안 되면(비공개·너무 긴 영상·한도) Gemini 앱에서 이어 하기 버튼
@@ -280,9 +304,29 @@ export function ChatBot({
       const tail: ChatTurn[] = suggest || youtubeUrl(text) ? [{ role: 'model', text: youtubeUrl(text) ? '여기서는 영상을 요약하지 못했어요. Gemini 앱에서 이어 할 수 있어요(부탁 글이 복사돼요).' : '답을 받지 못했어요.', at: new Date().toISOString(), by: 'office', ...(suggest ? { suggest } : {}), ...yt }] : [];
       update({ ...thread, title, messages: [...messages, ...tail] });
     } finally {
-      setBusy(false);
-      setLive('');
+      if (myTurn === turnNo.current) {
+        setBusy(false);
+        setLive('');
+      }
     }
+  };
+  /** 멈추기: 기다리던 답은 버리고(늦게 와도 무시) 바로 다시 보낼 수 있게 */
+  const stop = () => {
+    turnNo.current += 1;
+    setBusy(false);
+    setLive('');
+    update({ ...thread, messages: [...thread.messages, { role: 'model', text: '멈췄어요. 다시 보내면 새로 답해요.', at: new Date().toISOString(), by: 'office' }] });
+  };
+  const pickMention = (tag: string) => {
+    const el = document.getElementById('chatbot-input') as HTMLTextAreaElement | null;
+    if (!el || !mention) return;
+    const next = insertMention(el.value, el.selectionStart, mention.start, tag);
+    setInput(next.text);
+    setMention(null);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+    });
   };
 
   /** 빠른 명령이면 실행하고 true(/검색은 웹 조사로 묻기) */
@@ -421,6 +465,11 @@ export function ChatBot({
               <b>Gemini</b>
             </div>
             {live ? <Markdown text={live} /> : <p className="inbox-typing">답을 쓰는 중…</p>}
+            <div className="chatbot-tools">
+              <button type="button" onClick={stop}>
+                멈추기
+              </button>
+            </div>
           </li>
         )}
       </ol>
@@ -440,6 +489,17 @@ export function ChatBot({
           submit();
         }}
       >
+        {mentionList.length > 0 && (
+          <ul className="mention-pop" role="listbox" aria-label="답할 AI 고르기">
+            {mentionList.map((o) => (
+              <li key={o.tag}>
+                <button type="button" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => pickMention(o.tag)}>
+                  <b>@{o.tag}</b> <span>{o.ko} · {o.desc}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <CommandMenu
           input={input}
           projects={snap.projects}
@@ -471,8 +531,16 @@ export function ChatBot({
           value={input}
           rows={1}
           placeholder={canAsk ? (project ? `${project.name}: 묻거나 시킬 일` : '무엇이든 물어보기') : '로그인하면 Gemini와 대화할 수 있어요'}
+          onFocus={() => {
+            if (!warmed.current) {
+              warmed.current = true;
+              onWarm?.();
+            }
+          }}
+          onSelect={(e) => readMention(e.currentTarget)}
           onChange={(e) => {
             setInput(e.target.value);
+            readMention(e.target);
             // 글을 쓰면 늘어난다(6줄쯤까지, 그 뒤는 안에서 스크롤)
             const el = e.target;
             el.style.height = 'auto';

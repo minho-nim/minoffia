@@ -1,6 +1,6 @@
 # 현재 상태 · 2026-11-18
 
-소스 버전은 package.json(지금 v0.8.13). 운영 사이트 minlab-ai-office.pages.dev는 v0.8.13까지 배포(2026-11-23). /portfolio = 포트폴리오, /demo = 데모판(예시 데이터·이 기기만·클라우드·AI 안 씀, '체험 업무 시작'으로 승인 3번 흐름 체험), / = 소유자 앱(로그인). 운영 Supabase에는 마이그레이션 0070까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
+소스 버전은 package.json(지금 v0.8.14). 운영 사이트 minlab-ai-office.pages.dev는 v0.8.13까지 배포(2026-11-23). /portfolio = 포트폴리오, /demo = 데모판(예시 데이터·이 기기만·클라우드·AI 안 씀, '체험 업무 시작'으로 승인 3번 흐름 체험), / = 소유자 앱(로그인). 운영 Supabase에는 마이그레이션 0070까지 적용, 바꾼 서버 함수는 '서버 함수 배포'로 반영했다. 흐름은 [FLOW](FLOW.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md).
 
 ## 소유자 결정(현재 기준)
 
