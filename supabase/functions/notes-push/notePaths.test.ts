@@ -15,6 +15,9 @@ describe('노트 경로 검사(v0.8.5)', () => {
     expect(okPath('미노피아/지식.md')).toBe(true);
     expect(okPath('미노피아/대화/2026-11-21.md')).toBe(true);
     expect(okPath('결정/2026-11.md')).toBe(true);
+    expect(okPath('스킬/ui-check.md')).toBe(true);
+    expect(okPath('스킬/분류/화면·디자인.md')).toBe(true);
+    expect(okPath('스킬/a/b.md')).toBe(false);
     expect(okPath('주간/2026-W48.md')).toBe(true);
     expect(okPath('아이디어/2026-11-21 블로그.md')).toBe(true);
     expect(okPath('미노피아/업무.base')).toBe(false);

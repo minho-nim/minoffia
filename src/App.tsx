@@ -967,7 +967,9 @@ export function App() {
       // v0.8.8: 업무 대화·변경 기록(소유자 결정)도. 변경 기록은 이때만 따로 받아 온다(앱 첫 화면 크기에 안 들어감)
       const inbox = await store.loadInbox().catch(() => null);
       const changelog = await import('../CHANGELOG.md?raw').then((m) => m.default as string).catch(() => '');
-      const files = brainNotes({ projects: snap.projects, tasks: snap.tasks, workflow: snap.workflow, chats, chatIndex: index, wikis, rules: snap.projectRules ?? [], inbox: (inbox?.messages ?? []) as never, changelog });
+      // v0.8.10: 스킬 모음 전부(본문·연결). 스킬 탭이 쓰는 것과 같은 자료(10분 보관)
+      const skills = store.skills ? await loadSkillsData().then((d) => ({ files: d.files, map: d.map }), () => undefined) : undefined;
+      const files = brainNotes({ projects: snap.projects, tasks: snap.tasks, workflow: snap.workflow, chats, chatIndex: index, wikis, rules: snap.projectRules ?? [], inbox: (inbox?.messages ?? []) as never, changelog, skills });
       const changed = files.filter((f) => sentHash[f.path] !== noteHash(f.content));
       let sent = 0;
       for (let i = 0; i < changed.length; i += 150) {
