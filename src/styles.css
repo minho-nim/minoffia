@@ -8535,7 +8535,11 @@ html.popup-open .project-sections > details[open] * {
 
 /* 채팅 입력창을 업무 대화와 같은 모양으로(v0.8.11): 둥근 상자 안 [+] … [마이크][↑], 화면 아래에 붙고 아래 틈은 바탕색 */
 .chatbot-form.inbox-form { position: sticky; bottom: max(8px, env(safe-area-inset-bottom)); z-index: 4; margin-top: 10px; }
-.chatbot-form.inbox-form::after { content: ''; position: absolute; left: -6px; right: -6px; top: 100%; height: calc(max(8px, env(safe-area-inset-bottom)) + 4px); background: var(--surface); pointer-events: none; }
+/* 아래 틈 막기: 상자 테두리를 덮지 않게 그림자로(v0.8.12 소유자 "아래 잘려 있는 게 맞음?" → 아래 테두리가 가려졌던 것) */
+.chatbot-form.inbox-form { box-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.3), 0 16px 0 6px var(--surface); }
+/* 채팅도 업무 대화처럼 남는 높이를 채우고 입력창은 맨 아래(빈 대화에서 입력창이 가운데 떠 있던 것) */
+.chat-tab > .chatbot { flex: 1; }
+.chatbot > .chatbot-form { margin-top: auto; }
 .chatbot-form textarea { max-height: 160px; }
 .inbox-plus.is-off { opacity: 0.45; pointer-events: none; }
 @media (max-width: 1039px) {

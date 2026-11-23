@@ -193,9 +193,17 @@ export function ChatBot({
   useEffect(() => {
     onTitle?.(thread.title);
   }, [thread.title, onTitle]);
+  // 새 말이 생길 때만 아래로(v0.8.12 소유자 "대화창 오류": 빈 대화를 열 때도 아래로 밀어 위 머리 줄·안내가 탭 밑에 가려졌다)
+  const seenCount = useRef<number | null>(null);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [thread.messages.length, live]);
+    const n = thread.messages.length;
+    if (seenCount.current === null || loading) {
+      if (!loading) seenCount.current = n;
+      return;
+    }
+    if (n > seenCount.current || live) endRef.current?.scrollIntoView({ block: 'nearest' });
+    seenCount.current = n;
+  }, [thread.messages.length, live, loading]);
 
   const save = async (t: ChatThread) => {
     if (!threads || !t.messages.length) return;
