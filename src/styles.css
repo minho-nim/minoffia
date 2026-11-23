@@ -8391,3 +8391,30 @@ html.popup-open .project-sections > details[open] * {
 }
 .chat-menu .num, .chat-menu-float .num { position: absolute; top: -7px; right: -9px; }
 .chat-menu-float { position: relative; }
+
+/* 휴대폰 입력창 아래(v0.8.2 소유자 사진 "아래 또 고장, 아래로 더 붙이고 가려지는 부분 불투명하게"):
+   홈 막대 여백을 반으로 줄여 입력창을 더 내리고, 입력창 밑 틈은 바탕색으로 막아 뒤 대화(날씨 표 등)가 비치지 않게 한다 */
+@media (max-width: 1039px) {
+  .inbox {
+    --inbox-low: max(6px, calc(env(safe-area-inset-bottom, 0px) * 0.5 + 6px));
+  }
+  .kb-open .inbox {
+    --inbox-low: 6px;
+  }
+  .inbox > .inbox-form::after {
+    display: block;
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: -4px;
+    right: -4px;
+    height: calc(var(--inbox-low) + 4px);
+    background: var(--surface);
+    border: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .chatbot-form {
+    padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) * 0.5 + 6px));
+  }
+}
