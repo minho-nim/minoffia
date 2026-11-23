@@ -18,7 +18,7 @@ import type { Project, Snapshot, Task } from '../domain/types';
 import { SkillPick } from './SkillPick';
 import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
-import { youtubeUrl } from '../domain/youtube';
+import { openInGemini, youtubeUrl, YT_NOTE } from '../domain/youtube';
 import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction, actionNotices, mergeNotices, staleNotices } from '../domain/stageNotice';
@@ -70,6 +70,8 @@ interface Msg {
   offer?: Offer;
   /** 기획서 전에 되묻기(v0.7.97): 질문에 답하면 요청에 붙여 접수, [그냥 접수]면 그대로 */
   clarify?: { text: string; projectId: string; context?: PriorChat; whole?: string; questions: string[]; state: 'open' | 'done' | 'dropped' };
+  /** 유튜브 링크(v0.8.4): Gemini 앱에서 요약 버튼(원문) */
+  yt?: string;
   /** 함께 보낸 첨부(v0.4.89): 이름과 작은 미리보기(누르면 크게). 원본은 이 화면에서만 기억한다 */
   files?: { name: string; thumb?: string; key?: string }[];
 }
@@ -148,7 +150,7 @@ interface Props {
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
     opts?: AskOptions,
-  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number; video?: boolean; weather?: WeatherData }>;
+  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number; weather?: WeatherData }>;
   /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
   geminiAway?: boolean;
   /** Claude 웹 조사(v0.7.11): 웹 검색(Tavily·Firecrawl)이 안 됐을 때 'Claude에게 찾아보기'. Supabase 모드·Claude 근무일 때만 */
@@ -1304,6 +1306,11 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
   const routeText = (text: string, sent: File[], priorChat: PriorChat | null) => {
     const prior = priorChat ?? undefined;
     const t = triage(text, snap);
+    // 유튜브 링크(v0.8.4): API로 영상을 보내지 않고 Gemini 앱에서 요약(개발 요청이면 평소처럼)
+    if (youtubeUrl(text) && t.kind !== 'request' && t.kind !== 'status') {
+      setLog((l) => [...l, { id: mid(), from: 'office' as const, text: YT_NOTE, home: thread, yt: text }].slice(-KEEP));
+      return;
+    }
     if (t.kind === 'status') {
       say('office', t.answer);
       if (sent.length) say('office', '첨부는 업무 요청이나 질문에만 써요. 다음 메시지에 다시 붙여 주세요.');
@@ -1491,8 +1498,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
 
   const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }, extra: { research?: boolean } = {}) => {
     // 조사(v0.4.61, v0.7.52 Tavily·Firecrawl): 웹에서 찾아야 하는 질문은 Tavily가 찾고 Firecrawl이 본문을 읽고 Gemini가 정리해 출처를 붙인다(규칙으로 고름, Exa 휴가·실패면 검색 없이 다시).
-    // 유튜브 링크(v0.8.3)면 웹 조사 대신 Gemini가 영상을 직접 본다
-    const research = !youtubeUrl(text) && (extra.research ?? (needsResearch(text) || asksSearch(text)));
+    const research = extra.research ?? (needsResearch(text) || asksSearch(text));
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
@@ -1587,8 +1593,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           const raw = got.answer;
           const sources = got.sources ?? [];
           // 날씨(v0.7.68)는 Open-Meteo 숫자로 규칙 답(Gemini 안 씀)
-          const via0 = got.weather ? `${got.engine ?? '날씨'} 자료 · 규칙으로 답함` : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
-          const via = via0 && got.video ? `${via0} · YouTube 영상` : via0;
+          const via = got.weather ? `${got.engine ?? '날씨'} 자료 · 규칙으로 답함` : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
           // 현재 위치 기준 날씨면 설정의 '현재 위치' 이름도 맞춘다(v0.7.74)
           if (got.weather && opts.where && 'lat' in opts.where) saveHereSeen(got.weather.place);
           if (via || sources.length || got.weather) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}), ...(got.weather ? { weather: got.weather } : {}) } : m)));
@@ -1849,7 +1854,16 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
               ) : m.weather ? (
                 <WeatherCard data={m.weather} />
               ) : m.text ? (
-                <p>{m.text}</p>
+                <>
+                  <p>{m.text}</p>
+                  {m.yt && (
+                    <div className="chatbot-yt">
+                      <button type="button" className="btn btn-small" onClick={() => openInGemini(m.yt!)}>
+                        Gemini 앱에서 요약
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="inbox-typing" aria-label="답을 쓰는 중">
                   <span />
