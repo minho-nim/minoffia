@@ -286,6 +286,8 @@ export function ChatBot({
     setInput('');
     setPhotos([]);
     setPhotoError('');
+    const box = document.getElementById('chatbot-input');
+    if (box) box.style.height = '';
     if (!files.length && runCommand(q)) return;
     void send(q, thread.messages, undefined, files);
   };
@@ -415,7 +417,7 @@ export function ChatBot({
       )}
       <div ref={endRef} />
       <form
-        className="chatbot-form"
+        className="inbox-form chatbot-form"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -447,16 +449,18 @@ export function ChatBot({
             {photoError && <span className="task-error">{photoError}</span>}
           </div>
         )}
-        <label className="chatbot-attach" aria-label="사진 붙이기" title="사진 붙이기">
-          <input type="file" accept="image/*" multiple hidden onChange={(e) => (addPhotos(e.target.files), (e.target.value = ''))} disabled={!canAsk || busy} />
-          <span aria-hidden>＋</span>
-        </label>
         <textarea
           id="chatbot-input"
           value={input}
-          rows={2}
+          rows={1}
           placeholder={canAsk ? (project ? `${project.name}: 묻거나 시킬 일` : '무엇이든 물어보기') : '로그인하면 Gemini와 대화할 수 있어요'}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            // 글을 쓰면 늘어난다(6줄쯤까지, 그 뒤는 안에서 스크롤)
+            const el = e.target;
+            el.style.height = 'auto';
+            el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+          }}
           onPaste={(e) => {
             if (e.clipboardData.files.length) {
               e.preventDefault();
@@ -472,10 +476,22 @@ export function ChatBot({
           }}
           disabled={!canAsk}
         />
-        <VoiceInput disabled={!canAsk || busy} onText={(t) => setInput((v) => (v.trim() ? `${v.trimEnd()} ${t}` : t))} />
-        <button type="submit" className="btn" disabled={!canAsk || busy || (!input.trim() && !photos.length)}>
-          보내기
-        </button>
+        {/* v0.8.11 소유자 "채팅창 왜 바뀜?": 업무 대화 입력창과 같은 모양(왼쪽 [+], 오른쪽 [마이크][↑]) */}
+        <div className="inbox-tools">
+          <label className={`inbox-icon inbox-plus${!canAsk || busy ? ' is-off' : ''}`} aria-label="사진 붙이기" title="사진 붙이기(붙여넣기도 됩니다)">
+            <input type="file" accept="image/*" multiple hidden onChange={(e) => (addPhotos(e.target.files), (e.target.value = ''))} disabled={!canAsk || busy} />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </label>
+          <span className="inbox-tools-gap" />
+          <VoiceInput disabled={!canAsk || busy} onText={(t) => setInput((v) => (v.trim() ? `${v.trimEnd()} ${t}` : t))} />
+          <button type="submit" className="inbox-send" aria-label="보내기" title="보내기" disabled={!canAsk || busy || (!input.trim() && !photos.length)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 19V5M6 11l6-6 6 6" />
+            </svg>
+          </button>
+        </div>
       </form>
     </section>
   );

@@ -1,3 +1,4 @@
+import { areaNameInBrowser } from '../domain/areaName';
 import type { ChatTurn } from './store';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_KEY, SUPABASE_URL } from '../lib/supabase';
@@ -703,6 +704,9 @@ export function createSupabaseStore(client: SupabaseClient): OfficeStore {
       return { started: Boolean(res.started || res.ready) };
     },
     async areaName(spot) {
+      // v0.8.12: 서버에서는 지역 이름 서비스가 막혀(403) 브라우저가 먼저 찾고, 안 되면 서버로
+      const near = await areaNameInBrowser(spot.lat, spot.lon).catch(() => '');
+      if (near) return near;
       const data = await invoke('ask-gemini', { areaOf: spot });
       return typeof data.name === 'string' ? (data.name as string) : '';
     },

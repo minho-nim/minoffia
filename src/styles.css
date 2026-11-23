@@ -8309,8 +8309,6 @@ html.popup-open .project-sections > details[open] * {
 .chatbot-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .chatbot-tools button { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 12px; min-height: 26px; cursor: pointer; }
 .chatbot-tools button:hover { color: var(--ink); }
-.chatbot-form { position: sticky; bottom: 0; display: flex; gap: 8px; align-items: flex-end; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); background: var(--bg); }
-.chatbot-form textarea { flex: 1; min-width: 0; resize: vertical; min-height: 44px; max-height: 40vh; padding: 9px 11px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }
 .chatbot-threads { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .chatbot-threads li { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .chatbot-thread { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 8px; text-align: left; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; }
@@ -8414,9 +8412,6 @@ html.popup-open .project-sections > details[open] * {
     pointer-events: none;
     z-index: 0;
   }
-  .chatbot-form {
-    padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) * 0.5 + 6px));
-  }
 }
 .chatbot-yt { margin-top: 8px; }
 
@@ -8432,8 +8427,6 @@ html.popup-open .project-sections > details[open] * {
 .skill-suggest-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* 챗봇 사진·받아쓰기(v0.8.6) */
-.chatbot-form { flex-wrap: wrap; }
-.chatbot-form textarea { flex: 1 1 160px; }
 .chatbot-pending { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
 .chatbot-pending-item { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 4px 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chatbot-pending-item button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; }
@@ -8539,3 +8532,12 @@ html.popup-open .project-sections > details[open] * {
 .dash-metric { text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
 .dash-metric:disabled { cursor: default; }
 .dash-metric small.is-stale { color: var(--warn); }
+
+/* 채팅 입력창을 업무 대화와 같은 모양으로(v0.8.11): 둥근 상자 안 [+] … [마이크][↑], 화면 아래에 붙고 아래 틈은 바탕색 */
+.chatbot-form.inbox-form { position: sticky; bottom: max(8px, env(safe-area-inset-bottom)); z-index: 4; margin-top: 10px; }
+.chatbot-form.inbox-form::after { content: ''; position: absolute; left: -6px; right: -6px; top: 100%; height: calc(max(8px, env(safe-area-inset-bottom)) + 4px); background: var(--surface); pointer-events: none; }
+.chatbot-form textarea { max-height: 160px; }
+.inbox-plus.is-off { opacity: 0.45; pointer-events: none; }
+@media (max-width: 1039px) {
+  .chatbot-form.inbox-form { bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) * 0.5 + 6px)); }
+}
