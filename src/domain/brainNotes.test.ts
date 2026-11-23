@@ -80,3 +80,26 @@ describe('옵시디언 더 넣기(v0.8.8)', () => {
     expect(f[0].content).toContain('[[내 메모/주간 회고/2026-W47|여기에 쓰기]]');
   });
 });
+
+import { skillNotes } from './brainNotes';
+describe('스킬 노트(v0.8.10)', () => {
+  const md = (name: string, cat: string, related = '', body = '') => `---\nname: ${name}\ndescription: ${name} 설명\nmetadata:\n  minoffia-category: ${cat}\n${related ? `  minoffia-related: ${related}\n` : ''}---\n# ${name} 한글\n\n${body}`;
+  const files = [
+    { name: 'ui-check', skillMd: md('ui-check', '화면·디자인', 'impeccable', '## 하는 일\n먼저 `repo-map`을 본다.'), files: ['SKILL.md'], license: '' },
+    { name: 'impeccable', skillMd: md('impeccable', '화면·디자인'), files: ['SKILL.md', 'references/a.md'], license: 'Apache License' },
+    { name: 'repo-map', skillMd: md('repo-map', '기타'), files: ['SKILL.md'], license: '' },
+  ];
+  const out = skillNotes({ files, map: { p: { 'ui-check': 'same' } }, projects: P, tasks: [{ ...task, skills: ['ui-check'] } as Task] });
+  const ui = out.find((f) => f.path === '스킬/ui-check.md')!.content;
+  it('연결: 분류·함께 쓰는 스킬(앞머리+본문)·프로젝트·쓴 업무', () => {
+    expect(ui).toContain('- 분류: [[스킬/분류/화면·디자인|화면·디자인]]');
+    expect(ui).toContain('- 함께 쓰는 스킬: [[스킬/impeccable|impeccable]] · [[스킬/repo-map|repo-map]]');
+    expect(ui).toContain('- 들어 있는 프로젝트: [[미노피아]]');
+    expect(ui).toContain('- 쓴 업무: [[미노피아/업무/2026-11-20 로그인 버튼 색 바꾸기|로그인 버튼 색 바꾸기]]');
+  });
+  it('본문 전체(제목은 한 단계 아래로)·분류 허브·지도', () => {
+    expect(ui).toContain('### 하는 일');
+    expect(out.map((f) => f.path)).toEqual(expect.arrayContaining(['스킬/분류/화면·디자인.md', '스킬/분류/기타.md', '스킬/스킬 지도.md', '대시보드/스킬.base']));
+    expect(out.find((f) => f.path === '스킬/impeccable.md')!.content).toContain('`references/a.md`');
+  });
+});

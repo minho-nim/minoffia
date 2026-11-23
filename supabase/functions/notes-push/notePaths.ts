@@ -14,7 +14,8 @@ export function okPath(p: string): boolean {
   if (parts.some((s) => !SEG.test(s) || s.startsWith('.') || s.trim() !== s || s === '..')) return false;
   if (parts[0] === '내 메모') return false;
   // 허락한 자리: 채팅/·데일리/·자료/ 아래, 또는 <프로젝트>/업무/·<프로젝트>/채팅/·<프로젝트>/위키.md
-  if (['채팅', '데일리', '자료', '대시보드', '결정', '주간', '아이디어', '대화'].includes(parts[0]) && parts.length === 2) return true;
+  if (['채팅', '데일리', '자료', '대시보드', '결정', '주간', '아이디어', '대화', '스킬'].includes(parts[0]) && parts.length === 2) return true;
+  if (parts[0] === '스킬' && parts[1] === '분류' && parts.length === 3) return true;
   if (parts.length === 3 && (parts[1] === '업무' || parts[1] === '채팅' || parts[1] === '대화')) return true;
   if (parts.length === 2 && (parts[1] === '위키.md' || parts[1] === '업무 목록.md' || parts[1] === '지식.md')) return true;
   return false;

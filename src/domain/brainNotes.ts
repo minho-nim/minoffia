@@ -11,6 +11,7 @@ import { maskSecrets } from './maskSecrets';
 import { buildOk, testCount } from './approvalSummary';
 import { repeatIssues } from './repeatIssues';
 import type { ProjectRule } from './types';
+import { toSkillView, type SkillFile, type SkillMapData } from './skills';
 
 export interface NoteFile {
   path: string;
@@ -163,7 +164,7 @@ export function dailyNotes(items: { day: string; line: string }[]): NoteFile[] {
 }
 
 /** 전체 노트 만들기. chats = 새로 받은(바뀐) 대화 전체, chatIndex = 모든 대화 목록(데일리 링크용) */
-export function brainNotes(input: { projects: Project[]; tasks: Task[]; workflow: WorkflowData; chats: ChatThread[]; chatIndex: ChatThreadInfo[]; wikis: { projectId: string; body: string; updatedAt: string }[]; rules?: ProjectRule[]; inbox?: InboxLike[]; changelog?: string }): NoteFile[] {
+export function brainNotes(input: { projects: Project[]; tasks: Task[]; workflow: WorkflowData; chats: ChatThread[]; chatIndex: ChatThreadInfo[]; wikis: { projectId: string; body: string; updatedAt: string }[]; rules?: ProjectRule[]; inbox?: InboxLike[]; changelog?: string; skills?: { files: SkillFile[]; map: SkillMapData } }): NoteFile[] {
   const name = (id: string | null | undefined) => (id ? input.projects.find((p) => p.id === id)?.name ?? null : null);
   const files: NoteFile[] = [];
   const daily: { day: string; line: string }[] = [];
@@ -213,6 +214,7 @@ export function brainNotes(input: { projects: Project[]; tasks: Task[]; workflow
   const extras = chatExtras(input.chats, name);
   files.push(...extras);
   files.push(...weeklyNotes(input.tasks, input.workflow, name));
+  if (input.skills?.files.length) files.push(...skillNotes({ ...input.skills, projects: input.projects, tasks: input.tasks }));
   const dailies = dailyNotes(daily);
   const names = [...new Set(input.tasks.filter((t) => !t.sample).map((t) => name(t.projectId)).filter((x): x is string => Boolean(x)))];
   const hubs: NoteFile[] = [
@@ -396,6 +398,81 @@ export function weeklyNotes(tasks: Task[], w: WorkflowData, name: (id: string | 
   }));
 }
 
+
+// ── 스킬(v0.8.10 소유자 "옵시디언에서 스킬들이 왜 서로 연결이 안 돼? 내 지식으로 쓰려면 내용이 다 들어 있어야"):
+// 스킬 모음(minoffia-skills) 전부를 한 장씩, 본문 전체 + 연결([[분류]]·[[함께 쓰는 스킬]]·[[갈라져 나온 스킬]]·본문에 나온 스킬·[[들어 있는 프로젝트]]·[[쓴 업무]]).
+export function skillNotes(input: { files: SkillFile[]; map: SkillMapData; projects: Project[]; tasks: Task[] }): NoteFile[] {
+  const views = input.files.map(toSkillView);
+  const names = new Set(views.map((v) => v.name));
+  const sp = (n: string) => `스킬/${safeName(n)}`;
+  const catPath = (c: string) => `스킬/분류/${safeName(c)}`;
+  const out: NoteFile[] = [];
+  for (const v of views) {
+    // 본문에 이름이 나온 다른 스킬(백틱·괄호 속 이름)
+    const mentioned = [...names].filter((n) => n !== v.name && new RegExp(`(^|[^a-z0-9-])${n.replace(/[-]/g, '\\-')}([^a-z0-9-]|$)`).test(v.body.toLowerCase()));
+    const related = [...new Set([...v.related.filter((n) => names.has(n)), ...mentioned])].filter((n) => n !== v.parent);
+    const inProjects = input.projects.filter((p) => {
+      const st = input.map[p.id]?.[v.name];
+      return st === 'same' || st === 'old';
+    });
+    const usedIn = input.tasks.filter((t) => !t.sample && (t.skills ?? []).includes(v.name));
+    out.push({
+      path: `${sp(v.name)}.md`,
+      content: [
+        '---',
+        `이름: ${yaml(v.name)}`,
+        `분류: ${yaml(v.category)}`,
+        `라이선스: ${yaml(v.license)}`,
+        `출처: ${yaml(v.source)}`,
+        `기본: ${v.isDefault ? 'true' : 'false'}`,
+        `프로젝트 수: ${inProjects.length}`,
+        `쓴 업무 수: ${usedIn.length}`,
+        'tags: [minoffia/스킬]',
+        '---',
+        `# ${v.title}${v.title !== v.name ? ` (${v.name})` : ''}`,
+        '',
+        `> [!abstract] ${clean(v.description, 600)}`,
+        '',
+        '## 연결',
+        `- 분류: [[${catPath(v.category)}|${v.category}]]`,
+        ...(v.parent && names.has(v.parent) ? [`- 갈라져 나온 스킬: [[${sp(v.parent)}|${v.parent}]]`] : []),
+        ...(related.length ? [`- 함께 쓰는 스킬: ${related.map((n) => `[[${sp(n)}|${n}]]`).join(' · ')}`] : []),
+        ...(v.mcp.length ? [`- 쓰는 MCP: ${v.mcp.join(', ')}`] : []),
+        `- 들어 있는 프로젝트: ${inProjects.length ? inProjects.map((p) => `[[${safeName(p.name)}]]`).join(' · ') : '없음'}`,
+        ...(usedIn.length ? [`- 쓴 업무: ${usedIn.slice(0, 20).map((t) => `[[${taskPath(t, input.projects.find((p) => p.id === t.projectId)?.name ?? '').replace(/\.md$/, '')}|${safeName(t.title)}]]`).join(' · ')}`] : []),
+        `- 출처: ${v.source} · ${v.license}${v.risks.length ? ` · 살펴볼 곳: ${v.risks.join(', ')}` : ''}`,
+        '',
+        ...(v.files.length > 1 ? ['## 들어 있는 파일', ...v.files.slice(0, 40).map((f) => `- \`${f}\``), ''] : []),
+        '## 본문',
+        '',
+        // 본문 제목(#)은 한 단계 내려 노트 제목과 겹치지 않게
+        clean(v.body, 60000).replace(/^(#{1,5})\s/gm, '#$1 '),
+        '',
+      ].join('\n'),
+    });
+  }
+  // 분류 허브: 분류마다 스킬 목록, 그리고 전체 지도
+  const cats = [...new Set(views.map((v) => v.category))];
+  for (const c of cats) {
+    const mine = views.filter((v) => v.category === c);
+    out.push({
+      path: `${catPath(c)}.md`,
+      content: ['---', `분류: ${yaml(c)}`, 'tags: [minoffia/스킬분류]', '---', `# 스킬 · ${c}`, '', '[[스킬/스킬 지도|스킬 지도]]', '', ...mine.map((v) => `- [[${sp(v.name)}|${v.title}]] — ${clean(v.description, 120)}`), ''].join('\n'),
+    });
+  }
+  out.push({
+    path: '스킬/스킬 지도.md',
+    content: [
+      '---', 'tags: [minoffia/허브]', '---', '# 스킬 지도', '',
+      `> [!info] 스킬 모음(minoffia-skills) ${views.length}개. 분류를 누르면 그 분류 스킬, 스킬을 누르면 본문 전체와 연결(함께 쓰는 스킬·프로젝트·쓴 업무)이 보여요.`, '',
+      ...cats.map((c) => `- [[${catPath(c)}|${c}]] (${views.filter((v) => v.category === c).length})`), '',
+      '![[대시보드/스킬.base]]', '',
+    ].join('\n'),
+  });
+  out.push({ path: '대시보드/스킬.base', content: ['filters:', '  and:', '    - file.hasTag("minoffia/스킬")', 'views:', '  - type: table', '    name: 스킬', '    order:', '      - file.name', '      - note.분류', '      - note.프로젝트 수', '      - note.쓴 업무 수', '      - note.출처', ''].join('\n') });
+  return out;
+}
+
 // ── 허브(v0.8.7 소유자 "옵시디언 고도화"): 옵시디언 기본 기능 Bases(.base, 플러그인 설치 없음)로 업무·자료·채팅을 표로 본다 ──
 // shortcut: 한글 속성 이름을 note["…"]로 읽는다. 옵시디언에서 표가 비면 속성 이름 표기를 바꿔 확인.
 const q = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -466,6 +543,7 @@ export function homeHub(projects: string[], days: string[], weeks: string[] = []
     '## 프로젝트', '| 프로젝트 | 업무 | 지식 | 위키 |', '|---|---|---|---|',
     ...projects.map((p) => `| ${p} | [[${safeName(p)}/업무 목록\\|업무]] | [[${safeName(p)}/지식\\|지식]] | [[${safeName(p)}/위키\\|위키]] |`), '',
     '## 돌아보기', ...weeks.slice(0, 4).map((w) => `- [[주간/${w}|${w} 주간 회고]]`), ...days.slice(0, 7).map((d) => `- [[데일리/${d}|${d}]]`), '',
+    '## 스킬', '- [[스킬/스킬 지도|스킬 지도]]', '',
     '## 내 결정', ...(months.length ? months.map((m) => `- [[결정/${m}|${m}]]`) : ['아직 없어요.']), '',
     '## 아이디어', '![[대시보드/아이디어.base]]', '',
     '## 채팅', '![[대시보드/채팅.base]]', '',
