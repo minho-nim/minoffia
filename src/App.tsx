@@ -964,7 +964,10 @@ export function App() {
       const wikis = store.wiki
         ? (await Promise.all(snap.projects.filter((p) => !p.sample).map(async (p) => ({ p, w: await store.wiki!.get(p.id).catch(() => null) })))).filter((x) => x.w).map(({ p, w }) => ({ projectId: p.id, body: w!.body, updatedAt: w!.updatedAt }))
         : [];
-      const files = brainNotes({ projects: snap.projects, tasks: snap.tasks, workflow: snap.workflow, chats, chatIndex: index, wikis });
+      // v0.8.8: 업무 대화·변경 기록(소유자 결정)도. 변경 기록은 이때만 따로 받아 온다(앱 첫 화면 크기에 안 들어감)
+      const inbox = await store.loadInbox().catch(() => null);
+      const changelog = await import('../CHANGELOG.md?raw').then((m) => m.default as string).catch(() => '');
+      const files = brainNotes({ projects: snap.projects, tasks: snap.tasks, workflow: snap.workflow, chats, chatIndex: index, wikis, rules: snap.projectRules ?? [], inbox: (inbox?.messages ?? []) as never, changelog });
       const changed = files.filter((f) => sentHash[f.path] !== noteHash(f.content));
       let sent = 0;
       for (let i = 0; i < changed.length; i += 150) {

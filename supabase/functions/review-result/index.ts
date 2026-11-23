@@ -4,6 +4,7 @@
 // 같은 결과 버전은 한 줄만(result_reviews unique).
 // 판정만 기록하고, 다시 개발 보내기는 앱이 기존 수정 요청 길(PM 재계획 → 실행 승인)로 한다. 올리기 승인(B)은 늘 소유자가 한다.
 // 키는 secrets(GEMINI_API_KEY = Studio A, GEMINI_API_KEY2 = Studio B)에만. 휴가인 쪽 키는 쓰지 않는다. 글은 저장하지 않고 점수·이유만 남긴다.
+import { guardRedo } from './autoGuard.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { requestRedoOnServer } from './redo.ts';
 import { buildReviewPrompt, panelEntry, panelJudge, panelOutcome, parseScore, pendingEntry, PASS_SCORE, PEER_NOTE, PERSPECTIVE_NOTE, ranChecks, redoFeedback, requireRunEvidence, REVIEW_SYSTEM, ruleCheck, type Gate, type PanelEntry, type Score } from './rubric.ts';
@@ -74,7 +75,9 @@ async function settle(admin: Admin, taskId: string, revision: number, gates: Gat
   // v0.5.93: 지난 '다시 개발' 판정의 지적(같은 문제가 또 나오면 자동으로 돌리지 않음)과 시험·화면 확인 기록 유무
   const { data: lastRedo } = await admin.from('result_reviews').select('reasons').eq('task_id', taskId).eq('verdict', 'redo').lt('result_revision', revision).order('result_revision', { ascending: false }).limit(1).maybeSingle();
   const previousReasons = Array.isArray(lastRedo?.reasons) ? (lastRedo.reasons as unknown[]).filter((x): x is string => typeof x === 'string') : [];
-  const out = panelOutcome(gates, panel, redos ?? 0, { executed: ranChecks(testLog), previousReasons });
+  // v0.8.8: DB·권한·배포 설정·비밀값 변경이면 자동 다시 개발 대신 사장님 확인
+  const { data: pkg } = await admin.from('result_packages').select('diff').eq('task_id', taskId).eq('revision', revision).maybeSingle();
+  const out = guardRedo(panelOutcome(gates, panel, redos ?? 0, { executed: ranChecks(testLog), previousReasons }), String(pkg?.diff ?? ''));
   const feedback = out.verdict === 'pass' || out.waiting ? '' : redoFeedback(gates, out.score, out.reasons);
   return { ...out, feedback, redos: redos ?? 0 };
 }
