@@ -159,7 +159,90 @@ export function brainNotes(input: { projects: Project[]; tasks: Task[]; workflow
     const p = name(w.projectId);
     if (p && w.body.trim()) files.push({ path: `${safeName(p)}/위키.md`, content: wikiNote(p, w.body, w.updatedAt) });
   }
-  return [...files, ...dailyNotes(daily)];
+  const dailies = dailyNotes(daily);
+  const names = [...new Set(input.tasks.filter((t) => !t.sample).map((t) => name(t.projectId)).filter((x): x is string => Boolean(x)))];
+  const hubs: NoteFile[] = [
+    { path: '대시보드/업무.base', content: TASK_BASE },
+    { path: '대시보드/자료.base', content: REF_BASE },
+    { path: '대시보드/채팅.base', content: CHAT_BASE },
+    { path: '대시보드/한눈에.md', content: homeHub(names, dailies.map((d) => d.path.slice(4, -3)).sort().reverse()) },
+    ...names.map((p) => ({ path: `${safeName(p)}/업무 목록.md`, content: projectHub(p) })),
+  ];
+  return [...files, ...dailies, ...hubs];
+}
+
+// ── 허브(v0.8.7 소유자 "옵시디언 고도화"): 옵시디언 기본 기능 Bases(.base, 플러그인 설치 없음)로 업무·자료·채팅을 표로 본다 ──
+// shortcut: 한글 속성 이름을 note["…"]로 읽는다. 옵시디언에서 표가 비면 속성 이름 표기를 바꿔 확인.
+const q = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+/** 업무 표: 열린 업무 · 이번 달 끝난 업무 · 전체 */
+export const TASK_BASE = [
+  'filters:',
+  '  and:',
+  '    - file.hasTag("minoffia/업무")',
+  'properties:',
+  '  file.name:',
+  '    displayName: 업무',
+  'views:',
+  '  - type: table',
+  '    name: 열린 업무',
+  '    filters:',
+  "      and:",
+  `        - 'note["상태"] != "완료"'`,
+  '    order:',
+  '      - file.name',
+  '      - note.프로젝트',
+  '      - note.상태',
+  '      - note.만든날',
+  '  - type: table',
+  '    name: 끝난 업무',
+  '    filters:',
+  "      and:",
+  `        - 'note["상태"] == "완료"'`,
+  '    order:',
+  '      - file.name',
+  '      - note.프로젝트',
+  '      - note.끝난날',
+  '      - note.PR',
+  '  - type: table',
+  '    name: 전체',
+  '    order:',
+  '      - file.name',
+  '      - note.프로젝트',
+  '      - note.상태',
+  '      - note.만든날',
+  '',
+].join('\n');
+
+/** 자료 표·채팅 표 */
+export const REF_BASE = ['filters:', '  and:', '    - file.hasTag("minoffia/자료")', 'views:', '  - type: table', '    name: 자료', '    order:', '      - file.name', '      - note.주소', '      - note.처음 쓴 날', ''].join('\n');
+export const CHAT_BASE = ['filters:', '  and:', '    - file.hasTag("minoffia/채팅")', 'views:', '  - type: table', '    name: 채팅', '    order:', '      - file.name', '      - note.프로젝트', '      - note.마지막', ''].join('\n');
+
+/** 프로젝트마다 업무 목록(그 폴더 업무만 표로) */
+export function projectHub(project: string): string {
+  const dir = `${safeName(project)}/업무`;
+  return [
+    '---', `프로젝트: ${yaml(`[[${safeName(project)}]]`)}`, 'tags: [minoffia/허브]', '---',
+    `# ${project} 업무 목록`, '', `[[${safeName(project)}]] · [[${safeName(project)}/위키|위키]] · [[대시보드/한눈에|한눈에]]`, '',
+    '```base',
+    'filters:', '  and:', `    - file.inFolder("${q(dir)}")`,
+    'views:', '  - type: table', '    name: 업무', '    order:', '      - file.name', '      - note.상태', '      - note.만든날', '      - note.끝난날',
+    '```', '',
+  ].join('\n');
+}
+
+/** 한눈에(허브): 표 3개 + 프로젝트 목록 + 최근 데일리 */
+export function homeHub(projects: string[], days: string[]): string {
+  return [
+    '---', 'tags: [minoffia/허브]', '---',
+    '# 미노피아 한눈에', '',
+    '> [!tip] 미노피아가 하루 한 번 채워요. 직접 쓰는 메모는 **내 메모** 폴더에(자동으로 건드리지 않아요).', '',
+    '## 업무', '![[대시보드/업무.base]]', '',
+    '## 프로젝트', ...projects.map((p) => `- [[${safeName(p)}/업무 목록|${p}]]`), '',
+    '## 최근 날', ...days.slice(0, 7).map((d) => `- [[데일리/${d}|${d}]]`), '',
+    '## 채팅', '![[대시보드/채팅.base]]', '',
+    '## 자료', '![[대시보드/자료.base]]', '',
+  ].join('\n');
 }
 
 /** 바뀐 노트만 보내려고 쓰는 짧은 지문 */

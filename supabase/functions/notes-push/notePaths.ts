@@ -6,14 +6,17 @@ export const MAX_TOTAL = 3_000_000;
 const SEG = /^[^\\/:*?"<>|#^[\]\u0000-\u001f]{1,80}$/;
 
 export function okPath(p: string): boolean {
-  if (typeof p !== 'string' || !p.endsWith('.md') || p.length > 300) return false;
+  if (typeof p !== 'string' || p.length > 300) return false;
+  // 옵시디언 Bases 표(.base)는 대시보드/ 아래에만(v0.8.7)
+  if (p.endsWith('.base')) return /^대시보드\/[^/]{1,60}\.base$/.test(p) && !p.includes('..');
+  if (!p.endsWith('.md')) return false;
   const parts = p.split('/');
   if (parts.some((s) => !SEG.test(s) || s.startsWith('.') || s.trim() !== s || s === '..')) return false;
   if (parts[0] === '내 메모') return false;
   // 허락한 자리: 채팅/·데일리/·자료/ 아래, 또는 <프로젝트>/업무/·<프로젝트>/채팅/·<프로젝트>/위키.md
-  if ((parts[0] === '채팅' || parts[0] === '데일리' || parts[0] === '자료') && parts.length === 2) return true;
+  if ((parts[0] === '채팅' || parts[0] === '데일리' || parts[0] === '자료' || parts[0] === '대시보드') && parts.length === 2) return true;
   if (parts.length === 3 && (parts[1] === '업무' || parts[1] === '채팅')) return true;
-  if (parts.length === 2 && parts[1] === '위키.md') return true;
+  if (parts.length === 2 && (parts[1] === '위키.md' || parts[1] === '업무 목록.md')) return true;
   return false;
 }
 

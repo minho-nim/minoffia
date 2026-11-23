@@ -33,10 +33,15 @@ describe('옵시디언 세컨드 브레인(v0.8.5)', () => {
   it('전체: 업무·채팅·위키·데일리, 내 메모는 없음', () => {
     const chat = { id: 'abcdef123', title: '파이썬 질문', updatedAt: '2026-11-21T03:00:00Z', projectId: null, messages: [{ role: 'user', text: '파이썬?', at: '2026-11-21T03:00:00Z' }, { role: 'model', text: '언어예요', at: '2026-11-21T03:00:05Z', by: 'B' }] } as ChatThread;
     const files = brainNotes({ projects: P, tasks: [task], workflow: wf, chats: [chat], chatIndex: [{ id: chat.id, title: chat.title, updatedAt: chat.updatedAt, projectId: null }], wikis: [{ projectId: 'p', body: '# 위키', updatedAt: '2026-11-22T00:00:00Z' }] });
-    expect(files.map((f) => f.path)).toEqual(['미노피아/업무/2026-11-20 로그인 버튼 색 바꾸기.md', '채팅/파이썬 질문 abcdef.md', '미노피아/위키.md', '데일리/2026-11-20.md', '데일리/2026-11-21.md']);
+    expect(files.filter((f) => !f.path.startsWith('대시보드/') && !f.path.endsWith('업무 목록.md')).map((f) => f.path)).toEqual(['미노피아/업무/2026-11-20 로그인 버튼 색 바꾸기.md', '채팅/파이썬 질문 abcdef.md', '미노피아/위키.md', '데일리/2026-11-20.md', '데일리/2026-11-21.md']);
     expect(files.find((f) => f.path === '데일리/2026-11-21.md')!.content).toContain('업무 배포: [[미노피아/업무/2026-11-20 로그인 버튼 색 바꾸기|로그인 버튼 색 바꾸기]]');
     expect(files.some((f) => f.path.startsWith('내 메모'))).toBe(false);
     expect(chatNote(chat, null)).toContain('**Gemini B**');
+    // 허브(v0.8.7): Bases 표 3개 + 한눈에 + 프로젝트 업무 목록
+    expect(files.filter((f) => f.path.startsWith('대시보드/')).map((f) => f.path)).toEqual(['대시보드/업무.base', '대시보드/자료.base', '대시보드/채팅.base', '대시보드/한눈에.md']);
+    const hub = files.find((f) => f.path === '미노피아/업무 목록.md')!.content;
+    expect(hub).toContain('file.inFolder("미노피아/업무")');
+    expect(files.find((f) => f.path === '대시보드/한눈에.md')!.content).toContain('[[데일리/2026-11-21|2026-11-21]]');
   });
   it('지문', () => {
     expect(noteHash('a')).toBe(noteHash('a'));

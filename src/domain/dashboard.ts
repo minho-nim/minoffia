@@ -77,3 +77,84 @@ export function ago(iso: string | null | undefined, now: number = Date.now()): s
   if (m < 14 * 24 * 60) return `${Math.round(m / 1440)}일 전`;
   return iso.slice(5, 10).replace('-', '/');
 }
+
+/** 이번 주(최근 7일)와 지난주(그 앞 7일) 수 */
+export function weekCompare(dates: string[], now: number = Date.now()): { now: number; prev: number } {
+  let a = 0;
+  let b = 0;
+  for (const d of dates) {
+    const age = now - Date.parse(d);
+    if (age < 0) continue;
+    if (age <= WEEK) a++;
+    else if (age <= 2 * WEEK) b++;
+  }
+  return { now: a, prev: b };
+}
+
+/** '지난주보다 +2' · '지난주와 같아요' */
+export function deltaText(c: { now: number; prev: number }): string {
+  const d = c.now - c.prev;
+  return d === 0 ? '지난주와 같아요' : `지난주보다 ${d > 0 ? '+' : ''}${d}`;
+}
+
+export interface CalDay {
+  /** YYYY-MM-DD(한국 시각) */
+  day: string;
+  /** 달력의 이번 달 날인지(앞뒤 빈칸 false) */
+  inMonth: boolean;
+  created: number;
+  deployed: number;
+}
+
+const kstDay = (iso: string) => new Date(Date.parse(iso) + 9 * 3600_000).toISOString().slice(0, 10);
+
+/** 이번 달 활동 달력(일~토 줄, 앞뒤 빈칸 포함): 날마다 접수·배포 수 */
+export function monthCalendar(tasks: { createdAt: string; sample?: boolean }[], deploys: { ok: boolean; createdAt: string }[], now: number = Date.now()): CalDay[][] {
+  const today = new Date(now + 9 * 3600_000);
+  const y = today.getUTCFullYear();
+  const m = today.getUTCMonth();
+  const first = new Date(Date.UTC(y, m, 1));
+  const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const count = (list: string[]) => {
+    const c = new Map<string, number>();
+    for (const iso of list) c.set(kstDay(iso), (c.get(kstDay(iso)) ?? 0) + 1);
+    return c;
+  };
+  const created = count(tasks.filter((t) => !t.sample).map((t) => t.createdAt));
+  const deployed = count(deploys.filter((d) => d.ok).map((d) => d.createdAt));
+  const cells: CalDay[] = [];
+  for (let i = 0; i < first.getUTCDay(); i++) cells.push({ day: '', inMonth: false, created: 0, deployed: 0 });
+  for (let d = 1; d <= days; d++) {
+    const day = new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
+    cells.push({ day, inMonth: true, created: created.get(day) ?? 0, deployed: deployed.get(day) ?? 0 });
+  }
+  while (cells.length % 7) cells.push({ day: '', inMonth: false, created: 0, deployed: 0 });
+  const weeks: CalDay[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+export interface Routine {
+  name: string;
+  at: string | null;
+  ok: boolean | null;
+  /** 오래 안 돌았거나 실패면 표시 */
+  note: string;
+}
+
+/** 자동 작업: 미노피아가 스스로 돌리는 Actions(저장소 minoffia·notes·skills)의 이름별 마지막 실행 + 옵시디언 노트 */
+export function routines(actions: { repo: string; workflow: string; ok: boolean; createdAt: string }[], brainAt: string | null, now: number = Date.now()): Routine[] {
+  const own = actions.filter((a) => /^minho-nim\/(minoffia|minoffia-notes|minoffia-skills|minlab-ai-office)$/i.test(a.repo));
+  const last = new Map<string, { at: string; ok: boolean }>();
+  for (const a of own) {
+    const cur = last.get(a.workflow);
+    if (!cur || a.createdAt > cur.at) last.set(a.workflow, { at: a.createdAt, ok: a.ok });
+  }
+  const out: Routine[] = [...last.entries()].map(([name, v]) => ({ name, at: v.at, ok: v.ok, note: v.ok ? '' : '실패' }));
+  const brainAge = brainAt ? now - Date.parse(brainAt) : Infinity;
+  out.push({ name: '옵시디언 노트 보내기', at: brainAt, ok: brainAt ? true : null, note: brainAge > 2 * 86400_000 ? '이틀 넘게 안 보냄' : '' });
+  return out.sort((a, b) => Number(a.ok !== false) - Number(b.ok !== false) || (b.at ?? '').localeCompare(a.at ?? ''));
+}
+
+/** 오래된 자료면 true(기본 10분) */
+export const stale = (iso: string | null | undefined, now: number = Date.now(), ms = 10 * 60_000) => !iso || now - Date.parse(iso) > ms;
