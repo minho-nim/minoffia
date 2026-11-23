@@ -10,6 +10,8 @@ import { FormPopup } from './FormPopup';
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const titleOf = (q: string) => (q.replace(/\s+/g, ' ').trim().slice(0, 40) || '새 대화');
 const LAST_KEY = 'minoffia:chatbot:last-thread';
+/** 'gemini-3.5-flash' → 'Flash', 'gemini-3.1-flash-lite' → 'Lite 3.1' */
+export const modelLabel = (m?: string) => (!m ? '' : /flash-lite/.test(m) ? (/3\.5/.test(m) ? 'Lite' : `Lite ${/(\d+\.\d+)/.exec(m)?.[1] ?? ''}`.trim()) : /flash/.test(m) ? 'Flash' : /pro/.test(m) ? 'Pro' : m);
 
 function Inl({ v }: { v: Inline[] }) {
   return (
@@ -148,7 +150,7 @@ export function ChatBot({ store, ask, canAsk }: { store: OfficeStore; ask: Ask; 
       const history = base.slice(-60).map((m) => ({ role: m.role, text: m.text }));
       const got = await ask(q.trim(), history, [], (soFar) => setLive(soFar), { chat: true, research: needsResearch(q), ...(slot ? { slot } : {}) });
       const helpers = got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
-      const answer: ChatTurn = { role: 'model', text: got.answer, at: new Date().toISOString(), by: got.keySlot === 2 ? 'B' : 'A', ...(helpers ? { helpers } : {}) };
+      const answer: ChatTurn = { role: 'model', text: got.answer, at: new Date().toISOString(), by: got.keySlot === 2 ? 'B' : 'A', ...(got.model ? { model: got.model } : {}), ...(helpers ? { helpers } : {}) };
       const next = { ...thread, title, messages: [...messages, answer], updatedAt: new Date().toISOString() };
       setThread(next);
       void save(next);
@@ -225,6 +227,7 @@ export function ChatBot({ store, ask, canAsk }: { store: OfficeStore; ask: Ask; 
                 <>
                   <div className="chatbot-who">
                     <b>Gemini {m.by ?? 'A'}</b>
+                    {m.model && <span className="chatbot-model" title={m.model}>{modelLabel(m.model)}</span>}
                     {m.helpers?.map((h) => (
                       <span key={h} className="inbox-helper">
                         {h}

@@ -8336,3 +8336,4 @@ html.popup-open .project-sections > details[open] * {
 .md-code-head button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 12px; }
 .md-code pre { margin: 0; padding: 8px 10px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
 .md-code pre code { padding: 0; background: none; }
+.chatbot-model { margin-left: 4px; font-size: 11px; color: var(--muted); }
