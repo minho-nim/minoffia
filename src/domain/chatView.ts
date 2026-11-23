@@ -45,8 +45,10 @@ export function speakerOf(m: ChatMsgLike): Speaker {
     const wx = /^(\S+(?: \S+)?) 자료 · 규칙으로 답함/.exec(via);
     if (wx) return { ...MINA('날씨'), helpers: [wx[1]] };
     const role = via.includes('되물음') ? '되묻기' : '답변';
-    if (via.includes('Studio B')) return { id: 'studioB', name: 'Gemini B', role };
-    return { id: 'studioA', name: 'Gemini A', role };
+    // 유튜브 영상을 직접 보고 답함(v0.8.3)
+    const extra = via.includes('YouTube 영상') ? { helpers: ['YouTube 영상'] } : {};
+    if (via.includes('Studio B')) return { id: 'studioB', name: 'Gemini B', role, ...extra };
+    return { id: 'studioA', name: 'Gemini A', role, ...extra };
   }
   if (m.id.startsWith('act-')) return MINA('기록');
   if (m.id.startsWith('stale-')) return MINA('알림');

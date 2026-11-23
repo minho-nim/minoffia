@@ -18,7 +18,10 @@ import type { Project, Snapshot, Task } from '../domain/types';
 import { SkillPick } from './SkillPick';
 import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
-import { openInGemini, youtubeUrl, YT_NOTE } from '../domain/youtube';
+import { youtubeUrl } from '../domain/youtube';
+import { openInGemini } from '../domain/geminiApp';
+import { parseCommand, type Parsed } from '../domain/quickCommands';
+import { CommandMenu } from './CommandMenu';
 import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction, actionNotices, mergeNotices, staleNotices } from '../domain/stageNotice';
@@ -138,6 +141,8 @@ interface Props {
   onLinkProject?: (projectId: string) => void;
   /** 지금 고른 프로젝트(위 프로젝트 칩). 요청에 프로젝트 이름이 없으면 이 프로젝트로 묻는다(v0.4.19) */
   currentProject?: Project | null;
+  /** 빠른 명령(v0.8.5): 화면 이동·대화 열기 */
+  onCommand?: (p: Parsed) => void;
   /** 다른 탭에서 넘겨준 입력 초안(업무 카드 "대화로 묻기", 프로젝트 "요청하기"). n이 바뀔 때마다 채운다 */
   /** 다른 탭에서 넘어온 입력 초안. taskId가 있으면 그 업무에 대한 질문(보낼 때 업무 상태를 참고로 붙임, v0.5.1) */
   /** send = 채우고 바로 보낸다(스킬 입력 창, v0.6.57) */
@@ -150,7 +155,7 @@ interface Props {
     images: { mime: string; data: string }[],
     onDelta?: (soFar: string) => void,
     opts?: AskOptions,
-  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number; weather?: WeatherData }>;
+  ) => Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number; video?: boolean; weather?: WeatherData }>;
   /** Studio A·B(Gemini)가 모두 휴가면 Gemini를 부르지 않는다(v0.4.44) */
   geminiAway?: boolean;
   /** Claude 웹 조사(v0.7.11): 웹 검색(Tavily·Firecrawl)이 안 됐을 때 'Claude에게 찾아보기'. Supabase 모드·Claude 근무일 때만 */
@@ -301,7 +306,7 @@ function readSeen(): Record<string, string> | null {
 
 const ACTION_LABEL: Record<NoticeAction, string> = { open: '업무 보기', A: '기획 승인', B: '결과 승인' };
 
-export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onResultImages, onDrawDesign, active, onAutoDraft, onClarify, currentProject, draft, echo }: Props) {
+export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, onAskClaude, onWarmGemini, onCreateTask, onCreateProject, onAskGemini, onCopy, onCreateRepo, sync, onArchive, onCancelTask, skillPick, onShowTask, onAddFollowup, onApprove, onReviseSpec, onRedo, onDeployApprove, onPickDraft, onResultImages, onDrawDesign, active, onAutoDraft, onClarify, currentProject, draft, echo, onCommand }: Props) {
   const [log, setLog] = useState<Msg[]>(readLog);
   // v0.4.66: 기본 대화창('')과 프로젝트별 대화창. 기본창에서 물어본 것도 프로젝트로 확인되면 그 프로젝트 창에 같이 보인다.
   const thread = currentProject?.id ?? '';
@@ -1171,6 +1176,15 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
       return;
     }
     setInput('');
+    // 빠른 명령(v0.8.5): '/새채팅'·'/업무 미노피아'… /검색은 웹 조사로 묻기
+    const cmd = text.startsWith('/') && !replyTo ? parseCommand(text, snap.projects) : null;
+    if (cmd) {
+      if (cmd.cmd.id === 'search') {
+        if (cmd.arg) submit(`@Tavily ${cmd.arg}`);
+        else setInput('/검색 ');
+      } else onCommand?.(cmd);
+      return;
+    }
     if (replyTo) {
       // 답장은 글만 그 업무로(첨부는 그대로 남겨 둔다)
       const to = replyTo;
@@ -1306,11 +1320,6 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
   const routeText = (text: string, sent: File[], priorChat: PriorChat | null) => {
     const prior = priorChat ?? undefined;
     const t = triage(text, snap);
-    // 유튜브 링크(v0.8.4): API로 영상을 보내지 않고 Gemini 앱에서 요약(개발 요청이면 평소처럼)
-    if (youtubeUrl(text) && t.kind !== 'request' && t.kind !== 'status') {
-      setLog((l) => [...l, { id: mid(), from: 'office' as const, text: YT_NOTE, home: thread, yt: text }].slice(-KEEP));
-      return;
-    }
     if (t.kind === 'status') {
       say('office', t.answer);
       if (sent.length) say('office', '첨부는 업무 요청이나 질문에만 써요. 다음 메시지에 다시 붙여 주세요.');
@@ -1498,7 +1507,8 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
 
   const askGemini = (text: string, projectName?: string, route?: { prior?: PriorChat }, extra: { research?: boolean } = {}) => {
     // 조사(v0.4.61, v0.7.52 Tavily·Firecrawl): 웹에서 찾아야 하는 질문은 Tavily가 찾고 Firecrawl이 본문을 읽고 Gemini가 정리해 출처를 붙인다(규칙으로 고름, Exa 휴가·실패면 검색 없이 다시).
-    const research = extra.research ?? (needsResearch(text) || asksSearch(text));
+    // 유튜브 링크(v0.8.3·v0.8.5)면 웹 조사 대신 Gemini가 영상을 직접 본다
+    const research = !youtubeUrl(text) && (extra.research ?? (needsResearch(text) || asksSearch(text)));
     setPending(null);
     void run(async () => {
       // 이전 Gemini 대화만 문맥으로 보낸다(최근 6개).
@@ -1593,7 +1603,8 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           const raw = got.answer;
           const sources = got.sources ?? [];
           // 날씨(v0.7.68)는 Open-Meteo 숫자로 규칙 답(Gemini 안 씀)
-          const via = got.weather ? `${got.engine ?? '날씨'} 자료 · 규칙으로 답함` : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
+          const via0 = got.weather ? `${got.engine ?? '날씨'} 자료 · 규칙으로 답함` : VIA_OF_SLOT[got.keySlot] ? (sources.length ? VIA_OF_SLOT[got.keySlot].replace('Gemini ·', `${got.engine ?? '웹'} 검색${got.pages ? ` + 본문 ${got.pages}개` : ' + 요약만'} + Gemini ·`) : VIA_OF_SLOT[got.keySlot]) : undefined;
+          const via = via0 && got.video ? `${via0} · YouTube 영상` : via0;
           // 현재 위치 기준 날씨면 설정의 '현재 위치' 이름도 맞춘다(v0.7.74)
           if (got.weather && opts.where && 'lat' in opts.where) saveHereSeen(got.weather.place);
           if (via || sources.length || got.weather) setLog((l) => l.map((m) => (m.id === id ? { ...m, ...(via ? { via } : {}), ...(sources.length ? { sources } : {}), ...(got.weather ? { weather: got.weather } : {}) } : m)));
@@ -1638,6 +1649,11 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
           throw e;
         }
       } catch (e) {
+        // 유튜브 요약이 안 되면(비공개·너무 긴 영상·한도) Gemini 앱에서 이어 하기(v0.8.5)
+        if (youtubeUrl(text)) {
+          setLog((l) => [...l, { id: mid(), from: 'office' as const, text: `여기서는 영상을 요약하지 못했어요(${(e as Error).message}). Gemini 앱에서 이어 할 수 있어요(부탁 글이 복사돼요).`, home: thread, yt: text }].slice(-KEEP));
+          return;
+        }
         // 판단을 맡겼는데 실패하면(한도 등) 규칙으로 나눈다.
         if (route) {
           say('office', `AI 판단이 안 돼서 규칙으로 나눌게요(${(e as Error).message})`);
@@ -1859,7 +1875,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
                   {m.yt && (
                     <div className="chatbot-yt">
                       <button type="button" className="btn btn-small" onClick={() => openInGemini(m.yt!)}>
-                        Gemini 앱에서 요약
+                        Gemini 앱에서 이어 하기
                       </button>
                     </div>
                   )}
@@ -2307,6 +2323,17 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
             ))}
           </ul>
         )}
+        <CommandMenu
+          input={input}
+          projects={snap.projects}
+          onPick={(c) => {
+            if (c.run) submit(c.text);
+            else {
+              setInput(c.text);
+              document.getElementById('inbox-input')?.focus();
+            }
+          }}
+        />
         <textarea
           onPaste={(e) => {
             const files = [...e.clipboardData.files];

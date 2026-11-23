@@ -140,6 +140,8 @@ export interface OfficeStore {
     save(thread: ChatThread): Promise<void>;
     remove(id: string): Promise<void>;
   };
+  /** 옵시디언 세컨드 브레인(v0.8.5): 노트를 노트 보관함에 커밋 한 번으로 올린다. 로컬 데모는 없음 */
+  pushNotes?(files: { path: string; content: string }[]): Promise<{ changed: number }>;
   /** 계정 설정 '날씨 지역'(v0.7.71): null이면 현재 위치. 로컬 데모는 없음(이 기기 사본만) */
   weatherPlace?: { get(): Promise<string | null>; set(place: string | null): Promise<void> };
   /** 좌표 → 동네 이름(설정 '날씨 지역' ↻, v0.7.73). 로컬 데모는 없음 */
@@ -220,7 +222,7 @@ export interface OfficeStore {
     onDelta?: (soFar: string) => void,
     /** AI 먼저 판단(프로젝트 이름들)·고른 프로젝트 정보(v0.4.29) */
     opts?: AskOptions,
-  ): Promise<{ answer: string; keySlot: number; model?: string; sources?: Source[]; engine?: string; pages?: number; weather?: import('../domain/weather').WeatherData }>;
+  ): Promise<{ answer: string; keySlot: number; model?: string; video?: boolean; sources?: Source[]; engine?: string; pages?: number; weather?: import('../domain/weather').WeatherData }>;
 }
 
 /** 챗봇 모드 대화 한 마디(v0.7.99) */
@@ -233,7 +235,7 @@ export interface ChatTurn {
   /** 실제로 답한 모델(v0.8.0: 챗봇은 Flash 먼저, 안 되면 Lite) */
   model?: string;
   helpers?: string[];
-  /** 유튜브 링크(v0.8.4): Gemini 앱에서 요약하도록 버튼을 붙인 미니엉 답이면 그 원문 */
+  /** 유튜브 요약이 안 됐을 때(v0.8.4): Gemini 앱에서 이어 하기 버튼(원문) */
   yt?: string;
   /** 업무로 접수 제안(v0.8.1): 대화 중 개발 요청으로 보이면. 접수하면 그 업무 대화로 넘긴다 */
   suggest?: { candidates: string[]; state: 'open' | 'sent' | 'dismissed'; projectId?: string };
