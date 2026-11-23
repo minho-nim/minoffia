@@ -116,3 +116,11 @@ describe('날씨 질문(v0.7.68)', () => {
     expect(await areaName(1, 2, async () => json({}, 500))).toBe('');
   });
 });
+
+import { cleanWhere as cw } from './weather';
+describe('브라우저가 찾은 동네 이름(v0.8.13)', () => {
+  it('이름을 받아 두고(안전한 글자만), 좌표는 줄인다', () => {
+    expect(cw({ lat: 37.38123, lon: 127.11987, name: '성남시 분당구 수내동' })).toEqual({ lat: 37.38, lon: 127.12, name: '성남시 분당구 수내동' });
+    expect(cw({ lat: 37.38, lon: 127.12, name: '<script>' })).toEqual({ lat: 37.38, lon: 127.12 });
+  });
+});

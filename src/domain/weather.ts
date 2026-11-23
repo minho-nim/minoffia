@@ -1,3 +1,4 @@
+import { areaNameInBrowser } from './areaName';
 // 날씨 답(v0.7.70): 서버(ask-gemini/weather.ts)가 Open-Meteo 숫자로 답하고 표 숫자도 보낸다. 앱은 표로 그리고, 기준 곳을 보낸다.
 // 기준 곳: 질문에 적힌 곳 > 설정의 '날씨 지역'(지역 이름 또는 현재 위치) > 서울.
 
@@ -79,9 +80,13 @@ export function currentSpot(timeout = 5000, fresh = false): Promise<{ lat: numbe
 }
 
 /** 서버로 보낼 기준 곳 */
-export async function weatherWhereBody(w: WeatherWhere = readWeatherWhere()): Promise<{ place: string } | { lat: number; lon: number } | undefined> {
+export async function weatherWhereBody(w: WeatherWhere = readWeatherWhere()): Promise<{ place: string } | { lat: number; lon: number; name?: string } | undefined> {
   if (w.mode === 'place') return { place: w.place };
-  return (await currentSpot()) ?? undefined;
+  const spot = await currentSpot();
+  if (!spot) return undefined;
+  // v0.8.13: 동네 이름은 브라우저가 찾아 같이 보낸다(서버에서는 이름 서비스가 403으로 막힘)
+  const name = await areaNameInBrowser(spot.lat, spot.lon).catch(() => '');
+  return name ? { ...spot, name } : spot;
 }
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
