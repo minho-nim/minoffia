@@ -2649,6 +2649,11 @@ export function App() {
                 onSaved={savedThread}
                 onTitle={setChatTitle}
                 onLoaded={(info) => setBotCurrent({ id: info.id, projectId: info.projectId })}
+                onNewProject={(text) => {
+                  openWork(null);
+                  setDraft((d) => ({ text, n: (d?.n ?? 0) + 1, send: true }));
+                }}
+                onWarm={() => store.warmGemini?.()}
                 onCommand={runCommand}
                 onToTask={(text, pid) => {
                   openWork(pid);
