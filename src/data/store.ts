@@ -241,6 +241,8 @@ export interface ChatTurn {
   sources?: { title: string; uri: string }[];
   /** 함께 보낸 사진의 작은 미리보기(v0.8.6, 원본은 저장하지 않음) */
   thumbs?: string[];
+  /** 함께 보낸 문서 이름(v0.8.15, 원본·글은 저장하지 않음) */
+  docs?: string[];
   /** 유튜브 요약이 안 됐을 때(v0.8.4): Gemini 앱에서 이어 하기 버튼(원문) */
   yt?: string;
   /** 업무로 접수 제안(v0.8.1): 대화 중 개발 요청으로 보이면. 접수하면 그 업무 대화로 넘긴다 */

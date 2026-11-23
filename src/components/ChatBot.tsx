@@ -20,6 +20,24 @@ import { saveHereSeen, WEATHER_RE, weatherWhereBody } from '../domain/weather';
 import { WeatherCard } from './WeatherCard';
 import { openInGemini } from '../domain/geminiApp';
 import { parseMarkdown, type Inline } from '../domain/markdown';
+import { docMime } from '../domain/attachments';
+import { CHAT_ACCEPT, chatFileKind, defaultAsk, docText, MAX_DOC_CHARS, pickChatFiles, utf8Base64 } from '../domain/chatDocs';
+
+/** 문서 → Gemini에 함께 보낼 것(PDF는 그대로, 글·Office는 뽑은 글을 text/plain으로) */
+async function inlineOf(f: File): Promise<{ mime: string; data: string }> {
+  const kind = chatFileKind(f);
+  if (kind === 'image') return { mime: f.type, data: await toBase64(f) };
+  if (kind === 'pdf') return { mime: 'application/pdf', data: await toBase64(f) };
+  let text = '';
+  if (kind === 'office') {
+    const mime = docMime(f)!;
+    const [{ default: JSZip }, office] = await Promise.all([import('jszip'), import('../../supabase/functions/analyze-image/office')]);
+    const zip = await JSZip.loadAsync(await f.arrayBuffer());
+    text = office.officeToText(await office.extractOffice(zip as never, office.OFFICE_KIND[mime]), MAX_DOC_CHARS + 1);
+  } else text = await f.text();
+  if (!text.trim()) throw new Error(`${f.name}: 읽을 글이 없어요.`);
+  return { mime: 'text/plain', data: utf8Base64(docText(f.name, text)) };
+}
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 /** 사진 → base64(앞머리 뺌) */
@@ -47,8 +65,6 @@ const thumbOf = (file: File) =>
     img.onerror = () => (URL.revokeObjectURL(url), resolve(''));
     img.src = url;
   });
-const MAX_PHOTOS = 3;
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const titleOf = (q: string) => (q.replace(/\s+/g, ' ').trim().slice(0, 40) || '새 대화');
 /** 'gemini-3.5-flash' → 'Flash', 'gemini-3.1-flash-lite' → 'Lite 3.1' */
 export const modelLabel = (m?: string) => (!m ? '' : /flash-lite/.test(m) ? (/3\.5/.test(m) ? 'Lite' : `Lite ${/(\d+\.\d+)/.exec(m)?.[1] ?? ''}`.trim()) : /flash/.test(m) ? 'Flash' : /pro/.test(m) ? 'Pro' : m);
@@ -237,9 +253,11 @@ export function ChatBot({
   const send = async (q: string, base: ChatTurn[], slot?: 1 | 2, files: File[] = []) => {
     if ((!q.trim() && !files.length) || busy) return;
     setError('');
-    const text = q.trim() || '이 사진 설명해 줘';
-    const thumbs = files.length ? (await Promise.all(files.map(thumbOf))).filter(Boolean) : [];
-    const userTurn: ChatTurn = { role: 'user', text, at: new Date().toISOString(), ...(thumbs.length ? { thumbs } : {}) };
+    const text = q.trim() || defaultAsk(files.map((f) => chatFileKind(f) ?? 'text'));
+    const pics = files.filter((f) => chatFileKind(f) === 'image');
+    const docs = files.filter((f) => chatFileKind(f) !== 'image').map((f) => f.name);
+    const thumbs = pics.length ? (await Promise.all(pics.map(thumbOf))).filter(Boolean) : [];
+    const userTurn: ChatTurn = { role: 'user', text, at: new Date().toISOString(), ...(thumbs.length ? { thumbs } : {}), ...(docs.length ? { docs } : {}) };
     const messages = [...base, userTurn];
     const title = base.length ? thread.title : titleOf(text);
     const t = triage(text, snap);
@@ -265,7 +283,7 @@ export function ChatBot({
         : undefined;
     try {
       const history = base.filter((m) => m.by !== 'office').slice(-60).map((m) => ({ role: m.role, text: m.text }));
-      const images = files.length ? await Promise.all(files.map(async (f) => ({ mime: f.type, data: await toBase64(f) }))) : [];
+      const images = files.length ? await Promise.all(files.map(inlineOf)) : [];
       // 날씨(v0.8.13 소유자 "오늘 날씨 물어봤어, Open-Meteo 검색이 됐어"): 업무 대화처럼 설정한 지역·현재 위치를 보내고 표로 보인다
       const wantsWeather = !files.length && WEATHER_RE.test(text);
       const where = wantsWeather ? await weatherWhereBody().catch(() => undefined) : undefined;
@@ -354,15 +372,8 @@ export function ChatBot({
   };
   const addPhotos = (list: FileList | null) => {
     if (!list) return;
-    const ok: File[] = [];
-    let err = '';
-    for (const f of [...list]) {
-      if (!f.type.startsWith('image/')) err = '사진만 붙일 수 있어요.';
-      else if (f.size > MAX_PHOTO_BYTES) err = `${f.name}: 5MB까지 붙일 수 있어요.`;
-      else if (photos.length + ok.length >= MAX_PHOTOS) err = `사진은 ${MAX_PHOTOS}장까지예요.`;
-      else ok.push(f);
-    }
-    setPhotoError(err);
+    const { ok, error } = pickChatFiles(photos, [...list]);
+    setPhotoError(error);
     if (ok.length) setPhotos((xs) => [...xs, ...ok]);
   };
   /** 마지막 질문을 다시(같은 키 또는 다른 키로) */
@@ -402,6 +413,15 @@ export function ChatBot({
                   <span className="chatbot-thumbs">
                     {m.thumbs.map((t, j) => (
                       <img key={j} src={t} alt={`보낸 사진 ${j + 1}`} />
+                    ))}
+                  </span>
+                ) : null}
+                {m.docs?.length ? (
+                  <span className="chatbot-docs">
+                    {m.docs.map((d, j) => (
+                      <span key={j} className="chatbot-doc">
+                        {d}
+                      </span>
                     ))}
                   </span>
                 ) : null}
@@ -563,8 +583,8 @@ export function ChatBot({
         />
         {/* v0.8.11 소유자 "채팅창 왜 바뀜?": 업무 대화 입력창과 같은 모양(왼쪽 [+], 오른쪽 [마이크][↑]) */}
         <div className="inbox-tools">
-          <label className={`inbox-icon inbox-plus${!canAsk || busy ? ' is-off' : ''}`} aria-label="사진 붙이기" title="사진 붙이기(붙여넣기도 됩니다)">
-            <input type="file" accept="image/*" multiple hidden onChange={(e) => (addPhotos(e.target.files), (e.target.value = ''))} disabled={!canAsk || busy} />
+          <label className={`inbox-icon inbox-plus${!canAsk || busy ? ' is-off' : ''}`} aria-label="사진·문서 붙이기" title="사진·문서 붙이기(사진은 붙여넣기도 됩니다)">
+            <input type="file" accept={CHAT_ACCEPT} multiple hidden onChange={(e) => (addPhotos(e.target.files), (e.target.value = ''))} disabled={!canAsk || busy} />
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
