@@ -213,11 +213,11 @@ export function nameFromPhoton(json: unknown): string {
   return [p.city || p.county || p.state, p.district, p.locality].filter(Boolean).join(' ');
 }
 
-/** 좌표 → 동네 이름(v0.7.75: Nominatim → 안 되면 Photon, 둘 다 OpenStreetMap 자료·무료·키 없음). 못 찾으면 ''. 좌표는 기록하지 않는다 */
+/** 좌표 → 동네 이름(v0.8.0: 운영에서 Nominatim이 계속 403이라 Photon 먼저 → 안 되면 Nominatim, 둘 다 OpenStreetMap 자료·무료·키 없음). 못 찾으면 ''. 좌표는 기록하지 않는다 */
 export async function areaName(lat: number, lon: number, run: Fetch = get, log: (e: Record<string, unknown>) => void = () => undefined): Promise<string> {
   const tries: [string, string, (j: unknown) => string][] = [
-    ['Nominatim', `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=16&accept-language=ko`, nameFromNominatim],
     ['Photon', `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&limit=1`, nameFromPhoton],
+    ['Nominatim', `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=16&accept-language=ko`, nameFromNominatim],
   ];
   for (const [who, url, read] of tries) {
     const t0 = Date.now();

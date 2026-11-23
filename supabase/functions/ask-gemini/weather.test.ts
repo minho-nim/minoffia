@@ -106,13 +106,13 @@ describe('날씨 질문(v0.7.68)', () => {
     expect(skyOfMet('lightsnowshowers_night')).toBe('눈');
     expect(fromMet('서울', {})).toBeNull();
   });
-  it('동네 이름: Nominatim이 막히면 Photon, 동까지(v0.7.75)', async () => {
+  it('동네 이름: Photon 먼저, 막히면 Nominatim, 동까지(v0.8.0)', async () => {
     expect(nameFromNominatim({ address: { quarter: '수내동', suburb: '분당', borough: '분당구', city: '성남시', province: '경기도' } })).toBe('성남시 분당구 수내동');
     expect(nameFromPhoton({ features: [{ properties: { locality: '수내동', district: '분당', city: '성남시' } }] })).toBe('성남시 분당 수내동');
     const logs: Record<string, unknown>[] = [];
-    const name = await areaName(37.38, 127.12, async (u) => (u.includes('nominatim') ? json({}, 403) : json({ features: [{ properties: { locality: '수내동', district: '분당', city: '성남시' } }] })), (e) => logs.push(e));
-    expect(name).toBe('성남시 분당 수내동');
-    expect(logs[0]).toMatchObject({ areaTry: 'Nominatim', status: 403 });
+    const name = await areaName(37.38, 127.12, async (u) => (u.includes('photon') ? json({}, 403) : json({ address: { quarter: '수내동', borough: '분당구', city: '성남시' } })), (e) => logs.push(e));
+    expect(name).toBe('성남시 분당구 수내동');
+    expect(logs[0]).toMatchObject({ areaTry: 'Photon', status: 403 });
     expect(await areaName(1, 2, async () => json({}, 500))).toBe('');
   });
 });

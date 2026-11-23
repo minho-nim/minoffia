@@ -220,7 +220,7 @@ export interface OfficeStore {
     onDelta?: (soFar: string) => void,
     /** AI 먼저 판단(프로젝트 이름들)·고른 프로젝트 정보(v0.4.29) */
     opts?: AskOptions,
-  ): Promise<{ answer: string; keySlot: number; sources?: Source[]; engine?: string; pages?: number; weather?: import('../domain/weather').WeatherData }>;
+  ): Promise<{ answer: string; keySlot: number; model?: string; sources?: Source[]; engine?: string; pages?: number; weather?: import('../domain/weather').WeatherData }>;
 }
 
 /** 챗봇 모드 대화 한 마디(v0.7.99) */
@@ -230,6 +230,8 @@ export interface ChatTurn {
   at: string;
   /** 답한 키(A·B)와 함께 일한 쪽(웹 조사) */
   by?: 'A' | 'B';
+  /** 실제로 답한 모델(v0.8.0: 챗봇은 Flash 먼저, 안 되면 Lite) */
+  model?: string;
   helpers?: string[];
 }
 /** 챗봇 모드 대화 한 줄기(서버 chat_threads, v0.7.99) */

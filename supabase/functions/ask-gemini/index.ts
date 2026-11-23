@@ -12,6 +12,8 @@ import { geminiFetch } from './gemini-fallback.ts';
 
 /** 코드 상한. GEMINI_DAILY_CAP을 더 크게 줘도 넘지 않는다(이미지 분석과 무료 한도를 나눠 쓴다). */
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+// 챗봇은 한 단계 큰 Flash 먼저(v0.8.0 소유자 "5 ㄱㄱ"). 무료 한도·없는 모델이면 Lite(위 기본)로 내려간다. GEMINI_CHAT_MODEL로 바꿀 수 있다
+const CHAT_MODEL = 'gemini-3.5-flash';
 const MAX_QUESTION = 4000;
 const MAX_HISTORY = 6;
 /** 챗봇 모드(v0.7.99 소유자 "챗봇형, GPT·Claude에 묻듯이"): 앞 대화 30번, 한 번에 4000자까지 */
@@ -302,7 +304,8 @@ Deno.serve(async (req) => {
   const viaWeb = webContext !== '';
 
   const baseModel = env('GEMINI_MODEL') || DEFAULT_MODEL;
-  const models = [baseModel];
+  const chatModel = env('GEMINI_CHAT_MODEL') || CHAT_MODEL;
+  const models = chat && chatModel !== baseModel ? [chatModel, baseModel] : [baseModel];
   let model = baseModel;
   const stream = body.stream === true;
   const routeProjects = Array.isArray(body.route?.projects) ? body.route!.projects!.filter((p) => typeof p === 'string').slice(0, 50).map((p) => p.slice(0, 60)) : null;
@@ -382,13 +385,13 @@ Deno.serve(async (req) => {
               }
               const note = total ? cutNote(finish) : '';
               if (note) controller.enqueue(enc.encode(JSON.stringify({ d: note }) + '\n'));
-              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
+              controller.enqueue(enc.encode(JSON.stringify(total ? { done: true, keySlot: slot, model: res.headers.get('x-gemini-model') || model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) } : { error: 'Gemini가 빈 답을 보냈습니다. 다시 물어보세요.' }) + '\n'));
             } catch (e) {
               controller.enqueue(enc.encode(JSON.stringify({ error: `답을 받다가 끊겼습니다(${(e as Error).name}).` }) + '\n'));
             } finally {
               controller.close();
               console.log(JSON.stringify({ fn: 'ask-gemini', stream: true, route: !!routeProjects, project: !!project, research, search: searchEngine, pages: bodyPages, sources: found.size, thinking: mode, finish, head_ms: headMs, first_ms: first, total_ms: Date.now() - started, chars: total }));
-              await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model, prompt_chars: question.length, answer_chars: total, ...tokens });
+              await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: total > 0, http_status: 200, model: res.headers.get('x-gemini-model') || model, prompt_chars: question.length, answer_chars: total, ...tokens });
             }
           },
         });
@@ -399,9 +402,9 @@ Deno.serve(async (req) => {
       const text = got ? got + cutNote(finishOf(data)) : '';
       if (text) {
         console.log(JSON.stringify({ fn: 'ask-gemini', stream: false, thinking: mode, head_ms: headMs, total_ms: Date.now() - started, chars: text.length }));
-        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
+        await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose, key_slot: slot, ok: true, http_status: 200, model: res.headers.get('x-gemini-model') || model, prompt_chars: question.length, answer_chars: text.length, ...tokensOf(data) });
         const found = new Map<string, string>(webFound);
-        return reply(200, { ok: true, answer: text, keySlot: slot, model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) });
+        return reply(200, { ok: true, answer: text, keySlot: slot, model: res.headers.get('x-gemini-model') || model, ...(found.size ? { sources: sourceList(found) } : {}), ...(searchEngine ? { engine: searchEngine, pages: bodyPages } : {}) });
       }
       last = { status: res.status, message: (data as { error?: { message?: string } }).error?.message ?? '' };
       // 웹 조사는 모델·키마다 실패 이유를 남긴다(v0.6.3 소유자 "검색 한도가 실제로 걸린 건지"): 마지막 실패만 남아 원인을 몰랐다
