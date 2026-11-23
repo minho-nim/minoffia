@@ -2,7 +2,7 @@
 // 규칙만(모델 호출 없음). SVG 시안은 규칙대로 img로만 보여 준다.
 import { svgSrc } from './DesignDrafts';
 import { useEffect, useState } from 'react';
-import { afterApprove, fileBars, prChips, resultChips, skippedNotes, type Chip } from '../domain/approvalSummary';
+import { afterApprove, changeLines, fileBars, prChips, resultChips, skippedNotes, type Chip } from '../domain/approvalSummary';
 import { DRAW_STYLE_LABEL, pickedDraft, type DesignDraft } from '../domain/designDraft';
 import type { WorkflowView } from '../domain/workflow';
 import type { Task } from '../domain/types';
@@ -122,6 +122,19 @@ function ResultShots({ load, onPoint, draft }: { load: () => Promise<ShotImage[]
   );
 }
 
+/** 바뀐 점 3줄 */
+function Changes({ summary }: { summary: string }) {
+  const lines = changeLines(summary);
+  if (!lines.length) return null;
+  return (
+    <ul className="appr-changes" aria-label="바뀐 점">
+      {lines.map((l) => (
+        <li key={l}>{l}</li>
+      ))}
+    </ul>
+  );
+}
+
 function Skipped({ notes }: { notes: string[] }) {
   if (!notes.length) return null;
   return (
@@ -183,6 +196,9 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
     const draft = pickedDraft((data.designDrafts ?? []).filter((d) => d.taskId === task.id && d.specRevision === rev), data.designPicks ?? [], task.id, rev);
     return (
       <div className="appr">
+        {/* v0.8.6 한눈에: 화면 → 바뀐 점 3줄 → 상태 칩 → 승인하면 */}
+        {loadShots && <ResultShots key={view.result.revision} load={loadShots} onPoint={onPoint} draft={draft} />}
+        <Changes summary={view.result.summary} />
         <Chips chips={resultChips(view.result, review)} />
         <Skipped notes={skippedNotes('B', { drafts: 0, review, resultAt: view.result.createdAt })} />
         {review?.screen && review.screen.problems.length > 0 && (
@@ -192,7 +208,6 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
             ))}
           </ul>
         )}
-        {loadShots && <ResultShots key={view.result.revision} load={loadShots} onPoint={onPoint} draft={draft} />}
         <p className="appr-after">{afterApprove('B')}</p>
         {showFiles && <FileBars diff={view.result.diff} />}
       </div>
@@ -200,6 +215,8 @@ export function ApprovalSummary({ task, view, data, gate, repo, showFiles, onPic
   }
   return (
     <div className="appr">
+      {loadShots && view.result && <ResultShots key={`c-${view.result.revision}`} load={loadShots} />}
+      {view.result && <Changes summary={view.result.summary} />}
       <Chips chips={prChips(data.prCheck)} />
       <p className="appr-after">{afterApprove('C')}</p>
     </div>

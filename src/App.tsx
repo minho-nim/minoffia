@@ -83,6 +83,8 @@ import { serviceLamps } from './domain/serviceLamps';
 import { installPopupClose } from './components/popupClose';
 import { ChatBot } from './components/ChatBot';
 import { ChatDrawer } from './components/ChatDrawer';
+import { Dashboard } from './components/Dashboard';
+import { ResultsPane } from './components/ResultsPane';
 import type { ChatThreadInfo } from './data/store';
 import type { Parsed } from './domain/quickCommands';
 import { repeatedWork, skillRequest } from './domain/repeatWork';
@@ -224,6 +226,10 @@ export function App() {
   const [botCurrent, setBotCurrent] = useState<{ id: string | null; projectId: string | null }>({ id: botSel.threadId, projectId: null });
   const [chatTitle, setChatTitle] = useState('새 대화');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // 대시보드(v0.8.6): 팝업으로 연다(사무실 '…'·휴대폰 '…'·/대시보드)
+  const [dashOpen, setDashOpen] = useState(false);
+  // PC 사무실 자리 탭(v0.8.6): 사무실 · 대시보드 · 결과물(휴대폰은 늘 사무실, 대시보드는 팝업)
+  const [stageView, setStageView] = useState<'office' | 'dash' | 'results'>('office');
   const [threadList, setThreadList] = useState<ChatThreadInfo[] | null>(null);
   // 같은 일 여러 번 → 스킬 제안(v0.8.5): '괜찮아요'·만든 묶음은 이 기기에 기억(다시 제안 안 함)
   const [skillSkip, setSkillSkip] = useState<string[]>(() => {
@@ -326,6 +332,8 @@ export function App() {
         return go('skills');
       case 'settings':
         return go('settings');
+      case 'dash':
+        return setDashOpen(true);
       case 'notes':
         go('settings');
         return void brainRef.current();
@@ -2202,6 +2210,30 @@ export function App() {
   const inProject = pf === 'all' ? snap.tasks : snap.tasks.filter((t) => t.projectId === pf);
   const openCount = inProject.filter((t) => t.status !== 'done').length;
   const counts = (s: TaskStatus) => inProject.filter((t) => t.status === s).length;
+  /** 대시보드(팝업·PC 사무실 자리 같이 씀). close = 다른 곳으로 갈 때 닫을 것 */
+  const dashEl = (close: () => void) => (
+    <Dashboard
+            snap={snap}
+            turns={turns}
+            today={summarize(usageInput, rangeOf('day'))}
+            credits={trustedCredits}
+            ordered={ordered}
+            keyStatus={store.keyStatus ? () => store.keyStatus!() : undefined}
+            onTask={(id) => {
+              close();
+              showTask(id);
+            }}
+            onWork={(pid) => {
+              close();
+              setTab('chat');
+              openWork(pid);
+            }}
+            onUsage={() => {
+              close();
+              runCommand({ cmd: { id: 'usage', word: '사용량', alias: [], desc: '' }, arg: '' });
+            }}
+          />
+  );
   const turnsByProject = new Map<string, number>();
   for (const it of turns) {
     const pid = snap.tasks.find((t) => t.id === it.taskId)?.projectId;
@@ -2321,6 +2353,11 @@ export function App() {
         {/* 얇은 머리에도 밝기 버튼(v0.4.34), 오른쪽 끝 */}
         <ThemeToggle tabbable={barOn} />
       </div>
+      {dashOpen && (
+        <FormPopup wide title="대시보드" onClose={() => setDashOpen(false)}>
+          {dashEl(() => setDashOpen(false))}
+        </FormPopup>
+      )}
       {officePop && (
         <FormPopup wide title={officePop === 'role' ? '역할 지도' : '클라우드 관계도'} onClose={() => setOfficePop(null)}>
           {renderOffice(officePop)}
@@ -2341,6 +2378,9 @@ export function App() {
           {/* v0.6.74 소유자 "… 하나만, 열면 사무실·역할·클라우드": 평소엔 … 하나, 누르면 펼친다. 역할·클라우드는 열린 채로 팝업 */}
           {dockOpen && (
             <>
+          <button type="button" className="office-dock-btn" onClick={() => { setDashOpen(true); setDockOpen(false); }}>
+            대시보드
+          </button>
           <button type="button" className="office-dock-btn" onClick={() => { setOfficePop('role'); setDockOpen(false); }}>
             역할
           </button>
@@ -2370,12 +2410,25 @@ export function App() {
           </span>
         )}
         <section
+          data-view={stageView}
           className={`stage${mini ? ' is-mini' : ''}${tiny ? ' is-tiny' : ''}${docked ? ' is-docked' : ''}${peek ? ' is-peek' : ''}`}
           aria-label="오피스"
           ref={stageEl}
           // v0.7.62: 머리 오른쪽의 작은 사무실을 누르면 크게 띄워 본다
           onClickCapture={docked && !peek ? (e) => { e.preventDefault(); e.stopPropagation(); setPeek(true); } : undefined}
         >
+          <div className="stage-tabs" role="tablist" aria-label="사무실 자리 보기">
+            {(['office', 'dash', 'results'] as const).map((v) => (
+              <button key={v} type="button" role="tab" aria-selected={stageView === v} onClick={() => setStageView(v)}>
+                {v === 'office' ? '사무실' : v === 'dash' ? '대시보드' : '결과물'}
+              </button>
+            ))}
+          </div>
+          {stageView !== 'office' && (
+            <div className="stage-alt">
+              {stageView === 'dash' ? dashEl(() => undefined) : <ResultsPane snap={snap} onTask={showTask} />}
+            </div>
+          )}
           <OfficeView
             lamps={serviceLamps(snap.workflow, snap.aiCalls ?? [], store.mode === 'supabase')}
             tasks={snap.tasks}
@@ -2397,6 +2450,9 @@ export function App() {
                 </button>
                 <button type="button" onClick={() => { setOfficePop('cloud'); setPicOpen(false); }}>
                   클라우드
+                </button>
+                <button type="button" onClick={() => { setDashOpen(true); setPicOpen(false); }}>
+                  대시보드
                 </button>
               </>
             )}

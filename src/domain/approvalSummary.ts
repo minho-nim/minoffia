@@ -142,3 +142,16 @@ export function skippedNotes(
   }
   return out;
 }
+
+/**
+ * 바뀐 점 3줄(v0.8.6 소유자 "검토 카드 한눈에: 스크린샷 + 바뀐 점 3줄 + 승인"): 결과 요약에서 글머리·문장을 골라 짧게.
+ * 규칙만. 제목·빈 줄·'시험'·'파일' 같은 기록 줄은 뺀다.
+ */
+export function changeLines(summary: string, max = 3): string[] {
+  const lines = summary
+    .split('\n')
+    .map((l) => l.replace(/^\s*(?:[-*•·]|\d+[.)])\s*/, '').replace(/[*`#]/g, '').trim())
+    .filter((l) => l.length >= 4 && !/^(요약|바뀐 파일|시험|테스트|명령|결과|남은 문제|diff|git )/i.test(l));
+  const pick = lines.length >= 2 ? lines : summary.replace(/\s+/g, ' ').split(/(?<=[.!?。]|다\.)\s+/).map((x) => x.trim()).filter((x) => x.length >= 4);
+  return pick.slice(0, max).map((l) => (l.length > 80 ? `${l.slice(0, 79)}…` : l));
+}
