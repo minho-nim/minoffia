@@ -244,7 +244,7 @@ export interface Spot {
   lon: number;
 }
 /** 앱이 보내는 기준 곳(v0.7.70): 설정한 지역 이름 또는 현재 위치(약 1km로 줄인 좌표) */
-export type Where = { place: string } | { lat: number; lon: number };
+export type Where = { place: string } | { lat: number; lon: number; name?: string };
 
 /** 받은 where를 믿을 수 있는 값으로만(범위 밖·이상한 값은 버림) */
 export function cleanWhere(raw: unknown): Where | null {
@@ -253,7 +253,9 @@ export function cleanWhere(raw: unknown): Where | null {
   if (typeof w.place === 'string' && /^[가-힣A-Za-z0-9 ]{2,20}$/.test(w.place.trim())) return { place: w.place.trim() };
   const lat = Number(w.lat);
   const lon = Number(w.lon);
-  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return { lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100 };
+  // v0.8.13: 브라우저가 찾은 동네 이름(서버에서는 이름 서비스가 막혀서)
+  const name = typeof (w as { name?: unknown }).name === 'string' && /^[가-힣A-Za-z0-9 ·-]{2,30}$/.test(String((w as { name?: unknown }).name).trim()) ? String((w as { name?: unknown }).name).trim() : '';
+  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return { lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100, ...(name ? { name } : {}) };
   return null;
 }
 
@@ -265,6 +267,7 @@ const SEOUL: Spot = { name: '서울', lat: CITY['서울'][0], lon: CITY['서울'
 async function pick(ask: WeatherAsk, where: Where | null, run: Fetch, log: (e: Record<string, unknown>) => void): Promise<{ spot: Spot; name: Promise<string> | null }> {
   if (ask.place) return { spot: (await locate(ask.place, run).catch(() => null)) ?? SEOUL, name: null };
   if (where && 'place' in where) return { spot: (await locate(where.place, run).catch(() => null)) ?? SEOUL, name: null };
+  if (where && where.name) return { spot: { name: where.name, lat: where.lat, lon: where.lon }, name: null };
   if (where) return { spot: { name: '현재 위치', lat: where.lat, lon: where.lon }, name: areaName(where.lat, where.lon, run, log).then((n) => n || '현재 위치') };
   return { spot: SEOUL, name: null };
 }

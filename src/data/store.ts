@@ -235,6 +235,8 @@ export interface ChatTurn {
   /** 실제로 답한 모델(v0.8.0: 챗봇은 Flash 먼저, 안 되면 Lite) */
   model?: string;
   helpers?: string[];
+  /** 날씨 답(v0.8.13): 표로 그린다(Open-Meteo 숫자, 모델 아님) */
+  weather?: import('../domain/weather').WeatherData;
   /** 웹 조사 출처(v0.8.6): 답 아래 '출처 n'과 옵시디언 '자료/' 노트 */
   sources?: { title: string; uri: string }[];
   /** 함께 보낸 사진의 작은 미리보기(v0.8.6, 원본은 저장하지 않음) */

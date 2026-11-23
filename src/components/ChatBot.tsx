@@ -16,6 +16,8 @@ import { parseCommand, type Parsed } from '../domain/quickCommands';
 import { CommandMenu } from './CommandMenu';
 import { VoiceInput } from './VoiceInput';
 import { checkNumbers } from '../domain/checkNumbers';
+import { saveHereSeen, WEATHER_RE, weatherWhereBody } from '../domain/weather';
+import { WeatherCard } from './WeatherCard';
 import { openInGemini } from '../domain/geminiApp';
 import { parseMarkdown, type Inline } from '../domain/markdown';
 
@@ -244,19 +246,26 @@ export function ChatBot({
     try {
       const history = base.filter((m) => m.by !== 'office').slice(-60).map((m) => ({ role: m.role, text: m.text }));
       const images = files.length ? await Promise.all(files.map(async (f) => ({ mime: f.type, data: await toBase64(f) }))) : [];
+      // 날씨(v0.8.13 소유자 "오늘 날씨 물어봤어, Open-Meteo 검색이 됐어"): 업무 대화처럼 설정한 지역·현재 위치를 보내고 표로 보인다
+      const wantsWeather = !files.length && WEATHER_RE.test(text);
+      const where = wantsWeather ? await weatherWhereBody().catch(() => undefined) : undefined;
       const got = await ask(text, history, images, (soFar) => setLive(soFar), {
+        ...(where ? { where } : {}),
         chat: true,
         // 유튜브 링크(v0.8.3·v0.8.5)면 웹 조사 대신 Gemini가 영상을 직접 본다
         research: !youtubeUrl(text) && (needsResearch(text) || asksSearch(text)),
         ...(slot ? { slot } : {}),
         ...(project ? { project: projectContext(project, snap.tasks) } : {}),
       });
-      const helpers = got.video ? ['YouTube 영상'] : got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
+      if (got.weather && where && 'lat' in where) saveHereSeen(got.weather.place);
+      const helpers = got.weather ? [`${got.engine ?? 'Open-Meteo'} 날씨`] : got.video ? ['YouTube 영상'] : got.engine ? [`${got.engine} 검색`, ...(got.pages ? [`Firecrawl 본문 ${got.pages}`] : [])] : undefined;
       const answer: ChatTurn = {
         role: 'model',
         text: got.answer,
         at: new Date().toISOString(),
-        by: got.keySlot === 2 ? 'B' : 'A',
+        // 날씨는 모델이 아니라 규칙(숫자 그대로)이라 미니엉이 답한다
+        by: got.weather ? 'office' : got.keySlot === 2 ? 'B' : 'A',
+        ...(got.weather ? { weather: got.weather } : {}),
         ...(got.model ? { model: got.model } : {}),
         ...(helpers ? { helpers } : {}),
         ...(got.sources?.length ? { sources: got.sources.map((x) => ({ title: x.title, uri: x.uri })) } : {}),
@@ -370,7 +379,7 @@ export function ChatBot({
                   </span>
                 ))}
               </div>
-              <Markdown text={m.text} />
+              {m.weather ? <WeatherCard data={m.weather} /> : <Markdown text={m.text} />}
               {m.by !== 'office' && <Proof m={m} />}
               {m.yt && (
                 <div className="chatbot-yt">
