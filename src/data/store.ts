@@ -233,6 +233,8 @@ export interface ChatTurn {
   /** 실제로 답한 모델(v0.8.0: 챗봇은 Flash 먼저, 안 되면 Lite) */
   model?: string;
   helpers?: string[];
+  /** 유튜브 링크(v0.8.4): Gemini 앱에서 요약하도록 버튼을 붙인 미니엉 답이면 그 원문 */
+  yt?: string;
   /** 업무로 접수 제안(v0.8.1): 대화 중 개발 요청으로 보이면. 접수하면 그 업무 대화로 넘긴다 */
   suggest?: { candidates: string[]; state: 'open' | 'sent' | 'dismissed'; projectId?: string };
 }

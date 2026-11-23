@@ -18,6 +18,7 @@ import type { Project, Snapshot, Task } from '../domain/types';
 import { SkillPick } from './SkillPick';
 import { takeQueued } from '../domain/chatQueue';
 import { needsResearch, type Source } from '../domain/research';
+import { openInGemini, youtubeUrl, YT_NOTE } from '../domain/youtube';
 import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction, actionNotices, mergeNotices, staleNotices } from '../domain/stageNotice';
@@ -69,6 +70,8 @@ interface Msg {
   offer?: Offer;
   /** 기획서 전에 되묻기(v0.7.97): 질문에 답하면 요청에 붙여 접수, [그냥 접수]면 그대로 */
   clarify?: { text: string; projectId: string; context?: PriorChat; whole?: string; questions: string[]; state: 'open' | 'done' | 'dropped' };
+  /** 유튜브 링크(v0.8.4): Gemini 앱에서 요약 버튼(원문) */
+  yt?: string;
   /** 함께 보낸 첨부(v0.4.89): 이름과 작은 미리보기(누르면 크게). 원본은 이 화면에서만 기억한다 */
   files?: { name: string; thumb?: string; key?: string }[];
 }
@@ -1303,6 +1306,11 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
   const routeText = (text: string, sent: File[], priorChat: PriorChat | null) => {
     const prior = priorChat ?? undefined;
     const t = triage(text, snap);
+    // 유튜브 링크(v0.8.4): API로 영상을 보내지 않고 Gemini 앱에서 요약(개발 요청이면 평소처럼)
+    if (youtubeUrl(text) && t.kind !== 'request' && t.kind !== 'status') {
+      setLog((l) => [...l, { id: mid(), from: 'office' as const, text: YT_NOTE, home: thread, yt: text }].slice(-KEEP));
+      return;
+    }
     if (t.kind === 'status') {
       say('office', t.answer);
       if (sent.length) say('office', '첨부는 업무 요청이나 질문에만 써요. 다음 메시지에 다시 붙여 주세요.');
@@ -1846,7 +1854,16 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
               ) : m.weather ? (
                 <WeatherCard data={m.weather} />
               ) : m.text ? (
-                <p>{m.text}</p>
+                <>
+                  <p>{m.text}</p>
+                  {m.yt && (
+                    <div className="chatbot-yt">
+                      <button type="button" className="btn btn-small" onClick={() => openInGemini(m.yt!)}>
+                        Gemini 앱에서 요약
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="inbox-typing" aria-label="답을 쓰는 중">
                   <span />

@@ -8418,3 +8418,4 @@ html.popup-open .project-sections > details[open] * {
     padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) * 0.5 + 6px));
   }
 }
+.chatbot-yt { margin-top: 8px; }
