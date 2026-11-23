@@ -49,6 +49,7 @@ run supabase/tests/99_save_pm_plan_as.sql
 run supabase/tests/99_task_followups.sql
 run supabase/tests/99_revision_once.sql
 run supabase/tests/99_chat_threads.sql
+run supabase/tests/99_similar_tasks.sql
 python3 supabase/tests/check_pm_concurrency.py
 
 # 기존 v0.1 데이터가 0003 적용 후에도 남는지
