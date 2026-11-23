@@ -7,7 +7,7 @@ import { cleanRefs, cleanStandard, REF_SYSTEM, STANDARD_SYSTEM, styleFiles } fro
 import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const TIMEOUT_MS = 40_000;
 const MAX_FILE = 12_000;
 const MAX_TOTAL = 40_000;

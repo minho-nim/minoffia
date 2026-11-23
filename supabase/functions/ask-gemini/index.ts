@@ -11,9 +11,8 @@ import { latestTokens, NO_TOKENS, tokensOf, type GeminiTokens } from './geminiTo
 import { geminiFetch } from './gemini-fallback.ts';
 
 /** 코드 상한. GEMINI_DAILY_CAP을 더 크게 줘도 넘지 않는다(이미지 분석과 무료 한도를 나눠 쓴다). */
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
-// 챗봇은 한 단계 큰 Flash 먼저(v0.8.0 소유자 "5 ㄱㄱ"). 무료 한도·없는 모델이면 Lite(위 기본)로 내려간다. GEMINI_CHAT_MODEL로 바꿀 수 있다
-const CHAT_MODEL = 'gemini-3.5-flash';
+// v0.8.1 소유자 "업무도 똑같이": 모든 일이 Flash 먼저, 안 되면 Lite(gemini-fallback.ts)
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const MAX_QUESTION = 4000;
 const MAX_HISTORY = 6;
 /** 챗봇 모드(v0.7.99 소유자 "챗봇형, GPT·Claude에 묻듯이"): 앞 대화 30번, 한 번에 4000자까지 */
@@ -304,14 +303,13 @@ Deno.serve(async (req) => {
   const viaWeb = webContext !== '';
 
   const baseModel = env('GEMINI_MODEL') || DEFAULT_MODEL;
-  const chatModel = env('GEMINI_CHAT_MODEL') || CHAT_MODEL;
-  const models = chat && chatModel !== baseModel ? [chatModel, baseModel] : [baseModel];
+  const models = [baseModel];
   let model = baseModel;
   const stream = body.stream === true;
   const routeProjects = Array.isArray(body.route?.projects) ? body.route!.projects!.filter((p) => typeof p === 'string').slice(0, 50).map((p) => p.slice(0, 60)) : null;
   const project = body.project && typeof body.project.name === 'string' ? body.project : null;
   // 판단을 맡기면 '업무로 접수하라' 안내 대신 판단 머리를 쓰게 한다.
-  const system = clarify ? CLARIFY_SYSTEM : chat ? `${CHAT_SYSTEM}${viaWeb ? WEB_RULE : ''}` : [
+  const system = clarify ? CLARIFY_SYSTEM : chat ? `${CHAT_SYSTEM}${project ? projectRules(project) : ''}${viaWeb ? WEB_RULE : ''}` : [
     routeProjects ? SYSTEM.replace('\n개발·수정 작업이 필요해 보이면, AI Office에 업무로 접수하라고 한 줄로 안내한다.', '') : SYSTEM,
     project ? projectRules(project) : '',
     routeProjects ? routeRules(routeProjects) : '',

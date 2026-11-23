@@ -15,7 +15,7 @@ import { designReviewSection } from './designReview.ts';
 import { geminiFetch } from './gemini-fallback.ts';
 
 // v0.7.8: 결과 하나에 Gemini 두 번(A·B)이라 상한도 두 배
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const TIMEOUT_MS = 45_000;
 /** v0.7.98 소유자 "하루 상한 삭제": 기본은 상한 없음. 서버 설정 CLAUDE_DAILY_CAP을 주면 그 값으로 다시 막는다 */
 const NO_DAILY_CAP = 1_000_000;

@@ -121,7 +121,7 @@ export function createLocalStore(): OfficeStore {
       };
       return {
         async list() {
-          return all().map(({ id, title, updatedAt }) => ({ id, title, updatedAt }));
+          return all().map(({ id, title, updatedAt, projectId }) => ({ id, title, updatedAt, projectId: projectId ?? null }));
         },
         async get(id: string) {
           return all().find((t) => t.id === id) ?? null;

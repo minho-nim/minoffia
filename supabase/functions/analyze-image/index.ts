@@ -12,7 +12,7 @@ import { geminiFetch } from './gemini-fallback.ts';
 
 /** 상한 없음을 뜻하는 큰 수(DB 함수에 정수로 넘길 수 있게) */
 const NO_DAILY_CAP = 1_000_000;
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const TIMEOUT_MS = 40_000;
 
 const env = (key: string) => (Deno.env.get(key) ?? '').trim();

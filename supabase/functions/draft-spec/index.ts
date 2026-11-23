@@ -9,10 +9,12 @@ import { tokensOf, type GeminiTokens } from './geminiTokens.ts';
 import { codePaths, NEED_FILES_ASK, parseNeedFiles, withFiles } from './needFiles.ts';
 import { appMapSection } from './appMap.ts';
 import { geminiFetch } from './gemini-fallback.ts';
+import { deepSearch, isHit, webContext } from './websearch.ts';
+import { SPEC_WEB_RULE, specNeedsWeb, specQuery } from './specResearch.ts';
 
 /** 상한 없음을 뜻하는 큰 수(DB 함수에 정수로 넘길 수 있게) */
 const NO_DAILY_CAP = 1_000_000;
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const MAX_TEXT = 40_000;
 const TIMEOUT_MS = 40_000;
 
@@ -27,12 +29,12 @@ const cors = {
 const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-async function callGemini(key: string, model: string, text: string) {
+async function callGemini(key: string, model: string, text: string, system = DRAFT_SYSTEM) {
   const res = await geminiFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: DRAFT_SYSTEM }] },
+      systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text }] }],
       generationConfig: { maxOutputTokens: 4096, temperature: 0.3, responseMimeType: 'application/json' },
     }),
@@ -119,12 +121,37 @@ Deno.serve(async (req) => {
   } catch {
     appMap = '';
   }
-  const firstAsk = files.length ? `${prompt}\n\n[저장소 코드 파일 목록(이름만)]\n${files.join('\n')}${appMap ? `\n\n${appMap}` : ''}\n\n${NEED_FILES_ASK}` : prompt;
+  // 자동 웹 조사(v0.8.1): 요청이 외부 정보(최신·API·연동·규정·참고 서비스·링크)를 필요로 해 보이면 찾아서 자료로 붙인다. 실패해도 그대로 진행
+  let web = '';
+  let webEngine = '';
+  const { data: leaveRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
+  const leave = new Set((leaveRows ?? []).map((r: { agent: string }) => r.agent));
+  const request = String(task.user_original_text ?? text);
+  if (specNeedsWeb(request) && !(leave.has('search') && leave.has('firecrawl'))) {
+    try {
+      const { hit, tries, pages, scrapeFails } = await deepSearch({ tavily: leave.has('search') ? '' : env('TAVILY_API_KEY'), firecrawl: leave.has('firecrawl') ? '' : env('FIRECRAWL_API_KEY') }, specQuery(String(task.title ?? ''), request));
+      const row = (provider: string, m: string, ok: boolean, status: number, results: number, error: string) => ({ owner_id: user.id, provider, purpose: 'research', key_slot: null, ok, http_status: status || null, model: m, prompt_chars: request.length, answer_chars: results, error: error.slice(0, 300) });
+      const rows = [
+        ...tries.map((t) => row(t.engine, 'search', isHit(t, hit), t.status, t.results.length, isHit(t, hit) ? '' : t.error || '결과 없음')),
+        ...Array.from({ length: pages }, () => row('firecrawl', 'scrape', true, 200, 1, '')),
+        ...scrapeFails.map((f) => row('firecrawl', 'scrape', false, f.status, 0, f.error || '본문 없음')),
+      ];
+      if (rows.length) await admin.from('ai_calls').insert(rows);
+      if (hit) {
+        web = webContext(hit.results);
+        webEngine = hit.engine === 'tavily' ? 'Tavily' : 'Firecrawl';
+      }
+      console.log(JSON.stringify({ fn: 'draft-spec', web: hit ? 'ok' : 'fail', engine: webEngine, pages }));
+    } catch (e) {
+      console.log(JSON.stringify({ fn: 'draft-spec', web: 'error', error: (e as Error).message }));
+    }
+  }
+  const system = web ? DRAFT_SYSTEM + SPEC_WEB_RULE : DRAFT_SYSTEM;
+  const firstAsk = files.length ? `${prompt}\n\n[저장소 코드 파일 목록(이름만)]\n${files.join('\n')}${appMap ? `\n\n${appMap}` : ''}\n\n${NEED_FILES_ASK}${web}` : `${prompt}${web}`;
   const model = env('GEMINI_MODEL') || DEFAULT_MODEL;
   let last = { status: 0, message: '' };
   // 팀 관리 휴가(v0.4.44): 키 A = Studio A, 키 B = Studio B. 휴가인 쪽 키는 쓰지 않는다(표가 없거나 못 읽으면 모두 근무).
-  const { data: awayRows } = await admin.from('agent_leave').select('agent').eq('owner_id', user.id);
-  const away = new Set((awayRows ?? []).map((r: { agent: string }) => r.agent));
+  const away = leave;
   // 키마다 이유(v0.7.87): 키 없음·휴가·오늘 상한 다 씀. 둘 다 못 쓰면 이유를 그대로 알린다
   const why = [0, 1].map((i) => keyWhy(keys[i], usedBy[i] >= cap, away.has(i ? 'studioB' : 'studioA'))) as [KeyWhy, KeyWhy];
   why.forEach((w, i) => {
@@ -137,12 +164,12 @@ Deno.serve(async (req) => {
     if (!key) continue;
     let r: { status: number; text: string; message: string; tokens?: GeminiTokens };
     try {
-      r = await callGemini(key, model, firstAsk);
+      r = await callGemini(key, model, firstAsk, system);
       const need = files.length && r.status === 200 && !parseDraft(r.text) ? parseNeedFiles(r.text) : null;
       if (need) {
         await admin.from('ai_calls').insert({ owner_id: user.id, provider: 'gemini', purpose: 'plan', key_slot: i + 1, ok: true, http_status: 200, model, prompt_chars: firstAsk.length, answer_chars: r.text.length, ...(r.tokens ?? {}) });
         const got = await Promise.all(need.filter((p) => files.includes(p)).map(async (path) => ({ path, text: await readRepoFile(repo, path) })));
-        r = await callGemini(key, model, withFiles(prompt, got.length ? got : need.map((path) => ({ path, text: null }))));
+        r = await callGemini(key, model, withFiles(prompt, got.length ? got : need.map((path) => ({ path, text: null }))) + web, system);
       }
     } catch (e) {
       r = { status: 0, text: '', message: (e as Error).name === 'TimeoutError' ? '응답이 늦어 멈췄습니다.' : (e as Error).message };
@@ -177,7 +204,7 @@ Deno.serve(async (req) => {
       if (draft.title && original && task.title === autoTitle(original) && draft.title !== task.title) {
         await userClient.from('tasks').update({ title: draft.title }).eq('id', task.id).eq('title', task.title);
       }
-      return reply(200, { ok: true, revision, intent: draft.intent, model });
+      return reply(200, { ok: true, revision, intent: draft.intent, model, ...(webEngine ? { web: webEngine } : {}) });
     }
     last = { status: r.status, message: r.message };
     if (r.status === 400 || r.status === 404) break;
