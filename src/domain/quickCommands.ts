@@ -4,7 +4,7 @@
  */
 import type { Project } from './types';
 
-export type CommandId = 'new' | 'chat' | 'work' | 'turn' | 'tasks' | 'projects' | 'agent' | 'skills' | 'usage' | 'settings' | 'search' | 'notes';
+export type CommandId = 'new' | 'chat' | 'work' | 'turn' | 'tasks' | 'projects' | 'agent' | 'skills' | 'usage' | 'settings' | 'search' | 'notes' | 'dash';
 export interface Command {
   id: CommandId;
   /** '/' 뒤에 쓰는 말(한국어) */
@@ -20,6 +20,7 @@ export const COMMANDS: Command[] = [
   { id: 'new', word: '새채팅', alias: ['new', '새대화'], desc: '새 채팅 열기' },
   { id: 'chat', word: '채팅', alias: ['chat'], desc: '그 프로젝트에서 새 대화', arg: 'project' },
   { id: 'work', word: '업무', alias: ['work', '업무대화'], desc: '그 프로젝트 업무 대화 열기', arg: 'project' },
+  { id: 'dash', word: '대시보드', alias: ['dash', 'dashboard', '현황'], desc: '한눈에 보기(할 일·진행·사용량)' },
   { id: 'turn', word: '내차례', alias: ['승인', 'turn', 'approve'], desc: '내 차례(승인 기다림) 보기' },
   { id: 'search', word: '검색', alias: ['search', '조사'], desc: '웹에서 찾아 답하기(Tavily·Firecrawl)', arg: 'text' },
   { id: 'notes', word: '노트', alias: ['옵시디언', 'notes'], desc: '옵시디언에 노트 보내기' },

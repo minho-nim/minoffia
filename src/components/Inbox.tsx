@@ -10,7 +10,7 @@ import { WeatherCard } from './WeatherCard';
 import { answerSlot, asksSearch, insertMention, mentionOptions, mentionQuery, searchEngineOf } from '../domain/mention';
 import { setResearchPhase } from '../office/webResearch';
 import { CRITERIA_TAGS, insertCriterion, splitCriteria } from '../domain/criteriaTag';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, useMemo } from 'react';
 import { repoNameError, toRepoSlug } from '../../supabase/functions/create-repo/naming';
 import { chatGptFollowup, chatGptQuestion, matchProjects, priorChatText, questionProject, replyIntent, titleFrom, triage, type PriorChat } from '../domain/triage';
 import { ACCEPT_REQUEST, isImage, isRaster, MAX_REQUEST_FILES, MIME_EXT, prepareFile, validateFile } from '../domain/attachments';
@@ -22,6 +22,7 @@ import { youtubeUrl } from '../domain/youtube';
 import { openInGemini } from '../domain/geminiApp';
 import { parseCommand, type Parsed } from '../domain/quickCommands';
 import { CommandMenu } from './CommandMenu';
+import { checkNumbers } from '../domain/checkNumbers';
 import { researchMessage, unannounced } from '../domain/claudeResearch';
 import { matchRoutedProject, parseRoutedAll, projectContext, type AskOptions, type RoutedItem } from '../domain/aiRoute';
 import { stageNotices, type NoticeAction, actionNotices, mergeNotices, staleNotices } from '../domain/stageNotice';
@@ -418,7 +419,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
             showFiles={filesFor === m.id}
             busy={busy}
             onPick={onPickDraft ? (d) => void run(() => onPickDraft(task, d)) : undefined}
-            loadShots={gate === 'B' && onResultImages && view.result ? () => onResultImages(task, view.result!.revision) : undefined}
+            loadShots={(gate === 'B' || gate === 'C') && onResultImages && view.result ? () => onResultImages(task, view.result!.revision) : undefined}
             onPoint={fixKind ? (img) => setPointImg({ ...img, msgId: m.id }) : undefined}
             onDraw={onDrawDesign ? () => void run(() => onDrawDesign(task)) : undefined}
           />
@@ -1919,6 +1920,7 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
                   ))}
                 </ul>
               )}
+              {m.from === 'gemini' && m.text && !busy && <NumCheck text={m.text} />}
               {!m.actions && m.taskId && onShowTask && snap.tasks.some((t) => t.id === m.taskId) && (
                 <span className="inbox-tasklinks">
                   <button type="button" className="link-btn inbox-tasklink" onClick={() => onShowTask(m.taskId!)}>
@@ -2437,5 +2439,29 @@ export function Inbox({ snap, canAskGemini, demoResearch, geminiAway, gptAway, o
         </div>
       </form>
     </section>
+  );
+}
+
+/** 확인할 숫자(v0.8.6): 출처 번호 없는 숫자 문장이 있으면 작게, 누르면 펼침 */
+function NumCheck({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const nums = useMemo(() => checkNumbers(text), [text]);
+  if (!nums.length) return null;
+  return (
+    <div className="chatbot-proof">
+      <span className="chatbot-proof-row">
+        <button type="button" className="is-warn" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          확인할 숫자 {nums.length}
+        </button>
+      </span>
+      {open && (
+        <ul className="chatbot-proof-list">
+          <li className="muted">출처 번호가 없는 숫자예요. 쓰기 전에 확인해 보세요.</li>
+          {nums.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

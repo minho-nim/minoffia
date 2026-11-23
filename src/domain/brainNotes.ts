@@ -96,6 +96,21 @@ export function wikiNote(project: string, body: string, updatedAt: string): stri
   return ['---', `프로젝트: ${yaml(`[[${safeName(project)}]]`)}`, `고친날: ${day(updatedAt)}`, 'tags: [minoffia/위키]', '---', `# ${project} 위키`, '', `[[${safeName(project)}]]`, '', clean(body, 20000), ''].join('\n');
 }
 
+/** 자료 노트 자리: 사이트 이름 + 제목(같은 주소는 같은 파일) */
+export function refPath(uri: string, title: string): string {
+  let host = '';
+  try {
+    host = new URL(uri).hostname.replace(/^www\./, '');
+  } catch {
+    host = '링크';
+  }
+  return `자료/${safeName(`${host} ${title}`)}.md`;
+}
+
+export function refNote(title: string, uri: string, chats: string[], at: string): string {
+  return ['---', `주소: ${yaml(uri)}`, `처음 쓴 날: ${day(at)}`, 'tags: [minoffia/자료]', '---', `# ${title}`, '', `[원문 열기](${uri})`, '', '## 쓴 대화', ...chats.map((c) => `- ${c}`), ''].join('\n');
+}
+
 /** 데일리 노트(날짜별): 그날 만든·끝난 업무와 채팅으로 가는 링크 */
 export function dailyNotes(items: { day: string; line: string }[]): NoteFile[] {
   const by = new Map<string, string[]>();
@@ -125,6 +140,21 @@ export function brainNotes(input: { projects: Project[]; tasks: Task[]; workflow
     const p = name(c.projectId);
     daily.push({ day: day(c.updatedAt), line: `- 채팅: [[${chatPath(c, p).replace(/\.md$/, '')}|${safeName(c.title)}]]${p ? ` (${p})` : ''}` });
   }
+  // 자료(v0.8.6 소유자 "웹 조사 출처를 옵시디언 자료/에"): 같은 주소는 한 장, 어느 대화에서 썼는지 링크
+  // shortcut: 이번에 바뀐 대화의 출처만 다시 쓴다(옛 대화 링크가 빠질 수 있음), 필요하면 자료 노트를 읽어 합치기
+  const refs = new Map<string, { title: string; uri: string; chats: Set<string>; at: string }>();
+  for (const c of input.chats) {
+    const link = `[[${chatPath(c, name(c.projectId)).replace(/\.md$/, '')}|${safeName(c.title)}]]`;
+    for (const m of c.messages) {
+      for (const src of m.sources ?? []) {
+        if (!/^https?:\/\//.test(src.uri)) continue;
+        const r = refs.get(src.uri) ?? { title: src.title, uri: src.uri, chats: new Set<string>(), at: m.at };
+        r.chats.add(link);
+        refs.set(src.uri, r);
+      }
+    }
+  }
+  for (const r of refs.values()) files.push({ path: refPath(r.uri, r.title), content: refNote(r.title, r.uri, [...r.chats], r.at) });
   for (const w of input.wikis) {
     const p = name(w.projectId);
     if (p && w.body.trim()) files.push({ path: `${safeName(p)}/위키.md`, content: wikiNote(p, w.body, w.updatedAt) });

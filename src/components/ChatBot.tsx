@@ -14,10 +14,39 @@ import { youtubeUrl } from '../domain/youtube';
 import { asksSearch } from '../domain/mention';
 import { parseCommand, type Parsed } from '../domain/quickCommands';
 import { CommandMenu } from './CommandMenu';
+import { VoiceInput } from './VoiceInput';
+import { checkNumbers } from '../domain/checkNumbers';
 import { openInGemini } from '../domain/geminiApp';
 import { parseMarkdown, type Inline } from '../domain/markdown';
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+/** 사진 → base64(앞머리 뺌) */
+const toBase64 = (file: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
+    r.onerror = () => reject(new Error('사진을 읽지 못했어요.'));
+    r.readAsDataURL(file);
+  });
+/** 대화 기록용 작은 미리보기(긴 변 96px JPEG, 몇 KB) */
+const thumbOf = (file: File) =>
+  new Promise<string>((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = 96 / Math.max(img.width, img.height, 1);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * Math.min(1, k)));
+      c.height = Math.max(1, Math.round(img.height * Math.min(1, k)));
+      c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => (URL.revokeObjectURL(url), resolve(''));
+    img.src = url;
+  });
+const MAX_PHOTOS = 3;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const titleOf = (q: string) => (q.replace(/\s+/g, ' ').trim().slice(0, 40) || '새 대화');
 /** 'gemini-3.5-flash' → 'Flash', 'gemini-3.1-flash-lite' → 'Lite 3.1' */
 export const modelLabel = (m?: string) => (!m ? '' : /flash-lite/.test(m) ? (/3\.5/.test(m) ? 'Lite' : `Lite ${/(\d+\.\d+)/.exec(m)?.[1] ?? ''}`.trim()) : /flash/.test(m) ? 'Flash' : /pro/.test(m) ? 'Pro' : m);
@@ -135,6 +164,8 @@ export function ChatBot({
   const [thread, setThread] = useState<ChatThread>(() => fresh(projectId));
   const [loading, setLoading] = useState(Boolean(threadId));
   const [input, setInput] = useState('');
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState('');
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState('');
   const [error, setError] = useState('');
@@ -180,16 +211,17 @@ export function ChatBot({
     void save(t);
   };
 
-  const send = async (q: string, base: ChatTurn[], slot?: 1 | 2) => {
-    if (!q.trim() || busy) return;
+  const send = async (q: string, base: ChatTurn[], slot?: 1 | 2, files: File[] = []) => {
+    if ((!q.trim() && !files.length) || busy) return;
     setError('');
-    const text = q.trim();
-    const userTurn: ChatTurn = { role: 'user', text, at: new Date().toISOString() };
+    const text = q.trim() || '이 사진 설명해 줘';
+    const thumbs = files.length ? (await Promise.all(files.map(thumbOf))).filter(Boolean) : [];
+    const userTurn: ChatTurn = { role: 'user', text, at: new Date().toISOString(), ...(thumbs.length ? { thumbs } : {}) };
     const messages = [...base, userTurn];
     const title = base.length ? thread.title : titleOf(text);
     const t = triage(text, snap);
     // 앱 상태 질문("오늘 뭐 했어?")은 규칙 답(모델 0)
-    if (t.kind === 'status') {
+    if (t.kind === 'status' && !files.length) {
       update({ ...thread, title, messages: [...messages, { role: 'model', text: t.answer, at: new Date().toISOString(), by: 'office' }] });
       return;
     }
@@ -203,7 +235,8 @@ export function ChatBot({
         : undefined;
     try {
       const history = base.filter((m) => m.by !== 'office').slice(-60).map((m) => ({ role: m.role, text: m.text }));
-      const got = await ask(text, history, [], (soFar) => setLive(soFar), {
+      const images = files.length ? await Promise.all(files.map(async (f) => ({ mime: f.type, data: await toBase64(f) }))) : [];
+      const got = await ask(text, history, images, (soFar) => setLive(soFar), {
         chat: true,
         // 유튜브 링크(v0.8.3·v0.8.5)면 웹 조사 대신 Gemini가 영상을 직접 본다
         research: !youtubeUrl(text) && (needsResearch(text) || asksSearch(text)),
@@ -218,6 +251,7 @@ export function ChatBot({
         by: got.keySlot === 2 ? 'B' : 'A',
         ...(got.model ? { model: got.model } : {}),
         ...(helpers ? { helpers } : {}),
+        ...(got.sources?.length ? { sources: got.sources.map((x) => ({ title: x.title, uri: x.uri })) } : {}),
         ...(suggest ? { suggest } : {}),
       };
       update({ ...thread, title, messages: [...messages, answer], updatedAt: new Date().toISOString() });
@@ -248,9 +282,25 @@ export function ChatBot({
   };
   const submit = () => {
     const q = input;
+    const files = photos;
     setInput('');
-    if (runCommand(q)) return;
-    void send(q, thread.messages);
+    setPhotos([]);
+    setPhotoError('');
+    if (!files.length && runCommand(q)) return;
+    void send(q, thread.messages, undefined, files);
+  };
+  const addPhotos = (list: FileList | null) => {
+    if (!list) return;
+    const ok: File[] = [];
+    let err = '';
+    for (const f of [...list]) {
+      if (!f.type.startsWith('image/')) err = '사진만 붙일 수 있어요.';
+      else if (f.size > MAX_PHOTO_BYTES) err = `${f.name}: 5MB까지 붙일 수 있어요.`;
+      else if (photos.length + ok.length >= MAX_PHOTOS) err = `사진은 ${MAX_PHOTOS}장까지예요.`;
+      else ok.push(f);
+    }
+    setPhotoError(err);
+    if (ok.length) setPhotos((xs) => [...xs, ...ok]);
   };
   /** 마지막 질문을 다시(같은 키 또는 다른 키로) */
   const retry = (slot?: 1 | 2) => {
@@ -285,6 +335,13 @@ export function ChatBot({
           if (m.role === 'user')
             return (
               <li key={`${m.at}-${i}`} className="chatbot-msg from-user">
+                {m.thumbs?.length ? (
+                  <span className="chatbot-thumbs">
+                    {m.thumbs.map((t, j) => (
+                      <img key={j} src={t} alt={`보낸 사진 ${j + 1}`} />
+                    ))}
+                  </span>
+                ) : null}
                 <p className="chatbot-q">{m.text}</p>
               </li>
             );
@@ -304,6 +361,7 @@ export function ChatBot({
                 ))}
               </div>
               <Markdown text={m.text} />
+              {m.by !== 'office' && <Proof m={m} />}
               {m.yt && (
                 <div className="chatbot-yt">
                   <button type="button" className="btn btn-small" onClick={() => openInGemini(m.yt!)}>
@@ -376,12 +434,35 @@ export function ChatBot({
             }
           }}
         />
+        {(photos.length > 0 || photoError) && (
+          <div className="chatbot-pending">
+            {photos.map((f, i) => (
+              <span key={`${f.name}-${i}`} className="chatbot-pending-item">
+                {f.name}
+                <button type="button" aria-label={`${f.name} 빼기`} onClick={() => setPhotos((xs) => xs.filter((_, j) => j !== i))}>
+                  ×
+                </button>
+              </span>
+            ))}
+            {photoError && <span className="task-error">{photoError}</span>}
+          </div>
+        )}
+        <label className="chatbot-attach" aria-label="사진 붙이기" title="사진 붙이기">
+          <input type="file" accept="image/*" multiple hidden onChange={(e) => (addPhotos(e.target.files), (e.target.value = ''))} disabled={!canAsk || busy} />
+          <span aria-hidden>＋</span>
+        </label>
         <textarea
           id="chatbot-input"
           value={input}
           rows={2}
           placeholder={canAsk ? (project ? `${project.name}: 묻거나 시킬 일` : '무엇이든 물어보기') : '로그인하면 Gemini와 대화할 수 있어요'}
           onChange={(e) => setInput(e.target.value)}
+          onPaste={(e) => {
+            if (e.clipboardData.files.length) {
+              e.preventDefault();
+              addPhotos(e.clipboardData.files);
+            }
+          }}
           onKeyDown={(e) => {
             // 휴대폰 Enter는 줄바꿈(소유자 취향), PC는 Ctrl·⌘+Enter로 보내기
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -391,7 +472,8 @@ export function ChatBot({
           }}
           disabled={!canAsk}
         />
-        <button type="submit" className="btn" disabled={!canAsk || busy || !input.trim()}>
+        <VoiceInput disabled={!canAsk || busy} onText={(t) => setInput((v) => (v.trim() ? `${v.trimEnd()} ${t}` : t))} />
+        <button type="submit" className="btn" disabled={!canAsk || busy || (!input.trim() && !photos.length)}>
           보내기
         </button>
       </form>
@@ -427,6 +509,50 @@ function Suggest({ s, snap, onSend, onDismiss }: { s: NonNullable<ChatTurn['sugg
           아니요
         </button>
       </span>
+    </div>
+  );
+}
+
+/** 답 아래 투명성 줄(v0.8.6): 출처 n · 확인할 숫자 n · 자료 저장. 누르면 펼친다 */
+function Proof({ m }: { m: ChatTurn }) {
+  const [open, setOpen] = useState<'src' | 'num' | null>(null);
+  const nums = useMemo(() => checkNumbers(m.text), [m.text]);
+  const src = m.sources ?? [];
+  if (!src.length && !nums.length) return null;
+  return (
+    <div className="chatbot-proof">
+      <span className="chatbot-proof-row">
+        {src.length > 0 && (
+          <button type="button" aria-expanded={open === 'src'} onClick={() => setOpen(open === 'src' ? null : 'src')}>
+            출처 {src.length}
+          </button>
+        )}
+        {nums.length > 0 && (
+          <button type="button" className="is-warn" aria-expanded={open === 'num'} onClick={() => setOpen(open === 'num' ? null : 'num')}>
+            확인할 숫자 {nums.length}
+          </button>
+        )}
+        {src.length > 0 && <small>옵시디언 '자료'에 모아 둬요</small>}
+      </span>
+      {open === 'src' && (
+        <ol className="chatbot-proof-list">
+          {src.map((x) => (
+            <li key={x.uri}>
+              <a href={x.uri} target="_blank" rel="noreferrer noopener">
+                {x.title}
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
+      {open === 'num' && (
+        <ul className="chatbot-proof-list">
+          <li className="muted">출처 번호가 없는 숫자예요. 쓰기 전에 확인해 보세요.</li>
+          {nums.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

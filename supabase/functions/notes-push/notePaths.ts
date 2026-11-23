@@ -10,8 +10,8 @@ export function okPath(p: string): boolean {
   const parts = p.split('/');
   if (parts.some((s) => !SEG.test(s) || s.startsWith('.') || s.trim() !== s || s === '..')) return false;
   if (parts[0] === '내 메모') return false;
-  // 허락한 자리: 채팅/·데일리/ 아래, 또는 <프로젝트>/업무/·<프로젝트>/채팅/·<프로젝트>/위키.md
-  if ((parts[0] === '채팅' || parts[0] === '데일리') && parts.length === 2) return true;
+  // 허락한 자리: 채팅/·데일리/·자료/ 아래, 또는 <프로젝트>/업무/·<프로젝트>/채팅/·<프로젝트>/위키.md
+  if ((parts[0] === '채팅' || parts[0] === '데일리' || parts[0] === '자료') && parts.length === 2) return true;
   if (parts.length === 3 && (parts[1] === '업무' || parts[1] === '채팅')) return true;
   if (parts.length === 2 && parts[1] === '위키.md') return true;
   return false;

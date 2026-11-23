@@ -59,3 +59,14 @@ describe('승인 카드 요약(v0.7.23)', () => {
     expect(notes).toEqual(['평가: Gemini B 자리를 Studio A가 대신 채점(Studio B 답을 못 받음)', '평가: Claude 빠짐', '화면 평가: 아직 없어요(결과 화면을 못 찍었거나 실패, 업무 카드의 결과 화면에서 이유 확인)']);
   });
 });
+
+import { changeLines } from './approvalSummary';
+describe('바뀐 점 3줄(v0.8.6)', () => {
+  it('글머리에서 3줄, 기록 줄은 빼고', () => {
+    expect(changeLines('## 요약\n- 로그인 버튼을 주황으로\n- 휴대폰에서 한 줄로\n- 설정 탭 글씨 키움\n- 네 번째\n시험: 통과')).toEqual(['로그인 버튼을 주황으로', '휴대폰에서 한 줄로', '설정 탭 글씨 키움']);
+  });
+  it('글머리가 없으면 문장으로', () => {
+    expect(changeLines('버튼 색을 바꿨습니다. 휴대폰에서도 확인했습니다.')).toEqual(['버튼 색을 바꿨습니다.', '휴대폰에서도 확인했습니다.']);
+    expect(changeLines('')).toEqual([]);
+  });
+});

@@ -24,6 +24,9 @@ const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const TIMEOUT_MS = 25_000;
 const VIDEO_TIMEOUT_MS = 100_000;
+// 유튜브는 화면을 10초에 한 장만 본다(v0.8.6 소유자 "화면은 가끔, 소리 위주"): 소리는 다 듣고 토큰은 약 1/3.
+// 모델이 이 설정을 거절(400)하면 설정 없이 한 번 더 묻는다(아래 openGemini)
+let VIDEO_FPS = 0.1;
 // 웹 조사 하루 상한은 없앴다(v0.7.52 소유자 "하루 상한은 일단 없애"). Tavily·Firecrawl 무료 크레딧이 끝나면 각 서비스가 막고, 그때는 요약만·검색 없이로 내려간다.
 const sourceList = (m: Map<string, string>) => [...m].map(([uri, title]) => ({ uri, title }));
 
@@ -144,7 +147,7 @@ function requestBody(question: string, history: Turn[], images: InlineImage[], m
     systemInstruction: { parts: [{ text: system }] },
     contents: [
       ...history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-      { role: 'user', parts: [...(video ? [{ file_data: { file_uri: video } }] : []), ...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
+      { role: 'user', parts: [...(video ? [{ file_data: { file_uri: video }, ...(VIDEO_FPS ? { video_metadata: { fps: VIDEO_FPS } } : {}) }] : []), ...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: question }] },
     ],
     // 짧은 질문 답에는 '생각' 단계를 가장 적게 한다(빠르게, v0.4.15·v0.4.23). 모델이 설정을 모르면(400) 다음 설정으로 다시 묻는다.
     // 영상은 낮은 화질로(1초 약 100토큰, 무료 분당 토큰 한도에 덜 걸리게, v0.8.3)
@@ -174,6 +177,12 @@ async function openGemini(key: string, model: string, question: string, history:
   for (const m of order) {
     mode = m;
     res = await call(m);
+    // 영상 화면 줄이기(fps)를 모델이 모르면(400) 그 설정만 빼고 한 번 더(이번 서버가 켜져 있는 동안은 빼고 보낸다)
+    if (video && res.status === 400 && VIDEO_FPS) {
+      await res.body?.cancel();
+      VIDEO_FPS = 0;
+      res = await call(m);
+    }
     // 400이면(이 모델이 이 생각 설정을 모르는 경우 등) 다음 설정으로 다시 묻는다. 영상은 다시 보내면 또 영상을 보므로 멈춘다
     if (res.status !== 400 || m === order[order.length - 1] || video) break;
     await res.body?.cancel();
